@@ -87,8 +87,7 @@ export default function VozDeDeus() {
 
         {/* Footer */}
         <div className="text-center mt-8 text-muted-foreground">
-          <p className="text-sm">"A palavra de Deus é viva e eficaz" - Hebreus 4:12
-Feito por Kaian Bruno.</p>
+          <p className="text-sm">"A palavra de Deus é viva e eficaz" - Hebreus 4:12. Feito por Kaian Bruno.</p>
         </div>
       </div>
     </div>;
