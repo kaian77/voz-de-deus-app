@@ -30,8 +30,14 @@ export default function VozDeDeus() {
     setShowMessage(false);
     setCurrentMessage("");
   };
-  return <div className="min-h-screen bg-gradient-heavenly flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
+  return <div className="min-h-screen relative flex items-center justify-center p-4" style={{
+      backgroundImage: `url('/lovable-uploads/c8b72d68-9874-4a95-82fa-b47ac37ac6e7.png')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat'
+    }}>
+      <div className="absolute inset-0 bg-black/20"></div>
+      <div className="relative z-10 w-full max-w-2xl">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
