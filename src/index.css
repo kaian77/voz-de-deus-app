@@ -8,33 +8,44 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Divine color palette */
+    --background: 220 26% 98%;
+    --foreground: 220 15% 20%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 220 15% 20%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 220 15% 20%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 220 90% 45%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 45 100% 75%;
+    --secondary-foreground: 220 15% 20%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 15% 55%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 45 100% 85%;
+    --accent-foreground: 220 15% 20%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 220 90% 45%;
+
+    /* Divine gradients */
+    --gradient-divine: linear-gradient(135deg, hsl(220 90% 55%) 0%, hsl(45 100% 70%) 100%);
+    --gradient-heavenly: linear-gradient(180deg, hsl(220 26% 98%) 0%, hsl(220 40% 95%) 100%);
+    --gradient-blessing: linear-gradient(45deg, hsl(220 90% 45%) 0%, hsl(220 80% 60%) 50%, hsl(45 100% 75%) 100%);
+
+    /* Divine shadows */
+    --shadow-divine: 0 20px 40px -10px hsl(220 90% 45% / 0.3);
+    --shadow-blessing: 0 10px 30px -5px hsl(45 100% 75% / 0.4);
+    --shadow-gentle: 0 4px 15px -2px hsl(220 40% 50% / 0.15);
 
     --radius: 0.5rem;
 
