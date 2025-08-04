@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { getRandomVerse } from "@/data/verses";
-import { Heart, Share2, Sparkles } from "lucide-react";
+import { Heart, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function VozDeDeus() {
@@ -29,31 +29,6 @@ export default function VozDeDeus() {
     setShowMessage(true);
   };
 
-  const handleShare = async () => {
-    if (!currentMessage) return;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: "Voz de Deus",
-          text: currentMessage,
-        });
-      } else {
-        await navigator.clipboard.writeText(currentMessage);
-        toast({
-          title: "Mensagem copiada!",
-          description: "A mensagem foi copiada para a área de transferência.",
-        });
-      }
-    } catch (error) {
-      console.error("Erro ao compartilhar:", error);
-      toast({
-        title: "Erro ao compartilhar",
-        description: "Tente novamente ou copie a mensagem manualmente.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleNewWord = () => {
     setShowMessage(false);
@@ -121,19 +96,10 @@ export default function VozDeDeus() {
                   </div>
                 </div>
 
-                <div className="flex gap-4">
-                  <Button
-                    onClick={handleShare}
-                    variant="outline"
-                    className="flex-1 h-12 text-base font-medium border-primary/30 hover:bg-primary/10 transition-colors"
-                  >
-                    <Share2 className="w-4 h-4 mr-2" />
-                    Compartilhar
-                  </Button>
-                  
+                <div className="flex justify-center">
                   <Button
                     onClick={handleNewWord}
-                    className="flex-1 h-12 text-base font-medium bg-gradient-divine hover:shadow-blessing transition-all duration-300"
+                    className="w-full max-w-xs h-12 text-base font-medium bg-gradient-divine hover:shadow-blessing transition-all duration-300"
                   >
                     <Sparkles className="w-4 h-4 mr-2" />
                     Nova Palavra
