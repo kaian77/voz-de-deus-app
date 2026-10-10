@@ -1,5 +1,8 @@
-// Conexão com o Supabase. Preencha via variáveis de ambiente (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)
-// ou cole aqui — a anon key é pública por natureza (a segurança vem das policies RLS).
-// Sem essas informações o Studio roda em MODO DEMO, com dados salvos só no navegador.
-export const SUPABASE_URL: string = import.meta.env.VITE_SUPABASE_URL ?? "";
-export const SUPABASE_ANON_KEY: string = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
+// Conexão com o Supabase (só valores públicos: URL e chave anon/publishable).
+// Aceita as variáveis VITE_* ou as NEXT_PUBLIC_* criadas pela integração Supabase da Vercel.
+// Sem elas o Studio roda em MODO DEMO, com dados salvos só no navegador.
+const env = import.meta.env;
+
+export const SUPABASE_URL: string = env.VITE_SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+export const SUPABASE_ANON_KEY: string =
+  env.VITE_SUPABASE_ANON_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
