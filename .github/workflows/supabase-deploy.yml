@@ -1,0 +1,31 @@
+# Instala/atualiza o backend do Studio no Supabase (tabelas, funções, secrets, agendador).
+# Precisa só do secret SUPABASE_ACCESS_TOKEN (Settings > Secrets and variables > Actions).
+name: Supabase deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - "scripts/supabase-deploy.sh"
+      - ".github/workflows/supabase-deploy.yml"
+
+concurrency:
+  group: supabase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}
+      APP_URL: ${{ vars.APP_URL || 'https://voz-de-deus-app.vercel.app' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: ./scripts/supabase-deploy.sh
