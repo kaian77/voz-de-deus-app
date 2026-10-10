@@ -1,0 +1,100 @@
+// WhatsApp Cloud API (Meta). Docs: https://developers.facebook.com/docs/whatsapp/cloud-api
+// Regra importante: mensagens livres só dentro de 24h da última mensagem do cliente;
+// fora disso o WhatsApp exige um template aprovado.
+import { env } from "./util.ts";
+
+const graph = (path: string) => `https://graph.facebook.com/${env("META_GRAPH_VERSION", "v24.0")}/${path}`;
+
+async function wa<T = any>(token: string, path: string, body?: unknown, method = body ? "POST" : "GET"): Promise<T> {
+  const res = await fetch(graph(path), {
+    method,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.error) throw new Error(`WhatsApp: ${data.error?.message ?? res.status}`);
+  return data as T;
+}
+
+export function waPhoneInfo(token: string, phoneNumberId: string) {
+  return wa<{ id: string; display_phone_number: string; verified_name: string }>(
+    token,
+    `${phoneNumberId}?fields=display_phone_number,verified_name`,
+  );
+}
+
+export function waSubscribeApp(token: string, wabaId: string) {
+  return wa(token, `${wabaId}/subscribed_apps`, {});
+}
+
+export async function waSendText(token: string, phoneNumberId: string, to: string, body: string) {
+  const data = await wa<{ messages: { id: string }[] }>(token, `${phoneNumberId}/messages`, {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to,
+    type: "text",
+    text: { preview_url: true, body: body.slice(0, 4096) },
+  });
+  return data.messages?.[0]?.id;
+}
+
+export function waMarkRead(token: string, phoneNumberId: string, messageId: string) {
+  return wa(token, `${phoneNumberId}/messages`, { messaging_product: "whatsapp", status: "read", message_id: messageId }).catch(() => null);
+}
+
+/** Converte qualquer tipo de mensagem recebida em texto para o histórico/IA. */
+export function waMessageText(m: any): string {
+  switch (m.type) {
+    case "text":
+      return m.text?.body ?? "";
+    case "button":
+      return m.button?.text ?? "";
+    case "interactive":
+      return m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? "";
+    case "image":
+    case "video":
+    case "document":
+      return `[${m.type} enviado]${m[m.type]?.caption ? ` ${m[m.type].caption}` : ""}`;
+    case "audio":
+      return "[áudio enviado]";
+    case "location":
+      return "[localização enviada]";
+    default:
+      return `[${m.type ?? "mensagem"}]`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// WAHA (https://waha.devlike.pro) — WhatsApp HTTP API self-hosted, grátis (versão Core).
+// Não é oficial: usa o WhatsApp Web. Há risco de bloqueio do número se houver abuso.
+// ---------------------------------------------------------------------------
+export type WahaConfig = { base_url: string; session: string; api_key?: string | null };
+
+async function waha<T = any>(cfg: WahaConfig, path: string, body?: unknown, method = body ? "POST" : "GET"): Promise<T> {
+  const res = await fetch(`${cfg.base_url.replace(/\/$/, "")}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json", ...(cfg.api_key ? { "X-Api-Key": cfg.api_key } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`WAHA: ${data.message ?? data.error ?? res.status}`);
+  return data as T;
+}
+
+export function wahaSession(cfg: WahaConfig) {
+  return waha<{ name: string; status: string; me?: { id: string; pushName?: string } }>(cfg, `/api/sessions/${cfg.session}`);
+}
+
+/** Aponta o webhook da sessão do WAHA para o Studio (eventos "message"). */
+export function wahaSetWebhook(cfg: WahaConfig, url: string) {
+  return waha(cfg, `/api/sessions/${cfg.session}`, { config: { webhooks: [{ url, events: ["message"] }] } }, "PUT");
+}
+
+export async function wahaSendText(cfg: WahaConfig, chatId: string, text: string) {
+  const data = await waha<{ id?: string | { _serialized?: string } }>(cfg, "/api/sendText", { session: cfg.session, chatId, text });
+  return typeof data.id === "string" ? data.id : data.id?._serialized;
+}
+
+export function wahaSendSeen(cfg: WahaConfig, chatId: string) {
+  return waha(cfg, "/api/sendSeen", { session: cfg.session, chatId }).catch(() => null);
+}
