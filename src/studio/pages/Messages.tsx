@@ -1,41 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Bot, CheckCheck, Hand, Inbox, Loader2, Send, Sparkles, User } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Inbox, Loader2, Search, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { api, isDemo, supabase } from "../lib/api";
 import { useInvalidate, useSaveRow, useSettings, useTable } from "../lib/hooks";
 import type { Conversation, Message } from "../lib/types";
-import { EmptyState, PageHeader, PlatformIcon } from "../components/bits";
+import { Avatar, EmptyState, PageHeader, PlatformIcon, relativeTime, StatusDot } from "../components/bits";
 
-const WhatsAppIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={cn("h-4 w-4 text-emerald-600", className)} aria-hidden>
-    <path d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.4 5 5.1-1.3A9.9 9.9 0 1 0 12.04 2Zm5.8 14.1c-.25.7-1.45 1.33-2 1.4-.52.08-1.17.11-1.89-.12-.43-.14-1-.32-1.7-.63-3-1.3-4.96-4.32-5.1-4.52-.15-.2-1.22-1.62-1.22-3.1 0-1.47.77-2.2 1.05-2.5.27-.3.6-.37.8-.37h.57c.18 0 .43-.07.67.51.25.6.84 2.07.92 2.22.07.15.12.32.02.52-.1.2-.15.32-.3.5-.15.17-.31.38-.45.51-.15.15-.3.31-.13.6.17.3.77 1.27 1.65 2.06 1.14 1.01 2.1 1.33 2.4 1.48.3.15.47.12.65-.08.17-.2.74-.86.94-1.16.2-.3.4-.25.67-.15.27.1 1.73.82 2.03.97.3.15.5.22.57.35.08.12.08.72-.17 1.42Z" />
-  </svg>
-);
-
-const ChannelIcon = ({ channel }: { channel: Conversation["channel"] }) =>
-  channel === "whatsapp" ? <WhatsAppIcon /> : <PlatformIcon platform="instagram" />;
-
-const SENDER: Record<Message["sender"], { label: string; icon: typeof Bot }> = {
-  contact: { label: "", icon: User },
-  ai: { label: "IA", icon: Bot },
-  human: { label: "Você", icon: User },
-  agent: { label: "Claude", icon: Sparkles },
-};
-
-const timeLabel = (iso: string) => {
-  const d = new Date(iso);
-  return d.toDateString() === new Date().toDateString()
-    ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-};
+const SENDER_LABEL: Record<Message["sender"], string> = { contact: "", ai: "Agente de IA", human: "Você", agent: "Claude" };
+const nameOf = (c: Conversation) => c.contact_name ?? c.contact_username ?? `+${c.contact_id.split("@")[0]}`;
 
 function Thread({ conversation, onBack }: { conversation: Conversation; onBack: () => void }) {
   const { data: messages = [] } = useTable("messages", { eq: { conversation_id: conversation.id }, order: "created_at", ascending: true }, { refetchInterval: isDemo ? undefined : 15000 });
@@ -46,7 +25,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
   const bottom = useRef<HTMLDivElement>(null);
   const windowOpen = conversation.last_inbound_at && Date.now() - new Date(conversation.last_inbound_at).getTime() < 24 * 3600 * 1000;
 
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), [messages.length]);
+  useEffect(() => bottom.current?.scrollIntoView({ block: "end" }), [messages.length]);
   useEffect(() => {
     if (conversation.unread) saveConv.mutate({ id: conversation.id, unread: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,7 +52,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
     try {
       const r = await api.invoke<{ reply: string; handoff: boolean; handoff_reason: string }>("inbox", { action: "suggest", conversation_id: conversation.id });
       setText(r.reply);
-      if (r.handoff) toast.info(`A IA acha que um humano deve responder: ${r.handoff_reason}`);
+      if (r.handoff) toast.info(`A IA sugere atendimento humano: ${r.handoff_reason}`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -81,79 +60,89 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
     }
   };
 
+  const subtitle = conversation.contact_username
+    ? `@${conversation.contact_username}`
+    : conversation.channel === "whatsapp" ? `+${conversation.contact_id.split("@")[0]}` : "";
+
   return (
-    <Card className="flex h-[calc(100vh-220px)] min-h-[480px] flex-col">
-      <div className="flex flex-wrap items-center gap-3 border-b p-3">
-        <Button variant="ghost" size="icon" className="lg:hidden" onClick={onBack} aria-label="Voltar"><ArrowLeft className="h-4 w-4" /></Button>
-        <ChannelIcon channel={conversation.channel} />
+    <section className="flex h-[calc(100vh-200px)] min-h-[520px] flex-col overflow-hidden rounded-lg border bg-card">
+      <header className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5">
+        <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8 lg:hidden" onClick={onBack} aria-label="Voltar para a lista"><ArrowLeft className="h-4 w-4" /></Button>
+        <Avatar name={nameOf(conversation)} />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold">{conversation.contact_name ?? conversation.contact_username ?? conversation.contact_id.split("@")[0]}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {conversation.contact_username ? `@${conversation.contact_username}` : conversation.channel === "whatsapp" ? `+${conversation.contact_id.split("@")[0]}` : ""}
+          <p className="flex items-center gap-1.5 truncate text-[13px] font-semibold">
+            {nameOf(conversation)} <PlatformIcon platform={conversation.channel} />
           </p>
+          <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="ai" className="text-xs">IA responde</Label>
-          <Switch id="ai" checked={conversation.ai_enabled} onCheckedChange={(v) => saveConv.mutate({ id: conversation.id, ai_enabled: v })} />
-        </div>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground" htmlFor={`ai-${conversation.id}`}>
+          Agente de IA
+          <Switch id={`ai-${conversation.id}`} checked={conversation.ai_enabled} onCheckedChange={(v) => saveConv.mutate({ id: conversation.id, ai_enabled: v })} />
+        </label>
         {conversation.status === "needs_human" ? (
-          <Button size="sm" variant="outline" onClick={() => saveConv.mutate({ id: conversation.id, status: "open", handoff_reason: null })}>
-            <CheckCheck className="mr-1 h-4 w-4" /> Resolvido
-          </Button>
+          <Button size="sm" variant="outline" className="h-8" onClick={() => saveConv.mutate({ id: conversation.id, status: "open", handoff_reason: null })}>Marcar como resolvida</Button>
         ) : (
-          <Button size="sm" variant="ghost" onClick={() => saveConv.mutate({ id: conversation.id, status: "needs_human", handoff_reason: "Assumido manualmente" })}>
-            <Hand className="mr-1 h-4 w-4" /> Assumir
-          </Button>
+          <Button size="sm" variant="ghost" className="h-8" onClick={() => saveConv.mutate({ id: conversation.id, status: "needs_human", handoff_reason: "Assumida por você" })}>Assumir conversa</Button>
         )}
-      </div>
+      </header>
       {conversation.status === "needs_human" && (
-        <div className="bg-amber-50 px-4 py-2 text-xs text-amber-900">
-          <b>Precisa de você:</b> {conversation.handoff_reason ?? "atendimento humano"}. A IA fica pausada nesta conversa até você marcar como resolvido.
+        <div className="flex items-center gap-2 border-b bg-secondary/50 px-4 py-2 text-xs">
+          <StatusDot tone="warning">Com você</StatusDot>
+          <span className="text-muted-foreground">{conversation.handoff_reason ?? "Atendimento humano"}. O agente fica pausado até você marcar como resolvida.</span>
         </div>
       )}
-      <div className="flex-1 space-y-2 overflow-y-auto bg-muted/30 p-4">
-        {messages.map((m) => {
-          const S = SENDER[m.sender];
-          return (
-            <div key={m.id} className={cn("flex", m.direction === "out" ? "justify-end" : "justify-start")}>
-              <div className={cn("max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm", m.direction === "out" ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-background")}>
-                <p className="whitespace-pre-line">{m.text}</p>
-                <p className={cn("mt-1 flex items-center gap-1 text-[10px]", m.direction === "out" ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                  {S.label && <><S.icon className="h-3 w-3" /> {S.label} ·</>} {timeLabel(m.created_at)}
-                </p>
-                {m.error && <p className="text-[10px] text-red-200">{m.error}</p>}
-              </div>
+      <div className="flex-1 space-y-3 overflow-y-auto bg-background px-4 py-5">
+        {messages.map((m) => (
+          <div key={m.id} className={cn("flex flex-col", m.direction === "out" ? "items-end" : "items-start")}>
+            <div
+              className={cn(
+                "max-w-[78%] whitespace-pre-line rounded-lg px-3 py-2 text-[13px] leading-relaxed",
+                m.direction === "out" ? "bg-foreground text-background" : "border bg-card",
+              )}
+            >
+              {m.text}
             </div>
-          );
-        })}
+            <span className="mt-1 px-1 text-[11px] text-muted-foreground">
+              {SENDER_LABEL[m.sender] && `${SENDER_LABEL[m.sender]} · `}
+              {new Date(m.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).replace(/\./g, "")}
+            </span>
+            {m.error && <span className="px-1 text-[11px] text-danger">{m.error}</span>}
+          </div>
+        ))}
         <div ref={bottom} />
       </div>
-      <div className="space-y-2 border-t p-3">
+      <footer className="border-t p-3">
         {!windowOpen && conversation.channel === "instagram" && (
-          <p className="text-xs text-muted-foreground">Mais de 24h sem mensagem do contato — o Instagram não permite responder até ele escrever de novo.</p>
+          <p className="mb-2 text-xs text-muted-foreground">Passaram 24 horas desde a última mensagem desta pessoa. O Instagram só libera resposta quando ela escrever de novo.</p>
         )}
-        <Textarea
-          rows={2}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          placeholder="Escreva sua resposta… (Enter envia, Shift+Enter quebra linha)"
-        />
-        <div className="flex justify-between gap-2">
-          <Button variant="outline" size="sm" onClick={suggest} disabled={!!busy}>
-            {busy === "suggest" ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1 h-4 w-4" />} Sugerir com IA
-          </Button>
-          <Button size="sm" onClick={send} disabled={!!busy || !text.trim()}>
-            {busy === "send" ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Send className="mr-1 h-4 w-4" />} Enviar
-          </Button>
+        <div className="rounded-md border focus-within:ring-1 focus-within:ring-ring">
+          <Textarea
+            rows={2}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            className="min-h-0 resize-none border-0 bg-transparent text-[13px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            placeholder="Escreva uma resposta"
+          />
+          <div className="flex items-center justify-between gap-2 px-2 pb-2">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={suggest} disabled={!!busy}>
+              {busy === "suggest" ? <Loader2 className="animate-spin" /> : <Sparkles />} Sugerir resposta
+            </Button>
+            <div className="flex items-center gap-2">
+              <span className="hidden text-[11px] text-muted-foreground sm:inline">Enter envia · Shift+Enter quebra linha</span>
+              <Button size="sm" className="h-7" onClick={send} disabled={!!busy || !text.trim()}>
+                {busy === "send" ? <Loader2 className="animate-spin" /> : <Send />} Enviar
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
-    </Card>
+      </footer>
+    </section>
   );
 }
 
@@ -162,6 +151,7 @@ export default function Messages() {
   const { data: settings } = useSettings();
   const invalidate = useInvalidate();
   const [filter, setFilter] = useState<"all" | "needs_human" | "ai">("all");
+  const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Tempo real: atualiza a caixa de entrada quando chega mensagem nova
@@ -180,64 +170,79 @@ export default function Messages() {
 
   const list = useMemo(
     () =>
-      conversations.filter((c) =>
-        filter === "needs_human" ? c.status === "needs_human" : filter === "ai" ? c.ai_enabled && c.status === "open" : c.status !== "closed",
-      ),
-    [conversations, filter],
+      conversations
+        .filter((c) => (filter === "needs_human" ? c.status === "needs_human" : filter === "ai" ? c.ai_enabled && c.status === "open" : c.status !== "closed"))
+        .filter((c) => !query || nameOf(c).toLowerCase().includes(query.toLowerCase())),
+    [conversations, filter, query],
   );
-  const selected = conversations.find((c) => c.id === selectedId);
+  const selected = conversations.find((c) => c.id === selectedId) ?? (typeof window !== "undefined" && window.innerWidth >= 1024 ? list[0] : undefined);
   const waiting = conversations.filter((c) => c.status === "needs_human").length;
+  const FILTERS = [
+    { id: "all", label: "Todas" },
+    { id: "needs_human", label: `Com você${waiting ? ` (${waiting})` : ""}` },
+    { id: "ai", label: "Com o agente" },
+  ] as const;
 
   return (
     <div>
-      <PageHeader title="Mensagens" description="DMs do Instagram e WhatsApp num lugar só. A IA atende e te chama quando precisa de você." />
+      <PageHeader title="Mensagens" description="Direct do Instagram e WhatsApp. O agente responde e passa para você quando precisa." />
       {settings && !settings.agent_enabled && (
-        <Card className="mb-4 border-amber-200 bg-amber-50">
-          <CardContent className="p-3 text-sm text-amber-900">
-            O agente de IA está <b>desligado</b>. Ative e ensine como atender em <b>Claude &amp; API → Agente de mensagens</b>.
-          </CardContent>
-        </Card>
-      )}
-      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
-        <div className={cn("space-y-3", selected && "hidden lg:block")}>
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-            <TabsList className="w-full">
-              <TabsTrigger value="all" className="flex-1">Todas</TabsTrigger>
-              <TabsTrigger value="needs_human" className="flex-1">Precisa de você {waiting > 0 && <Badge className="ml-1 h-5 bg-amber-400 px-1.5 text-amber-950">{waiting}</Badge>}</TabsTrigger>
-              <TabsTrigger value="ai" className="flex-1">Com a IA</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          {list.length === 0 && <EmptyState icon={<Inbox className="h-8 w-8" />} title="Nenhuma conversa aqui" />}
-          {list.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedId(c.id)}
-              className={cn("flex w-full items-center gap-3 rounded-lg border bg-background p-3 text-left transition-colors hover:bg-muted", selectedId === c.id && "border-primary")}
-            >
-              <ChannelIcon channel={c.channel} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-sm font-semibold">{c.contact_name ?? c.contact_username ?? c.contact_id.split("@")[0]}</p>
-                  <span className="shrink-0 text-[10px] text-muted-foreground">{timeLabel(c.last_message_at)}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {c.status === "needs_human" ? (
-                    <span className="truncate text-xs text-amber-700">✋ {c.handoff_reason ?? "Precisa de você"}</span>
-                  ) : (
-                    <span className="truncate text-xs text-muted-foreground">{c.ai_enabled ? "🤖 IA atendendo" : "IA desligada"}</span>
-                  )}
-                  {c.unread > 0 && <Badge className="ml-auto h-5 px-1.5">{c.unread}</Badge>}
-                </div>
-              </div>
-            </button>
-          ))}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-3 text-[13px]">
+          <span><span className="font-medium">O agente de IA está desligado.</span> <span className="text-muted-foreground">As mensagens chegam aqui, mas ninguém responde automaticamente.</span></span>
+          <Button asChild size="sm" variant="outline" className="h-8"><Link to="/studio/claude">Configurar agente</Link></Button>
         </div>
-        <div className={cn(!selected && "hidden lg:block")}>
+      )}
+      <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <div className={cn("flex flex-col overflow-hidden rounded-lg border bg-card", selectedId && "hidden lg:flex")}>
+          <div className="space-y-2 border-b p-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <Input className="h-8 pl-8 text-[13px]" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar contato" aria-label="Buscar contato" />
+            </div>
+            <div className="flex gap-1">
+              {FILTERS.map((f) => (
+                <button key={f.id} onClick={() => setFilter(f.id)} className={cn("h-7 rounded px-2.5 text-xs font-medium", filter === f.id ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground")}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="max-h-[calc(100vh-290px)] divide-y overflow-y-auto">
+            {list.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">Nenhuma conversa aqui.</p>}
+            {list.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedId(c.id)}
+                className={cn("flex w-full items-start gap-3 px-3 py-3 text-left transition-colors", selected?.id === c.id ? "bg-secondary" : "hover:bg-secondary/50")}
+              >
+                <Avatar name={nameOf(c)} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
+                      <span className="truncate">{nameOf(c)}</span>
+                      <PlatformIcon platform={c.channel} className="h-3 w-3 shrink-0" />
+                    </p>
+                    <span className="tabular shrink-0 text-[11px] text-muted-foreground">{relativeTime(c.last_message_at)}</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    {c.status === "needs_human" ? (
+                      <StatusDot tone="warning" className="min-w-0 truncate font-normal text-foreground/70">{c.handoff_reason ?? "Com você"}</StatusDot>
+                    ) : (
+                      <span className="truncate text-xs text-muted-foreground">{c.ai_enabled ? "Agente respondendo" : "Agente desligado"}</span>
+                    )}
+                    {c.unread > 0 && <span className="tabular ml-auto rounded bg-foreground px-1.5 text-[10px] font-medium leading-4 text-background">{c.unread}</span>}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className={cn("min-w-0", !selectedId && "hidden lg:block")}>
           {selected ? (
             <Thread key={selected.id} conversation={selected} onBack={() => setSelectedId(null)} />
           ) : (
-            <EmptyState icon={<Inbox className="h-8 w-8" />} title="Escolha uma conversa">
-              As mensagens chegam sozinhas pelos webhooks do Instagram e do WhatsApp.
+            <EmptyState icon={<Inbox />} title="Nenhuma conversa selecionada">
+              As mensagens chegam sozinhas quando o Instagram e o WhatsApp estão conectados.
             </EmptyState>
           )}
         </div>

@@ -6,8 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isDemo, supabase } from "../lib/api";
+import { useStudioTheme } from "./bits";
 
 export default function AuthGate({ children }: { children: ReactNode }) {
+  useStudioTheme();
   const [session, setSession] = useState<Session | null | undefined>(isDemo ? null : undefined);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,11 +38,14 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-heavenly p-4">
-      <Card className="w-full max-w-sm shadow-divine">
-        <CardHeader>
-          <CardTitle>Social Studio</CardTitle>
-          <CardDescription>{mode === "login" ? "Entre para gerenciar suas redes" : "Crie seu acesso"}</CardDescription>
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-sm shadow-none">
+        <CardHeader className="space-y-3">
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-foreground text-sm font-semibold text-background">S</span>
+          <div>
+            <CardTitle className="text-lg">{mode === "login" ? "Entrar no Studio" : "Criar acesso"}</CardTitle>
+            <CardDescription>Instagram, TikTok e WhatsApp num só lugar.</CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="space-y-4">

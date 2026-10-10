@@ -1,23 +1,22 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bot, Copy, Loader2, Sparkles, Store } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Copy, Loader2, Sparkles, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { api, isDemo } from "../lib/api";
 import { useInstagramProfile, useTable } from "../lib/hooks";
 import type { ProfileAudit } from "../lib/types";
-import { EmptyState, formatDateTime, PageHeader } from "../components/bits";
+import { Avatar, EmptyState, formatDateTime, PageHeader, Panel, SectionLabel, sentence } from "../components/bits";
 import { IgMediaTile } from "../components/IgMediaTile";
 import { PostThumb } from "../components/PostThumb";
 
-function List({ title, items }: { title: string; items: string[] }) {
+function Bullets({ title, items }: { title: string; items: string[] }) {
   return (
     <div>
-      <p className="mb-2 text-sm font-semibold">{title}</p>
-      <ul className="space-y-1 text-sm text-muted-foreground">
-        {items.map((x, i) => <li key={i}>• {x}</li>)}
+      <SectionLabel className="mb-2">{title}</SectionLabel>
+      <ul className="space-y-1.5 text-[13px] text-foreground/85">
+        {items.map((x, i) => (
+          <li key={i} className="flex gap-2"><span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-foreground/40" />{x}</li>
+        ))}
       </ul>
     </div>
   );
@@ -25,47 +24,52 @@ function List({ title, items }: { title: string; items: string[] }) {
 
 function AuditView({ audit }: { audit: ProfileAudit }) {
   const a = audit.analysis;
-  const copy = (t: string) => navigator.clipboard.writeText(t).then(() => toast.success("Bio copiada! Cole no Instagram em Editar perfil."));
+  const copy = (t: string) =>
+    navigator.clipboard.writeText(t).then(
+      () => toast.success("Bio copiada. Cole em Editar perfil, no Instagram."),
+      () => toast.error("Não consegui copiar. Selecione o texto e copie manualmente."),
+    );
   return (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          {audit.source === "agent" ? <Bot className="h-4 w-4 text-violet-600" /> : <Sparkles className="h-4 w-4 text-violet-600" />}
-          Auditoria da vitrine
-        </CardTitle>
-        <span className="text-xs text-muted-foreground">{formatDateTime(audit.created_at)}</span>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="flex items-center gap-4">
-          <div className="text-4xl font-bold">{Math.round(a.score)}</div>
-          <div className="flex-1">
-            <Progress value={a.score} />
-            <p className="mt-2 text-sm text-muted-foreground">{a.summary}</p>
+    <Panel
+      title="Auditoria do perfil"
+      description={`${audit.source === "agent" ? "Feita pelo Claude" : "Feita pela IA"} · ${formatDateTime(audit.created_at)}`}
+      bodyClassName="space-y-6 p-5"
+    >
+      <div className="flex items-start gap-5">
+        <div className="shrink-0">
+          <p className="tabular text-[40px] font-semibold leading-none tracking-tight">{Math.round(a.score)}<span className="text-base font-normal text-muted-foreground">/100</span></p>
+          <div className="mt-2 h-1 w-24 overflow-hidden rounded-full bg-secondary">
+            <div className="h-full bg-foreground" style={{ width: `${Math.max(0, Math.min(100, a.score))}%` }} />
           </div>
         </div>
-        <div>
-          <p className="mb-2 text-sm font-semibold">Sugestões de bio</p>
-          <div className="space-y-2">
-            {a.bio_suggestions.map((b, i) => (
-              <div key={i} className="flex items-start gap-2 rounded-md border p-3">
-                <p className="flex-1 whitespace-pre-line text-sm">{b}</p>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => copy(b)} aria-label="Copiar"><Copy className="h-3.5 w-3.5" /></Button>
-              </div>
-            ))}
-          </div>
+        <p className="text-[13px] leading-relaxed text-foreground/85">{a.summary}</p>
+      </div>
+
+      <div>
+        <SectionLabel className="mb-2">Sugestões de bio</SectionLabel>
+        <div className="divide-y rounded-md border">
+          {a.bio_suggestions.map((b, i) => (
+            <div key={i} className="flex items-start gap-3 px-3 py-2.5">
+              <span className="tabular mt-0.5 text-xs text-muted-foreground">{i + 1}</span>
+              <p className="flex-1 whitespace-pre-line text-[13px]">{b}</p>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => copy(b)}><Copy /> Copiar</Button>
+            </div>
+          ))}
         </div>
-        <div className="grid gap-5 sm:grid-cols-2">
-          <List title="Ações rápidas" items={a.quick_wins} />
-          <List title="Pilares de conteúdo" items={a.content_pillars} />
-          <List title="Destaques (stories fixos)" items={a.highlight_ideas} />
-          <List title="Melhores horários" items={a.best_times} />
-        </div>
-        <div>
-          <p className="mb-1 text-sm font-semibold">Grade</p>
-          <p className="text-sm text-muted-foreground">{a.grid_feedback}</p>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="grid gap-6 sm:grid-cols-2">
+        <Bullets title="Ações rápidas" items={a.quick_wins} />
+        <Bullets title="Pilares de conteúdo" items={a.content_pillars} />
+        <Bullets title="Destaques sugeridos" items={a.highlight_ideas} />
+        <Bullets title="Melhores horários" items={a.best_times} />
+      </div>
+
+      <div>
+        <SectionLabel className="mb-2">Grade</SectionLabel>
+        <p className="text-[13px] leading-relaxed text-foreground/85">{a.grid_feedback}</p>
+      </div>
+    </Panel>
   );
 }
 
@@ -82,7 +86,7 @@ export default function Vitrine() {
     onSuccess: async (row) => {
       if (isDemo) await api.insert("profile_audits", row); // no Supabase a função já salvou
       qc.invalidateQueries({ queryKey: ["table", "profile_audits"] });
-      toast.success("Auditoria pronta!");
+      toast.success("Auditoria concluída");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -91,7 +95,7 @@ export default function Vitrine() {
     return (
       <div>
         <PageHeader title="Vitrine" description="Como seu perfil aparece para quem chega nele." />
-        <EmptyState icon={<Store className="h-8 w-8" />} title="Conecte o Instagram primeiro">Vá em Contas e conecte sua conta profissional.</EmptyState>
+        <EmptyState icon={<Store />} title="Conecte o Instagram primeiro">Vá em Contas e conecte sua conta profissional.</EmptyState>
       </div>
     );
   }
@@ -101,69 +105,87 @@ export default function Vitrine() {
     .filter((x) => x.status === "scheduled" && x.platforms.includes("instagram") && x.kind !== "story")
     .sort((a, b) => (b.scheduled_at ?? "").localeCompare(a.scheduled_at ?? ""));
   const latest = audits[0];
+  const best = profile.data?.best_times ?? [];
+  const maxEng = Math.max(1, ...best.map((b) => b.avg_engagement));
+  const website = p?.website ?? ig.meta.website;
 
   return (
     <div>
       <PageHeader
         title="Vitrine"
-        description="Seu perfil, a grade futura (com o que está agendado) e a auditoria com sugestões."
+        description="Seu perfil como o visitante vê, a grade com o que já está agendado e as recomendações."
         actions={
-          <Button onClick={() => audit.mutate()} disabled={audit.isPending}>
-            {audit.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />} Auditar com IA
+          <Button size="sm" onClick={() => audit.mutate()} disabled={audit.isPending}>
+            {audit.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />} Auditar perfil
           </Button>
         }
       />
-      <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
-        <Card className="self-start">
-          <CardContent className="p-4">
-            <div className="mb-4 flex items-center gap-4">
-              {p?.profile_picture_url || ig.avatar_url ? (
-                <img src={p?.profile_picture_url ?? ig.avatar_url!} alt="" className="h-16 w-16 rounded-full object-cover" />
-              ) : (
-                <div className="h-16 w-16 rounded-full bg-gradient-divine" />
-              )}
-              <div className="grid flex-1 grid-cols-3 text-center text-sm">
-                <div><p className="font-bold">{p?.media_count ?? ig.meta.media_count ?? "–"}</p><p className="text-xs text-muted-foreground">posts</p></div>
-                <div><p className="font-bold">{(p?.followers_count ?? ig.followers_count ?? 0).toLocaleString("pt-BR")}</p><p className="text-xs text-muted-foreground">seguidores</p></div>
-                <div><p className="font-bold">{p?.follows_count ?? "–"}</p><p className="text-xs text-muted-foreground">seguindo</p></div>
+      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="space-y-6 lg:self-start">
+          <section className="overflow-hidden rounded-lg border bg-card">
+            <div className="p-4">
+              <div className="mb-3 flex items-center gap-4">
+                <Avatar name={ig.username} src={p?.profile_picture_url ?? ig.avatar_url} className="h-16 w-16 text-base" />
+                <div className="tabular grid flex-1 grid-cols-3 text-center">
+                  {[
+                    [p?.media_count ?? ig.meta.media_count, "posts"],
+                    [p?.followers_count ?? ig.followers_count, "seguidores"],
+                    [p?.follows_count, "seguindo"],
+                  ].map(([v, l]) => (
+                    <div key={l as string}>
+                      <p className="text-[15px] font-semibold">{v != null ? Number(v).toLocaleString("pt-BR") : "–"}</p>
+                      <p className="text-[11px] text-muted-foreground">{l}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
+              <p className="text-[13px] font-semibold">{p?.name ?? ig.display_name}</p>
+              <p className="whitespace-pre-line text-[13px] leading-snug">{p?.biography ?? ig.meta.biography}</p>
+              {website && <p className="truncate text-[13px] font-medium text-brand">{website.replace(/^https?:\/\//, "")}</p>}
             </div>
-            <p className="text-sm font-semibold">{p?.name ?? ig.display_name}</p>
-            <p className="whitespace-pre-line text-sm">{p?.biography ?? ig.meta.biography}</p>
-            {(p?.website ?? ig.meta.website) && <p className="text-sm font-medium text-blue-800">{p?.website ?? ig.meta.website}</p>}
-
-            <div className="mt-4 grid grid-cols-3 gap-0.5">
+            <div className="grid grid-cols-3 gap-px bg-border">
               {upcoming.map((post) => (
-                <div key={post.id} className="relative">
+                <div key={post.id} className="relative bg-card">
                   <PostThumb post={post} className="rounded-none" />
-                  <Badge className="absolute left-1 top-1 h-4 px-1 text-[9px]">agendado</Badge>
+                  <span className="absolute left-1 top-1 rounded bg-foreground/85 px-1 text-[9px] font-medium uppercase tracking-wide text-background">Agendado</span>
                 </div>
               ))}
-              {profile.data?.media.map((m) => <IgMediaTile key={m.id} media={m} onClick={() => m.permalink && window.open(m.permalink, "_blank")} />)}
+              {profile.data?.media.map((m) => (
+                <a key={m.id} href={m.permalink} target="_blank" rel="noreferrer" className="bg-card">
+                  <IgMediaTile media={m} className="rounded-none" />
+                </a>
+              ))}
             </div>
-            {profile.isLoading && <p className="mt-3 text-xs text-muted-foreground">Carregando posts…</p>}
-            {profile.error && <p className="mt-3 text-xs text-destructive">{(profile.error as Error).message}</p>}
-          </CardContent>
-        </Card>
+            {profile.isLoading && <p className="p-4 text-xs text-muted-foreground">Carregando posts…</p>}
+            {profile.error && <p className="p-4 text-xs text-danger">{(profile.error as Error).message}</p>}
+          </section>
+        </div>
 
-        <div className="space-y-6">
-          {profile.data?.best_times?.length ? (
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Horários com mais engajamento (seus últimos posts)</CardTitle></CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                {profile.data.best_times.map((b) => <Badge key={b.slot} variant="secondary" className="capitalize">{b.slot} · {b.avg_engagement} interações</Badge>)}
-              </CardContent>
-            </Card>
-          ) : null}
+        <div className="min-w-0 space-y-6">
+          {best.length > 0 && (
+            <Panel title="Horários com mais engajamento" description="Média de curtidas e comentários dos seus últimos posts por horário">
+              <div className="space-y-2.5">
+                {best.map((b) => (
+                  <div key={b.slot} className="grid grid-cols-[130px_minmax(0,1fr)_auto] items-center gap-3 text-[13px]">
+                    <span>{sentence(b.slot)}</span>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                      <div className="h-full rounded-full bg-brand" style={{ width: `${(b.avg_engagement / maxEng) * 100}%` }} />
+                    </div>
+                    <span className="tabular text-xs text-muted-foreground">{b.avg_engagement.toLocaleString("pt-BR")} · {b.posts} post{b.posts > 1 ? "s" : ""}</span>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          )}
           {latest ? (
             <AuditView audit={latest} />
           ) : (
-            <EmptyState icon={<Sparkles className="h-8 w-8" />} title="Nenhuma auditoria ainda">
-              Clique em "Auditar com IA" ou peça ao Claude: "analise minha vitrine e me dê uma bio nova".
+            <EmptyState icon={<Sparkles />} title="Nenhuma auditoria ainda">
+              Clique em “Auditar perfil” ou peça ao Claude: “analise minha vitrine e me dê uma bio nova”.
             </EmptyState>
           )}
           <p className="text-xs text-muted-foreground">
-            A API do Instagram não permite alterar bio, foto ou destaques automaticamente — o Studio sugere e você aplica com um toque em Editar perfil.
+            O Instagram não permite alterar bio, foto ou destaques por API. O Studio sugere e você aplica em Editar perfil.
           </p>
         </div>
       </div>

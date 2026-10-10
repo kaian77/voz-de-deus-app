@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { MessageSquareReply, Pencil, Plus, Sparkles, Trash2, Workflow } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { MoreHorizontal, Plus, Sparkles, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useInstagramProfile, useRemoveRow, useSaveRow, useTable } from "../lib/hooks";
 import { IgMediaTile } from "../components/IgMediaTile";
 import type { Automation } from "../lib/types";
-import { EmptyState, PageHeader } from "../components/bits";
+import { EmptyState, PageHeader, SectionLabel } from "../components/bits";
 
 const blank: Partial<Automation> = {
   name: "",
@@ -60,7 +59,7 @@ function AutomationDialog({ value, onClose }: { value: Partial<Automation>; onCl
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl [&_label]:text-xs">
         <DialogHeader>
           <DialogTitle>{a.id ? "Editar automação" : "Nova automação"}</DialogTitle>
         </DialogHeader>
@@ -131,7 +130,7 @@ function AutomationDialog({ value, onClose }: { value: Partial<Automation>; onCl
 
           <div className="space-y-3 rounded-lg border p-3">
             <div className="flex items-center justify-between">
-              <Label className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-600" /> Resposta pública escrita pela IA</Label>
+              <Label className="flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-muted-foreground" /> Resposta pública escrita pela IA</Label>
               <Switch checked={!!a.use_ai} onCheckedChange={(v) => setA({ ...a, use_ai: v })} />
             </div>
             {a.use_ai ? (
@@ -173,55 +172,72 @@ export default function Automations() {
   return (
     <div>
       <PageHeader
-        title="Automações de comentários"
-        description="Quem comentar a palavra-chave recebe resposta pública e mensagem no direct, na hora."
-        actions={<Button onClick={() => setEditing(blank)}><Plus className="mr-2 h-4 w-4" /> Nova automação</Button>}
+        title="Automações"
+        description="Quem comentar a palavra-chave recebe uma resposta pública e uma mensagem no direct, na hora."
+        actions={<Button size="sm" onClick={() => setEditing(blank)}><Plus /> Nova automação</Button>}
       />
 
       {automations.length === 0 ? (
-        <EmptyState icon={<Workflow className="h-8 w-8" />} title="Nenhuma automação ainda">
-          Exemplo clássico: no vídeo, diga "comente ORAÇÃO que eu te mando". Crie a automação com a palavra "oração" e a mensagem do direct.
+        <EmptyState icon={<Workflow />} title="Nenhuma automação" action={<Button size="sm" onClick={() => setEditing(blank)}><Plus /> Criar a primeira</Button>}>
+          Exemplo clássico: no vídeo, diga “comente ORAÇÃO que eu te mando”. Crie a automação com a palavra “oração” e a mensagem do direct.
         </EmptyState>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {automations.map((a) => (
-            <Card key={a.id} className={a.active ? "" : "opacity-60"}>
-              <CardContent className="space-y-3 p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{a.name}</p>
-                    <p className="text-xs text-muted-foreground">Disparou {a.triggered_count} vezes</p>
-                  </div>
-                  <Switch checked={a.active} onCheckedChange={(v) => save.mutate({ id: a.id, active: v })} aria-label="Ativar" />
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {a.match_mode === "any" ? (
-                    <Badge variant="secondary">qualquer comentário</Badge>
-                  ) : (
-                    a.keywords.map((k) => <Badge key={k} variant="secondary">{k}</Badge>)
-                  )}
-                  {a.media_ids.length > 0 && <Badge variant="outline">{a.media_ids.length} post(s)</Badge>}
-                  {a.use_ai && <Badge className="bg-violet-600">IA</Badge>}
-                </div>
-                {a.dm_message && (
-                  <p className="flex gap-2 rounded-md bg-muted p-2 text-xs"><MessageSquareReply className="h-4 w-4 shrink-0" /> <span className="line-clamp-3 whitespace-pre-line">{a.dm_message}</span></p>
-                )}
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setEditing(a)}><Pencil className="mr-1 h-3.5 w-3.5" /> Editar</Button>
-                  <Button size="sm" variant="ghost" onClick={() => confirm("Apagar automação?") && remove.mutate(a.id)}><Trash2 className="mr-1 h-3.5 w-3.5" /> Apagar</Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="overflow-x-auto rounded-lg border bg-card">
+          <table className="w-full min-w-[720px] text-[13px]">
+            <thead>
+              <tr className="border-b bg-secondary/40 text-left">
+                <th className="px-4 py-2"><SectionLabel>Automação</SectionLabel></th>
+                <th className="px-4 py-2"><SectionLabel>Quando comentarem</SectionLabel></th>
+                <th className="px-4 py-2"><SectionLabel>Ações</SectionLabel></th>
+                <th className="px-4 py-2 text-right"><SectionLabel>Disparos</SectionLabel></th>
+                <th className="px-4 py-2"><SectionLabel>Ativa</SectionLabel></th>
+                <th className="w-10" />
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {automations.map((a) => (
+                <tr key={a.id} className={a.active ? "" : "text-muted-foreground"}>
+                  <td className="px-4 py-3">
+                    <button className="text-left font-medium hover:underline" onClick={() => setEditing(a)}>{a.name}</button>
+                    <p className="text-xs text-muted-foreground">{a.media_ids.length ? `${a.media_ids.length} post(s) específico(s)` : "Todos os posts e reels"}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    {a.match_mode === "any" ? (
+                      <span className="text-muted-foreground">Qualquer comentário</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {a.keywords.map((k) => <code key={k} className="rounded border bg-secondary/60 px-1.5 py-0.5 font-mono text-[11px] uppercase">{k}</code>)}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-foreground/80">
+                    {[a.use_ai ? "Resposta pela IA" : a.reply_variants.length ? `${a.reply_variants.length} resposta(s) pública(s)` : null, a.dm_message ? "Mensagem no direct" : null].filter(Boolean).join(" + ")}
+                  </td>
+                  <td className="tabular px-4 py-3 text-right">{a.triggered_count.toLocaleString("pt-BR")}</td>
+                  <td className="px-4 py-3"><Switch checked={a.active} onCheckedChange={(v) => save.mutate({ id: a.id, active: v })} aria-label={`Ativar ${a.name}`} /></td>
+                  <td className="px-2 py-3">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Ações"><MoreHorizontal className="h-4 w-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => setEditing(a)}>Editar</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => remove.mutate(a.id)}>Excluir</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      <Card className="mt-6 bg-muted/40">
-        <CardContent className="space-y-1 p-4 text-xs text-muted-foreground">
-          <p><b>Instagram:</b> respostas e DMs automáticas funcionam em posts, reels e lives da conta profissional conectada.</p>
-          <p><b>TikTok:</b> a API oficial do TikTok não permite responder comentários automaticamente — lá o Studio faz agendamento e publicação.</p>
-        </CardContent>
-      </Card>
+      <div className="mt-6 grid gap-4 text-xs text-muted-foreground sm:grid-cols-2">
+        <p><span className="font-medium text-foreground">Instagram.</span> Funciona em posts, reels e lives da conta profissional conectada. O Instagram permite uma mensagem no direct por comentário, em até 7 dias.</p>
+        <p><span className="font-medium text-foreground">TikTok.</span> A API oficial não permite responder comentários automaticamente. No TikTok, o Studio agenda e publica.</p>
+      </div>
 
       {editing && <AutomationDialog value={editing} onClose={() => setEditing(null)} />}
     </div>

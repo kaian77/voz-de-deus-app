@@ -1,31 +1,27 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Bot, Check, Loader2, PenSquare, X } from "lucide-react";
+import { Bot, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { api } from "../lib/api";
 import { useInvalidate, useTable } from "../lib/hooks";
 import { renderAndUploadSlides } from "../lib/publishing";
 import type { Post } from "../lib/types";
-import { EmptyState, formatDateTime, KIND_LABEL, PageHeader, PlatformIcon, SlidePreview } from "../components/bits";
+import { EmptyState, formatDateTime, KIND_LABEL, PageHeader, PlatformIcon, SectionLabel, SlidePreview } from "../components/bits";
 import { PostThumb } from "../components/PostThumb";
 
-function ApprovalCard({ post }: { post: Post }) {
+function ApprovalItem({ post }: { post: Post }) {
   const invalidate = useInvalidate();
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
+  const slides = post.slides?.length && !post.media.length ? (post.kind === "carousel" ? post.slides : post.slides.slice(0, 1)) : null;
 
   const approve = async () => {
     setBusy("approve");
     try {
-      let media = post.media;
-      if (!media.length && post.slides?.length) {
-        const slides = post.kind === "carousel" ? post.slides : post.slides.slice(0, 1);
-        media = await renderAndUploadSlides(slides, post.design);
-      }
+      const media = slides ? await renderAndUploadSlides(slides, post.design) : post.media;
       const future = post.scheduled_at && new Date(post.scheduled_at) > new Date();
       await api.update("posts", post.id, { media, status: future ? "scheduled" : "draft" });
-      toast.success(future ? `Aprovado e agendado para ${formatDateTime(post.scheduled_at)}` : "Aprovado como rascunho — defina um horário para agendar.");
+      toast.success(future ? `Aprovado. Sai ${formatDateTime(post.scheduled_at)}.` : "Aprovado como rascunho. Defina um horário para agendar.");
       invalidate("posts");
     } catch (e) {
       toast.error((e as Error).message);
@@ -37,60 +33,63 @@ function ApprovalCard({ post }: { post: Post }) {
   const reject = async () => {
     setBusy("reject");
     await api.remove("posts", post.id).catch((e) => toast.error(e.message));
+    toast("Sugestão descartada");
     invalidate("posts");
     setBusy(null);
   };
 
   return (
-    <Card>
-      <CardContent className="grid gap-5 p-5 md:grid-cols-[260px_1fr]">
-        <div className="space-y-2">
-          {post.slides?.length && !post.media.length ? (
-            <div className="flex snap-x gap-2 overflow-x-auto pb-2">
-              {(post.kind === "carousel" ? post.slides : post.slides.slice(0, 1)).map((s, i, arr) => (
-                <SlidePreview key={i} slide={s} index={i} total={arr.length} design={post.design} className="w-[220px] shrink-0 snap-center" />
-              ))}
+    <article className="overflow-hidden rounded-lg border bg-card">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2.5 text-[13px]">
+        <span className="flex items-center gap-1.5 font-medium"><Bot className="h-3.5 w-3.5 text-muted-foreground" /> {post.title || KIND_LABEL[post.kind]}</span>
+        <span className="text-muted-foreground">{KIND_LABEL[post.kind]}</span>
+        <span className="flex gap-1.5">{post.platforms.map((p) => <PlatformIcon key={p} platform={p} />)}</span>
+        <span className="tabular ml-auto text-xs text-muted-foreground">{formatDateTime(post.scheduled_at)}</span>
+      </header>
+      <div className="grid gap-5 p-4 md:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
+        {slides ? (
+          <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1">
+            {slides.map((s, i) => <SlidePreview key={i} slide={s} index={i} total={slides.length} design={post.design} className="w-[200px] shrink-0 snap-start" />)}
+          </div>
+        ) : (
+          <PostThumb post={post} className="max-w-[240px]" />
+        )}
+        <div className="flex min-w-0 flex-col gap-4">
+          {post.notes && (
+            <div>
+              <SectionLabel className="mb-1">Por que este post</SectionLabel>
+              <p className="text-[13px] text-foreground/80">{post.notes}</p>
             </div>
-          ) : (
-            <PostThumb post={post} />
           )}
-        </div>
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <Bot className="h-4 w-4 text-violet-600" />
-            <span className="font-semibold">{post.title || KIND_LABEL[post.kind]}</span>
-            {post.platforms.map((p) => <PlatformIcon key={p} platform={p} />)}
-            <span className="text-muted-foreground">· {formatDateTime(post.scheduled_at)}</span>
+          <div>
+            <SectionLabel className="mb-1">Legenda</SectionLabel>
+            <p className="max-h-44 overflow-y-auto whitespace-pre-line text-[13px] leading-relaxed">{post.caption}</p>
           </div>
-          {post.notes && <p className="rounded-md bg-violet-50 p-3 text-sm text-violet-900"><b>Por quê:</b> {post.notes}</p>}
-          <p className="max-h-48 overflow-y-auto whitespace-pre-line rounded-md border p-3 text-sm">{post.caption}</p>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={approve} disabled={!!busy}>
-              {busy === "approve" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />} Aprovar
+          <div className="mt-auto flex flex-wrap gap-2">
+            <Button size="sm" onClick={approve} disabled={!!busy}>
+              {busy === "approve" ? <Loader2 className="animate-spin" /> : <Check />} Aprovar
             </Button>
-            <Button asChild variant="outline"><Link to={`/studio/criar?id=${post.id}`}><PenSquare className="mr-2 h-4 w-4" /> Editar</Link></Button>
-            <Button variant="ghost" onClick={reject} disabled={!!busy}>
-              <X className="mr-2 h-4 w-4" /> Descartar
-            </Button>
+            <Button asChild size="sm" variant="outline"><Link to={`/studio/criar?id=${post.id}`}>Editar</Link></Button>
+            <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={reject} disabled={!!busy}>Descartar</Button>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }
 
 export default function Approvals() {
   const { data: posts = [] } = useTable("posts");
-  const pending = posts.filter((p) => p.status === "pending_approval");
+  const pending = posts.filter((p) => p.status === "pending_approval").sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""));
   return (
     <div>
-      <PageHeader title="Aprovações" description="Conteúdos que o Claude criou para você. Aprove, edite ou descarte." />
+      <PageHeader title="Aprovações" description="Posts que o Claude preparou. Nada é publicado sem o seu aval enquanto a aprovação estiver ligada." />
       {pending.length === 0 ? (
-        <EmptyState icon={<Bot className="h-8 w-8" />} title="Nada esperando aprovação">
-          Peça ao Claude: "crie 3 carrosséis para esta semana e agende nos melhores horários". Eles aparecem aqui.
+        <EmptyState icon={<Bot />} title="Nenhum post esperando aprovação">
+          Peça ao Claude algo como “crie 3 carrosséis para esta semana e agende nos melhores horários”. Eles aparecem aqui.
         </EmptyState>
       ) : (
-        <div className="space-y-4">{pending.map((p) => <ApprovalCard key={p.id} post={p} />)}</div>
+        <div className="space-y-4">{pending.map((p) => <ApprovalItem key={p.id} post={p} />)}</div>
       )}
     </div>
   );

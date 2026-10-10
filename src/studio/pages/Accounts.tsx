@@ -1,27 +1,51 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, Unplug } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "../lib/api";
 import { useRemoveRow, useTable } from "../lib/hooks";
-import type { Platform } from "../lib/types";
-import { PageHeader, PlatformIcon } from "../components/bits";
+import type { Platform, SocialAccount } from "../lib/types";
+import { Avatar, PageHeader, PlatformIcon, StatusDot } from "../components/bits";
 import WhatsAppConnect from "../components/WhatsAppConnect";
 
-const INFO: Record<Platform, { name: string; features: string[]; note: string }> = {
+const INFO: Record<Platform, { name: string; features: string; note: string }> = {
   instagram: {
     name: "Instagram",
-    features: ["Publicar posts, carrosséis, reels e stories", "Responder comentários e mandar DM automática", "Agente de IA respondendo o direct", "Ler perfil, posts e engajamento"],
-    note: "Precisa ser conta Profissional (Criador de conteúdo ou Empresa).",
+    features: "Publica posts, carrosséis, reels e stories. Responde comentários e mensagens do direct. Lê perfil e engajamento.",
+    note: "Exige conta profissional (criador de conteúdo ou empresa).",
   },
   tiktok: {
     name: "TikTok",
-    features: ["Publicar vídeos", "Publicar carrossel de fotos", "Agendar no mesmo calendário"],
-    note: "Até o app ser aprovado na auditoria do TikTok, os posts saem como privados (só você vê).",
+    features: "Publica vídeos e carrosséis de fotos no mesmo calendário do Instagram.",
+    note: "Até o app ser aprovado na auditoria do TikTok, os posts saem como privados.",
   },
 };
+
+export function ConnectedAccount({ account, onRemove }: { account: SocialAccount; onRemove: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <div className="flex items-center gap-3 rounded-md border px-3 py-2">
+      <Avatar name={account.username ?? account.display_name} src={account.avatar_url} className="h-7 w-7" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-medium">{account.platform === "whatsapp" ? account.display_name : `@${account.username ?? account.display_name}`}</p>
+        <p className="tabular truncate text-xs text-muted-foreground">
+          {account.platform === "whatsapp"
+            ? `+${account.username} · ${account.meta.provider === "waha" ? "WAHA" : "API oficial"}`
+            : account.followers_count != null ? `${account.followers_count.toLocaleString("pt-BR")} seguidores` : "Conectada"}
+        </p>
+      </div>
+      {confirming ? (
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setConfirming(false)}>Cancelar</Button>
+          <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={onRemove}>Desconectar</Button>
+        </div>
+      ) : (
+        <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setConfirming(true)}>Desconectar</Button>
+      )}
+    </div>
+  );
+}
 
 export default function Accounts() {
   const { data: accounts = [] } = useTable("social_accounts");
@@ -32,7 +56,7 @@ export default function Accounts() {
   useEffect(() => {
     const connected = params.get("connected");
     const error = params.get("error");
-    if (connected) toast.success(`${connected === "instagram" ? "Instagram" : "TikTok"} conectado!`);
+    if (connected) toast.success(`${connected === "instagram" ? "Instagram" : "TikTok"} conectado`);
     if (error) toast.error(error);
     if (connected || error) setParams({}, { replace: true });
   }, [params, setParams]);
@@ -50,38 +74,31 @@ export default function Accounts() {
 
   return (
     <div>
-      <PageHeader title="Contas" description="Conecte as redes que o Studio vai gerenciar." />
-      <div className="grid gap-6 md:grid-cols-2">
+      <PageHeader title="Contas" description="As redes que o Studio publica, responde e acompanha." />
+      <div className="divide-y rounded-lg border bg-card">
         {(["instagram", "tiktok"] as Platform[]).map((platform) => {
           const list = accounts.filter((a) => a.platform === platform);
           return (
-            <Card key={platform}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><PlatformIcon platform={platform} className="h-5 w-5" /> {INFO[platform].name}</CardTitle>
-                <CardDescription>{INFO[platform].note}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="space-y-1 text-sm text-muted-foreground">
-                  {INFO[platform].features.map((f) => <li key={f} className="flex gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> {f}</li>)}
-                </ul>
-                {list.map((a) => (
-                  <div key={a.id} className="flex items-center gap-3 rounded-lg border p-3">
-                    {a.avatar_url ? <img src={a.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" /> : <div className="h-9 w-9 rounded-full bg-gradient-divine" />}
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold">@{a.username ?? a.display_name}</p>
-                      <p className="text-xs text-muted-foreground">{a.followers_count != null ? `${a.followers_count.toLocaleString("pt-BR")} seguidores` : "Conectada"}</p>
-                    </div>
-                    <Button size="sm" variant="ghost" onClick={() => confirm("Desconectar esta conta?") && remove.mutate(a.id)}>
-                      <Unplug className="mr-1 h-4 w-4" /> Desconectar
-                    </Button>
+            <section key={platform} className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
+              <div className="flex gap-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border"><PlatformIcon platform={platform} className="h-5 w-5 text-foreground" /></span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold">{INFO[platform].name}</h2>
+                    {list.length > 0 ? <StatusDot tone="success">Conectado</StatusDot> : <StatusDot tone="neutral">Não conectado</StatusDot>}
                   </div>
-                ))}
-                <Button className="w-full" variant={list.length ? "outline" : "default"} onClick={() => connect(platform)} disabled={busy === platform}>
-                  {busy === platform && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {list.length ? "Reconectar / adicionar outra" : `Conectar ${INFO[platform].name}`}
+                  <p className="mt-1 text-[13px] text-foreground/80">{INFO[platform].features}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{INFO[platform].note}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {list.map((a) => <ConnectedAccount key={a.id} account={a} onRemove={() => remove.mutate(a.id)} />)}
+                <Button size="sm" className="w-full" variant={list.length ? "outline" : "default"} onClick={() => connect(platform)} disabled={busy === platform}>
+                  {busy === platform && <Loader2 className="animate-spin" />}
+                  {list.length ? "Conectar outra conta" : `Conectar ${INFO[platform].name}`}
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           );
         })}
         <WhatsAppConnect />

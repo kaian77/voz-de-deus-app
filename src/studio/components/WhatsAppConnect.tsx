@@ -1,20 +1,24 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Copy, Loader2, Unplug } from "lucide-react";
+import { Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
 import { useRemoveRow, useTable } from "../lib/hooks";
+import { PlatformIcon, StatusDot } from "./bits";
+import { ConnectedAccount } from "../pages/Accounts";
+
+type Provider = "waha" | "meta";
 
 export default function WhatsAppConnect() {
   const { data: accounts = [] } = useTable("social_accounts");
   const remove = useRemoveRow("social_accounts");
   const qc = useQueryClient();
   const list = accounts.filter((a) => a.platform === "whatsapp");
+  const [provider, setProvider] = useState<Provider>("waha");
   const [busy, setBusy] = useState(false);
   const [waha, setWaha] = useState({ base_url: "", session: "default", api_key: "" });
   const [meta, setMeta] = useState({ phone_number_id: "", access_token: "", waba_id: "" });
@@ -25,7 +29,7 @@ export default function WhatsAppConnect() {
     try {
       const r = await api.invoke<{ webhook_url?: string; webhook_configured?: boolean }>("inbox", { action, ...body });
       qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
-      toast.success("WhatsApp conectado!");
+      toast.success("WhatsApp conectado");
       if (r.webhook_url && !r.webhook_configured) setWebhook(r.webhook_url);
     } catch (e) {
       toast.error((e as Error).message);
@@ -34,88 +38,94 @@ export default function WhatsAppConnect() {
     }
   };
 
+  const copy = (t: string) => navigator.clipboard.writeText(t).then(() => toast.success("Copiado"), () => toast.error("Selecione e copie manualmente"));
+
   return (
-    <Card className="md:col-span-2">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">WhatsApp</CardTitle>
-        <CardDescription>O agente de IA responde quem te chamar no WhatsApp e passa para você quando precisar.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {list.map((a) => (
-          <div key={a.id} className="flex items-center gap-3 rounded-lg border p-3">
-            <div className="flex-1">
-              <p className="text-sm font-semibold">{a.display_name}</p>
-              <p className="text-xs text-muted-foreground">+{a.username} · {a.meta.provider === "waha" ? "WAHA" : "API oficial"}</p>
-            </div>
-            <Button size="sm" variant="ghost" onClick={() => confirm("Desconectar este WhatsApp?") && remove.mutate(a.id)}>
-              <Unplug className="mr-1 h-4 w-4" /> Desconectar
-            </Button>
+    <section className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
+      <div className="flex gap-4">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border"><PlatformIcon platform="whatsapp" className="h-5 w-5 text-foreground" /></span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold">WhatsApp</h2>
+            {list.length > 0 ? <StatusDot tone="success">Conectado</StatusDot> : <StatusDot tone="neutral">Não conectado</StatusDot>}
           </div>
-        ))}
+          <p className="mt-1 text-[13px] text-foreground/80">O agente de IA responde quem chamar no seu WhatsApp e passa a conversa para você quando precisa.</p>
+          <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+            <p><span className="font-medium text-foreground">WAHA</span> é gratuito e roda num servidor seu, conectado por QR Code como o WhatsApp Web. Não é oficial: o WhatsApp pode bloquear números que se comportem como robô. Comece com um número secundário e não envie mensagens em massa.</p>
+            <p><span className="font-medium text-foreground">API oficial da Meta</span> não tem risco de bloqueio. Responder quem te chamou, em até 24 horas, é gratuito; só mensagens iniciadas por você são cobradas.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {list.map((a) => <ConnectedAccount key={a.id} account={a} onRemove={() => remove.mutate(a.id)} />)}
 
         {webhook && (
-          <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
-            <p>Não consegui configurar o webhook no WAHA automaticamente. No painel do WAHA, em <b>Webhooks</b> da sessão, cole esta URL com o evento <code>message</code>:</p>
+          <div className="space-y-2 rounded-md border border-dashed p-3 text-xs">
+            <p>Configure este endereço no painel do WAHA, em Webhooks da sessão, com o evento <code className="font-mono">message</code>:</p>
             <div className="flex gap-2">
-              <code className="flex-1 break-all rounded bg-white p-2 text-xs">{webhook}</code>
-              <Button size="icon" variant="outline" onClick={() => navigator.clipboard.writeText(webhook).then(() => toast.success("Copiado"))} aria-label="Copiar"><Copy className="h-4 w-4" /></Button>
+              <code className="min-w-0 flex-1 break-all rounded bg-secondary p-2 font-mono text-[11px]">{webhook}</code>
+              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => copy(webhook)} aria-label="Copiar endereço"><Copy className="h-3.5 w-3.5" /></Button>
             </div>
           </div>
         )}
 
-        <Tabs defaultValue="waha">
-          <TabsList>
-            <TabsTrigger value="waha">WAHA (grátis)</TabsTrigger>
-            <TabsTrigger value="meta">API oficial da Meta</TabsTrigger>
-          </TabsList>
-          <TabsContent value="waha" className="space-y-3 pt-2">
-            <p className="text-xs text-muted-foreground">
-              O WAHA roda no seu servidor (Docker) e conecta o WhatsApp lendo um QR Code, igual ao WhatsApp Web. É gratuito, mas <b>não é oficial</b>: o
-              WhatsApp pode bloquear números que pareçam robô. Comece com um número secundário e evite mandar mensagens em massa.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1.5 sm:col-span-3">
-                <Label>URL pública do WAHA (https)</Label>
-                <Input value={waha.base_url} onChange={(e) => setWaha({ ...waha, base_url: e.target.value })} placeholder="https://waha.seudominio.com" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Sessão</Label>
-                <Input value={waha.session} onChange={(e) => setWaha({ ...waha, session: e.target.value })} />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>API key do WAHA (WAHA_API_KEY)</Label>
-                <Input type="password" value={waha.api_key} onChange={(e) => setWaha({ ...waha, api_key: e.target.value })} />
-              </div>
-            </div>
-            <Button onClick={() => connect("connect_waha", waha)} disabled={busy || !waha.base_url}>
-              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Conectar WAHA
-            </Button>
-          </TabsContent>
-          <TabsContent value="meta" className="space-y-3 pt-2">
-            <p className="text-xs text-muted-foreground">
-              Oficial e sem risco de bloqueio. <b>Responder</b> quem te chamou (até 24h depois) é gratuito; só mensagens iniciadas por você, com template, são cobradas.
-              Os dados ficam no app da Meta, em WhatsApp → Configuração da API.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Phone Number ID</Label>
-                <Input value={meta.phone_number_id} onChange={(e) => setMeta({ ...meta, phone_number_id: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>WhatsApp Business Account ID</Label>
-                <Input value={meta.waba_id} onChange={(e) => setMeta({ ...meta, waba_id: e.target.value })} />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Token permanente (usuário do sistema)</Label>
-                <Input type="password" value={meta.access_token} onChange={(e) => setMeta({ ...meta, access_token: e.target.value })} />
-              </div>
-            </div>
-            <Button onClick={() => connect("connect_whatsapp", meta)} disabled={busy || !meta.phone_number_id || !meta.access_token}>
-              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Conectar API oficial
-            </Button>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+        <div className="rounded-md border">
+          <div className="grid grid-cols-2 border-b text-xs font-medium">
+            {(["waha", "meta"] as Provider[]).map((p) => (
+              <button key={p} type="button" onClick={() => setProvider(p)} className={cn("h-9 border-b-2", provider === p ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+                {p === "waha" ? "WAHA (grátis)" : "API oficial"}
+              </button>
+            ))}
+          </div>
+          <form
+            className="space-y-3 p-3 [&_label]:text-xs"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (provider === "waha") connect("connect_waha", waha);
+              else connect("connect_whatsapp", meta);
+            }}
+          >
+            {provider === "waha" ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="waha-url">Endereço do WAHA (https)</Label>
+                  <Input id="waha-url" className="h-8 text-[13px]" value={waha.base_url} onChange={(e) => setWaha({ ...waha, base_url: e.target.value })} placeholder="https://waha.seudominio.com" />
+                </div>
+                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="waha-session">Sessão</Label>
+                    <Input id="waha-session" className="h-8 text-[13px]" value={waha.session} onChange={(e) => setWaha({ ...waha, session: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="waha-key">Chave de API</Label>
+                    <Input id="waha-key" className="h-8 text-[13px]" type="password" value={waha.api_key} onChange={(e) => setWaha({ ...waha, api_key: e.target.value })} placeholder="WAHA_API_KEY" />
+                  </div>
+                </div>
+                <Button type="submit" size="sm" className="w-full" disabled={busy || !waha.base_url}>{busy && <Loader2 className="animate-spin" />} Conectar WAHA</Button>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="wa-phone">Phone Number ID</Label>
+                    <Input id="wa-phone" className="h-8 text-[13px]" value={meta.phone_number_id} onChange={(e) => setMeta({ ...meta, phone_number_id: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="wa-waba">ID da conta (WABA)</Label>
+                    <Input id="wa-waba" className="h-8 text-[13px]" value={meta.waba_id} onChange={(e) => setMeta({ ...meta, waba_id: e.target.value })} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="wa-token">Token permanente</Label>
+                  <Input id="wa-token" className="h-8 text-[13px]" type="password" value={meta.access_token} onChange={(e) => setMeta({ ...meta, access_token: e.target.value })} />
+                </div>
+                <Button type="submit" size="sm" className="w-full" disabled={busy || !meta.phone_number_id || !meta.access_token}>{busy && <Loader2 className="animate-spin" />} Conectar API oficial</Button>
+              </>
+            )}
+          </form>
+        </div>
+      </div>
+    </section>
   );
 }

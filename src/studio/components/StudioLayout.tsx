@@ -1,69 +1,122 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
-  Bot, CalendarDays, CheckCircle2, Inbox, LayoutDashboard, LogOut, Menu, MessageCircle, PenSquare, Store, Users, Workflow, Link2,
+  BarChart3, Bot, CalendarDays, CheckSquare, Inbox, LayoutGrid, Link2, LogOut, Menu, MessageSquare, PenLine, Store, Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { isDemo, resetDemo, supabase } from "../lib/api";
-import { useTable } from "../lib/hooks";
+import { useSettings, useTable } from "../lib/hooks";
+import { Avatar } from "./bits";
 
-const NAV = [
-  { to: "/studio", label: "Visão geral", icon: LayoutDashboard, end: true },
-  { to: "/studio/criar", label: "Criar post", icon: PenSquare },
-  { to: "/studio/calendario", label: "Calendário", icon: CalendarDays },
-  { to: "/studio/aprovacoes", label: "Aprovações", icon: CheckCircle2, badge: "approvals" },
-  { to: "/studio/mensagens", label: "Mensagens", icon: Inbox, badge: "inbox" },
-  { to: "/studio/automacoes", label: "Automações", icon: Workflow },
-  { to: "/studio/comentarios", label: "Comentários", icon: MessageCircle },
-  { to: "/studio/vitrine", label: "Vitrine", icon: Store },
-  { to: "/studio/concorrentes", label: "Concorrentes", icon: Users },
-  { to: "/studio/contas", label: "Contas", icon: Link2 },
-  { to: "/studio/claude", label: "Claude & API", icon: Bot },
+type Item = { to: string; label: string; icon: typeof Bot; end?: boolean; count?: "approvals" | "inbox" };
+const GROUPS: { label?: string; items: Item[] }[] = [
+  { items: [{ to: "/studio", label: "Visão geral", icon: LayoutGrid, end: true }] },
+  {
+    label: "Publicar",
+    items: [
+      { to: "/studio/criar", label: "Criar post", icon: PenLine },
+      { to: "/studio/calendario", label: "Calendário", icon: CalendarDays },
+      { to: "/studio/aprovacoes", label: "Aprovações", icon: CheckSquare, count: "approvals" },
+    ],
+  },
+  {
+    label: "Engajar",
+    items: [
+      { to: "/studio/mensagens", label: "Mensagens", icon: Inbox, count: "inbox" },
+      { to: "/studio/automacoes", label: "Automações", icon: Workflow },
+      { to: "/studio/comentarios", label: "Comentários", icon: MessageSquare },
+    ],
+  },
+  {
+    label: "Crescer",
+    items: [
+      { to: "/studio/vitrine", label: "Vitrine", icon: Store },
+      { to: "/studio/concorrentes", label: "Concorrentes", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Configurar",
+    items: [
+      { to: "/studio/contas", label: "Contas", icon: Link2 },
+      { to: "/studio/claude", label: "Claude e API", icon: Bot },
+    ],
+  },
 ];
 
 function Nav({ onNavigate }: { onNavigate?: () => void }) {
   const { data: posts } = useTable("posts");
   const { data: conversations } = useTable("conversations", { order: "last_message_at" });
-  const counts: Record<string, number> = {
+  const counts = {
     approvals: posts?.filter((p) => p.status === "pending_approval").length ?? 0,
     inbox: conversations?.filter((c) => c.status === "needs_human").length ?? 0,
   };
   return (
-    <nav className="flex flex-col gap-1">
-      {NAV.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.end}
-          onClick={onNavigate}
-          className={({ isActive }) =>
-            cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-              isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )
-          }
-        >
-          <item.icon className="h-4 w-4" />
-          <span className="flex-1">{item.label}</span>
-          {item.badge && counts[item.badge] > 0 && (
-            <span className="rounded-full bg-amber-400 px-2 py-0.5 text-xs font-semibold text-amber-950">{counts[item.badge]}</span>
-          )}
-        </NavLink>
+    <nav className="flex flex-col gap-5">
+      {GROUPS.map((group, i) => (
+        <div key={i} className="flex flex-col gap-px">
+          {group.label && <p className="mb-1 px-2.5 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground/80">{group.label}</p>}
+          {group.items.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                cn(
+                  "group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] transition-colors",
+                  isActive ? "bg-secondary font-medium text-foreground" : "text-foreground/70 hover:bg-secondary/70 hover:text-foreground",
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <item.icon className={cn("h-4 w-4", isActive ? "text-foreground" : "text-muted-foreground group-hover:text-foreground")} strokeWidth={1.75} />
+                  <span className="flex-1">{item.label}</span>
+                  {item.count && counts[item.count] > 0 && (
+                    <span className="tabular rounded bg-foreground px-1.5 text-[10px] font-medium leading-4 text-background">{counts[item.count]}</span>
+                  )}
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
       ))}
     </nav>
   );
 }
 
-function Brand() {
+function Workspace() {
+  const { data: settings } = useSettings();
+  const { data: accounts } = useTable("social_accounts");
+  const ig = accounts?.find((a) => a.platform === "instagram");
+  const name = settings?.brand_name || ig?.display_name || "Meu Studio";
   return (
-    <div className="flex items-center gap-2 px-3">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-divine text-lg font-bold text-white">S</div>
-      <div>
-        <p className="text-sm font-bold leading-tight">Social Studio</p>
-        <p className="text-xs text-muted-foreground">Instagram · TikTok · WhatsApp</p>
+    <div className="flex items-center gap-2.5 px-2.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-foreground text-[12px] font-semibold text-background">
+        {name.trim()[0]?.toUpperCase()}
+      </span>
+      <div className="min-w-0 leading-tight">
+        <p className="truncate text-[13px] font-semibold">{name}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{ig?.username ? `@${ig.username}` : "Studio"}</p>
       </div>
+    </div>
+  );
+}
+
+function Footer({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <div className="space-y-2 border-t px-3 pt-3">
+      {isDemo && (
+        <div className="rounded-md border border-dashed px-2.5 py-2 text-[11px] leading-snug text-muted-foreground">
+          <span className="font-medium text-foreground">Modo demonstração.</span> Dados de exemplo, salvos só neste navegador.
+        </div>
+      )}
+      <button onClick={onSignOut} className="flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] text-foreground/70 hover:bg-secondary hover:text-foreground">
+        <LogOut className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
+        {isDemo ? "Restaurar exemplos" : "Sair"}
+      </button>
     </div>
   );
 }
@@ -71,6 +124,8 @@ function Brand() {
 export default function StudioLayout() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const { data: accounts } = useTable("social_accounts");
+  const ig = accounts?.find((a) => a.platform === "instagram");
 
   const signOut = async () => {
     if (isDemo) {
@@ -83,49 +138,39 @@ export default function StudioLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      {isDemo && (
-        <div className="bg-amber-100 px-4 py-2 text-center text-xs text-amber-900">
-          Modo demo: os dados ficam só neste navegador. Configure o Supabase (veja <b>SETUP_SOCIAL_STUDIO.md</b>) para conectar Instagram e TikTok de verdade.
+    <div className="flex min-h-screen bg-background">
+      <aside className="sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r bg-card py-4 lg:flex">
+        <Workspace />
+        <div className="mt-6 flex-1 overflow-y-auto px-2">
+          <Nav />
         </div>
-      )}
-      <div className="flex">
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-6 border-r bg-background py-5 lg:flex">
-          <Brand />
-          <div className="flex-1 overflow-y-auto px-3">
-            <Nav />
-          </div>
-          <div className="px-3">
-            <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" onClick={signOut}>
-              <LogOut className="mr-2 h-4 w-4" /> {isDemo ? "Reiniciar demo" : "Sair"}
-            </Button>
-          </div>
-        </aside>
+        <Footer onSignOut={signOut} />
+      </aside>
 
-        <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur lg:hidden">
-            <Brand />
+      <div className="min-w-0 flex-1">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-card/95 px-4 backdrop-blur lg:hidden">
+          <Workspace />
+          <div className="flex items-center gap-2">
+            <Avatar name={ig?.username} src={ig?.avatar_url} className="h-7 w-7" />
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
-                <Button variant="outline" size="icon" aria-label="Abrir menu">
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Abrir menu">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-72 p-4">
-                <div className="mb-6 mt-2">
-                  <Brand />
+              <SheetContent side="left" className="flex w-[260px] flex-col p-0 py-4">
+                <Workspace />
+                <div className="mt-6 flex-1 overflow-y-auto px-2">
+                  <Nav onNavigate={() => setOpen(false)} />
                 </div>
-                <Nav onNavigate={() => setOpen(false)} />
-                <Button variant="ghost" size="sm" className="mt-6 w-full justify-start text-muted-foreground" onClick={signOut}>
-                  <LogOut className="mr-2 h-4 w-4" /> {isDemo ? "Reiniciar demo" : "Sair"}
-                </Button>
+                <Footer onSignOut={signOut} />
               </SheetContent>
             </Sheet>
-          </header>
-          <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
-            <Outlet />
-          </main>
-        </div>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-8 lg:py-8">
+          <Outlet />
+        </main>
       </div>
     </div>
   );
