@@ -29,6 +29,13 @@ Sem configurar nada, o `/studio` abre em **modo demo**, com dados de exemplo sal
 
 ## 1. Supabase
 
+> **Atalho (recomendado):** o GitHub instala o backend sozinho.
+> 1. Gere um token em supabase.com → Account → Access Tokens.
+> 2. No GitHub: Settings → Secrets and variables → Actions → New repository secret, com o nome `SUPABASE_ACCESS_TOKEN`.
+> 3. Em Actions → **Supabase deploy** → Run workflow.
+>
+> O workflow (`scripts/supabase-deploy.sh`) cria as tabelas, publica as funções e gera os secrets internos. Também configura o endereço de login e o agendador. Por padrão ele usa o projeto `supabase-citron-window` e o site `https://voz-de-deus-app.vercel.app`; para trocar, crie as *variables* `SUPABASE_PROJECT_NAME` e `APP_URL`. Depois, só faltam os secrets dos apps (Instagram, TikTok, Anthropic), descritos no passo 2.
+
 1. Crie um projeto em <https://supabase.com>. Se o projeto estiver no Lovable, pode conectar o Supabase por lá.
 2. Instale a CLI e vincule o projeto:
    ```bash

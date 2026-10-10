@@ -1,3 +1,5 @@
+project_id = "voz-de-deus-app"
+
 # Funções chamadas por serviços externos (Meta, TikTok, pg_cron, Claude) não usam o JWT do Supabase:
 # cada uma faz a própria autenticação (assinatura do webhook, state assinado, CRON_SECRET, chave de API).
 
