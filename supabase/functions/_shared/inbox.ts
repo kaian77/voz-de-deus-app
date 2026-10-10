@@ -1,0 +1,159 @@
+// Caixa de entrada unificada (Instagram DM + WhatsApp) e o agente de IA que responde.
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { z } from "npm:zod@4";
+import { igRequest, igTokenFor } from "./instagram.ts";
+import { waSendText, wahaSendText } from "./whatsapp.ts";
+import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
+import { sleep } from "./util.ts";
+
+export type Channel = "instagram" | "whatsapp";
+type Sender = "contact" | "ai" | "human" | "agent";
+
+const WINDOW_MS = 24 * 3600 * 1000;
+
+async function tokenFor(db: SupabaseClient, accountId: string, channel: Channel) {
+  if (channel === "instagram") return igTokenFor(db, accountId);
+  const { data } = await db.from("account_tokens").select("access_token").eq("account_id", accountId).maybeSingle();
+  if (!data) throw new Error("WhatsApp sem token — reconecte em Contas");
+  return data.access_token as string; // no WAHA é a X-Api-Key (pode ser vazia)
+}
+
+/** Registra a mensagem recebida. Retorna null se for entrega duplicada do webhook. */
+export async function recordInbound(
+  db: SupabaseClient,
+  account: { id: string; user_id: string },
+  channel: Channel,
+  contact: { id: string; name?: string; username?: string },
+  message: { externalId: string; text: string },
+) {
+  const now = new Date().toISOString();
+  const { data: existing } = await db.from("conversations").select("*").eq("account_id", account.id).eq("contact_id", contact.id).maybeSingle();
+  const conversation = existing ?? (await db.from("conversations").insert({
+    user_id: account.user_id,
+    account_id: account.id,
+    channel,
+    contact_id: contact.id,
+    contact_name: contact.name,
+    contact_username: contact.username,
+  }).select().single()).data;
+  if (!conversation) throw new Error("Falha ao criar conversa");
+
+  const { data: inserted, error } = await db.from("messages").insert({
+    user_id: account.user_id,
+    conversation_id: conversation.id,
+    direction: "in",
+    sender: "contact",
+    text: message.text,
+    external_id: message.externalId,
+  }).select().single();
+  if (error) return null;
+
+  const { data: updated } = await db.from("conversations").update({
+    last_message_at: now,
+    last_inbound_at: now,
+    unread: (conversation.unread ?? 0) + 1,
+    status: conversation.status === "closed" ? "open" : conversation.status,
+    contact_name: conversation.contact_name ?? contact.name,
+    contact_username: conversation.contact_username ?? contact.username,
+  }).eq("id", conversation.id).select().single();
+  return { conversation: updated ?? conversation, message: inserted };
+}
+
+/** Envia uma mensagem pelo canal da conversa e registra no histórico. */
+export async function sendMessage(db: SupabaseClient, conversationId: string, text: string, sender: Exclude<Sender, "contact">) {
+  const { data: conv } = await db.from("conversations").select("*, social_accounts(external_id, meta)").eq("id", conversationId).single();
+  if (!conv) throw new Error("Conversa não encontrada");
+  const isWaha = conv.social_accounts.meta?.provider === "waha";
+  // Janela de 24h é regra das APIs oficiais da Meta (o WAHA não tem essa limitação)
+  if (!isWaha && (!conv.last_inbound_at || Date.now() - new Date(conv.last_inbound_at).getTime() > WINDOW_MS)) {
+    throw new Error(
+      conv.channel === "whatsapp"
+        ? "Já passaram 24h desde a última mensagem do contato: o WhatsApp só permite responder com um template aprovado."
+        : "Já passaram 24h desde a última mensagem do contato: o Instagram não permite mais responder esta conversa.",
+    );
+  }
+  const token = await tokenFor(db, conv.account_id, conv.channel);
+  const accountExternalId = conv.social_accounts.external_id as string;
+
+  let externalId: string | undefined;
+  if (conv.channel === "instagram") {
+    // DMs do Instagram têm limite de 1000 caracteres por mensagem
+    const chunks = text.match(/[\s\S]{1,1000}/g) ?? [text];
+    for (const chunk of chunks) {
+      const r = await igRequest<{ message_id?: string }>(token, `${accountExternalId}/messages`, {
+        method: "POST",
+        body: { recipient: { id: conv.contact_id }, message: { text: chunk } },
+      });
+      externalId = r.message_id;
+    }
+  } else if (isWaha) {
+    const meta = conv.social_accounts.meta;
+    externalId = await wahaSendText({ base_url: meta.base_url, session: meta.session, api_key: token || null }, conv.contact_id, text);
+  } else {
+    externalId = await waSendText(token, accountExternalId, conv.contact_id, text);
+  }
+
+  const { data: msg } = await db.from("messages").insert({
+    user_id: conv.user_id,
+    conversation_id: conv.id,
+    direction: "out",
+    sender,
+    text,
+    external_id: externalId ?? null,
+  }).select().single();
+  await db.from("conversations").update({ last_message_at: new Date().toISOString(), ...(sender !== "ai" ? { unread: 0 } : {}) }).eq("id", conv.id);
+  return msg;
+}
+
+const AgentReply = z.object({
+  reply: z.string().describe("Mensagem a enviar ao contato (vazia se handoff sem mensagem)"),
+  handoff: z.boolean().describe("true se um humano precisa assumir"),
+  handoff_reason: z.string().describe("Motivo curto do handoff, ou vazio"),
+});
+
+export async function transcript(db: SupabaseClient, conversationId: string, limit = 30) {
+  const { data } = await db.from("messages").select("direction,sender,text,created_at").eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false }).limit(limit);
+  return (data ?? []).reverse();
+}
+
+/** Gera a resposta da IA (sem enviar). */
+export async function draftReply(db: SupabaseClient, conversation: any) {
+  const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", conversation.user_id).maybeSingle();
+  const history = await transcript(db, conversation.id);
+  const lines = history.map((m) => `${m.direction === "in" ? "CONTATO" : "MARCA"}: ${m.text}`).join("\n");
+  const system =
+    `Você é o atendente virtual da marca no ${conversation.channel === "whatsapp" ? "WhatsApp" : "direct do Instagram"}. ` +
+    `Responda em português do Brasil, de forma calorosa, curta (até 3 frases), natural, sem parecer robô, no máximo 1 emoji. ` +
+    `Use SOMENTE as informações da base de conhecimento; nunca invente preços, prazos, links ou promessas. ` +
+    `Peça handoff (handoff=true) quando: a pessoa pedir para falar com humano; reclamação séria; pagamento/reembolso; ` +
+    `assunto delicado (luto, crise, saúde mental grave — nesse caso responda com acolhimento e indique o CVV 188 se houver risco); ` +
+    `ou quando você não souber a resposta.\n\n` +
+    `${brandContext(settings)}\n\nInstruções de atendimento:\n${settings?.agent_instructions ?? "Seja prestativo e acolhedor."}\n\n` +
+    `Base de conhecimento:\n${settings?.agent_knowledge ?? "(vazia)"}`;
+  const result = await generateJSON(AgentReply, system,
+    `Contato: ${conversation.contact_name ?? conversation.contact_username ?? "sem nome"}\n\nConversa até agora:\n${lines}\n\nEscreva a próxima mensagem da MARCA.`, "low");
+  return { ...result, settings };
+}
+
+/** Responde automaticamente se o agente estiver ligado para a marca e para a conversa. */
+export async function autoReply(db: SupabaseClient, conversation: any, inboundMessageId: string) {
+  if (!aiEnabled() || !conversation.ai_enabled || conversation.status === "needs_human") return;
+  const { data: settings } = await db.from("brand_settings").select("agent_enabled").eq("user_id", conversation.user_id).maybeSingle();
+  if (!settings?.agent_enabled) return;
+
+  // Espera um pouco: se a pessoa mandar várias mensagens seguidas, responde só a última (com todo o contexto)
+  await sleep(4000);
+  const { data: latest } = await db.from("messages").select("id").eq("conversation_id", conversation.id).eq("direction", "in")
+    .order("created_at", { ascending: false }).limit(1).single();
+  if (latest?.id !== inboundMessageId) return;
+
+  const draft = await draftReply(db, conversation);
+  if (draft.handoff) {
+    await db.from("conversations").update({ status: "needs_human", handoff_reason: draft.handoff_reason || "Pedido de atendimento humano" }).eq("id", conversation.id);
+    const text = draft.reply?.trim() || draft.settings?.agent_handoff_message;
+    if (text) await sendMessage(db, conversation.id, text, "ai");
+    return;
+  }
+  if (draft.reply.trim()) await sendMessage(db, conversation.id, draft.reply.trim(), "ai");
+}

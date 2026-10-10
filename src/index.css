@@ -114,3 +114,54 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+/* ---------------------------------------------------------------------------
+   Studio: identidade própria, aplicada em <html class="studio-theme"> enquanto
+   o painel está aberto (inclui dialogs/menus que o Radix renderiza no body).
+   Conceito: console editorial neutro — superfícies brancas sobre cinza-grafite
+   frio, tinta quase-preta para ações, um único azul-cobalto para seleção/foco.
+--------------------------------------------------------------------------- */
+:root {
+  --brand: 224 64% 48%;
+  --brand-soft: 224 80% 97%;
+  --success: 152 56% 36%;
+  --warning: 36 92% 46%;
+  --danger: 0 68% 50%;
+}
+
+:root.studio-theme {
+  --background: 220 14% 97.5%;
+  --foreground: 222 22% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 22% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 22% 11%;
+  --primary: 222 22% 12%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 95%;
+  --secondary-foreground: 222 22% 12%;
+  --muted: 220 14% 95.5%;
+  --muted-foreground: 220 9% 44%;
+  --accent: 220 14% 94.5%;
+  --accent-foreground: 222 22% 11%;
+  --destructive: 0 68% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 13% 90%;
+  --input: 220 13% 87%;
+  --ring: 224 64% 48%;
+  --radius: 0.5rem;
+}
+
+.studio-theme body {
+  font-family: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+.studio-theme .font-mono {
+  font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 0;
+}
+.studio-theme .tabular { font-variant-numeric: tabular-nums; }
+.studio-theme h1, .studio-theme h2 { text-wrap: balance; }
+/* Campos brancos sobre o cinza da página */
+.studio-theme :is(input:not([type="checkbox"]):not([type="radio"]), textarea, button[role="combobox"]) { background-color: hsl(var(--card)); }

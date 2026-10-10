@@ -1,0 +1,213 @@
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
+import { ChevronLeft, ChevronRight, ExternalLink, Loader2, MoreHorizontal, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import { api } from "../lib/api";
+import { useInvalidate, useRemoveRow, useTable } from "../lib/hooks";
+import type { Post } from "../lib/types";
+import { EmptyState, formatDateTime, sentence, formatTime, KIND_LABEL, PageHeader, PlatformIcon, STATUS, StatusBadge } from "../components/bits";
+import { PostThumb } from "../components/PostThumb";
+
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const when = (p: Post) => p.published_at ?? p.scheduled_at;
+
+const DOT: Record<string, string> = { neutral: "bg-muted-foreground/50", brand: "bg-brand", success: "bg-success", warning: "bg-warning", danger: "bg-danger" };
+
+function PostActions({ post }: { post: Post }) {
+  const remove = useRemoveRow("posts");
+  const invalidate = useInvalidate();
+  const [busy, setBusy] = useState(false);
+  const retry = async () => {
+    setBusy(true);
+    try {
+      const r = await api.publishNow(post);
+      if (r.status === "failed") toast.error("A publicação falhou de novo. Veja o motivo na lista.");
+      else toast.success("Publicação enviada");
+      invalidate("posts");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const links = Object.entries(post.results ?? {}).filter(([, r]) => r?.permalink);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Ações do post">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        {post.status !== "published" && <DropdownMenuItem asChild><Link to={`/studio/criar?id=${post.id}`}>Editar</Link></DropdownMenuItem>}
+        {post.status === "failed" && <DropdownMenuItem onSelect={retry}>Tentar publicar de novo</DropdownMenuItem>}
+        {links.map(([p, r]) => (
+          <DropdownMenuItem key={p} asChild>
+            <a href={r!.permalink} target="_blank" rel="noreferrer">Abrir no {p === "instagram" ? "Instagram" : "TikTok"} <ExternalLink className="ml-auto h-3 w-3" /></a>
+          </DropdownMenuItem>
+        ))}
+        {post.status !== "published" && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => remove.mutate(post.id)}>Excluir post</DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function PostLine({ post, showDate }: { post: Post; showDate?: boolean }) {
+  const errors = Object.entries(post.results ?? {}).filter(([, r]) => r?.error);
+  return (
+    <div className="flex items-start gap-3 px-4 py-3">
+      <PostThumb post={post} className="w-10 shrink-0 rounded" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-medium">{post.title || post.caption.split("\n")[0] || "Sem legenda"}</p>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+          <span className="tabular">{showDate ? formatDateTime(when(post)) : when(post) ? formatTime(when(post)!) : "Sem data"}</span>
+          <span>·</span>
+          <span>{KIND_LABEL[post.kind]}</span>
+          {post.created_by === "agent" && <><span>·</span><span>criado pelo Claude</span></>}
+        </p>
+        {errors.map(([p, r]) => <p key={p} className="mt-1 text-xs text-danger">{p === "instagram" ? "Instagram" : "TikTok"}: {r!.error}</p>)}
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="hidden gap-1.5 sm:flex">{post.platforms.map((p) => <PlatformIcon key={p} platform={p} />)}</span>
+        <span className="hidden w-24 sm:block"><StatusBadge status={post.status} /></span>
+        <PostActions post={post} />
+      </div>
+    </div>
+  );
+}
+
+export default function Calendar() {
+  const { data: posts = [] } = useTable("posts");
+  const [view, setView] = useState<"mes" | "lista">("mes");
+  const [cursor, setCursor] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [selected, setSelected] = useState<Date>(new Date());
+
+  const days = useMemo(() => {
+    const start = new Date(cursor);
+    start.setDate(1 - start.getDay());
+    return Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+  }, [cursor]);
+
+  const postsOn = (d: Date) => posts.filter((p) => when(p) && sameDay(new Date(when(p)!), d)).sort((a, b) => when(a)!.localeCompare(when(b)!));
+  const dayPosts = postsOn(selected);
+  const drafts = posts.filter((p) => !when(p));
+  const sortedList = [...posts].sort((a, b) => (when(b) ?? b.created_at).localeCompare(when(a) ?? a.created_at));
+  const monthLabel = cursor.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+
+  return (
+    <div>
+      <PageHeader
+        title="Calendário"
+        description="Tudo que foi publicado e o que está programado."
+        actions={
+          <>
+            <div className="inline-flex rounded-md border bg-secondary/60 p-0.5">
+              {(["mes", "lista"] as const).map((v) => (
+                <button key={v} onClick={() => setView(v)} className={cn("h-7 rounded px-3 text-xs font-medium", view === v ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+                  {v === "mes" ? "Mês" : "Lista"}
+                </button>
+              ))}
+            </div>
+            <Button asChild size="sm"><Link to="/studio/criar"><Plus /> Criar post</Link></Button>
+          </>
+        }
+      />
+
+      {view === "lista" ? (
+        posts.length === 0 ? (
+          <EmptyState icon={<Plus />} title="Nenhum post ainda" />
+        ) : (
+          <div className="divide-y rounded-lg border bg-card">{sortedList.map((p) => <PostLine key={p.id} post={p} showDate />)}</div>
+        )
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <section className="overflow-hidden rounded-lg border bg-card">
+            <header className="flex items-center justify-between border-b px-4 py-2.5">
+              <h2 className="text-sm font-semibold">{sentence(monthLabel)}</h2>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { const d = new Date(); setCursor(new Date(d.getFullYear(), d.getMonth(), 1)); setSelected(d); }}>Hoje</Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} aria-label="Mês anterior"><ChevronLeft className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} aria-label="Próximo mês"><ChevronRight className="h-4 w-4" /></Button>
+              </div>
+            </header>
+            <div className="grid grid-cols-7 border-b bg-secondary/40">
+              {WEEKDAYS.map((w) => <div key={w} className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{w}</div>)}
+            </div>
+            <div className="grid grid-cols-7">
+              {days.map((d, i) => {
+                const list = postsOn(d);
+                const inMonth = d.getMonth() === cursor.getMonth();
+                const isToday = sameDay(d, new Date());
+                const isSelected = sameDay(d, selected);
+                return (
+                  <button
+                    key={d.toISOString()}
+                    onClick={() => setSelected(d)}
+                    className={cn(
+                      "flex min-h-[72px] flex-col gap-1 border-b border-r p-1.5 text-left transition-colors sm:min-h-[96px]",
+                      (i + 1) % 7 === 0 && "border-r-0",
+                      i >= 35 && "border-b-0",
+                      !inMonth && "bg-secondary/30",
+                      isSelected ? "bg-brand-soft" : "hover:bg-secondary/50",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "tabular flex h-5 min-w-5 items-center justify-center self-start rounded px-1 text-xs",
+                        isToday ? "bg-foreground font-semibold text-background" : inMonth ? "text-foreground/80" : "text-muted-foreground/60",
+                      )}
+                    >
+                      {d.getDate()}
+                    </span>
+                    {list.slice(0, 3).map((p) => (
+                      <span key={p.id} className="hidden w-full items-center gap-1 truncate text-[11px] text-foreground/80 sm:flex">
+                        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", DOT[STATUS[p.status].tone])} />
+                        <span className="tabular text-muted-foreground">{formatTime(when(p)!)}</span>
+                        <span className="truncate">{KIND_LABEL[p.kind]}</span>
+                      </span>
+                    ))}
+                    {list.length > 0 && (
+                      <span className="flex gap-0.5 sm:hidden">{list.slice(0, 4).map((p) => <span key={p.id} className={cn("h-1.5 w-1.5 rounded-full", DOT[STATUS[p.status].tone])} />)}</span>
+                    )}
+                    {list.length > 3 && <span className="hidden text-[10px] text-muted-foreground sm:block">+{list.length - 3}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <div className="space-y-6">
+            <section className="rounded-lg border bg-card">
+              <header className="border-b px-4 py-2.5">
+                <h2 className="text-sm font-semibold">{sentence(selected.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" }))}</h2>
+              </header>
+              {dayPosts.length === 0 ? (
+                <p className="px-4 py-6 text-[13px] text-muted-foreground">Nada programado neste dia.</p>
+              ) : (
+                <div className="divide-y">{dayPosts.map((p) => <PostLine key={p.id} post={p} />)}</div>
+              )}
+            </section>
+            {drafts.length > 0 && (
+              <section className="rounded-lg border bg-card">
+                <header className="border-b px-4 py-2.5"><h2 className="text-sm font-semibold">Rascunhos sem data</h2></header>
+                <div className="divide-y">{drafts.map((p) => <PostLine key={p.id} post={p} />)}</div>
+              </section>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
