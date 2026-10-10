@@ -5,6 +5,9 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  // NEXT_PUBLIC_* é o prefixo que a integração Supabase da Vercel usa para as chaves públicas.
+  // Nunca adicione "SUPABASE_" aqui: exporia a service_role no navegador.
+  envPrefix: ["VITE_", "NEXT_PUBLIC_"],
   server: {
     host: "::",
     port: 8080,
