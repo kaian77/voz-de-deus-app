@@ -164,4 +164,4 @@ All colors MUST be HSL.
 .studio-theme .tabular { font-variant-numeric: tabular-nums; }
 .studio-theme h1, .studio-theme h2 { text-wrap: balance; }
 /* Campos brancos sobre o cinza da página */
-.studio-theme :is(input, textarea, button[role="combobox"]).bg-background { background-color: hsl(var(--card)); }
+.studio-theme :is(input:not([type="checkbox"]):not([type="radio"]), textarea, button[role="combobox"]) { background-color: hsl(var(--card)); }
