@@ -117,7 +117,7 @@ export default function Accounts() {
                 Acompanha pedidos, pagamentos e rastreio. O agente de mensagens consulta produtos, preços e estoque ao vivo e responde
                 “cadê meu pedido?” quando o cliente informa o número do pedido e o e-mail da compra.
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">Somente leitura: o Studio não altera pedidos nem produtos da loja.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Também cadastra e edita produtos a partir das fotos (página Produtos). Pedidos são só leitura.</p>
             </div>
           </div>
           <div className="space-y-2">

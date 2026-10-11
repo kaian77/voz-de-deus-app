@@ -82,6 +82,17 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
       { id: "dm5", conversation_id: "demo-cv2", direction: "in", sender: "contact", text: "Fico no aguardo!", error: null, created_at: at(0, 8, 1) },
     ],
     api_keys: [],
+    product_templates: [
+      {
+        id: "demo-tpl", name: "Pin padrão", is_default: true, created_at: now(),
+        data: {
+          name_pattern: "Pin {nome}", price: 29.9, stock: null, weight: 0.05, width: 4, height: 4, depth: 1, sku_prefix: "PIN-",
+          category_ids: [1], description: "Pin {nome} em metal esmaltado, com fecho de borboleta.\n\nEnviamos para todo o Brasil.",
+          ai_description: true, published: true, free_shipping: false, seo_title: "Pin {nome} | Minha Marca",
+        },
+      },
+    ],
+    product_drafts: [],
     brand_settings: [
       { brand_name: "Minha Marca", niche: "Conteúdo cristão / devocional", audience: "Cristãos 25–55 anos, maioria mulheres, Brasil", tone: "Acolhedor, esperançoso, simples", default_hashtags: "fé palavradedeus deus jesus oração", default_cta: "Comente AMÉM para receber uma oração no direct", approval_required: true, timezone: "America/Sao_Paulo",
         agent_enabled: true, agent_instructions: "Atenda com carinho, ofereça oração, convide para o grupo de quarta 20h.", agent_knowledge: "Grupo de oração: quartas 20h, live no Instagram.\nApp: https://minhamarca.com", agent_handoff_message: "Vou chamar alguém da equipe para te responder, só um instante 🙏" },
@@ -182,6 +193,12 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
         return {
           knowledge: "Loja: https://minhamarca.com\nPagamento: Pix (5% de desconto), cartão em até 3x sem juros.\nFrete: Correios PAC e SEDEX para todo o Brasil; grátis acima de R$ 150.\nPrazo de postagem: até 2 dias úteis após o pagamento.\nTrocas: até 7 dias após o recebimento, pelo e-mail contato@minhamarca.com.",
         };
+      case "store_categories":
+        return [{ id: 1, name: "Pins", parent: null }, { id: 2, name: "Combos", parent: null }, { id: 3, name: "Saúde", parent: 1 }];
+      case "product_suggest":
+        return { name: "Coração Dourado", description: "Pin Coração Dourado em metal esmaltado, com brilho delicado.\n\nEnviamos para todo o Brasil." };
+      case "product_create":
+        throw new Error("No modo demo não há loja conectada para cadastrar o produto.");
       case "sync_competitor":
         throw new Error("No modo demo não há conexão com o Instagram.");
     }

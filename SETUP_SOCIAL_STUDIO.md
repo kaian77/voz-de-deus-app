@@ -183,12 +183,12 @@ A versão Core (grátis) do WAHA suporta **1 número** (sessão `default`).
 
 ## 8. Loja Nuvemshop (pedidos, rastreio e catálogo para o agente)
 
-Somente leitura: o Studio consulta a loja na hora e não guarda dados de clientes.
+Pedidos e clientes são só leitura (consultados na hora, sem guardar dados de clientes). Produtos: leitura e escrita, para cadastrar a partir das fotos.
 
 1. Entre no [Portal de Parceiros da Nuvemshop](https://partners.nuvemshop.com.br) (crie a conta de parceiro com o mesmo e-mail, é grátis) e crie um **aplicativo**.
 2. Configure o app:
    - **URL de redirecionamento**: `https://<ref>.supabase.co/functions/v1/oauth-nuvemshop`
-   - **Permissões (escopos)**: ler produtos, ler pedidos, ler clientes (`read_products`, `read_orders`, `read_customers`), ler conteúdo/páginas se existir.
+   - **Permissões (escopos)**: produtos leitura **e escrita**, pedidos e clientes só leitura (`write_products`, `read_orders`, `read_customers`), ler conteúdo/páginas se existir.
    - **Webhooks de LGPD** (obrigatórios):
      - Loja removida: `https://<ref>.supabase.co/functions/v1/oauth-nuvemshop?lgpd=store_redact`
      - Apagar dados do cliente: `https://<ref>.supabase.co/functions/v1/oauth-nuvemshop?lgpd=customers_redact`
@@ -201,6 +201,13 @@ ao vivo e informa a situação de um pedido quando o cliente manda o **número d
 nada do pedido é revelado). Em **Claude e API → Base de conhecimento**, o botão "Preencher com a loja e o site" monta o FAQ do agente
 a partir das páginas da loja e do site. O Claude ganha as ferramentas `get_store_info`, `list_store_products`, `list_orders`,
 `get_order` e `read_web_page`.
+
+**Produtos a partir de fotos** (página Produtos): defina um *modelo de cadastro* (padrão do nome como `Pin {nome}`, preço, estoque,
+peso, medidas, categorias, descrição-base, SEO; opcionalmente a IA escreve a descrição olhando a foto), envie as fotos e clique em
+Cadastrar. Sem nome, a IA dá o nome olhando a foto. Cada produto cadastrado vira um post de divulgação no Instagram/TikTok com legenda
+da IA no próximo horário nobre (13h/19h), em Aprovações se a marca exigir aprovação (desligável na página). O Claude ganha
+`list_product_templates`, `save_product_template`, `list_store_categories`, `list_product_drafts`, `create_product_from_draft`,
+`create_store_product` e `update_store_product` (edita pelo nome: preço, promoção, estoque, descrição, fotos...).
 
 ## 9. Concorrentes automáticos (opcional)
 

@@ -4,7 +4,8 @@ import { z } from "npm:zod@4";
 import { adminClient, corsHeaders, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
 import { readWebPage, runTool } from "../_shared/agent-tools.ts";
-import { nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
+import { nsCategories, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
+import { createFromDraft, suggestProduct, templateFor } from "../_shared/products.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
 const SYSTEM = (brand: string) =>
@@ -66,6 +67,18 @@ Deno.serve(async (req) => {
       const store = await storeFor(db, userId);
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
       return json(await nsOrders(store.token, store.storeId, { status: input.status, q: input.q, limit: input.limit ?? 50 }));
+    }
+    if (action === "store_categories") {
+      const store = await storeFor(db, userId);
+      if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
+      return json(await nsCategories(store.token, store.storeId));
+    }
+    if (action === "product_create") return json(await createFromDraft(db, userId, String(input.draft_id)));
+    if (action === "product_suggest") {
+      const { data: draft } = await db.from("product_drafts").select("images,name,template_id").eq("id", input.draft_id).eq("user_id", userId).single();
+      if (!draft) throw new HttpError(404, "Rascunho não encontrado");
+      const template = await templateFor(db, userId, draft.template_id);
+      return json(await suggestProduct(db, userId, draft.images, template?.data, draft.name || undefined));
     }
     if (!aiEnabled()) throw new HttpError(400, "Configure ANTHROPIC_API_KEY nas secrets do Supabase para usar a IA.");
 
