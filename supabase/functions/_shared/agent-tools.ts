@@ -6,6 +6,7 @@ import { businessDiscoveryEnabled, igBusinessDiscovery, igProfile, igRecentMedia
 import { advancePost, validatePost } from "./publisher.ts";
 import { assertPublicHttpsUrl } from "./util.ts";
 import { sendMessage, transcript } from "./inbox.ts";
+import { aiEnabled, generateJSON, researchWeb } from "./claude.ts";
 import { nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
 import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
 
@@ -76,6 +77,37 @@ export async function readWebPage(raw: string, maxChars = 20000) {
     .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
     .replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
   return { url: current.toString(), title, text: text.slice(0, maxChars), truncated: text.length > maxChars, links };
+}
+
+const WebSnapshot = z.object({
+  name: z.string().describe("Nome exibido no perfil, ou vazio"),
+  biography: z.string().describe("Bio do perfil, ou vazio"),
+  followers_count: z.number().nullable().describe("Seguidores, só se aparecer nas fontes"),
+  media_count: z.number().nullable().describe("Número de posts, só se aparecer nas fontes"),
+  summary: z.string().describe("O que o perfil vende/publica, formatos, temas, frequência, preços e diferenciais encontrados"),
+});
+
+/** Sem Business Discovery: a IA pesquisa o perfil público na web e resume o que encontrou (com fontes). */
+async function researchCompetitor(username: string, platform: "instagram" | "tiktok") {
+  const where = platform === "instagram" ? `instagram.com/${username}` : `tiktok.com/@${username}`;
+  const research = await researchWeb(
+    "Você pesquisa perfis de marcas nas redes sociais para análise de concorrência. Responda em português do Brasil. " +
+      "Só afirme o que encontrar nas fontes; quando um número não aparecer, diga que não foi encontrado.",
+    `Pesquise o perfil @${username} (${where}) e o site/loja da marca, se houver. Levante: nome, bio, número de seguidores e de posts ` +
+      `(se aparecerem), o que vendem, faixa de preço, temas e formatos de conteúdo, frequência de postagem, campanhas e diferenciais.`,
+  );
+  if (!research.text) throw new Error(`Não encontrei informações públicas sobre @${username}.`);
+  const parsed = await generateJSON(WebSnapshot, "Extraia os dados do texto de pesquisa. Não invente números.", research.text, "low");
+  return {
+    username,
+    source: "web",
+    name: parsed.name || undefined,
+    biography: parsed.biography || undefined,
+    followers_count: parsed.followers_count ?? undefined,
+    media_count: parsed.media_count ?? undefined,
+    summary: parsed.summary,
+    sources: research.sources,
+  };
 }
 
 async function settings(ctx: Ctx) {
@@ -444,14 +476,20 @@ const tools = {
   },
 
   sync_competitor: {
-    description: "Busca dados públicos atualizados de um concorrente do Instagram (perfil comercial/criador) via Business Discovery. Requer META_FB_ACCESS_TOKEN configurado.",
-    input: z.object({ username: z.string() }),
-    run: async (ctx: Ctx, input: { username: string }) => {
-      if (!businessDiscoveryEnabled()) throw new Error("Business Discovery não configurado (META_FB_ACCESS_TOKEN / META_FB_IG_USER_ID). Pesquise o perfil por outra fonte e salve com upsert_competitor.");
-      const username = input.username.replace(/^@/, "").toLowerCase();
-      const snapshot = await igBusinessDiscovery(username);
+    description: "Atualiza os dados públicos de um concorrente. Instagram: Business Discovery (números exatos) quando configurado; senão (e no TikTok), a IA pesquisa o perfil na web e salva um resumo com as fontes.",
+    input: z.object({ username: z.string(), platform: z.enum(["instagram", "tiktok"]).optional() }),
+    run: async (ctx: Ctx, input: { username: string; platform?: "instagram" | "tiktok" }) => {
+      const username = input.username.replace(/^@/, "").toLowerCase().trim();
+      const platform = input.platform ?? "instagram";
+      let snapshot: Record<string, unknown>;
+      if (platform === "instagram" && businessDiscoveryEnabled()) {
+        snapshot = await igBusinessDiscovery(username);
+      } else {
+        if (!aiEnabled()) throw new Error("Configure a chave da IA para pesquisar concorrentes.");
+        snapshot = await researchCompetitor(username, platform);
+      }
       const { data, error } = await ctx.db.from("competitors").upsert({
-        user_id: ctx.userId, platform: "instagram", username, snapshot, synced_at: new Date().toISOString(),
+        user_id: ctx.userId, platform, username, snapshot, synced_at: new Date().toISOString(),
       }, { onConflict: "user_id,platform,username" }).select().single();
       if (error) throw error;
       return data;

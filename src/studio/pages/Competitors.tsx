@@ -46,7 +46,7 @@ function CompetitorCard({ c }: { c: Competitor }) {
   const run = async (action: "sync" | "analyze") => {
     setBusy(action);
     try {
-      if (action === "sync") await api.invoke("ai", { action: "sync_competitor", username: c.username });
+      if (action === "sync") await api.invoke("ai", { action: "sync_competitor", username: c.username, platform: c.platform });
       else {
         if (notes !== (c.notes ?? "")) await api.update("competitors", c.id, { notes });
         const r = await api.invoke<{ analysis: CompetitorAnalysis }>("ai", { action: "analyze_competitor", id: c.id });
@@ -88,6 +88,19 @@ function CompetitorCard({ c }: { c: Competitor }) {
           <Stat label="interações por post" value={avgEng != null ? avgEng.toLocaleString("pt-BR") : "–"} />
         </div>
         {snap?.biography && <p className="whitespace-pre-line border-l-2 pl-3 text-xs text-muted-foreground">{snap.biography}</p>}
+        {snap?.summary && (
+          <div className="space-y-1.5 rounded-md bg-secondary/60 p-3">
+            <p className="text-[13px] leading-relaxed">{snap.summary}</p>
+            {!!snap.sources?.length && (
+              <p className="truncate text-[11px] text-muted-foreground">
+                Pesquisado na web ·{" "}
+                {snap.sources.slice(0, 3).map((u, i) => (
+                  <a key={u} href={u} target="_blank" rel="noreferrer" className="underline underline-offset-2">{i ? ", " : ""}{new URL(u).hostname.replace(/^www\./, "")}</a>
+                ))}
+              </p>
+            )}
+          </div>
+        )}
         <Textarea
           rows={2}
           className="resize-none text-[13px]"
@@ -97,11 +110,9 @@ function CompetitorCard({ c }: { c: Competitor }) {
           placeholder="Suas observações: formatos, frequência, ganchos que funcionam…"
         />
         <div className="flex flex-wrap gap-2">
-          {c.platform === "instagram" && (
-            <Button size="sm" variant="outline" className="h-8" onClick={() => run("sync")} disabled={!!busy}>
-              {busy === "sync" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Atualizar dados
-            </Button>
-          )}
+          <Button size="sm" variant="outline" className="h-8" onClick={() => run("sync")} disabled={!!busy}>
+            {busy === "sync" ? <Loader2 className="animate-spin" /> : <RefreshCw />} {snap ? "Atualizar dados" : "Pesquisar perfil"}
+          </Button>
           <Button size="sm" variant={c.analysis ? "outline" : "default"} className="h-8" onClick={() => run("analyze")} disabled={!!busy}>
             {busy === "analyze" ? <Loader2 className="animate-spin" /> : <Sparkles />} {c.analysis ? "Refazer análise" : "Analisar com IA"}
           </Button>
@@ -157,7 +168,7 @@ export default function Competitors() {
       </form>
       {competitors.length === 0 ? (
         <EmptyState icon={<BarChart3 />} title="Nenhum perfil monitorado">
-          Adicione perfis do seu nicho. Com o Business Discovery configurado, os números do Instagram são puxados sozinhos. No TikTok, anote o que observar ou peça ao Claude para pesquisar.
+          Adicione perfis do seu nicho (Instagram ou TikTok). A IA pesquisa o perfil na web e depois compara com a sua marca.
         </EmptyState>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">{competitors.map((c) => <CompetitorCard key={c.id} c={c} />)}</div>

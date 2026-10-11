@@ -124,9 +124,10 @@ Deno.serve(async (req) => {
       }
 
       case "analyze_competitor": {
-        const { data: competitor } = await db.from("competitors").select("*").eq("id", input.id).eq("user_id", userId).single();
+        let { data: competitor } = await db.from("competitors").select("*").eq("id", input.id).eq("user_id", userId).single();
         if (!competitor) throw new HttpError(404, "Concorrente não encontrado");
-        if (!competitor.snapshot && !competitor.notes) throw new HttpError(400, "Sincronize ou adicione anotações sobre o concorrente antes de analisar.");
+        // Sem dados ainda: pesquisa o perfil antes de analisar
+        if (!competitor.snapshot) competitor = await runTool(ctx, "sync_competitor", { username: competitor.username, platform: competitor.platform }) as typeof competitor;
         const analysis = await generateJSON(CompetitorAnalysis, system,
           `Analise o concorrente @${competitor.username} (${competitor.platform}) e compare com a nossa marca. ` +
           `Aponte forças, padrões de conteúdo (formatos, ganchos, temas, frequência), oportunidades que eles não exploram e ideias para adaptarmos (sem copiar).\n\n` +

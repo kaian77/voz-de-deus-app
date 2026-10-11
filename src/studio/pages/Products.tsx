@@ -268,12 +268,24 @@ function TemplateEditor({ templates, categories }: { templates: ProductTemplate[
 function DraftRow({ draft, templates, onCreate }: { draft: ProductDraft; templates: ProductTemplate[]; onCreate: (d: ProductDraft) => Promise<void> }) {
   const qc = useQueryClient();
   const [name, setName] = useState(draft.name ?? "");
+  const initialPrice = typeof draft.overrides?.price === "number" ? String(draft.overrides.price).replace(".", ",") : "";
+  const [price, setPrice] = useState(initialPrice);
   const [busy, setBusy] = useState<"suggest" | "create" | null>(null);
   const [confirming, setConfirming] = useState(false);
   useEffect(() => setName(draft.name ?? ""), [draft.name]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["table", "product_drafts"] });
   const template = templates.find((t) => t.id === draft.template_id) ?? templates.find((t) => t.is_default) ?? templates[0];
   const finalName = !name.trim() ? null : template?.data.ai_guide ? name.trim() : (template?.data.name_pattern || "{nome}").split("{nome}").join(name.trim());
+
+  const savePrice = async () => {
+    const v = price.trim().replace(/[^\d,.]/g, "").replace(",", ".");
+    const n = v ? Number(v) : undefined;
+    if (v && (Number.isNaN(n) || !n)) return toast.error("Preço inválido");
+    if (price === initialPrice) return;
+    const { price: _old, ...rest } = draft.overrides ?? {};
+    await api.update("product_drafts", draft.id, { overrides: n ? { ...rest, price: n } : rest }).catch((e) => toast.error(e.message));
+    refresh();
+  };
 
   const saveName = async () => {
     if ((draft.name ?? "") !== name.trim()) await api.update("product_drafts", draft.id, { name: name.trim() || null }).catch((e) => toast.error(e.message));
@@ -299,6 +311,7 @@ function DraftRow({ draft, templates, onCreate }: { draft: ProductDraft; templat
   const create = async () => {
     setBusy("create");
     await saveName();
+    await savePrice();
     await onCreate({ ...draft, name: name.trim() || null });
     setBusy(null);
   };
@@ -322,6 +335,15 @@ function DraftRow({ draft, templates, onCreate }: { draft: ProductDraft; templat
             onBlur={saveName}
             placeholder={template?.data.ai_guide ? "Nome do produto (a IA monta o resto pelo padrão)" : "Nome do produto (vazio = a IA dá o nome)"}
             aria-label="Nome do produto"
+          />
+          <Input
+            className="h-9 w-24 shrink-0 sm:w-28"
+            inputMode="decimal"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            onBlur={savePrice}
+            placeholder={template?.data.price != null ? `R$ ${String(template.data.price).replace(".", ",")}` : "Preço"}
+            aria-label="Preço"
           />
           <Button size="sm" variant="outline" className="h-9 shrink-0" onClick={suggest} disabled={!!busy} title="Sugerir nome olhando a foto">
             {busy === "suggest" ? <Loader2 className="animate-spin" /> : <Sparkles />}

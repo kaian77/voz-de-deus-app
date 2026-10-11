@@ -65,3 +65,32 @@ export function brandContext(settings: Record<string, unknown> | null): string {
   ].filter(Boolean);
   return lines.length ? lines.join("\n") : "Marca sem configurações definidas ainda.";
 }
+
+/**
+ * Pesquisa na web (ferramenta de busca do próprio Claude) e devolve o texto da pesquisa + as fontes.
+ * O Claude Haiku usa a versão básica da ferramenta; os demais modelos, a versão com filtragem dinâmica.
+ */
+export async function researchWeb(system: string, prompt: string, maxUses = 5): Promise<{ text: string; sources: string[] }> {
+  const model = MODEL();
+  const tool = model.includes("haiku")
+    ? { type: "web_search_20250305" as const, name: "web_search" as const, max_uses: maxUses }
+    : { type: "web_search_20260209" as const, name: "web_search" as const, max_uses: maxUses };
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
+  let response = await anthropic().messages.create({ model, max_tokens: 16000, system, messages, tools: [tool] });
+  // pause_turn: o loop de busca do servidor parou no limite; reenviar o turno retoma de onde parou
+  for (let i = 0; i < 4 && response.stop_reason === "pause_turn"; i++) {
+    messages.push({ role: "assistant", content: response.content });
+    response = await anthropic().messages.create({ model, max_tokens: 16000, system, messages, tools: [tool] });
+    messages.pop();
+  }
+  if (response.stop_reason === "refusal") throw new Error("A IA recusou esta pesquisa.");
+  const sources = new Set<string>();
+  let text = "";
+  for (const block of response.content) {
+    if (block.type === "text") text += block.text;
+    if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
+      for (const r of block.content) if (r.type === "web_search_result") sources.add(r.url);
+    }
+  }
+  return { text: text.trim(), sources: [...sources].slice(0, 10) };
+}
