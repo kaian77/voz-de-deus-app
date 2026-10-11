@@ -1,6 +1,8 @@
 // Cliente da TikTok Content Posting API.
 // Docs: https://developers.tiktok.com/doc/content-posting-api-get-started
 // Atenção: enquanto o app não passar na auditoria do TikTok, os posts só podem ser privados (SELF_ONLY).
+// A tela de post segue as diretrizes de compartilhamento do TikTok (conta, privacidade sem padrão,
+// interações, divulgação comercial e declaração de uso de música).
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { env } from "./util.ts";
 
@@ -68,21 +70,50 @@ export async function ttUserInfo(token: string) {
   return data.data?.user ?? {};
 }
 
-export async function ttCreatorInfo(token: string) {
-  return tt<{ privacy_level_options: string[]; max_video_post_duration_sec: number; creator_username: string }>(
-    token,
-    "post/publish/creator_info/query/",
-    {},
-  );
+export type CreatorInfo = {
+  creator_avatar_url?: string;
+  creator_username?: string;
+  creator_nickname?: string;
+  privacy_level_options: string[];
+  comment_disabled?: boolean;
+  duet_disabled?: boolean;
+  stitch_disabled?: boolean;
+  max_video_post_duration_sec?: number;
+};
+
+export function ttCreatorInfo(token: string) {
+  return tt<CreatorInfo>(token, "post/publish/creator_info/query/", {});
 }
 
-type Options = { privacy_level?: string; disable_comment?: boolean; disable_duet?: boolean; disable_stitch?: boolean; auto_add_music?: boolean };
+type Options = {
+  privacy_level?: string;
+  disable_comment?: boolean;
+  disable_duet?: boolean;
+  disable_stitch?: boolean;
+  auto_add_music?: boolean;
+  brand_content_toggle?: boolean; // "Conteúdo de marca" (parceria paga)
+  brand_organic_toggle?: boolean; // "Sua marca" (conteúdo promocional)
+};
 
-/** Escolhe o nível de privacidade pedido se permitido; senão o mais aberto disponível. */
-function pickPrivacy(allowed: string[], wanted?: string) {
-  if (wanted && allowed.includes(wanted)) return wanted;
-  for (const p of ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]) if (allowed.includes(p)) return p;
-  return allowed[0] ?? "SELF_ONLY";
+/**
+ * Regras do TikTok para Direct Post: a privacidade é escolhida pelo criador (nunca pré-definida como
+ * pública pelo app) e conteúdo de marca não pode ser privado. Sem escolha válida, publica só para o criador.
+ */
+function postSettings(creator: CreatorInfo, options: Options) {
+  const allowed = creator.privacy_level_options ?? [];
+  const privacy = options.privacy_level && allowed.includes(options.privacy_level)
+    ? options.privacy_level
+    : allowed.includes("SELF_ONLY") ? "SELF_ONLY" : allowed[0];
+  if (!privacy) throw new Error("TikTok: nenhuma opção de privacidade disponível para esta conta");
+  if (options.brand_content_toggle && privacy === "SELF_ONLY") {
+    throw new Error("TikTok: conteúdo de marca (parceria paga) não pode ser publicado como privado");
+  }
+  return {
+    privacy_level: privacy,
+    disable_comment: Boolean(options.disable_comment || creator.comment_disabled),
+    brand_content_toggle: Boolean(options.brand_content_toggle),
+    brand_organic_toggle: Boolean(options.brand_organic_toggle),
+  };
 }
 
 export async function ttPublishVideo(token: string, caption: string, videoUrl: string, options: Options = {}) {
@@ -90,10 +121,9 @@ export async function ttPublishVideo(token: string, caption: string, videoUrl: s
   const data = await tt<{ publish_id: string }>(token, "post/publish/video/init/", {
     post_info: {
       title: caption.slice(0, 2200),
-      privacy_level: pickPrivacy(creator.privacy_level_options ?? [], options.privacy_level),
-      disable_comment: options.disable_comment ?? false,
-      disable_duet: options.disable_duet ?? false,
-      disable_stitch: options.disable_stitch ?? false,
+      ...postSettings(creator, options),
+      disable_duet: Boolean(options.disable_duet || creator.duet_disabled),
+      disable_stitch: Boolean(options.disable_stitch || creator.stitch_disabled),
     },
     source_info: { source: "PULL_FROM_URL", video_url: videoUrl },
   });
@@ -107,8 +137,7 @@ export async function ttPublishPhotos(token: string, caption: string, imageUrls:
     post_info: {
       title: firstLine.slice(0, 90),
       description: (rest.join("\n").trim() || caption).slice(0, 4000),
-      privacy_level: pickPrivacy(creator.privacy_level_options ?? [], options.privacy_level),
-      disable_comment: options.disable_comment ?? false,
+      ...postSettings(creator, options),
       auto_add_music: options.auto_add_music ?? true,
     },
     source_info: { source: "PULL_FROM_URL", photo_cover_index: 0, photo_images: imageUrls.slice(0, 35) },
