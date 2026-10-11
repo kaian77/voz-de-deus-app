@@ -15,6 +15,7 @@ import { THEMES } from "../lib/carousel";
 import { useTable } from "../lib/hooks";
 import { renderAndUploadSlides } from "../lib/publishing";
 import type { CarouselDesign, MediaItem, Platform, Post, PostKind, Slide, ThemeId } from "../lib/types";
+import TikTokSettings, { fromApiOptions, TIKTOK_DEFAULTS, tiktokProblem, toApiOptions, useTikTokCreator, type TikTokOptions } from "../components/TikTokSettings";
 import { Avatar, KIND_LABEL, PageHeader, Panel, PlatformIcon, SectionLabel, SlidePreview, StatusBadge, toLocalInput } from "../components/bits";
 
 const KINDS: { id: PostKind; hint: string }[] = [
@@ -68,6 +69,21 @@ export default function Composer() {
   const [topic, setTopic] = useState("");
   const [slideCount, setSlideCount] = useState("6");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [ttOpts, setTtOpts] = useState<TikTokOptions>(TIKTOK_DEFAULTS);
+  const [videoSeconds, setVideoSeconds] = useState<number>();
+  const onTikTok = platforms.includes("tiktok") && kind !== "story";
+  const ttCreator = useTikTokCreator(onTikTok);
+
+  // Duração do vídeo (o TikTok limita por conta)
+  useEffect(() => {
+    setVideoSeconds(undefined);
+    const v = media[0];
+    if (v?.type !== "video") return;
+    const el = document.createElement("video");
+    el.preload = "metadata";
+    el.onloadedmetadata = () => setVideoSeconds(el.duration);
+    el.src = v.url;
+  }, [media]);
 
   useEffect(() => {
     if (!editing) return;
@@ -82,6 +98,7 @@ export default function Composer() {
     setCaption(editing.caption);
     setTitle(editing.title ?? "");
     setWhen(toLocalInput(editing.scheduled_at));
+    setTtOpts(fromApiOptions((editing.options as { tiktok?: Record<string, unknown> })?.tiktok));
   }, [editing]);
 
   useEffect(() => {
@@ -121,6 +138,7 @@ export default function Composer() {
     if (kind === "reel" && media[0]?.type !== "video") return "Reels precisa de um vídeo.";
     if (platforms.includes("tiktok") && kind !== "reel" && media.some((m) => m.type === "video")) return "No TikTok, fotos/carrossel aceitam só imagens.";
     if (usingDesign && visibleSlides.some((s) => !s.title.trim())) return "Todo slide precisa de um título.";
+    if (onTikTok) return tiktokProblem(ttOpts, ttCreator.data, videoSeconds);
     return null;
   };
 
@@ -147,11 +165,12 @@ export default function Composer() {
         scheduled_at: when ? new Date(when).toISOString() : null,
         status: intent === "schedule" ? "scheduled" : intent === "publish" ? "publishing" : "draft",
         results: {},
+        options: { ...(editing?.options ?? {}), ...(onTikTok ? { tiktok: toApiOptions(ttOpts) } : {}) },
       };
-      const saved = editing ? await api.update("posts", editing.id, row) : await api.insert("posts", { ...row, created_by: "user", options: {} });
+      const saved = editing ? await api.update("posts", editing.id, row) : await api.insert("posts", { ...row, created_by: "user" });
       if (intent === "publish") {
         const result = await api.publishNow(saved);
-        if (result.status === "published") toast.success("Publicado! 🎉");
+        if (result.status === "published") toast.success(platforms.includes("tiktok") ? "Publicado. No TikTok, pode levar alguns minutos para aparecer no perfil." : "Publicado");
         else if (result.status === "publishing") toast.info("Enviado — o vídeo está processando e será publicado em instantes.");
         else toast.error(`Falhou: ${Object.values(result.results ?? {}).map((r) => r?.error).filter(Boolean).join(" | ")}`);
       } else toast.success(intent === "schedule" ? "Post agendado!" : "Rascunho salvo.");
@@ -379,6 +398,7 @@ export default function Composer() {
               </div>
             </div>
           </Panel>
+          {onTikTok && <TikTokSettings value={ttOpts} onChange={setTtOpts} isVideo={kind === "reel"} />}
         </div>
 
         <div className="space-y-6 lg:sticky lg:top-8 lg:self-start">

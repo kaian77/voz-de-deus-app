@@ -157,6 +157,12 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
           })),
           best_times: [{ slot: "quinta-feira 19h", avg_engagement: 1240, posts: 3 }, { slot: "domingo 08h", avg_engagement: 1105, posts: 2 }],
         };
+      case "tiktok_creator":
+        return {
+          creator_nickname: "Minha Marca", creator_username: "minhamarca", creator_avatar_url: undefined,
+          privacy_level_options: ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY"],
+          comment_disabled: false, duet_disabled: false, stitch_disabled: true, max_video_post_duration_sec: 600,
+        };
       case "sync_competitor":
         throw new Error("No modo demo não há conexão com o Instagram.");
     }

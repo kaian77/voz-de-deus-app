@@ -4,6 +4,7 @@ import { z } from "npm:zod@4";
 import { adminClient, corsHeaders, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
 import { runTool } from "../_shared/agent-tools.ts";
+import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
 const SYSTEM = (brand: string) =>
   `Você é estrategista de conteúdo e social media sênior, especialista em Instagram e TikTok no Brasil. ` +
@@ -55,6 +56,11 @@ Deno.serve(async (req) => {
     // Ações sem IA (dados ao vivo do Instagram)
     if (action === "sync_competitor") return json(await runTool(ctx, "sync_competitor", input));
     if (action === "profile") return json(await runTool(ctx, "get_instagram_profile", input));
+    if (action === "tiktok_creator") {
+      const { data: account } = await db.from("social_accounts").select("id").eq("user_id", userId).eq("platform", "tiktok").order("connected_at").limit(1).maybeSingle();
+      if (!account) throw new HttpError(404, "Conecte o TikTok em Contas");
+      return json(await ttCreatorInfo(await ttTokenFor(db, account.id)));
+    }
     if (!aiEnabled()) throw new HttpError(400, "Configure ANTHROPIC_API_KEY nas secrets do Supabase para usar a IA.");
 
     const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", userId).maybeSingle();
