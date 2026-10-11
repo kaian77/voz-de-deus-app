@@ -78,7 +78,13 @@ Deno.serve(async (req) => {
       const { data: draft } = await db.from("product_drafts").select("images,name,template_id").eq("id", input.draft_id).eq("user_id", userId).single();
       if (!draft) throw new HttpError(404, "Rascunho não encontrado");
       const template = await templateFor(db, userId, draft.template_id);
-      return json(await suggestProduct(db, userId, draft.images, template?.data, draft.name || undefined));
+      const suggestion = await suggestProduct(db, userId, draft.images, template?.data, draft.name || undefined);
+      if ("listing" in suggestion) {
+        // Guarda o cadastro gerado para o "Cadastrar" usar sem gerar de novo
+        const { data: current } = await db.from("product_drafts").select("overrides").eq("id", input.draft_id).single();
+        await db.from("product_drafts").update({ name: suggestion.name, overrides: { ...(current?.overrides ?? {}), ai: suggestion.listing } }).eq("id", input.draft_id);
+      }
+      return json(suggestion);
     }
     if (!aiEnabled()) throw new HttpError(400, "Configure ANTHROPIC_API_KEY nas secrets do Supabase para usar a IA.");
 
@@ -118,9 +124,10 @@ Deno.serve(async (req) => {
       }
 
       case "analyze_competitor": {
-        const { data: competitor } = await db.from("competitors").select("*").eq("id", input.id).eq("user_id", userId).single();
+        let { data: competitor } = await db.from("competitors").select("*").eq("id", input.id).eq("user_id", userId).single();
         if (!competitor) throw new HttpError(404, "Concorrente não encontrado");
-        if (!competitor.snapshot && !competitor.notes) throw new HttpError(400, "Sincronize ou adicione anotações sobre o concorrente antes de analisar.");
+        // Sem dados ainda: pesquisa o perfil antes de analisar
+        if (!competitor.snapshot) competitor = await runTool(ctx, "sync_competitor", { username: competitor.username, platform: competitor.platform }) as typeof competitor;
         const analysis = await generateJSON(CompetitorAnalysis, system,
           `Analise o concorrente @${competitor.username} (${competitor.platform}) e compare com a nossa marca. ` +
           `Aponte forças, padrões de conteúdo (formatos, ganchos, temas, frequência), oportunidades que eles não exploram e ideias para adaptarmos (sem copiar).\n\n` +

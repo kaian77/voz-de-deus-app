@@ -27,7 +27,7 @@ const Caption = z.object({
 export async function announceProduct(
   db: SupabaseClient,
   userId: string,
-  product: { name: string; images: string[]; url?: string | null; price?: string; description?: string },
+  product: { name: string; images: string[]; url?: string | null; price?: string; description?: string; caption?: string },
 ) {
   const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", userId).maybeSingle();
   if (settings && settings.product_autopost === false) return null;
@@ -37,7 +37,9 @@ export async function announceProduct(
 
   const cta = settings?.default_cta || "Garanta o seu pelo link da bio!";
   let caption = `NOVIDADE NA LOJA! 🔥\n\n${product.name}${product.price ? ` por ${product.price}` : ""}.\n\n${cta}`;
-  if (aiEnabled()) {
+  if (product.caption?.trim()) {
+    caption = product.caption.trim(); // legenda já escrita no padrão do lojista
+  } else if (aiEnabled()) {
     try {
       const r = await generateJSON(Caption,
         `Você é social media de uma loja brasileira e escreve legendas que vendem, em português do Brasil, com energia e no máximo 3 emojis. ` +
@@ -85,9 +87,55 @@ const Suggestion = z.object({
   description: z.string().describe("Descrição de venda em texto simples, parágrafos curtos"),
 });
 
-/** A IA olha as fotos e sugere nome e descrição seguindo o modelo e o tom da marca. */
+/** Cadastro completo gerado pela IA seguindo o padrão escrito pelo lojista. */
+const Listing = z.object({
+  name: z.string().describe("Nome completo do produto exatamente no formato do padrão"),
+  description: z.string().describe("Descrição no formato do padrão, em texto simples"),
+  sku: z.string().describe("Código/SKU no formato do padrão"),
+  handle: z.string().describe("URL/identificador no formato do padrão"),
+  tags: z.array(z.string()).describe("Tags no formato do padrão"),
+  seo_title: z.string(),
+  seo_description: z.string(),
+  caption: z.string().describe("Legenda do Instagram completa no formato do padrão, com hashtags; vazia se o padrão não tiver legenda"),
+});
+export type ListingData = z.infer<typeof Listing>;
+
+const slug = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** A IA olha as fotos e preenche o cadastro inteiro seguindo o padrão do lojista. */
+export async function generateListing(db: SupabaseClient, userId: string, images: string[], template: ProductTemplate, hint?: string) {
+  if (!aiEnabled()) throw new Error("Configure a chave da IA para preencher o cadastro.");
+  const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", userId).maybeSingle();
+  const stock = template.stock;
+  const r = await generateJSON(Listing,
+    `Você cadastra produtos numa loja virtual brasileira seguindo EXATAMENTE o padrão de cadastro do lojista: mesma estrutura, ` +
+      `mesma ordem, mesmo estilo, trocando só o que está entre colchetes. Português do Brasil, profissional e persuasivo.\n` +
+      `Regras: descreva só o que dá para ver nas fotos (cores, símbolos, personagens, acessórios, quantidade de peças); não invente ` +
+      `medidas nem materiais além dos que o padrão manda afirmar; escolha entre as opções do padrão (ex.: Pin ou Kit, Metal Esmaltado ` +
+      `ou Metal Fundido) olhando a foto; frases marcadas "se aplicável" só entram quando houver base para isso` +
+      `${stock != null && stock <= 10 ? ` (estoque deste produto: ${stock} unidades, então "pouquíssimas unidades" se aplica)` : " (escassez/\"pouquíssimas unidades\" NÃO se aplica: não há estoque baixo informado)"}.\n\n` +
+      `${brandContext(settings)}`,
+    `PADRÃO DE CADASTRO DO LOJISTA:\n${template.ai_guide}\n\n` +
+      (hint
+        ? `O lojista informou o nome do produto: "${hint}". Use-o como [Nome do Produto] (se já vier no formato completo, mantenha como está).\n`
+        : "O lojista não informou o nome: dê um nome curto e fiel ao que aparece na foto.\n") +
+      `As fotos a seguir são do produto. Preencha todos os campos.`,
+    "medium", images);
+  return {
+    ...r,
+    sku: r.sku.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 60),
+    handle: slug(r.handle).toLowerCase().slice(0, 120),
+    tags: r.tags.map((t) => t.trim()).filter(Boolean),
+  };
+}
+
+/** A IA olha as fotos e sugere nome e descrição (modo simples, sem padrão escrito). */
 export async function suggestProduct(db: SupabaseClient, userId: string, images: string[], template: ProductTemplate | undefined, name?: string) {
   if (!aiEnabled()) throw new Error("Configure a chave da IA para sugerir nome e descrição.");
+  if (template?.ai_guide) {
+    const listing = await generateListing(db, userId, images, template, name);
+    return { name: listing.name, description: listing.description, listing };
+  }
   const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", userId).maybeSingle();
   return generateJSON(Suggestion,
     `Você cadastra produtos numa loja virtual brasileira. Escreve em português do Brasil, sem inventar materiais, medidas ou ` +
@@ -96,6 +144,43 @@ export async function suggestProduct(db: SupabaseClient, userId: string, images:
       `Padrão do nome na loja: ${template?.name_pattern || "{nome}"} (o {nome} é o que você devolve em name).\n` +
       `Escreva a descrição de venda${template?.description ? ` seguindo esta descrição-base da loja (mantenha as informações dela, como medidas, material e envio):\n${template.description}` : "."}`,
     "low", images);
+}
+
+/**
+ * Monta os campos do produto: valores fixos do modelo (preço, peso, categorias, marca...) + textos.
+ * Com padrão escrito (ai_guide), a IA gera nome, descrição, código, URL, tags, SEO e a legenda.
+ */
+export async function buildProduct(
+  db: SupabaseClient,
+  userId: string,
+  tpl: ProductTemplate,
+  images: string[],
+  name: string | undefined,
+  overrides: ProductChanges,
+  cached?: ListingData,
+) {
+  if (tpl.ai_guide && aiEnabled() && overrides.description === undefined) {
+    const listing = cached && (!name || name === cached.name) ? cached : await generateListing(db, userId, images, tpl, name);
+    const fields = applyTemplate(tpl, listing.name, {
+      name: listing.name,
+      description: listing.description,
+      sku: listing.sku || undefined,
+      handle: listing.handle || undefined,
+      tags: listing.tags.length ? listing.tags.join(", ") : undefined,
+      seo_title: listing.seo_title || undefined,
+      seo_description: listing.seo_description || undefined,
+      ...overrides,
+    });
+    return { fields, caption: listing.caption || undefined, baseName: listing.name };
+  }
+  let baseName = (name ?? "").trim();
+  let description = overrides.description;
+  if (!baseName || (tpl.ai_description && description === undefined && aiEnabled())) {
+    const s = await suggestProduct(db, userId, images, tpl, baseName || undefined);
+    baseName ||= s.name;
+    if (tpl.ai_description && description === undefined) description = s.description;
+  }
+  return { fields: applyTemplate(tpl, baseName, { ...overrides, ...(description !== undefined ? { description } : {}) }), caption: undefined, baseName };
 }
 
 /** Cria na Nuvemshop o produto de um rascunho (fotos enviadas no Studio). */
@@ -115,23 +200,24 @@ export async function createFromDraft(db: SupabaseClient, userId: string, draftI
   try {
     const template = await templateFor(db, userId, draft.template_id);
     const tpl = template?.data ?? {};
-    const overrides = { ...(draft.overrides ?? {}), ...extra } as ProductChanges;
-    let baseName = (draft.name ?? "").trim();
-    let description = overrides.description;
-    if (!baseName || (tpl.ai_description && description === undefined && aiEnabled())) {
-      const s = await suggestProduct(db, userId, draft.images, tpl, baseName || undefined);
-      baseName ||= s.name;
-      if (tpl.ai_description && description === undefined) description = s.description;
-    }
     // social_images: versões 4:5 das fotos (o Instagram recusa fotos muito altas), geradas no envio
-    const { social_images: socialImages, ...productOverrides } = overrides as ProductChanges & { social_images?: string[] };
-    const fields = applyTemplate(tpl, baseName, { ...productOverrides, ...(description !== undefined ? { description } : {}) });
-    const product = await nsCreateProduct(store.token, store.storeId, fields, draft.images);
+    // ai: cadastro já gerado pelo botão "Sugerir" (evita gerar de novo)
+    const { social_images: socialImages, ai: cached, ...productOverrides } = { ...(draft.overrides ?? {}), ...extra } as ProductChanges & {
+      social_images?: string[];
+      ai?: ListingData;
+    };
+    const built = await buildProduct(db, userId, tpl, draft.images, (draft.name ?? "").trim() || undefined, productOverrides, cached);
+    const product = await nsCreateProduct(store.token, store.storeId, built.fields, draft.images, { ncm: tpl.fiscal_ncm });
     const { data } = await db.from("product_drafts").update({
-      status: "created", name: baseName, product_id: String(product.id), product_url: product.url ?? null, error: null,
+      status: "created", name: built.fields.name ?? built.baseName, product_id: String(product.id), product_url: product.url ?? null, error: null,
     }).eq("id", draft.id).select().single();
     const post = await announceProduct(db, userId, {
-      name: fields.name ?? baseName, images: socialImages?.length ? socialImages : draft.images, url: product.url, price: product.price, description: fields.description,
+      name: built.fields.name ?? built.baseName,
+      images: socialImages?.length ? socialImages : draft.images,
+      url: product.url,
+      price: product.price,
+      description: built.fields.description,
+      caption: built.caption,
     }).catch((e) => {
       console.error("divulgação", e);
       return null;

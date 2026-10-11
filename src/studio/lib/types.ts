@@ -98,6 +98,10 @@ export interface ProductTemplateData {
   free_shipping?: boolean;
   seo_title?: string;
   seo_description?: string;
+  ai_guide?: string;
+  fiscal_ncm?: string;
+  fiscal_origin?: string;
+  fiscal_type?: string;
 }
 
 export interface ProductTemplate {
@@ -172,6 +176,9 @@ export interface Competitor {
     media_count?: number;
     profile_picture_url?: string;
     media?: { caption?: string; like_count?: number; comments_count?: number; timestamp?: string; media_type?: string; permalink?: string }[];
+    source?: "web";
+    summary?: string;
+    sources?: string[];
   } | null;
   analysis: CompetitorAnalysis | null;
   synced_at: string | null;

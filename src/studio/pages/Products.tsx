@@ -63,7 +63,7 @@ async function socialImage(bitmap: ImageBitmap): Promise<Blob> {
 // --------------------------------------------------------------------------------------------
 
 const NUMERIC = ["price", "promotional_price", "stock", "weight", "width", "height", "depth"] as const;
-const TEXT = ["name_pattern", "sku_prefix", "description", "tags", "brand", "seo_title", "seo_description"] as const;
+const TEXT = ["name_pattern", "sku_prefix", "description", "tags", "brand", "seo_title", "seo_description", "ai_guide", "fiscal_ncm", "fiscal_origin", "fiscal_type"] as const;
 
 type Form = Record<(typeof NUMERIC)[number] | (typeof TEXT)[number], string> & {
   name: string;
@@ -122,6 +122,7 @@ function TemplateEditor({ templates, categories }: { templates: ProductTemplate[
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setForm(toForm(current)), [currentKey]);
 
+  const guided = Boolean(form.ai_guide?.trim());
   const text = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
 
   const save = async () => {
@@ -171,16 +172,31 @@ function TemplateEditor({ templates, categories }: { templates: ProductTemplate[
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field id="tpl-name" label="Nome do modelo"><Input id="tpl-name" className="h-9" value={form.name} onChange={text("name")} /></Field>
-          <Field id="tpl-pattern" label="Padrão do nome do produto" hint="Ex.: Pin {nome} → Pin Zé Gotinha Veterinário">
-            <Input id="tpl-pattern" className="h-9" value={form.name_pattern} onChange={text("name_pattern")} placeholder="{nome}" />
-          </Field>
+          {!guided && (
+            <Field id="tpl-pattern" label="Padrão do nome do produto" hint="Ex.: Pin {nome} → Pin Zé Gotinha Veterinário">
+              <Input id="tpl-pattern" className="h-9" value={form.name_pattern} onChange={text("name_pattern")} placeholder="{nome}" />
+            </Field>
+          )}
         </div>
+
+        <Field
+          id="tpl-guide"
+          label="Padrão de cadastro escrito (opcional)"
+          hint={guided
+            ? "A IA olha as fotos e preenche nome, descrição, código, URL, tags, SEO e a legenda do Instagram exatamente neste formato. Preço, estoque, peso, medidas, categorias e marca vêm dos campos abaixo."
+            : "Cole aqui o seu padrão (formato do nome, descrição, código, tags, SEO, URL, legenda...) e a IA passa a seguir à risca."}
+        >
+          <Textarea id="tpl-guide" rows={guided ? 14 : 3} className="font-mono text-xs leading-relaxed" value={form.ai_guide} onChange={text("ai_guide")}
+            placeholder={"Pin/Kit [Nome do Produto] - [Subtítulo] ([Material])\nDescrição: [parágrafo detalhado...]\nCódigo: PIN-[NOME-EM-MAIÚSCULAS]\nTags: ...\nLegenda para Instagram: ..."} />
+        </Field>
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Field id="tpl-price" label="Preço (R$)"><Input id="tpl-price" inputMode="decimal" className="h-9" value={form.price} onChange={text("price")} placeholder="29,90" /></Field>
           <Field id="tpl-promo" label="Preço promocional"><Input id="tpl-promo" inputMode="decimal" className="h-9" value={form.promotional_price} onChange={text("promotional_price")} placeholder="Opcional" /></Field>
           <Field id="tpl-stock" label="Estoque"><Input id="tpl-stock" inputMode="numeric" className="h-9" value={form.stock} onChange={text("stock")} placeholder="Vazio = infinito" /></Field>
-          <Field id="tpl-sku" label="Prefixo do SKU"><Input id="tpl-sku" className="h-9" value={form.sku_prefix} onChange={text("sku_prefix")} placeholder="PIN-" /></Field>
+          {guided
+            ? <Field id="tpl-brand2" label="Marca"><Input id="tpl-brand2" className="h-9" value={form.brand} onChange={text("brand")} /></Field>
+            : <Field id="tpl-sku" label="Prefixo do SKU"><Input id="tpl-sku" className="h-9" value={form.sku_prefix} onChange={text("sku_prefix")} placeholder="PIN-" /></Field>}
           <Field id="tpl-weight" label="Peso (kg)"><Input id="tpl-weight" inputMode="decimal" className="h-9" value={form.weight} onChange={text("weight")} placeholder="0,05" /></Field>
           <Field id="tpl-width" label="Largura (cm)"><Input id="tpl-width" inputMode="decimal" className="h-9" value={form.width} onChange={text("width")} /></Field>
           <Field id="tpl-height" label="Altura (cm)"><Input id="tpl-height" inputMode="decimal" className="h-9" value={form.height} onChange={text("height")} /></Field>
@@ -200,6 +216,8 @@ function TemplateEditor({ templates, categories }: { templates: ProductTemplate[
           ) : <p className="text-xs text-muted-foreground">As categorias aparecem aqui com a loja conectada.</p>}
         </Field>
 
+        {!guided && (
+          <>
         <Field id="tpl-description" label="Descrição-base" hint="Material, medidas, cuidados, envio... Escreva uma vez e vale para todos.">
           <Textarea id="tpl-description" rows={5} className="text-[13px]" value={form.description} onChange={text("description")} placeholder={"Pin {nome} em metal esmaltado, com fecho de borboleta.\n\nEnviamos para todo o Brasil."} />
         </Field>
@@ -217,6 +235,16 @@ function TemplateEditor({ templates, categories }: { templates: ProductTemplate[
           <Field id="tpl-seo-title" label="Título para o Google (SEO)"><Input id="tpl-seo-title" className="h-9" value={form.seo_title} onChange={text("seo_title")} placeholder="Pin {nome} | Sua loja" /></Field>
           <Field id="tpl-seo-desc" label="Descrição para o Google (SEO)"><Input id="tpl-seo-desc" className="h-9" value={form.seo_description} onChange={text("seo_description")} /></Field>
         </div>
+
+          </>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Field id="tpl-ncm" label="NCM"><Input id="tpl-ncm" className="h-9" value={form.fiscal_ncm} onChange={text("fiscal_ncm")} placeholder="7117.90.00" /></Field>
+          <Field id="tpl-origin" label="Origem"><Input id="tpl-origin" className="h-9" value={form.fiscal_origin} onChange={text("fiscal_origin")} placeholder="0 – Nacional" /></Field>
+          <Field id="tpl-type" label="Tipo"><Input id="tpl-type" className="h-9" value={form.fiscal_type} onChange={text("fiscal_type")} placeholder="Revenda" /></Field>
+        </div>
+        <p className="-mt-3 text-xs text-muted-foreground">Dados fiscais: o Studio grava o NCM quando a Nuvemshop aceita pela API; se não aceitar, ele avisa para completar no painel da loja.</p>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label htmlFor="tpl-published" className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
@@ -240,12 +268,24 @@ function TemplateEditor({ templates, categories }: { templates: ProductTemplate[
 function DraftRow({ draft, templates, onCreate }: { draft: ProductDraft; templates: ProductTemplate[]; onCreate: (d: ProductDraft) => Promise<void> }) {
   const qc = useQueryClient();
   const [name, setName] = useState(draft.name ?? "");
+  const initialPrice = typeof draft.overrides?.price === "number" ? String(draft.overrides.price).replace(".", ",") : "";
+  const [price, setPrice] = useState(initialPrice);
   const [busy, setBusy] = useState<"suggest" | "create" | null>(null);
   const [confirming, setConfirming] = useState(false);
   useEffect(() => setName(draft.name ?? ""), [draft.name]);
   const refresh = () => qc.invalidateQueries({ queryKey: ["table", "product_drafts"] });
   const template = templates.find((t) => t.id === draft.template_id) ?? templates.find((t) => t.is_default) ?? templates[0];
-  const finalName = name.trim() ? (template?.data.name_pattern || "{nome}").split("{nome}").join(name.trim()) : null;
+  const finalName = !name.trim() ? null : template?.data.ai_guide ? name.trim() : (template?.data.name_pattern || "{nome}").split("{nome}").join(name.trim());
+
+  const savePrice = async () => {
+    const v = price.trim().replace(/[^\d,.]/g, "").replace(",", ".");
+    const n = v ? Number(v) : undefined;
+    if (v && (Number.isNaN(n) || !n)) return toast.error("Preço inválido");
+    if (price === initialPrice) return;
+    const { price: _old, ...rest } = draft.overrides ?? {};
+    await api.update("product_drafts", draft.id, { overrides: n ? { ...rest, price: n } : rest }).catch((e) => toast.error(e.message));
+    refresh();
+  };
 
   const saveName = async () => {
     if ((draft.name ?? "") !== name.trim()) await api.update("product_drafts", draft.id, { name: name.trim() || null }).catch((e) => toast.error(e.message));
@@ -254,9 +294,12 @@ function DraftRow({ draft, templates, onCreate }: { draft: ProductDraft; templat
   const suggest = async () => {
     setBusy("suggest");
     try {
-      const s = await api.invoke<{ name: string; description: string }>("ai", { action: "product_suggest", draft_id: draft.id });
+      const s = await api.invoke<{ name: string; description: string; listing?: unknown }>("ai", { action: "product_suggest", draft_id: draft.id });
       setName(s.name);
-      await api.update("product_drafts", draft.id, { name: s.name, ...(template?.data.ai_description ? { overrides: { ...draft.overrides, description: s.description } } : {}) });
+      // Com padrão escrito, o servidor já guardou o cadastro completo gerado no rascunho
+      if (!s.listing) {
+        await api.update("product_drafts", draft.id, { name: s.name, ...(template?.data.ai_description ? { overrides: { ...draft.overrides, description: s.description } } : {}) });
+      }
       refresh();
     } catch (e) {
       toast.error((e as Error).message);
@@ -268,6 +311,7 @@ function DraftRow({ draft, templates, onCreate }: { draft: ProductDraft; templat
   const create = async () => {
     setBusy("create");
     await saveName();
+    await savePrice();
     await onCreate({ ...draft, name: name.trim() || null });
     setBusy(null);
   };
@@ -289,8 +333,17 @@ function DraftRow({ draft, templates, onCreate }: { draft: ProductDraft; templat
             value={name}
             onChange={(e) => setName(e.target.value)}
             onBlur={saveName}
-            placeholder="Nome do produto (vazio = a IA dá o nome)"
+            placeholder={template?.data.ai_guide ? "Nome do produto (a IA monta o resto pelo padrão)" : "Nome do produto (vazio = a IA dá o nome)"}
             aria-label="Nome do produto"
+          />
+          <Input
+            className="h-9 w-24 shrink-0 sm:w-28"
+            inputMode="decimal"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            onBlur={savePrice}
+            placeholder={template?.data.price != null ? `R$ ${String(template.data.price).replace(".", ",")}` : "Preço"}
+            aria-label="Preço"
           />
           <Button size="sm" variant="outline" className="h-9 shrink-0" onClick={suggest} disabled={!!busy} title="Sugerir nome olhando a foto">
             {busy === "suggest" ? <Loader2 className="animate-spin" /> : <Sparkles />}
@@ -397,8 +450,9 @@ export default function Products() {
 
   const createOne = async (draft: ProductDraft, quiet = false) => {
     try {
-      const r = await api.invoke<{ post?: { status: string } | null }>("ai", { action: "product_create", draft_id: draft.id });
+      const r = await api.invoke<{ post?: { status: string } | null; product?: { fiscal?: string } }>("ai", { action: "product_create", draft_id: draft.id });
       if (r.post) qc.invalidateQueries({ queryKey: ["table", "posts"] });
+      if (r.product?.fiscal && !r.product.fiscal.startsWith("NCM")) toast.info(r.product.fiscal);
       if (!quiet) {
         toast.success(r.post
           ? r.post.status === "pending_approval" ? "Produto na loja. O post de divulgação está esperando você em Aprovações." : "Produto na loja e post de divulgação agendado."

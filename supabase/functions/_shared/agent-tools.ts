@@ -6,8 +6,9 @@ import { businessDiscoveryEnabled, igBusinessDiscovery, igProfile, igRecentMedia
 import { advancePost, validatePost } from "./publisher.ts";
 import { assertPublicHttpsUrl } from "./util.ts";
 import { sendMessage, transcript } from "./inbox.ts";
-import { applyTemplate, nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
-import { announceProduct, createFromDraft, templateFor } from "./products.ts";
+import { aiEnabled, generateJSON, researchWeb } from "./claude.ts";
+import { nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
+import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
 
@@ -78,6 +79,37 @@ export async function readWebPage(raw: string, maxChars = 20000) {
   return { url: current.toString(), title, text: text.slice(0, maxChars), truncated: text.length > maxChars, links };
 }
 
+const WebSnapshot = z.object({
+  name: z.string().describe("Nome exibido no perfil, ou vazio"),
+  biography: z.string().describe("Bio do perfil, ou vazio"),
+  followers_count: z.number().nullable().describe("Seguidores, só se aparecer nas fontes"),
+  media_count: z.number().nullable().describe("Número de posts, só se aparecer nas fontes"),
+  summary: z.string().describe("O que o perfil vende/publica, formatos, temas, frequência, preços e diferenciais encontrados"),
+});
+
+/** Sem Business Discovery: a IA pesquisa o perfil público na web e resume o que encontrou (com fontes). */
+async function researchCompetitor(username: string, platform: "instagram" | "tiktok") {
+  const where = platform === "instagram" ? `instagram.com/${username}` : `tiktok.com/@${username}`;
+  const research = await researchWeb(
+    "Você pesquisa perfis de marcas nas redes sociais para análise de concorrência. Responda em português do Brasil. " +
+      "Só afirme o que encontrar nas fontes; quando um número não aparecer, diga que não foi encontrado.",
+    `Pesquise o perfil @${username} (${where}) e o site/loja da marca, se houver. Levante: nome, bio, número de seguidores e de posts ` +
+      `(se aparecerem), o que vendem, faixa de preço, temas e formatos de conteúdo, frequência de postagem, campanhas e diferenciais.`,
+  );
+  if (!research.text) throw new Error(`Não encontrei informações públicas sobre @${username}.`);
+  const parsed = await generateJSON(WebSnapshot, "Extraia os dados do texto de pesquisa. Não invente números.", research.text, "low");
+  return {
+    username,
+    source: "web",
+    name: parsed.name || undefined,
+    biography: parsed.biography || undefined,
+    followers_count: parsed.followers_count ?? undefined,
+    media_count: parsed.media_count ?? undefined,
+    summary: parsed.summary,
+    sources: research.sources,
+  };
+}
+
 async function settings(ctx: Ctx) {
   const { data } = await ctx.db.from("brand_settings").select("*").eq("user_id", ctx.userId).maybeSingle();
   return data;
@@ -130,6 +162,10 @@ const TemplateData = z.object({
   name_pattern: z.string().optional().describe("Padrão do nome, ex.: 'Pin {nome}'"),
   sku_prefix: z.string().optional().describe("Prefixo do SKU, ex.: 'PIN-'"),
   ai_description: z.boolean().optional().describe("A IA escreve a descrição olhando a foto, usando description como base"),
+  ai_guide: z.string().optional().describe("Padrão de cadastro escrito pelo lojista (formato do nome, descrição, código, tags, SEO, URL e legenda). Quando existe, a IA preenche tudo seguindo esse padrão"),
+  fiscal_ncm: z.string().optional(),
+  fiscal_origin: z.string().optional(),
+  fiscal_type: z.string().optional(),
 });
 
 const tools = {
@@ -440,14 +476,20 @@ const tools = {
   },
 
   sync_competitor: {
-    description: "Busca dados públicos atualizados de um concorrente do Instagram (perfil comercial/criador) via Business Discovery. Requer META_FB_ACCESS_TOKEN configurado.",
-    input: z.object({ username: z.string() }),
-    run: async (ctx: Ctx, input: { username: string }) => {
-      if (!businessDiscoveryEnabled()) throw new Error("Business Discovery não configurado (META_FB_ACCESS_TOKEN / META_FB_IG_USER_ID). Pesquise o perfil por outra fonte e salve com upsert_competitor.");
-      const username = input.username.replace(/^@/, "").toLowerCase();
-      const snapshot = await igBusinessDiscovery(username);
+    description: "Atualiza os dados públicos de um concorrente. Instagram: Business Discovery (números exatos) quando configurado; senão (e no TikTok), a IA pesquisa o perfil na web e salva um resumo com as fontes.",
+    input: z.object({ username: z.string(), platform: z.enum(["instagram", "tiktok"]).optional() }),
+    run: async (ctx: Ctx, input: { username: string; platform?: "instagram" | "tiktok" }) => {
+      const username = input.username.replace(/^@/, "").toLowerCase().trim();
+      const platform = input.platform ?? "instagram";
+      let snapshot: Record<string, unknown>;
+      if (platform === "instagram" && businessDiscoveryEnabled()) {
+        snapshot = await igBusinessDiscovery(username);
+      } else {
+        if (!aiEnabled()) throw new Error("Configure a chave da IA para pesquisar concorrentes.");
+        snapshot = await researchCompetitor(username, platform);
+      }
       const { data, error } = await ctx.db.from("competitors").upsert({
-        user_id: ctx.userId, platform: "instagram", username, snapshot, synced_at: new Date().toISOString(),
+        user_id: ctx.userId, platform, username, snapshot, synced_at: new Date().toISOString(),
       }, { onConflict: "user_id,platform,username" }).select().single();
       if (error) throw error;
       return data;
@@ -618,7 +660,7 @@ const tools = {
   },
 
   create_store_product: {
-    description: "Cadastra um produto na loja Nuvemshop a partir de fotos (URLs públicas; use import_media antes se precisar) aplicando um modelo de cadastro (o padrão, se template_id não vier). name é o nome-base: o padrão do modelo (ex.: 'Pin {nome}') é aplicado.",
+    description: "Cadastra um produto na loja Nuvemshop a partir de fotos (URLs públicas; use import_media antes se precisar) aplicando um modelo de cadastro (o padrão, se template_id não vier). name é o nome-base. Se o modelo tiver padrão escrito (ai_guide) e você não mandar description, a IA preenche nome completo, descrição, código, URL, tags, SEO e a legenda seguindo o padrão.",
     input: z.object({
       name: z.string().min(1),
       image_urls: z.array(z.string().url()).min(1).max(20),
@@ -631,10 +673,11 @@ const tools = {
       for (const u of image_urls) assertPublicHttpsUrl(u);
       const s = await store(ctx);
       const template = await templateFor(ctx.db, ctx.userId, template_id);
-      const fields = applyTemplate(template?.data ?? {}, name, extra);
-      const product = await nsCreateProduct(s.token, s.storeId, fields, image_urls);
+      const tpl = template?.data ?? {};
+      const { fields, caption } = await buildProduct(ctx.db, ctx.userId, tpl, image_urls, name, extra);
+      const product = await nsCreateProduct(s.token, s.storeId, fields, image_urls, { ncm: tpl.fiscal_ncm });
       const post = announce === false ? null : await announceProduct(ctx.db, ctx.userId, {
-        name: fields.name ?? name, images: image_urls, url: product.url, price: product.price, description: fields.description,
+        name: fields.name ?? name, images: image_urls, url: product.url, price: product.price, description: fields.description, caption,
       }).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
       return { product, post };
     },
