@@ -62,14 +62,21 @@ async function stepInstagram(db: SupabaseClient, post: Post, r: PlatformResult):
   return { status: "published", id: published.id, permalink: published.permalink, account_id: account.id };
 }
 
+/** O TikTok só puxa mídia de URLs verificadas; servimos o storage pelo domínio do site (rewrite /media na Vercel). */
+function tiktokUrl(url: string) {
+  const storage = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/media/`;
+  const app = Deno.env.get("APP_URL");
+  return app && url.startsWith(storage) ? `${app.replace(/\/$/, "")}/media/${url.slice(storage.length)}` : url;
+}
+
 async function stepTikTok(db: SupabaseClient, post: Post, r: PlatformResult): Promise<PlatformResult> {
   const account = await accountFor(db, post, "tiktok");
   const token = await ttTokenFor(db, account.id);
   const opts = post.options?.tiktok ?? {};
   if (!r.publish_id) {
     r.publish_id = ["reel", "video"].includes(post.kind)
-      ? await ttPublishVideo(token, post.caption, post.media[0].url, opts)
-      : await ttPublishPhotos(token, post.caption, post.media.filter((m) => m.type === "image").map((m) => m.url), opts);
+      ? await ttPublishVideo(token, post.caption, tiktokUrl(post.media[0].url), opts)
+      : await ttPublishPhotos(token, post.caption, post.media.filter((m) => m.type === "image").map((m) => tiktokUrl(m.url)), opts);
   }
   const status = await ttPublishStatus(token, r.publish_id);
   if (status.status === "PUBLISH_COMPLETE") {
