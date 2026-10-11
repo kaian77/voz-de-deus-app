@@ -5,6 +5,7 @@ import { igRequest, igTokenFor } from "./instagram.ts";
 import { waSendText, wahaSendText } from "./whatsapp.ts";
 import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
 import { sleep } from "./util.ts";
+import { nsFindOrder, nsProducts, storeFor } from "./nuvemshop.ts";
 
 export type Channel = "instagram" | "whatsapp";
 type Sender = "contact" | "ai" | "human" | "agent";
@@ -119,11 +120,60 @@ export async function transcript(db: SupabaseClient, conversationId: string, lim
   return (data ?? []).reverse();
 }
 
+/**
+ * Contexto da loja para o agente: catálogo resumido e, se o contato informou número do pedido
+ * E o e-mail da compra, a situação do pedido. Sem o e-mail certo, nenhum dado do pedido é revelado.
+ */
+async function storeContext(db: SupabaseClient, userId: string, history: { direction: string; text: string }[]) {
+  const store = await storeFor(db, userId).catch(() => null);
+  if (!store) return "";
+  const parts: string[] = [];
+  try {
+    const products = await nsProducts(store.token, store.storeId, { limit: 80 });
+    if (products.length) {
+      parts.push("Produtos da loja (preço atual):\n" + products.map((p) =>
+        `- ${p.name}${p.price ? ` — ${p.price}` : ""}${p.stock === 0 ? " (esgotado)" : ""}${p.url ? ` — ${p.url}` : ""}`).join("\n"));
+    }
+  } catch (e) {
+    console.error("catálogo", e);
+  }
+
+  const said = history.filter((m) => m.direction === "in").map((m) => m.text).join("\n");
+  // "pedido 1234", "nº 1234", "#1234" ou uma mensagem só com o número
+  const numbers = [...new Set([
+    ...said.matchAll(/(?:pedido|n[º°o]\.?|#)\s*:?\s*(\d{3,9})/gi),
+    ...said.matchAll(/^\s*(\d{3,9})\s*$/gm),
+  ].map((m) => m[1]))].slice(-2);
+  const emails = [...said.matchAll(/[\w.+-]+@[\w-]+\.[\w.-]+/g)].map((m) => m[0].toLowerCase());
+  const lookups: string[] = [];
+  for (const number of numbers) {
+    const order = await nsFindOrder(store.token, store.storeId, number).catch(() => null);
+    if (!order) {
+      lookups.push(`Pedido ${number}: não encontrado. Peça para a pessoa conferir o número.`);
+    } else if (!emails.length) {
+      lookups.push(`Pedido ${number}: existe. Antes de passar qualquer informação, peça o e-mail usado na compra.`);
+    } else if (!order.email || !emails.includes(String(order.email).toLowerCase())) {
+      lookups.push(`Pedido ${number}: o e-mail informado não confere com o da compra. Não passe dados do pedido; peça para conferir o e-mail ou faça handoff.`);
+    } else {
+      lookups.push(`Pedido ${number} (e-mail confirmado): pagamento ${order.payment}; envio ${order.shipping}` +
+        `${order.shipping_option ? ` via ${order.shipping_option}` : ""}${order.shipping_days ? ` (prazo ${order.shipping_days})` : ""}` +
+        `${order.tracking_number ? `; código de rastreio ${order.tracking_number}` : ""}${order.tracking_url ? ` — ${order.tracking_url}` : ""}` +
+        `${order.status === "cancelled" ? "; pedido CANCELADO" : ""}. Itens: ${order.items.join(", ")}.`);
+    }
+  }
+  parts.push(
+    "Pedidos: para informar a situação de um pedido, a pessoa precisa mandar o número do pedido e o e-mail usado na compra. " +
+      "Só fale da situação de pedidos listados abaixo como \"e-mail confirmado\".\n" + (lookups.join("\n") || "(nenhum pedido consultado nesta conversa)"),
+  );
+  return parts.join("\n\n");
+}
+
 /** Gera a resposta da IA (sem enviar). */
 export async function draftReply(db: SupabaseClient, conversation: any) {
   const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", conversation.user_id).maybeSingle();
   const history = await transcript(db, conversation.id);
   const lines = history.map((m) => `${m.direction === "in" ? "CONTATO" : "MARCA"}: ${m.text}`).join("\n");
+  const shop = await storeContext(db, conversation.user_id, history);
   const system =
     `Você é o atendente virtual da marca no ${conversation.channel === "whatsapp" ? "WhatsApp" : "direct do Instagram"}. ` +
     `Responda em português do Brasil, de forma calorosa, curta (até 3 frases), natural, sem parecer robô, no máximo 1 emoji. ` +
@@ -132,7 +182,8 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
     `assunto delicado (luto, crise, saúde mental grave — nesse caso responda com acolhimento e indique o CVV 188 se houver risco); ` +
     `ou quando você não souber a resposta.\n\n` +
     `${brandContext(settings)}\n\nInstruções de atendimento:\n${settings?.agent_instructions ?? "Seja prestativo e acolhedor."}\n\n` +
-    `Base de conhecimento:\n${settings?.agent_knowledge ?? "(vazia)"}`;
+    `Base de conhecimento:\n${settings?.agent_knowledge ?? "(vazia)"}` +
+    (shop ? `\n\nDados ao vivo da loja (também valem como base de conhecimento):\n${shop}` : "");
   const result = await generateJSON(AgentReply, system,
     `Contato: ${conversation.contact_name ?? conversation.contact_username ?? "sem nome"}\n\nConversa até agora:\n${lines}\n\nEscreva a próxima mensagem da MARCA.`, "low");
   return { ...result, settings };

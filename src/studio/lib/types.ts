@@ -51,14 +51,32 @@ export interface Post {
 
 export interface SocialAccount {
   id: string;
-  platform: Platform | "whatsapp";
+  platform: Platform | "whatsapp" | "nuvemshop";
   external_id: string;
   username: string | null;
   display_name: string | null;
   avatar_url: string | null;
   followers_count: number | null;
-  meta: { biography?: string; website?: string; media_count?: number; provider?: "meta" | "waha" };
+  meta: { biography?: string; website?: string; media_count?: number; provider?: "meta" | "waha"; url?: string };
   connected_at: string;
+}
+
+export interface StoreOrder {
+  id: number;
+  number: number;
+  created_at: string;
+  customer?: string;
+  email?: string;
+  status: "open" | "closed" | "cancelled";
+  payment?: string;
+  shipping?: string;
+  shipping_option?: string;
+  shipping_days?: string;
+  tracking_number?: string;
+  tracking_url?: string;
+  shipped_at?: string;
+  total?: string;
+  items: string[];
 }
 
 export interface Automation {

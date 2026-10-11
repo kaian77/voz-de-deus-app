@@ -3,7 +3,8 @@
 import { z } from "npm:zod@4";
 import { adminClient, corsHeaders, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
-import { runTool } from "../_shared/agent-tools.ts";
+import { readWebPage, runTool } from "../_shared/agent-tools.ts";
+import { nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
 const SYSTEM = (brand: string) =>
@@ -61,6 +62,11 @@ Deno.serve(async (req) => {
       if (!account) throw new HttpError(404, "Conecte o TikTok em Contas");
       return json(await ttCreatorInfo(await ttTokenFor(db, account.id)));
     }
+    if (action === "store_orders") {
+      const store = await storeFor(db, userId);
+      if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
+      return json(await nsOrders(store.token, store.storeId, { status: input.status, q: input.q, limit: input.limit ?? 50 }));
+    }
     if (!aiEnabled()) throw new HttpError(400, "Configure ANTHROPIC_API_KEY nas secrets do Supabase para usar a IA.");
 
     const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", userId).maybeSingle();
@@ -108,6 +114,45 @@ Deno.serve(async (req) => {
           `Anotações: ${competitor.notes ?? "-"}\nDados: ${JSON.stringify(competitor.snapshot ?? {}).slice(0, 60000)}`, "high");
         const { data } = await db.from("competitors").update({ analysis }).eq("id", competitor.id).select().single();
         return json(data);
+      }
+
+      case "knowledge_from_store": {
+        // Junta o que existe de fonte confiável (Nuvemshop + site) e pede um texto de FAQ para o agente
+        const sources: string[] = [];
+        const store = await storeFor(db, userId);
+        if (store) {
+          const [info, pages, products] = await Promise.all([
+            nsStore(store.token, store.storeId).catch(() => null),
+            nsPages(store.token, store.storeId).catch(() => []),
+            nsProducts(store.token, store.storeId, { limit: 60 }).catch(() => []),
+          ]);
+          if (info) sources.push(`Loja:\n${JSON.stringify(info)}`);
+          for (const p of pages) sources.push(`Página "${p.title}":\n${p.text}`);
+          if (products.length) sources.push(`Alguns produtos:\n${products.map((p) => `${p.name} — ${p.price ?? "?"}`).join("\n")}`);
+        }
+        const site = input.site_url || (store?.account.meta?.url as string | undefined);
+        if (site) {
+          const home = await readWebPage(site, 15000).catch(() => null);
+          if (home) {
+            sources.push(`Site (${home.url}):\n${home.text}`);
+            const useful = home.links.filter((l) =>
+              /troca|devolu|envio|entrega|frete|prazo|pagamento|faq|perguntas|d[uú]vidas|sobre|quem somos|contato|pol[ií]tica|atacado|personaliz/i.test(`${l.text} ${l.url}`) &&
+              new URL(l.url).host === new URL(home.url).host,
+            ).slice(0, 6);
+            for (const l of useful) {
+              const page = await readWebPage(l.url, 8000).catch(() => null);
+              if (page) sources.push(`Página "${l.text}" (${page.url}):\n${page.text}`);
+            }
+          }
+        }
+        if (!sources.length) throw new HttpError(400, "Conecte a Nuvemshop em Contas ou informe o endereço do site.");
+        const result = await generateJSON(z.object({ knowledge: z.string() }), system,
+          `Monte a base de conhecimento do atendente virtual da loja a partir das fontes abaixo. ` +
+          `Escreva em tópicos curtos e objetivos (texto puro, sem markdown pesado): link da loja, formas de pagamento, frete e prazos, ` +
+          `trocas e devoluções, pedidos personalizados/atacado, contatos e horários, cupons/promoções vigentes e perguntas frequentes. ` +
+          `Use SOMENTE o que estiver nas fontes; se uma informação não aparecer, não escreva o tópico. Não liste o catálogo inteiro ` +
+          `(o agente já consulta os produtos ao vivo). Máximo de 3500 caracteres.\n\n${sources.join("\n\n---\n\n").slice(0, 80000)}`);
+        return json(result);
       }
 
       default:

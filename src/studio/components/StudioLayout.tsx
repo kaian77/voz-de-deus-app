@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
-  BarChart3, Bot, CalendarDays, CheckSquare, Inbox, LayoutGrid, Link2, LogOut, Menu, MessageSquare, PenLine, Store, Workflow,
+  BarChart3, Bot, CalendarDays, CheckSquare, Inbox, LayoutGrid, Link2, LogOut, Menu, MessageSquare, Package, PenLine, Store, Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -27,6 +27,7 @@ const GROUPS: { label?: string; items: Item[] }[] = [
       { to: "/studio/mensagens", label: "Mensagens", icon: Inbox, count: "inbox" },
       { to: "/studio/automacoes", label: "Automações", icon: Workflow },
       { to: "/studio/comentarios", label: "Comentários", icon: MessageSquare },
+      { to: "/studio/pedidos", label: "Pedidos", icon: Package },
     ],
   },
   {

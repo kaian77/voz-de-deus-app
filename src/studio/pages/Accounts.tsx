@@ -28,9 +28,11 @@ export function ConnectedAccount({ account, onRemove }: { account: SocialAccount
     <div className="flex items-center gap-3 rounded-md border px-3 py-2">
       <Avatar name={account.username ?? account.display_name} src={account.avatar_url} className="h-7 w-7" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium">{account.platform === "whatsapp" ? account.display_name : `@${account.username ?? account.display_name}`}</p>
+        <p className="truncate text-[13px] font-medium">{["whatsapp", "nuvemshop"].includes(account.platform) ? account.display_name : `@${account.username ?? account.display_name}`}</p>
         <p className="tabular truncate text-xs text-muted-foreground">
-          {account.platform === "whatsapp"
+          {account.platform === "nuvemshop"
+            ? account.username
+            : account.platform === "whatsapp"
             ? `+${account.username} · ${account.meta.provider === "waha" ? "WAHA" : "API oficial"}`
             : account.followers_count != null ? `${account.followers_count.toLocaleString("pt-BR")} seguidores` : "Conectada"}
         </p>
@@ -50,18 +52,19 @@ export function ConnectedAccount({ account, onRemove }: { account: SocialAccount
 export default function Accounts() {
   const { data: accounts = [] } = useTable("social_accounts");
   const remove = useRemoveRow("social_accounts");
+  const shops = accounts.filter((a) => a.platform === "nuvemshop");
   const [params, setParams] = useSearchParams();
-  const [busy, setBusy] = useState<Platform | null>(null);
+  const [busy, setBusy] = useState<Platform | "nuvemshop" | null>(null);
 
   useEffect(() => {
     const connected = params.get("connected");
     const error = params.get("error");
-    if (connected) toast.success(`${connected === "instagram" ? "Instagram" : "TikTok"} conectado`);
+    if (connected) toast.success({ instagram: "Instagram conectado", tiktok: "TikTok conectado", nuvemshop: "Loja Nuvemshop conectada" }[connected] ?? "Conta conectada");
     if (error) toast.error(error);
     if (connected || error) setParams({}, { replace: true });
   }, [params, setParams]);
 
-  const connect = async (platform: Platform) => {
+  const connect = async (platform: Platform | "nuvemshop") => {
     setBusy(platform);
     try {
       const { url } = await api.invoke<{ url: string }>(`oauth-${platform}?action=start`);
@@ -102,6 +105,31 @@ export default function Accounts() {
           );
         })}
         <WhatsAppConnect />
+        <section className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
+          <div className="flex gap-4">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border"><PlatformIcon platform="nuvemshop" className="h-5 w-5 text-foreground" /></span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold">Loja Nuvemshop</h2>
+                {shops.length > 0 ? <StatusDot tone="success">Conectada</StatusDot> : <StatusDot tone="neutral">Não conectada</StatusDot>}
+              </div>
+              <p className="mt-1 text-[13px] text-foreground/80">
+                Acompanha pedidos, pagamentos e rastreio. O agente de mensagens consulta produtos, preços e estoque ao vivo e responde
+                “cadê meu pedido?” quando o cliente informa o número do pedido e o e-mail da compra.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Somente leitura: o Studio não altera pedidos nem produtos da loja.</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {shops.map((a) => <ConnectedAccount key={a.id} account={a} onRemove={() => remove.mutate(a.id)} />)}
+            {shops.length === 0 && (
+              <Button size="sm" className="w-full" onClick={() => connect("nuvemshop")} disabled={busy === "nuvemshop"}>
+                {busy === "nuvemshop" && <Loader2 className="animate-spin" />}
+                Conectar loja
+              </Button>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

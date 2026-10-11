@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Copy } from "lucide-react";
+import { Copy, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +76,11 @@ export default function ClaudeApi() {
   const [saving, setSaving] = useState(false);
   const [keyName, setKeyName] = useState("Claude");
   const [newKey, setNewKey] = useState<string | null>(null);
+  const { data: accounts = [] } = useTable("social_accounts");
+  const shop = accounts.find((a) => a.platform === "nuvemshop");
+  const website = shop?.meta.url ?? accounts.find((a) => a.platform === "instagram")?.meta.website ?? "";
+  const [siteUrl, setSiteUrl] = useState("");
+  const [learning, setLearning] = useState(false);
 
   useEffect(() => {
     if (data) setForm(data);
@@ -106,6 +111,20 @@ export default function ClaudeApi() {
       setNewKey(key);
     } catch (e) {
       toast.error((e as Error).message);
+    }
+  };
+
+  const learn = async () => {
+    setLearning(true);
+    try {
+      const site = (siteUrl || website).trim();
+      const { knowledge } = await api.invoke<{ knowledge: string }>("ai", { action: "knowledge_from_store", ...(site ? { site_url: site.startsWith("http") ? site : `https://${site}` } : {}) });
+      setForm((f) => ({ ...f, agent_knowledge: knowledge }));
+      toast.success("Base de conhecimento preenchida. Revise e clique em Salvar alterações.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLearning(false);
     }
   };
 
@@ -142,7 +161,20 @@ export default function ClaudeApi() {
           <Field id="agent_instructions" label="Como atender" hint="Postura, o que oferecer, o que evitar.">
             <Textarea id="agent_instructions" rows={3} className="text-[13px]" value={val("agent_instructions")} onChange={set("agent_instructions")} placeholder="Seja simpático e objetivo, tire dúvidas sobre os produtos e mande o link de compra quando pedirem." />
           </Field>
-          <Field id="agent_knowledge" label="Base de conhecimento" hint="O agente só afirma o que estiver aqui: horários, links, preços, perguntas frequentes.">
+          <Field
+            id="agent_knowledge"
+            label="Base de conhecimento"
+            hint={shop
+              ? "O agente só afirma o que estiver aqui. Produtos, preços, estoque e pedidos ele consulta ao vivo na sua loja Nuvemshop."
+              : "O agente só afirma o que estiver aqui: horários, links, preços, perguntas frequentes."}
+          >
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input className="h-9" value={siteUrl} onChange={(e) => setSiteUrl(e.target.value)} placeholder={website || "Endereço do seu site (https://…)"} aria-label="Endereço do site" />
+              <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={learn} disabled={learning}>
+                {learning ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                {shop ? "Preencher com a loja e o site" : "Preencher com o site"}
+              </Button>
+            </div>
             <Textarea id="agent_knowledge" rows={5} className="font-mono text-xs leading-relaxed" value={val("agent_knowledge")} onChange={set("agent_knowledge")} placeholder={"Horário de atendimento: seg a sex, 9h às 18h\nLink da loja: https://…\nFrete grátis acima de R$ 150"} />
           </Field>
           <Field id="agent_handoff_message" label="Mensagem ao passar para você">

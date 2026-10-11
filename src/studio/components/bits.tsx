@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Instagram } from "lucide-react";
+import { Instagram, ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { renderSlide } from "../lib/carousel";
 import type { CarouselDesign, Platform, PostKind, PostStatus, Slide } from "../lib/types";
@@ -34,14 +34,15 @@ export function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 /** Ícones de rede em tom neutro — a cor fica para estados, não para logos. */
-export function PlatformIcon({ platform, className }: { platform: Platform | "whatsapp"; className?: string }) {
+export function PlatformIcon({ platform, className }: { platform: Platform | "whatsapp" | "nuvemshop"; className?: string }) {
   const cls = cn("h-3.5 w-3.5 text-foreground/70", className);
   if (platform === "instagram") return <Instagram className={cls} strokeWidth={1.9} />;
   if (platform === "whatsapp") return <WhatsAppIcon className={cls} />;
+  if (platform === "nuvemshop") return <ShoppingBag className={cls} strokeWidth={1.9} />;
   return <TikTokIcon className={cls} />;
 }
 
-export const PLATFORM_LABEL = { instagram: "Instagram", tiktok: "TikTok", whatsapp: "WhatsApp" } as const;
+export const PLATFORM_LABEL = { instagram: "Instagram", tiktok: "TikTok", whatsapp: "WhatsApp", nuvemshop: "Nuvemshop" } as const;
 
 export const KIND_LABEL: Record<PostKind, string> = {
   image: "Imagem",

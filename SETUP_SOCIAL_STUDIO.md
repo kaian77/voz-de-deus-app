@@ -181,7 +181,28 @@ A versão Core (grátis) do WAHA suporta **1 número** (sessão `default`).
 4. Defina `WHATSAPP_APP_SECRET` com o *App Secret* do app (em Configurações → Básico).
 5. No Studio, em **Contas → WhatsApp → API oficial**, informe o Phone Number ID, o WABA ID e o token.
 
-## 8. Concorrentes automáticos (opcional)
+## 8. Loja Nuvemshop (pedidos, rastreio e catálogo para o agente)
+
+Somente leitura: o Studio consulta a loja na hora e não guarda dados de clientes.
+
+1. Entre no [Portal de Parceiros da Nuvemshop](https://partners.nuvemshop.com.br) (crie a conta de parceiro com o mesmo e-mail, é grátis) e crie um **aplicativo**.
+2. Configure o app:
+   - **URL de redirecionamento**: `https://<ref>.supabase.co/functions/v1/oauth-nuvemshop`
+   - **Permissões (escopos)**: ler produtos, ler pedidos, ler clientes (`read_products`, `read_orders`, `read_customers`), ler conteúdo/páginas se existir.
+   - **Webhooks de LGPD** (obrigatórios):
+     - Loja removida: `https://<ref>.supabase.co/functions/v1/oauth-nuvemshop?lgpd=store_redact`
+     - Apagar dados do cliente: `https://<ref>.supabase.co/functions/v1/oauth-nuvemshop?lgpd=customers_redact`
+     - Dados do cliente: `https://<ref>.supabase.co/functions/v1/oauth-nuvemshop?lgpd=customers_data_request`
+3. Copie o **ID do app** e o **Client Secret** para os secrets do GitHub `NUVEMSHOP_APP_ID` e `NUVEMSHOP_CLIENT_SECRET` (ou `supabase secrets set`).
+4. No Studio: **Contas → Loja Nuvemshop → Conectar loja** e autorize.
+
+Depois disso: a página **Pedidos** mostra pagamento, envio e rastreio; o agente de mensagens consulta produtos, preços e estoque
+ao vivo e informa a situação de um pedido quando o cliente manda o **número do pedido e o e-mail da compra** (sem o e-mail certo,
+nada do pedido é revelado). Em **Claude e API → Base de conhecimento**, o botão "Preencher com a loja e o site" monta o FAQ do agente
+a partir das páginas da loja e do site. O Claude ganha as ferramentas `get_store_info`, `list_store_products`, `list_orders`,
+`get_order` e `read_web_page`.
+
+## 9. Concorrentes automáticos (opcional)
 
 O *Business Discovery* da Meta lê dados públicos de outras contas profissionais. Ele só existe na API com **Facebook Login**:
 
