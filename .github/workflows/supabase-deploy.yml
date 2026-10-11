@@ -26,6 +26,8 @@ jobs:
       APP_URL: ${{ vars.APP_URL || 'https://voz-de-deus-app.vercel.app' }}
       # Token de verificação dos webhooks da Meta (não é segredo: os eventos são assinados com o app secret)
       META_VERIFY_TOKEN: ${{ vars.META_VERIFY_TOKEN || 'voz-de-deus-studio' }}
+      # "true" libera novos cadastros no Studio; por padrão só quem já tem conta entra
+      ALLOW_SIGNUP: ${{ vars.ALLOW_SIGNUP }}
       # Chaves opcionais dos apps — crie como secrets do repositório quando tiver
       IG_APP_ID: ${{ secrets.IG_APP_ID }}
       IG_APP_SECRET: ${{ secrets.IG_APP_SECRET }}

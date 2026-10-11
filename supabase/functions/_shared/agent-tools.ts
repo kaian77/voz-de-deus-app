@@ -4,6 +4,7 @@ import { z } from "npm:zod@4";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { businessDiscoveryEnabled, igBusinessDiscovery, igProfile, igRecentMedia, igTokenFor } from "./instagram.ts";
 import { advancePost, validatePost } from "./publisher.ts";
+import { assertPublicHttpsUrl } from "./util.ts";
 import { sendMessage, transcript } from "./inbox.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
@@ -440,7 +441,7 @@ const tools = {
       if (input.data_base64) {
         bytes = Uint8Array.from(atob(input.data_base64.replace(/^data:[^,]+,/, "")), (c) => c.charCodeAt(0));
       } else if (input.url) {
-        const res = await fetch(input.url);
+        const res = await fetch(assertPublicHttpsUrl(input.url), { redirect: "error" });
         if (!res.ok) throw new Error(`Não consegui baixar a mídia (${res.status})`);
         bytes = new Uint8Array(await res.arrayBuffer());
         type ??= res.headers.get("content-type") ?? undefined;

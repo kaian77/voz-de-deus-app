@@ -1,6 +1,6 @@
 // Chamado pelo pg_cron a cada minuto (ver SETUP_SOCIAL_STUDIO.md).
 // Também aceita { post_id } com JWT do usuário para "Publicar agora".
-import { adminClient, corsHeaders, env, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
+import { adminClient, corsHeaders, env, handleError, HttpError, json, requireUser, timingSafeEqual } from "../_shared/util.ts";
 import { advancePost, runDuePosts } from "../_shared/publisher.ts";
 
 Deno.serve(async (req) => {
@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
       return json(await advancePost(db, claimed));
     }
 
-    if (req.headers.get("x-cron-secret") !== env("CRON_SECRET")) throw new HttpError(401, "Não autorizado");
+    if (!timingSafeEqual(req.headers.get("x-cron-secret") ?? "", env("CRON_SECRET"))) throw new HttpError(401, "Não autorizado");
     return json({ processed: await runDuePosts(db) });
   } catch (err) {
     return handleError(err);
