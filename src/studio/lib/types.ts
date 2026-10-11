@@ -79,6 +79,48 @@ export interface StoreOrder {
   items: string[];
 }
 
+export interface ProductTemplateData {
+  name_pattern?: string;
+  price?: number;
+  promotional_price?: number | null;
+  stock?: number | null;
+  weight?: number;
+  width?: number;
+  height?: number;
+  depth?: number;
+  sku_prefix?: string;
+  category_ids?: number[];
+  description?: string;
+  ai_description?: boolean;
+  tags?: string;
+  brand?: string;
+  published?: boolean;
+  free_shipping?: boolean;
+  seo_title?: string;
+  seo_description?: string;
+}
+
+export interface ProductTemplate {
+  id: string;
+  name: string;
+  is_default: boolean;
+  data: ProductTemplateData;
+  created_at: string;
+}
+
+export interface ProductDraft {
+  id: string;
+  images: string[];
+  name: string | null;
+  template_id: string | null;
+  overrides: Record<string, unknown>;
+  status: "pending" | "creating" | "created" | "failed";
+  product_id: string | null;
+  product_url: string | null;
+  error: string | null;
+  created_at: string;
+}
+
 export interface Automation {
   id: string;
   account_id: string | null;
@@ -161,6 +203,7 @@ export interface BrandSettings {
   tone: string | null;
   default_hashtags: string | null;
   default_cta: string | null;
+  product_autopost?: boolean;
   approval_required: boolean;
   timezone: string;
   agent_enabled?: boolean;
@@ -216,6 +259,8 @@ export interface TableMap {
   brand_settings: BrandSettings;
   conversations: Conversation;
   messages: Message;
+  product_templates: ProductTemplate;
+  product_drafts: ProductDraft;
 }
 export type TableName = keyof TableMap;
 

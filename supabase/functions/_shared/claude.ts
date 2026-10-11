@@ -23,12 +23,17 @@ export async function generateJSON<T extends z.ZodTypeAny>(
   system: string,
   prompt: string,
   effort: Effort = "medium",
+  images: string[] = [],
 ): Promise<z.infer<T>> {
+  // Imagens por URL pública (ex.: fotos de produto no storage do Studio)
+  const content = images.length
+    ? [...images.slice(0, 8).map((url) => ({ type: "image" as const, source: { type: "url" as const, url } })), { type: "text" as const, text: prompt }]
+    : prompt;
   const response = await anthropic().messages.parse({
     model: MODEL(),
     max_tokens: 16000,
     system,
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content }],
     output_config: { effort, format: zodOutputFormat(schema) },
   });
   if (response.stop_reason === "refusal") throw new Error("A IA recusou este pedido. Reformule e tente de novo.");

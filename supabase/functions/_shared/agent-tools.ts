@@ -6,7 +6,8 @@ import { businessDiscoveryEnabled, igBusinessDiscovery, igProfile, igRecentMedia
 import { advancePost, validatePost } from "./publisher.ts";
 import { assertPublicHttpsUrl } from "./util.ts";
 import { sendMessage, transcript } from "./inbox.ts";
-import { nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "./nuvemshop.ts";
+import { applyTemplate, nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
+import { announceProduct, createFromDraft, templateFor } from "./products.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
 
@@ -107,6 +108,30 @@ export function bestTimes(media: { timestamp: string; like_count?: number; comme
     .slice(0, 5);
 }
 
+const ProductFields = {
+  price: z.number().positive().optional().describe("Preço em reais, ex.: 29.9"),
+  promotional_price: z.number().positive().nullable().optional().describe("Preço promocional (null remove a promoção)"),
+  stock: z.number().int().min(0).nullable().optional().describe("Estoque (null = infinito)"),
+  weight: z.number().positive().optional().describe("Peso em kg, ex.: 0.05"),
+  width: z.number().positive().optional().describe("Largura em cm"),
+  height: z.number().positive().optional().describe("Altura em cm"),
+  depth: z.number().positive().optional().describe("Profundidade em cm"),
+  category_ids: z.array(z.number().int()).optional().describe("Ids das categorias (veja list_store_categories)"),
+  description: z.string().optional().describe("Descrição em texto simples; {nome} vira o nome do produto nos modelos"),
+  tags: z.string().optional().describe("Tags separadas por vírgula"),
+  brand: z.string().optional(),
+  published: z.boolean().optional().describe("Visível na loja"),
+  free_shipping: z.boolean().optional(),
+  seo_title: z.string().optional(),
+  seo_description: z.string().optional(),
+};
+const TemplateData = z.object({
+  ...ProductFields,
+  name_pattern: z.string().optional().describe("Padrão do nome, ex.: 'Pin {nome}'"),
+  sku_prefix: z.string().optional().describe("Prefixo do SKU, ex.: 'PIN-'"),
+  ai_description: z.boolean().optional().describe("A IA escreve a descrição olhando a foto, usando description como base"),
+});
+
 const tools = {
   get_overview: {
     description: "Resumo do Studio: contas conectadas, configurações da marca, próximos posts, posts aguardando aprovação, automações, comentários recentes e conversas esperando humano. Comece por aqui.",
@@ -143,6 +168,7 @@ const tools = {
       tone: z.string().optional(),
       default_hashtags: z.string().optional(),
       default_cta: z.string().optional(),
+      product_autopost: z.boolean().optional().describe("Divulgar no Instagram/TikTok cada produto novo cadastrado"),
       approval_required: z.boolean().optional(),
       timezone: z.string().optional(),
       agent_enabled: z.boolean().optional().describe("Liga/desliga o agente de IA que responde DMs e WhatsApp"),
@@ -540,6 +566,88 @@ const tools = {
       const order = await nsFindOrder(s.token, s.storeId, input.number);
       if (!order) throw new Error(`Pedido ${input.number} não encontrado`);
       return order;
+    },
+  },
+  list_product_templates: {
+    description: "Modelos de cadastro de produto (preço, peso, medidas, categoria, descrição-base, padrão do nome...). O modelo padrão é usado quando nenhum é informado.",
+    input: z.object({}),
+    run: async (ctx: Ctx) => (await ctx.db.from("product_templates").select("id,name,is_default,data").eq("user_id", ctx.userId).order("created_at")).data,
+  },
+
+  save_product_template: {
+    description: "Cria ou atualiza (com id) um modelo de cadastro de produto. data substitui o conteúdo do modelo inteiro.",
+    input: z.object({ id: z.string().uuid().optional(), name: z.string().min(1), is_default: z.boolean().optional(), data: TemplateData }),
+    run: async (ctx: Ctx, input: { id?: string; name: string; is_default?: boolean; data: Record<string, unknown> }) => {
+      if (input.is_default) await ctx.db.from("product_templates").update({ is_default: false }).eq("user_id", ctx.userId);
+      const row = { user_id: ctx.userId, name: input.name, data: input.data, ...(input.is_default !== undefined ? { is_default: input.is_default } : {}) };
+      const { data, error } = input.id
+        ? await ctx.db.from("product_templates").update(row).eq("id", input.id).eq("user_id", ctx.userId).select().single()
+        : await ctx.db.from("product_templates").insert(row).select().single();
+      if (error) throw error;
+      return data;
+    },
+  },
+
+  list_store_categories: {
+    description: "Categorias da loja Nuvemshop (id e nome) para usar nos modelos e produtos.",
+    input: z.object({}),
+    run: async (ctx: Ctx) => {
+      const s = await store(ctx);
+      return nsCategories(s.token, s.storeId);
+    },
+  },
+
+  list_product_drafts: {
+    description: "Fotos enviadas no Studio (página Produtos) esperando virar produto. status pending = ainda não cadastrado.",
+    input: z.object({ status: z.enum(["pending", "failed", "created"]).optional(), limit: z.number().int().max(100).optional() }),
+    run: async (ctx: Ctx, input: { status?: string; limit?: number }) => {
+      let q = ctx.db.from("product_drafts").select("id,images,name,template_id,status,error,product_url,created_at").eq("user_id", ctx.userId);
+      q = input.status ? q.eq("status", input.status) : q.in("status", ["pending", "failed"]);
+      return (await q.order("created_at").limit(input.limit ?? 50)).data;
+    },
+  },
+
+  create_product_from_draft: {
+    description: "Cadastra na loja o produto de um rascunho (fotos enviadas no Studio) usando o modelo dele. Se name não for informado, a IA olha a foto e dá o nome. Campos extras sobrescrevem o modelo.",
+    input: z.object({ draft_id: z.string().uuid(), name: z.string().optional(), ...ProductFields }),
+    run: async (ctx: Ctx, input: { draft_id: string; name?: string } & Record<string, unknown>) => {
+      const { draft_id, name, ...extra } = input;
+      if (name) await ctx.db.from("product_drafts").update({ name }).eq("id", draft_id).eq("user_id", ctx.userId);
+      return createFromDraft(ctx.db, ctx.userId, draft_id, extra);
+    },
+  },
+
+  create_store_product: {
+    description: "Cadastra um produto na loja Nuvemshop a partir de fotos (URLs públicas; use import_media antes se precisar) aplicando um modelo de cadastro (o padrão, se template_id não vier). name é o nome-base: o padrão do modelo (ex.: 'Pin {nome}') é aplicado.",
+    input: z.object({
+      name: z.string().min(1),
+      image_urls: z.array(z.string().url()).min(1).max(20),
+      template_id: z.string().uuid().optional(),
+      announce: z.boolean().optional().describe("Criar o post de divulgação no Instagram/TikTok (padrão: segue a configuração da marca)"),
+      ...ProductFields,
+    }),
+    run: async (ctx: Ctx, input: { name: string; image_urls: string[]; template_id?: string; announce?: boolean } & Record<string, unknown>) => {
+      const { name, image_urls, template_id, announce, ...extra } = input;
+      for (const u of image_urls) assertPublicHttpsUrl(u);
+      const s = await store(ctx);
+      const template = await templateFor(ctx.db, ctx.userId, template_id);
+      const fields = applyTemplate(template?.data ?? {}, name, extra);
+      const product = await nsCreateProduct(s.token, s.storeId, fields, image_urls);
+      const post = announce === false ? null : await announceProduct(ctx.db, ctx.userId, {
+        name: fields.name ?? name, images: image_urls, url: product.url, price: product.price, description: fields.description,
+      }).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+      return { product, post };
+    },
+  },
+
+  update_store_product: {
+    description: "Altera um produto da loja pelo nome (ou id): nome, preço, promoção, estoque, descrição, categorias, visibilidade, SEO e adiciona fotos. Preço/estoque/peso valem para todas as variações. Se o nome bater com mais de um produto, retorna as opções.",
+    input: z.object({ product: z.union([z.string(), z.number()]).describe("Nome atual do produto ou id"), new_name: z.string().optional(), add_image_urls: z.array(z.string().url()).max(20).optional(), ...ProductFields }),
+    run: async (ctx: Ctx, input: { product: string | number; new_name?: string; add_image_urls?: string[] } & Record<string, unknown>) => {
+      const { product, new_name, add_image_urls, ...changes } = input;
+      for (const u of add_image_urls ?? []) assertPublicHttpsUrl(u);
+      const s = await store(ctx);
+      return nsUpdateProduct(s.token, s.storeId, product, { ...changes, ...(new_name ? { name: new_name } : {}) }, add_image_urls);
     },
   },
 } satisfies Record<string, { description: string; input: z.ZodTypeAny; run: (ctx: Ctx, input: any) => Promise<unknown> }>;
