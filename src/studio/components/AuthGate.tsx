@@ -43,7 +43,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         <CardHeader className="space-y-3">
           <span className="flex h-8 w-8 items-center justify-center rounded-md bg-foreground text-sm font-semibold text-background">S</span>
           <div>
-            <CardTitle className="text-lg">{mode === "login" ? "Entrar no Studio" : "Criar acesso"}</CardTitle>
+            <CardTitle className="text-lg">{mode === "login" ? "Entrar no Social Studio" : "Criar acesso ao Social Studio"}</CardTitle>
             <CardDescription>Instagram, TikTok e WhatsApp num só lugar.</CardDescription>
           </div>
         </CardHeader>

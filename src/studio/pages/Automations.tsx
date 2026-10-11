@@ -97,7 +97,7 @@ function AutomationDialog({ value, onClose }: { value: Partial<Automation>; onCl
           {a.match_mode !== "any" && (
             <div className="space-y-1.5">
               <Label>Palavras-chave (separe por vírgula)</Label>
-              <Input value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="amém, oração, quero" />
+              <Input value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="quero, link, preço" />
               <p className="text-xs text-muted-foreground">Não diferencia maiúsculas nem acentos: "Oração" = "oracao".</p>
             </div>
           )}
@@ -134,7 +134,7 @@ function AutomationDialog({ value, onClose }: { value: Partial<Automation>; onCl
               <Switch checked={!!a.use_ai} onCheckedChange={(v) => setA({ ...a, use_ai: v })} />
             </div>
             {a.use_ai ? (
-              <Textarea rows={2} value={a.ai_instructions ?? ""} onChange={(e) => setA({ ...a, ai_instructions: e.target.value })} placeholder="Instruções: ex. agradeça, cite um versículo curto e diga que mandou no direct" />
+              <Textarea rows={2} value={a.ai_instructions ?? ""} onChange={(e) => setA({ ...a, ai_instructions: e.target.value })} placeholder="Instruções: ex. agradeça o comentário e diga que mandou o link no direct" />
             ) : (
               <div className="space-y-1.5">
                 <Label>Respostas públicas (uma por linha — uma é sorteada)</Label>
@@ -179,7 +179,7 @@ export default function Automations() {
 
       {automations.length === 0 ? (
         <EmptyState icon={<Workflow />} title="Nenhuma automação" action={<Button size="sm" onClick={() => setEditing(blank)}><Plus /> Criar a primeira</Button>}>
-          Exemplo clássico: no vídeo, diga “comente ORAÇÃO que eu te mando”. Crie a automação com a palavra “oração” e a mensagem do direct.
+          Exemplo clássico: no vídeo, diga “comente QUERO que eu te mando o link”. Crie a automação com a palavra “quero” e a mensagem do direct.
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-card">

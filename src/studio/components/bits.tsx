@@ -9,7 +9,7 @@ export function useStudioTheme() {
   useEffect(() => {
     document.documentElement.classList.add("studio-theme");
     const previous = document.title;
-    document.title = "Studio";
+    document.title = "Social Studio";
     return () => {
       document.documentElement.classList.remove("studio-theme");
       document.title = previous;

@@ -449,7 +449,7 @@ export default function Composer() {
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label className="text-xs" htmlFor="topic">Tema</Label>
-              <Textarea id="topic" rows={4} className="text-[13px]" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Ex.: 5 versículos para quem está ansioso, com chamada para comentar AMÉM" />
+              <Textarea id="topic" rows={4} className="text-[13px]" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Ex.: 5 erros que iniciantes cometem no meu nicho, com chamada para comentar QUERO" />
             </div>
             {aiOpen === "carousel" && (
               <div className="flex items-center gap-2">

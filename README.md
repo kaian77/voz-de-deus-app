@@ -1,6 +1,6 @@
 # Welcome to your Lovable project
 
-> **Social Studio** (`/studio`): agendamento de posts no Instagram e TikTok, respostas automáticas a comentários (estilo ManyChat), agente de IA para DMs e WhatsApp, auditoria da vitrine, concorrentes e acesso do Claude via MCP.
+> **Social Studio**: agendamento de posts no Instagram e TikTok, respostas automáticas a comentários (estilo ManyChat), agente de IA para DMs e WhatsApp, auditoria da vitrine, concorrentes e acesso do Claude via MCP. O endereço principal abre o painel (`/studio`).
 > Veja o passo a passo em [SETUP_SOCIAL_STUDIO.md](SETUP_SOCIAL_STUDIO.md).
 
 ## Project info

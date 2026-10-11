@@ -2,9 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
+import { BrowserRouter, HashRouter, Navigate, Routes, Route } from "react-router-dom";
 import AuthGate from "./studio/components/AuthGate";
 import StudioLayout from "./studio/components/StudioLayout";
 import Dashboard from "./studio/pages/Dashboard";
@@ -31,7 +29,7 @@ const App = () => (
       <Sonner />
       <Router>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<Navigate to="/studio" replace />} />
           <Route path="/studio" element={<AuthGate><StudioLayout /></AuthGate>}>
             <Route index element={<Dashboard />} />
             <Route path="criar" element={<Composer />} />
@@ -45,8 +43,7 @@ const App = () => (
             <Route path="contas" element={<Accounts />} />
             <Route path="claude" element={<ClaudeApi />} />
           </Route>
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
+          <Route path="*" element={<Navigate to="/studio" replace />} />
         </Routes>
       </Router>
     </TooltipProvider>
