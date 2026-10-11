@@ -16,6 +16,7 @@ import Competitors from "./studio/pages/Competitors";
 import Accounts from "./studio/pages/Accounts";
 import ClaudeApi from "./studio/pages/ClaudeApi";
 import Messages from "./studio/pages/Messages";
+import Orders from "./studio/pages/Orders";
 import Legal from "./studio/pages/Legal";
 
 const queryClient = new QueryClient();
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="automacoes" element={<Automations />} />
             <Route path="comentarios" element={<Comments />} />
             <Route path="mensagens" element={<Messages />} />
+            <Route path="pedidos" element={<Orders />} />
             <Route path="vitrine" element={<Vitrine />} />
             <Route path="concorrentes" element={<Competitors />} />
             <Route path="contas" element={<Accounts />} />

@@ -6,6 +6,7 @@ import { businessDiscoveryEnabled, igBusinessDiscovery, igProfile, igRecentMedia
 import { advancePost, validatePost } from "./publisher.ts";
 import { assertPublicHttpsUrl } from "./util.ts";
 import { sendMessage, transcript } from "./inbox.ts";
+import { nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "./nuvemshop.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
 
@@ -32,6 +33,48 @@ function normalizeMedia(items: z.infer<typeof MediaInput>[] = []) {
     const type = typeof m === "string" || !m.type ? (/\.(mp4|mov|m4v|webm)(\?|$)/i.test(url) ? "video" : "image") : m.type;
     return { url, type };
   });
+}
+
+async function store(ctx: Ctx) {
+  const s = await storeFor(ctx.db, ctx.userId);
+  if (!s) throw new Error("Nenhuma loja Nuvemshop conectada. Conecte em Studio > Contas.");
+  return s;
+}
+
+/** Baixa uma página pública e devolve só o texto legível (sem scripts, estilos e tags). */
+export async function readWebPage(raw: string, maxChars = 20000) {
+  // Segue redirecionamentos manualmente para checar cada destino (proteção contra SSRF)
+  let current = assertPublicHttpsUrl(raw);
+  let res: Response | undefined;
+  for (let hop = 0; hop < 5; hop++) {
+    res = await fetch(current, {
+      redirect: "manual",
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; SocialStudio/1.0)", Accept: "text/html,text/plain" },
+    });
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!location) break;
+    await res.body?.cancel();
+    current = assertPublicHttpsUrl(new URL(location, current).toString());
+  }
+  if (!res) throw new Error("Não consegui abrir a página");
+  if (!res.ok) throw new Error(`Não consegui abrir a página (${res.status})`);
+  const type = res.headers.get("content-type") ?? "";
+  if (!/text\/html|text\/plain|application\/xhtml/.test(type)) throw new Error(`A página não é texto (${type})`);
+  const html = (await res.text()).slice(0, 2_000_000);
+  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
+  const links = [...html.matchAll(/<a\s[^>]*href="([^"#]+)"[^>]*>([\s\S]*?)<\/a>/gi)]
+    .map((m) => ({ href: m[1], text: m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() }))
+    .filter((l) => l.text && !/^(javascript|mailto|tel):/i.test(l.href))
+    .map((l) => { try { return { text: l.text.slice(0, 80), url: new URL(l.href, current).toString() }; } catch { return null; } })
+    .filter((l): l is { text: string; url: string } => l !== null)
+    .slice(0, 150);
+  const text = html
+    .replace(/<(script|style|noscript|svg|iframe)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<br\s*\/?>|<\/(p|div|li|h[1-6]|tr|section|article)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
+  return { url: current.toString(), title, text: text.slice(0, maxChars), truncated: text.length > maxChars, links };
 }
 
 async function settings(ctx: Ctx) {
@@ -453,6 +496,50 @@ const tools = {
       if (error) throw error;
       const { data } = ctx.db.storage.from("media").getPublicUrl(path);
       return { url: data.publicUrl, type: type.startsWith("video") ? "video" : "image" };
+    },
+  },
+  read_web_page: {
+    description: "Abre uma página pública (https) — ex.: o site da loja, políticas de troca/envio, perguntas frequentes — e devolve o texto e os links. Use para montar a base de conhecimento do agente ou pesquisar concorrentes.",
+    input: z.object({ url: z.string().url(), max_chars: z.number().int().min(1000).max(60000).optional() }),
+    run: async (_ctx: Ctx, input: { url: string; max_chars?: number }) => readWebPage(input.url, input.max_chars),
+  },
+
+  get_store_info: {
+    description: "Dados da loja Nuvemshop conectada (nome, site, contatos) e as páginas de conteúdo (trocas, envio, perguntas frequentes).",
+    input: z.object({}),
+    run: async (ctx: Ctx) => {
+      const s = await store(ctx);
+      const [info, pages] = await Promise.all([nsStore(s.token, s.storeId), nsPages(s.token, s.storeId)]);
+      return { store: info, pages };
+    },
+  },
+
+  list_store_products: {
+    description: "Produtos publicados na loja Nuvemshop, com preço (já com promoção), estoque e link. q filtra por nome.",
+    input: z.object({ q: z.string().optional(), limit: z.number().int().min(1).max(200).optional() }),
+    run: async (ctx: Ctx, input: { q?: string; limit?: number }) => {
+      const s = await store(ctx);
+      return nsProducts(s.token, s.storeId, input);
+    },
+  },
+
+  list_orders: {
+    description: "Pedidos da loja Nuvemshop (mais recentes primeiro): pagamento, envio, rastreio, itens e total. status: open (em andamento), closed (concluídos), cancelled, any. q busca por número do pedido, nome ou e-mail do cliente.",
+    input: z.object({ status: z.enum(["open", "closed", "cancelled", "any"]).optional(), q: z.string().optional(), limit: z.number().int().min(1).max(200).optional() }),
+    run: async (ctx: Ctx, input: { status?: string; q?: string; limit?: number }) => {
+      const s = await store(ctx);
+      return nsOrders(s.token, s.storeId, input);
+    },
+  },
+
+  get_order: {
+    description: "Um pedido da loja pelo número que o cliente vê (ex.: 1234) ou pelo id interno: situação do pagamento e do envio, código e link de rastreio.",
+    input: z.object({ number: z.union([z.string(), z.number()]) }),
+    run: async (ctx: Ctx, input: { number: string | number }) => {
+      const s = await store(ctx);
+      const order = await nsFindOrder(s.token, s.storeId, input.number);
+      if (!order) throw new Error(`Pedido ${input.number} não encontrado`);
+      return order;
     },
   },
 } satisfies Record<string, { description: string; input: z.ZodTypeAny; run: (ctx: Ctx, input: any) => Promise<unknown> }>;

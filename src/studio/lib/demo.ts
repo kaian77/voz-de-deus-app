@@ -22,6 +22,10 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
         id: "demo-wa", platform: "whatsapp", external_id: "waha:demo:default", username: "5511988887777", display_name: "Minha Marca (WAHA)",
         avatar_url: null, followers_count: null, meta: { provider: "waha" }, connected_at: now(),
       },
+      {
+        id: "demo-shop", platform: "nuvemshop", external_id: "123456", username: "minhamarca.com", display_name: "Minha Marca Loja",
+        avatar_url: null, followers_count: null, meta: { url: "https://minhamarca.com" }, connected_at: now(),
+      },
     ],
     posts: [
       {
@@ -162,6 +166,21 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
           creator_nickname: "Minha Marca", creator_username: "minhamarca", creator_avatar_url: undefined,
           privacy_level_options: ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY"],
           comment_disabled: false, duet_disabled: false, stitch_disabled: true, max_video_post_duration_sec: 600,
+        };
+      case "store_orders": {
+        const orders = [
+          { number: 1042, customer: "Ana Souza", status: "open", payment: "pago", shipping: "enviado", shipping_option: "Correios PAC", tracking_number: "QB123456789BR", tracking_url: "https://rastreamento.correios.com.br", total: "R$ 89,70", items: ["2x Pin Coração", "1x Pin Estrela"], h: 5 },
+          { number: 1041, customer: "Bruno Lima", status: "open", payment: "pago", shipping: "aguardando embalagem", shipping_option: "Correios SEDEX", total: "R$ 59,80", items: ["2x Pin Lua"], h: 20 },
+          { number: 1040, customer: "Carla Dias", status: "open", payment: "aguardando pagamento", shipping: "ainda não enviado", shipping_option: "Correios PAC", total: "R$ 29,90", items: ["1x Pin Sol"], h: 30 },
+          { number: 1038, customer: "Diego Alves", status: "closed", payment: "pago", shipping: "entregue", shipping_option: "Correios PAC", tracking_number: "QB987654321BR", total: "R$ 149,50", items: ["5x Pin Coleção"], h: 120 },
+          { number: 1037, customer: "Elisa Rocha", status: "cancelled", payment: "cancelado", shipping: "ainda não enviado", total: "R$ 29,90", items: ["1x Pin Sol"], h: 150 },
+        ].map(({ h, ...o }) => ({ ...o, id: 9000000000 + o.number, created_at: new Date(Date.now() - h * 3600_000).toISOString() }));
+        const q = String(body.q ?? "").toLowerCase();
+        return orders.filter((o) => (body.status === "any" || o.status === body.status) && (!q || `${o.number} ${o.customer}`.toLowerCase().includes(q)));
+      }
+      case "knowledge_from_store":
+        return {
+          knowledge: "Loja: https://minhamarca.com\nPagamento: Pix (5% de desconto), cartão em até 3x sem juros.\nFrete: Correios PAC e SEDEX para todo o Brasil; grátis acima de R$ 150.\nPrazo de postagem: até 2 dias úteis após o pagamento.\nTrocas: até 7 dias após o recebimento, pelo e-mail contato@minhamarca.com.",
         };
       case "sync_competitor":
         throw new Error("No modo demo não há conexão com o Instagram.");
