@@ -98,6 +98,10 @@ export interface ProductTemplateData {
   free_shipping?: boolean;
   seo_title?: string;
   seo_description?: string;
+  ai_guide?: string;
+  fiscal_ncm?: string;
+  fiscal_origin?: string;
+  fiscal_type?: string;
 }
 
 export interface ProductTemplate {

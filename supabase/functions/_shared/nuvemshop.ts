@@ -190,11 +190,17 @@ export type ProductTemplate = {
   free_shipping?: boolean;
   seo_title?: string;
   seo_description?: string;
+  /** Padrão de cadastro escrito pelo lojista (nome, descrição, código, tags, SEO, URL, legenda). A IA segue à risca. */
+  ai_guide?: string;
+  fiscal_ncm?: string;
+  fiscal_origin?: string;
+  fiscal_type?: string;
 };
 
-export type ProductChanges = Partial<Omit<ProductTemplate, "name_pattern" | "sku_prefix" | "ai_description">> & {
+export type ProductChanges = Partial<Omit<ProductTemplate, "name_pattern" | "sku_prefix" | "ai_description" | "ai_guide" | "fiscal_ncm" | "fiscal_origin" | "fiscal_type">> & {
   name?: string;
   sku?: string;
+  handle?: string;
 };
 
 const fill = (text: string | undefined, name: string) => (text ?? "").replaceAll("{nome}", name).trim();
@@ -230,6 +236,7 @@ function productFields(src: ProductChanges) {
   if (src.free_shipping !== undefined) p.free_shipping = src.free_shipping;
   if (src.seo_title !== undefined) p.seo_title = { pt: src.seo_title };
   if (src.seo_description !== undefined) p.seo_description = { pt: src.seo_description };
+  if (src.handle) p.handle = { pt: src.handle };
   return p;
 }
 
@@ -276,7 +283,7 @@ function productSummary(p: any) {
   };
 }
 
-export async function nsCreateProduct(token: string, storeId: string, fields: ProductChanges, images: string[]) {
+export async function nsCreateProduct(token: string, storeId: string, fields: ProductChanges, images: string[], fiscal?: { ncm?: string }) {
   if (!fields.name) throw new Error("O produto precisa de um nome");
   if (fields.price === undefined) throw new Error("O produto precisa de um preço (defina no modelo ou informe price)");
   const body = {
@@ -284,7 +291,28 @@ export async function nsCreateProduct(token: string, storeId: string, fields: Pr
     variants: [variantFields(fields)],
     images: images.slice(0, 50).map((src, i) => ({ src, position: i + 1 })),
   };
-  return productSummary(await ns(token, storeId, "products", { method: "POST", body }));
+  const created = await ns(token, storeId, "products", { method: "POST", body });
+  return { ...productSummary(created), fiscal: await applyFiscal(token, storeId, created, fiscal) };
+}
+
+/**
+ * NCM: a documentação da API não confirma o campo. Só gravamos se a variação devolvida pela loja já tiver
+ * um campo de NCM; senão avisamos para preencher no painel (nunca inventamos nome de campo).
+ */
+async function applyFiscal(token: string, storeId: string, product: any, fiscal?: { ncm?: string }) {
+  const ncm = fiscal?.ncm?.replace(/\D/g, "");
+  if (!ncm) return undefined;
+  const variant = product.variants?.[0];
+  const key = variant && Object.keys(variant).find((k) => /ncm/i.test(k));
+  if (!key) return "A API da loja não expõe o NCM: preencha os dados fiscais no painel da Nuvemshop.";
+  try {
+    for (const v of product.variants ?? []) {
+      await ns(token, storeId, `products/${product.id}/variants/${v.id}`, { method: "PUT", body: { [key]: ncm } });
+    }
+    return `NCM ${ncm} aplicado.`;
+  } catch (e) {
+    return `Não consegui gravar o NCM (${e instanceof Error ? e.message : e}); preencha no painel.`;
+  }
 }
 
 /** Encontra um produto pelo nome (ou id). Ambíguo = erro listando as opções. */

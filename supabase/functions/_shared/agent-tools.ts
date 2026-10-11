@@ -6,8 +6,8 @@ import { businessDiscoveryEnabled, igBusinessDiscovery, igProfile, igRecentMedia
 import { advancePost, validatePost } from "./publisher.ts";
 import { assertPublicHttpsUrl } from "./util.ts";
 import { sendMessage, transcript } from "./inbox.ts";
-import { applyTemplate, nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
-import { announceProduct, createFromDraft, templateFor } from "./products.ts";
+import { nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
+import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
 
@@ -130,6 +130,10 @@ const TemplateData = z.object({
   name_pattern: z.string().optional().describe("Padrão do nome, ex.: 'Pin {nome}'"),
   sku_prefix: z.string().optional().describe("Prefixo do SKU, ex.: 'PIN-'"),
   ai_description: z.boolean().optional().describe("A IA escreve a descrição olhando a foto, usando description como base"),
+  ai_guide: z.string().optional().describe("Padrão de cadastro escrito pelo lojista (formato do nome, descrição, código, tags, SEO, URL e legenda). Quando existe, a IA preenche tudo seguindo esse padrão"),
+  fiscal_ncm: z.string().optional(),
+  fiscal_origin: z.string().optional(),
+  fiscal_type: z.string().optional(),
 });
 
 const tools = {
@@ -618,7 +622,7 @@ const tools = {
   },
 
   create_store_product: {
-    description: "Cadastra um produto na loja Nuvemshop a partir de fotos (URLs públicas; use import_media antes se precisar) aplicando um modelo de cadastro (o padrão, se template_id não vier). name é o nome-base: o padrão do modelo (ex.: 'Pin {nome}') é aplicado.",
+    description: "Cadastra um produto na loja Nuvemshop a partir de fotos (URLs públicas; use import_media antes se precisar) aplicando um modelo de cadastro (o padrão, se template_id não vier). name é o nome-base. Se o modelo tiver padrão escrito (ai_guide) e você não mandar description, a IA preenche nome completo, descrição, código, URL, tags, SEO e a legenda seguindo o padrão.",
     input: z.object({
       name: z.string().min(1),
       image_urls: z.array(z.string().url()).min(1).max(20),
@@ -631,10 +635,11 @@ const tools = {
       for (const u of image_urls) assertPublicHttpsUrl(u);
       const s = await store(ctx);
       const template = await templateFor(ctx.db, ctx.userId, template_id);
-      const fields = applyTemplate(template?.data ?? {}, name, extra);
-      const product = await nsCreateProduct(s.token, s.storeId, fields, image_urls);
+      const tpl = template?.data ?? {};
+      const { fields, caption } = await buildProduct(ctx.db, ctx.userId, tpl, image_urls, name, extra);
+      const product = await nsCreateProduct(s.token, s.storeId, fields, image_urls, { ncm: tpl.fiscal_ncm });
       const post = announce === false ? null : await announceProduct(ctx.db, ctx.userId, {
-        name: fields.name ?? name, images: image_urls, url: product.url, price: product.price, description: fields.description,
+        name: fields.name ?? name, images: image_urls, url: product.url, price: product.price, description: fields.description, caption,
       }).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
       return { product, post };
     },

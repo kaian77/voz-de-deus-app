@@ -78,7 +78,13 @@ Deno.serve(async (req) => {
       const { data: draft } = await db.from("product_drafts").select("images,name,template_id").eq("id", input.draft_id).eq("user_id", userId).single();
       if (!draft) throw new HttpError(404, "Rascunho não encontrado");
       const template = await templateFor(db, userId, draft.template_id);
-      return json(await suggestProduct(db, userId, draft.images, template?.data, draft.name || undefined));
+      const suggestion = await suggestProduct(db, userId, draft.images, template?.data, draft.name || undefined);
+      if ("listing" in suggestion) {
+        // Guarda o cadastro gerado para o "Cadastrar" usar sem gerar de novo
+        const { data: current } = await db.from("product_drafts").select("overrides").eq("id", input.draft_id).single();
+        await db.from("product_drafts").update({ name: suggestion.name, overrides: { ...(current?.overrides ?? {}), ai: suggestion.listing } }).eq("id", input.draft_id);
+      }
+      return json(suggestion);
     }
     if (!aiEnabled()) throw new HttpError(400, "Configure ANTHROPIC_API_KEY nas secrets do Supabase para usar a IA.");
 
