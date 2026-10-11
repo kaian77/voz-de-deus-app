@@ -16,6 +16,7 @@ import Competitors from "./studio/pages/Competitors";
 import Accounts from "./studio/pages/Accounts";
 import ClaudeApi from "./studio/pages/ClaudeApi";
 import Messages from "./studio/pages/Messages";
+import Legal from "./studio/pages/Legal";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +44,9 @@ const App = () => (
             <Route path="contas" element={<Accounts />} />
             <Route path="claude" element={<ClaudeApi />} />
           </Route>
+          <Route path="/privacidade" element={<Legal doc="privacidade" />} />
+          <Route path="/termos" element={<Legal doc="termos" />} />
+          <Route path="/exclusao-de-dados" element={<Legal doc="exclusao-de-dados" />} />
           <Route path="*" element={<Navigate to="/studio" replace />} />
         </Routes>
       </Router>
