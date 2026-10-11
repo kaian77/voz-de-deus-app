@@ -14,19 +14,19 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
   return {
     social_accounts: [
       {
-        id: igId, platform: "instagram", external_id: "178414", username: "vozdedeus.oficial", display_name: "Voz de Deus",
-        avatar_url: null, followers_count: 12840, meta: { biography: "Uma palavra de Deus para você todos os dias 🙏\nReceba a sua 👇", website: "https://vozdedeus.app", media_count: 214 },
+        id: igId, platform: "instagram", external_id: "178414", username: "minhamarca", display_name: "Minha Marca",
+        avatar_url: null, followers_count: 12840, meta: { biography: "Uma palavra de Deus para você todos os dias 🙏\nReceba a sua 👇", website: "https://minhamarca.com", media_count: 214 },
         connected_at: now(),
       },
       {
-        id: "demo-wa", platform: "whatsapp", external_id: "waha:demo:default", username: "5511988887777", display_name: "Voz de Deus (WAHA)",
+        id: "demo-wa", platform: "whatsapp", external_id: "waha:demo:default", username: "5511988887777", display_name: "Minha Marca (WAHA)",
         avatar_url: null, followers_count: null, meta: { provider: "waha" }, connected_at: now(),
       },
     ],
     posts: [
       {
         id: "demo-p1", title: "Salmo 23 — carrossel", caption: "O Senhor é o meu pastor, nada me faltará 🙏\n\nSalve para ler de novo quando precisar.\n\n#fé #salmo23 #palavradedeus",
-        kind: "carousel", platforms: ["instagram", "tiktok"], media: [], design: { theme: "divino", handle: "@vozdedeus.oficial" },
+        kind: "carousel", platforms: ["instagram", "tiktok"], media: [], design: { theme: "divino", handle: "@minhamarca" },
         slides: [
           { title: "5 promessas do Salmo 23 para hoje", body: "Arraste para o lado →" },
           { title: "Nada te faltará", body: "Ele conhece cada necessidade sua, antes mesmo de você pedir." },
@@ -53,7 +53,7 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
       {
         id: "demo-a1", account_id: igId, name: "Oração no direct", active: true, keywords: ["amém", "oração", "quero"], match_mode: "contains",
         media_ids: [], reply_variants: ["Amém, {username}! Te mandei uma oração no direct 🙏", "Deus te abençoe, {username}! Olha seu direct 💌"],
-        dm_message: "Oi {username}! Que bom ter você aqui 🙏\n\nAqui está a sua palavra de hoje: https://vozdedeus.app", use_ai: false,
+        dm_message: "Oi {username}! Que bom ter você aqui 🙏\n\nAqui está a sua palavra de hoje: https://minhamarca.com", use_ai: false,
         ai_instructions: null, once_per_user: true, triggered_count: 342, created_at: now(),
       },
     ],
@@ -79,8 +79,8 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
     ],
     api_keys: [],
     brand_settings: [
-      { brand_name: "Voz de Deus", niche: "Conteúdo cristão / devocional", audience: "Cristãos 25–55 anos, maioria mulheres, Brasil", tone: "Acolhedor, esperançoso, simples", default_hashtags: "fé palavradedeus deus jesus oração", default_cta: "Comente AMÉM para receber uma oração no direct", approval_required: true, timezone: "America/Sao_Paulo",
-        agent_enabled: true, agent_instructions: "Atenda com carinho, ofereça oração, convide para o grupo de quarta 20h.", agent_knowledge: "Grupo de oração: quartas 20h, live no Instagram.\nApp: https://vozdedeus.app", agent_handoff_message: "Vou chamar alguém da equipe para te responder, só um instante 🙏" },
+      { brand_name: "Minha Marca", niche: "Conteúdo cristão / devocional", audience: "Cristãos 25–55 anos, maioria mulheres, Brasil", tone: "Acolhedor, esperançoso, simples", default_hashtags: "fé palavradedeus deus jesus oração", default_cta: "Comente AMÉM para receber uma oração no direct", approval_required: true, timezone: "America/Sao_Paulo",
+        agent_enabled: true, agent_instructions: "Atenda com carinho, ofereça oração, convide para o grupo de quarta 20h.", agent_knowledge: "Grupo de oração: quartas 20h, live no Instagram.\nApp: https://minhamarca.com", agent_handoff_message: "Vou chamar alguém da equipe para te responder, só um instante 🙏" },
     ],
   };
 }
@@ -149,7 +149,7 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
         };
       case "profile":
         return {
-          profile: { username: "vozdedeus.oficial", name: "Voz de Deus", followers_count: 12840, follows_count: 210, media_count: 214, biography: "Uma palavra de Deus para você todos os dias 🙏\nReceba a sua 👇", website: "https://vozdedeus.app" },
+          profile: { username: "minhamarca", name: "Minha Marca", followers_count: 12840, follows_count: 210, media_count: 214, biography: "Uma palavra de Deus para você todos os dias 🙏\nReceba a sua 👇", website: "https://minhamarca.com" },
           media: Array.from({ length: 12 }, (_, i) => ({
             id: `m${i + 1}`, caption: ["Salmo 23 🙏", "Não temas", "Oração da manhã", "Filipenses 4:13"][i % 4], media_type: i % 3 ? "IMAGE" : "VIDEO",
             media_product_type: i % 3 ? "FEED" : "REELS", like_count: 300 + ((i * 137) % 900), comments_count: 20 + ((i * 53) % 180),

@@ -27,7 +27,7 @@ const solid = (color: string) => (ctx: CanvasRenderingContext2D) => {
 
 export const THEMES: Record<ThemeId, Theme> = {
   divino: {
-    name: "Divino (azul e dourado)",
+    name: "Azul e dourado",
     background: (ctx) => gradient(ctx, [[0, "#0f2a6b"], [0.6, "#1d4ed8"], [1, "#c99a2e"]]),
     text: "#ffffff",
     muted: "rgba(255,255,255,0.82)",

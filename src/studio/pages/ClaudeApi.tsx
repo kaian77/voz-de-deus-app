@@ -17,8 +17,8 @@ const copy = (text: string, msg = "Copiado") =>
 
 const EXAMPLES = [
   "Analise meu Instagram, me diga o que melhorar na vitrine e salve a auditoria no Studio.",
-  "Crie 5 carrosséis para esta semana sobre ansiedade e fé e agende nos meus melhores horários.",
-  "Crie uma automação: quem comentar ORAÇÃO recebe no direct o link do app.",
+  "Crie 5 carrosséis para esta semana sobre o meu nicho e agende nos meus melhores horários.",
+  "Crie uma automação: quem comentar QUERO recebe no direct o link do meu produto.",
   "Adicione @perfil_x e @perfil_y como concorrentes, compare com a gente e me dê 10 ideias de reels.",
   "O que está agendado para os próximos 7 dias? Tem algum dia vazio?",
   "Quais conversas estão esperando por mim? Responda as que você souber.",
@@ -122,16 +122,16 @@ export default function ClaudeApi() {
       <div className="rounded-lg border bg-card px-5">
         <Row title="Marca" description="Contexto usado em legendas, carrosséis, respostas e análises.">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field id="brand_name" label="Nome da marca"><Input id="brand_name" className="h-9" value={val("brand_name")} onChange={set("brand_name")} placeholder="Voz de Deus" /></Field>
-            <Field id="niche" label="Nicho"><Input id="niche" className="h-9" value={val("niche")} onChange={set("niche")} placeholder="Conteúdo cristão e devocional" /></Field>
+            <Field id="brand_name" label="Nome da marca"><Input id="brand_name" className="h-9" value={val("brand_name")} onChange={set("brand_name")} placeholder="Nome da sua marca" /></Field>
+            <Field id="niche" label="Nicho"><Input id="niche" className="h-9" value={val("niche")} onChange={set("niche")} placeholder="Ex.: confeitaria, fitness, educação financeira" /></Field>
           </div>
           <Field id="audience" label="Público"><Textarea id="audience" rows={2} className="text-[13px]" value={val("audience")} onChange={set("audience")} placeholder="Quem você quer alcançar" /></Field>
-          <Field id="tone" label="Tom de voz"><Input id="tone" className="h-9" value={val("tone")} onChange={set("tone")} placeholder="Acolhedor, esperançoso, simples" /></Field>
+          <Field id="tone" label="Tom de voz"><Input id="tone" className="h-9" value={val("tone")} onChange={set("tone")} placeholder="Ex.: próximo, direto, bem-humorado" /></Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field id="default_hashtags" label="Hashtags da marca"><Input id="default_hashtags" className="h-9" value={val("default_hashtags")} onChange={set("default_hashtags")} placeholder="fé palavradedeus jesus" /></Field>
+            <Field id="default_hashtags" label="Hashtags da marca"><Input id="default_hashtags" className="h-9" value={val("default_hashtags")} onChange={set("default_hashtags")} placeholder="suamarca seunicho" /></Field>
             <Field id="timezone" label="Fuso horário"><Input id="timezone" className="h-9 font-mono text-xs" value={val("timezone")} onChange={set("timezone")} /></Field>
           </div>
-          <Field id="default_cta" label="Chamada para ação padrão"><Input id="default_cta" className="h-9" value={val("default_cta")} onChange={set("default_cta")} placeholder="Comente AMÉM para receber uma oração" /></Field>
+          <Field id="default_cta" label="Chamada para ação padrão"><Input id="default_cta" className="h-9" value={val("default_cta")} onChange={set("default_cta")} placeholder="Comente QUERO que eu te mando no direct" /></Field>
         </Row>
 
         <Row title="Agente de mensagens" description="Responde o direct do Instagram e o WhatsApp. Quando não souber, ou a pessoa pedir um humano, passa a conversa para você.">
@@ -140,10 +140,10 @@ export default function ClaudeApi() {
             <Switch id="agent_enabled" checked={!!form.agent_enabled} onCheckedChange={(v) => setForm({ ...form, agent_enabled: v })} />
           </label>
           <Field id="agent_instructions" label="Como atender" hint="Postura, o que oferecer, o que evitar.">
-            <Textarea id="agent_instructions" rows={3} className="text-[13px]" value={val("agent_instructions")} onChange={set("agent_instructions")} placeholder="Acolha, ofereça oração, convide para o grupo de quarta. Nunca fale de política." />
+            <Textarea id="agent_instructions" rows={3} className="text-[13px]" value={val("agent_instructions")} onChange={set("agent_instructions")} placeholder="Seja simpático e objetivo, tire dúvidas sobre os produtos e mande o link de compra quando pedirem." />
           </Field>
           <Field id="agent_knowledge" label="Base de conhecimento" hint="O agente só afirma o que estiver aqui: horários, links, preços, perguntas frequentes.">
-            <Textarea id="agent_knowledge" rows={5} className="font-mono text-xs leading-relaxed" value={val("agent_knowledge")} onChange={set("agent_knowledge")} placeholder={"Grupo de oração: quartas, 20h, ao vivo no Instagram\nApp: https://vozdedeus.app"} />
+            <Textarea id="agent_knowledge" rows={5} className="font-mono text-xs leading-relaxed" value={val("agent_knowledge")} onChange={set("agent_knowledge")} placeholder={"Horário de atendimento: seg a sex, 9h às 18h\nLink da loja: https://…\nFrete grátis acima de R$ 150"} />
           </Field>
           <Field id="agent_handoff_message" label="Mensagem ao passar para você">
             <Input id="agent_handoff_message" className="h-9" value={val("agent_handoff_message")} onChange={set("agent_handoff_message")} placeholder="Vou chamar alguém da equipe para te responder." />

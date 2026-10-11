@@ -91,7 +91,7 @@ function Workspace() {
   const { data: settings } = useSettings();
   const { data: accounts } = useTable("social_accounts");
   const ig = accounts?.find((a) => a.platform === "instagram");
-  const name = settings?.brand_name || ig?.display_name || "Meu Studio";
+  const name = settings?.brand_name || ig?.display_name || "Social Studio";
   return (
     <div className="flex items-center gap-2.5 px-2.5">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-foreground text-[12px] font-semibold text-background">
@@ -99,7 +99,7 @@ function Workspace() {
       </span>
       <div className="min-w-0 leading-tight">
         <p className="truncate text-[13px] font-semibold">{name}</p>
-        <p className="truncate text-[11px] text-muted-foreground">{ig?.username ? `@${ig.username}` : "Studio"}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{ig?.username ? `@${ig.username}` : "Social Studio"}</p>
       </div>
     </div>
   );
