@@ -33,7 +33,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
       ? await supabase!.auth.signInWithPassword({ email, password })
       : await supabase!.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/studio` } });
     setBusy(false);
-    if (error) toast.error(error.message);
+    if (error) toast.error(/signups? not allowed/i.test(error.message) ? "Novos cadastros estão fechados. Entre com a conta do dono do Studio." : error.message);
     else if (mode === "signup") toast.success("Conta criada! Confirme pelo e-mail, se for pedido, e entre.");
   };
 

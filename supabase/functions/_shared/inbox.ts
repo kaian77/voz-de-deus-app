@@ -61,8 +61,10 @@ export async function recordInbound(
 
 /** Envia uma mensagem pelo canal da conversa e registra no histórico. */
 export async function sendMessage(db: SupabaseClient, conversationId: string, text: string, sender: Exclude<Sender, "contact">) {
-  const { data: conv } = await db.from("conversations").select("*, social_accounts(external_id, meta)").eq("id", conversationId).single();
+  const { data: conv } = await db.from("conversations").select("*, social_accounts(external_id, meta, user_id)").eq("id", conversationId).single();
   if (!conv) throw new Error("Conversa não encontrada");
+  // Defesa extra: a conta que envia precisa ser do mesmo dono da conversa
+  if (conv.social_accounts?.user_id !== conv.user_id) throw new Error("Conta da conversa não pertence a este usuário");
   const isWaha = conv.social_accounts.meta?.provider === "waha";
   // Janela de 24h é regra das APIs oficiais da Meta (o WAHA não tem essa limitação)
   if (!isWaha && (!conv.last_inbound_at || Date.now() - new Date(conv.last_inbound_at).getTime() > WINDOW_MS)) {

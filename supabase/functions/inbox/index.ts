@@ -3,7 +3,7 @@
 //   { action: "suggest", conversation_id }         -> IA sugere uma resposta (não envia)
 //   { action: "connect_whatsapp", phone_number_id, access_token, waba_id? }   -> API oficial da Meta
 //   { action: "connect_waha", base_url, session?, api_key? }                   -> WAHA (self-hosted, grátis)
-import { adminClient, corsHeaders, functionsUrl, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
+import { adminClient, assertPublicHttpsUrl, corsHeaders, functionsUrl, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { draftReply, sendMessage } from "../_shared/inbox.ts";
 import { waPhoneInfo, waSubscribeApp, wahaSession, wahaSetWebhook } from "../_shared/whatsapp.ts";
 import { aiEnabled } from "../_shared/claude.ts";
@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       }
       case "connect_waha": {
         const cfg = { base_url: String(body.base_url ?? "").replace(/\/$/, ""), session: body.session || "default", api_key: body.api_key || null };
-        if (!/^https:\/\//.test(cfg.base_url)) throw new HttpError(400, "Informe a URL pública (https) do seu WAHA");
+        assertPublicHttpsUrl(cfg.base_url);
         const session = await wahaSession(cfg);
         if (session.status !== "WORKING") throw new HttpError(400, `Sessão "${cfg.session}" está ${session.status}. Escaneie o QR Code no painel do WAHA e tente de novo.`);
         const phone = session.me?.id?.split("@")[0] ?? cfg.session;

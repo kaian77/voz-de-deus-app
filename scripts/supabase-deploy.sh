@@ -53,7 +53,12 @@ for f in supabase/migrations/*.sql; do
 done
 
 echo "==> Login (endereço do site)"
-api PATCH "/projects/$REF/config/auth" "$(jq -n --arg u "$APP_URL" '{site_url: $u, uri_allow_list: ($u + "/**")}')" >/dev/null
+# Cadastro público fica FECHADO (só o dono usa o Studio). Para liberar novos cadastros,
+# crie a variable ALLOW_SIGNUP=true no GitHub e rode o workflow.
+DISABLE_SIGNUP=true; [[ ${ALLOW_SIGNUP:-} == true ]] && DISABLE_SIGNUP=false
+api PATCH "/projects/$REF/config/auth" "$(jq -n --arg u "$APP_URL" --argjson d "$DISABLE_SIGNUP" \
+  '{site_url: $u, uri_allow_list: ($u + "/**"), disable_signup: $d, password_min_length: 8}')" >/dev/null
+echo "    cadastro público: $([[ $DISABLE_SIGNUP == true ]] && echo fechado || echo aberto)"
 
 echo "==> Secrets das funções"
 EXISTING=$(api GET "/projects/$REF/secrets" | jq -r '.[].name')

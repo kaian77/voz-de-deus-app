@@ -96,3 +96,20 @@ export function appUrl(path = ""): string {
 }
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Bloqueia URLs que apontam para a rede interna (proteção contra SSRF em downloads/integrações). */
+export function assertPublicHttpsUrl(raw: string): URL {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new HttpError(400, "URL inválida");
+  }
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const privateHost =
+    host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal") || host.endsWith(".local") ||
+    /^(127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(host) ||
+    (host.includes(":") && (host === "::1" || /^(fc|fd|fe80)/.test(host)));
+  if (url.protocol !== "https:" || privateHost) throw new HttpError(400, "Use um endereço https público");
+  return url;
+}
