@@ -1,5 +1,6 @@
 # Instala/atualiza o backend do Studio no Supabase (tabelas, funções, secrets, agendador).
-# Precisa só do secret SUPABASE_ACCESS_TOKEN (Settings > Secrets and variables > Actions).
+# Precisa do secret SUPABASE_ACCESS_TOKEN (Settings > Secrets and variables > Actions).
+# As chaves dos apps (IG_APP_ID, IG_APP_SECRET, ANTHROPIC_API_KEY...) também vêm de secrets do repositório.
 name: Supabase deploy
 
 on:
@@ -23,6 +24,18 @@ jobs:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}
       APP_URL: ${{ vars.APP_URL || 'https://voz-de-deus-app.vercel.app' }}
+      # Token de verificação dos webhooks da Meta (não é segredo: os eventos são assinados com o app secret)
+      META_VERIFY_TOKEN: ${{ vars.META_VERIFY_TOKEN || 'voz-de-deus-studio' }}
+      # Chaves opcionais dos apps — crie como secrets do repositório quando tiver
+      IG_APP_ID: ${{ secrets.IG_APP_ID }}
+      IG_APP_SECRET: ${{ secrets.IG_APP_SECRET }}
+      TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+      TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+      WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
+      META_FB_ACCESS_TOKEN: ${{ secrets.META_FB_ACCESS_TOKEN }}
+      META_FB_IG_USER_ID: ${{ secrets.META_FB_IG_USER_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1

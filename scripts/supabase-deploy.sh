@@ -62,7 +62,13 @@ NEW='[]'
 add() { NEW=$(jq --arg n "$1" --arg v "$2" '. + [{name: $n, value: $v}]' <<<"$NEW"); }
 add APP_URL "$APP_URL"
 has OAUTH_STATE_SECRET || add OAUTH_STATE_SECRET "$(openssl rand -hex 32)"
-has META_VERIFY_TOKEN || add META_VERIFY_TOKEN "$(openssl rand -hex 16)"
+add META_VERIFY_TOKEN "${META_VERIFY_TOKEN:-voz-de-deus-studio}"
+
+# Chaves dos apps (vêm dos secrets do GitHub; só são enviadas quando preenchidas)
+for name in IG_APP_ID IG_APP_SECRET TIKTOK_CLIENT_KEY TIKTOK_CLIENT_SECRET ANTHROPIC_API_KEY CLAUDE_MODEL \
+            WHATSAPP_APP_SECRET META_FB_ACCESS_TOKEN META_FB_IG_USER_ID; do
+  [[ -n ${!name:-} ]] && add "$name" "${!name}"
+done
 
 # O cron precisa conhecer o CRON_SECRET; como o valor salvo não pode ser lido de volta,
 # geramos um novo (e reagendamos o job) quando o secret ou o job não existem.
