@@ -191,7 +191,7 @@ export async function analyzeMarketplace(db: SupabaseClient, userId: string, pla
   await db.from("social_accounts").update({ meta: { ...(acc.meta ?? {}), analysis: result } }).eq("id", acc.id);
   return result;
 }
-// Atributos que são de cada produto (não se copiam do anúncio de referência)
+
 // Atributos próprios de cada produto (os demais, como marca, material e medidas da embalagem, vêm do anúncio modelo)
 const OWN_ATTRS = new Set(["SELLER_SKU", "GTIN", "MODEL", "ALPHANUMERIC_MODEL", "LINE", "CHARACTER"]);
 
