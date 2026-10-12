@@ -447,7 +447,7 @@ function VideoOnlyForm() {
     <div className="space-y-3 border-b p-4">
       <div>
         <p className="text-[13px] font-medium">Só o vídeo, para baixar</p>
-        <p className="text-xs text-muted-foreground">Mande a foto e o nome. O vídeo não é postado nem cadastra produto: quando ficar pronto, é só baixar.</p>
+        <p className="text-xs text-muted-foreground">Mande a foto e o nome. O vídeo não é postado nem cadastra produto: quando ficar pronto, é só baixar (fica disponível por 30 dias).</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {previews.map((src, i) => (
@@ -524,6 +524,7 @@ function VideosPanel() {
                   {v.autopost === false && " · só para baixar"} · {relativeTime(v.created_at)}
                 </p>
                 {v.status === "failed" && v.error && <p className="truncate text-xs text-danger" title={v.error}>{v.error}</p>}
+                {v.file_deleted_at && <p className="text-xs text-muted-foreground">Arquivo apagado para liberar espaço. Use “Refazer” para gerar de novo.</p>}
               </div>
               <div className="flex flex-wrap items-center justify-end gap-x-2">
                 {v.video_url && (
@@ -536,7 +537,7 @@ function VideosPanel() {
                     </a>
                   </>
                 )}
-                {v.post_id ? (
+                {v.file_deleted_at ? null : v.post_id ? (
                   <Link to="/studio/aprovacoes" className="text-xs underline underline-offset-2">Post</Link>
                 ) : v.status === "ready" && (
                   <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => run(v, "video_post")} disabled={working === v.id + "video_post"}>

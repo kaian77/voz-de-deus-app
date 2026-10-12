@@ -9,6 +9,14 @@ export function PostThumb({ post, className }: { post: Post; className?: string 
   if (first?.type === "image") {
     return <img src={first.url} alt="" className={cn("aspect-[4/5] w-full rounded-md object-cover", className)} />;
   }
+  if (first?.type === "video" && first.removed) {
+    return (
+      <div className={cn("flex aspect-[4/5] w-full flex-col items-center justify-center gap-1 rounded-md bg-muted text-xs text-muted-foreground", className)}>
+        <Film className="h-5 w-5" />
+        Vídeo publicado
+      </div>
+    );
+  }
   if (first?.type === "video") {
     return (
       <div className={cn("relative aspect-[4/5] w-full overflow-hidden rounded-md bg-black", className)}>

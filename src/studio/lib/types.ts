@@ -5,6 +5,8 @@ export type PostStatus = "draft" | "pending_approval" | "scheduled" | "publishin
 export interface MediaItem {
   url: string;
   type: "image" | "video";
+  /** Arquivo apagado do storage depois de publicado (limpeza automática) */
+  removed?: boolean;
 }
 
 export interface Slide {
@@ -250,6 +252,8 @@ export interface ProductVideo {
   post_id: string | null;
   /** false = vídeo avulso, só para baixar */
   autopost: boolean;
+  /** Arquivo apagado na limpeza automática (o "Refazer" gera de novo) */
+  file_deleted_at?: string | null;
   error: string | null;
   created_at: string;
 }
