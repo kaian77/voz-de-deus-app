@@ -157,8 +157,9 @@ export default function Messages() {
   // Tempo real: atualiza a caixa de entrada quando chega mensagem nova
   useEffect(() => {
     if (isDemo) return;
+    // Nome único por montagem: o canal anterior ainda pode estar fechando, e reusar o mesmo nome derruba a página
     const channel = supabase!
-      .channel("inbox")
+      .channel(`inbox-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => invalidate("messages"))
       .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => invalidate("conversations"))
       .subscribe();
