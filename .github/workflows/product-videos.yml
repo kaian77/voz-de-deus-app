@@ -1,12 +1,13 @@
 # Vídeos dos produtos (Reels/TikTok): renderiza a fila do Studio (tabela product_videos).
-# Roda de hora em hora durante o dia e também pelo botão "Run workflow". Com a fila vazia,
-# termina em segundos (sem instalar nada). Usa o mesmo secret SUPABASE_ACCESS_TOKEN do deploy.
+# O Studio dispara este workflow na hora em que um vídeo entra na fila (secret VIDEO_DISPATCH_TOKEN); o horário
+# abaixo é só a rede de segurança, 3 vezes por dia, para economizar os minutos grátis do GitHub Actions.
+# Com a fila vazia, termina em segundos (sem instalar nada). Usa o mesmo secret SUPABASE_ACCESS_TOKEN do deploy.
 name: Vídeos dos produtos
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 11-23 * * *" # de hora em hora, das 8h17 às 20h17 (Brasília)
+    - cron: "17 12,17,22 * * *" # 9h17, 14h17 e 19h17 (Brasília)
 
 concurrency:
   group: product-videos
