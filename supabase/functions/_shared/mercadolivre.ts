@@ -96,11 +96,11 @@ export type MlItem = {
   pictures?: { url?: string; secure_url?: string }[];
 };
 
-/** Anúncios ativos do vendedor (até `max`), com os dados completos. */
-export async function mlSellerItems(token: string, sellerId: string, max = 200): Promise<MlItem[]> {
+/** Anúncios do vendedor (até `max`, ativos por padrão), com os dados completos. */
+export async function mlSellerItems(token: string, sellerId: string, max = 200, status = "active"): Promise<MlItem[]> {
   const ids: string[] = [];
   for (let offset = 0; offset < max; offset += 50) {
-    const page = await ml<{ results: string[]; paging: { total: number } }>(token, `/users/${sellerId}/items/search?status=active&limit=50&offset=${offset}`);
+    const page = await ml<{ results: string[]; paging: { total: number } }>(token, `/users/${sellerId}/items/search?status=${status}&limit=50&offset=${offset}`);
     ids.push(...page.results);
     if (offset + 50 >= page.paging.total) break;
   }

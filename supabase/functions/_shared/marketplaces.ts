@@ -112,6 +112,26 @@ async function account(db: SupabaseClient, userId: string, platform: Marketplace
   return data;
 }
 
+/** Anúncios do Mercado Livre (ativos e pausados) e os produtos da loja que ainda não têm anúncio lá. */
+export async function mercadoLivreListings(db: SupabaseClient, userId: string) {
+  const acc = await account(db, userId, "mercadolivre");
+  if (!acc) throw new Error("Conecte o Mercado Livre em Contas");
+  const token = await mlTokenFor(db, acc.id);
+  const items = [
+    ...await mlSellerItems(token, acc.external_id, 1000, "active"),
+    ...await mlSellerItems(token, acc.external_id, 1000, "paused"),
+  ];
+  const store = await storePrices(db, userId);
+  const listed = new Set<string>();
+  const listings = items.map((it) => {
+    const m = matchStore(store, it.title, mlSku(it));
+    if (m) listed.add(m.name);
+    return { id: it.id, title: it.title, price: it.price, status: it.status, permalink: it.permalink, store_product: m?.name ?? null };
+  });
+  const missing = store.filter((s) => !listed.has(s.name)).map((s) => ({ name: s.name, price: s.price }));
+  return { listings, store_products: store.length, missing };
+}
+
 /** Lê os anúncios do marketplace, compara com a loja e guarda o padrão em social_accounts.meta.analysis. */
 export async function analyzeMarketplace(db: SupabaseClient, userId: string, platform: Marketplace): Promise<Analysis> {
   const acc = await account(db, userId, platform);
