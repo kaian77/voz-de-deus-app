@@ -93,6 +93,7 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
       },
     ],
     product_drafts: [],
+    product_videos: [],
     brand_settings: [
       { brand_name: "Minha Marca", niche: "Conteúdo cristão / devocional", audience: "Cristãos 25–55 anos, maioria mulheres, Brasil", tone: "Acolhedor, esperançoso, simples", default_hashtags: "fé palavradedeus deus jesus oração", default_cta: "Comente AMÉM para receber uma oração no direct", approval_required: true, timezone: "America/Sao_Paulo",
         agent_enabled: true, agent_instructions: "Atenda com carinho, ofereça oração, convide para o grupo de quarta 20h.", agent_knowledge: "Grupo de oração: quartas 20h, live no Instagram.\nApp: https://minhamarca.com", agent_handoff_message: "Vou chamar alguém da equipe para te responder, só um instante 🙏" },
@@ -199,6 +200,13 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
         return { name: "Coração Dourado", description: "Pin Coração Dourado em metal esmaltado, com brilho delicado.\n\nEnviamos para todo o Brasil." };
       case "product_create":
         throw new Error("No modo demo não há loja conectada para cadastrar o produto.");
+      case "heygen_options":
+        return {
+          avatars: [{ id: "demo-katia", name: "Katia", group: "Katia", private: true, voice_id: "demo-voz" }],
+          voices: [{ id: "demo-voz", name: "Katia (voz clonada)", language: "Portuguese", private: true }],
+        };
+      case "product_video":
+        throw new Error("No modo demo não há conta HeyGen conectada.");
       case "sync_competitor":
         throw new Error("No modo demo não há conexão com o Instagram.");
     }
