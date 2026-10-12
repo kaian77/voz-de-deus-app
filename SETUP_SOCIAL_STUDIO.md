@@ -243,7 +243,7 @@ Liga em **Produtos → Fazer também um vídeo animado**; cada produto cadastrad
 1. Em [developers.mercadolivre.com.br](https://developers.mercadolivre.com.br) → **Minhas aplicações → Criar aplicação**:
    - Redirect URI: `https://<ref>.supabase.co/functions/v1/oauth-mercadolivre`
    - Escopos: leitura e escrita (*read*, *write*) e *offline_access*.
-2. Secrets do GitHub: `ML_APP_ID` (Client ID) e `ML_CLIENT_SECRET`. Rode o deploy.
+2. Secret do GitHub: `ML_CLIENT_SECRET` (o Client ID 5226202533888505 já está no workflow; `ML_APP_ID` só se trocar de app). Rode o deploy.
 3. Em **Contas → Conectar Mercado Livre**. O Studio lê os anúncios ativos, compara com a loja e mostra a regra de preço.
 
 **Shopee**

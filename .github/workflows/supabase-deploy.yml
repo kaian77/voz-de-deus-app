@@ -36,7 +36,8 @@ jobs:
       NUVEMSHOP_APP_ID: ${{ secrets.NUVEMSHOP_APP_ID }}
       NUVEMSHOP_CLIENT_SECRET: ${{ secrets.NUVEMSHOP_CLIENT_SECRET }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      ML_APP_ID: ${{ secrets.ML_APP_ID }}
+      # Client ID do app do Mercado Livre (público); o secret ML_APP_ID, se existir, tem prioridade
+      ML_APP_ID: ${{ secrets.ML_APP_ID || '5226202533888505' }}
       ML_CLIENT_SECRET: ${{ secrets.ML_CLIENT_SECRET }}
       SHOPEE_PARTNER_ID: ${{ secrets.SHOPEE_PARTNER_ID }}
       SHOPEE_PARTNER_KEY: ${{ secrets.SHOPEE_PARTNER_KEY }}
