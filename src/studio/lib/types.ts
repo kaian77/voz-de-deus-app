@@ -227,6 +227,7 @@ export interface BrandSettings {
   autopilot_enabled?: boolean;
   autopilot_per_week?: number;
   autopilot_last_run?: string | null;
+  autopilot_error?: string | null;
 }
 
 export interface MarketplaceAnalysis {
