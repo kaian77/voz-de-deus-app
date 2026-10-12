@@ -6,8 +6,6 @@ import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
 import { readWebPage, runTool } from "../_shared/agent-tools.ts";
 import { nsCategories, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
 import { createFromDraft, suggestProduct, templateFor } from "../_shared/products.ts";
-import { startProductVideo } from "../_shared/product-video.ts";
-import { hgLooks, hgVoices } from "../_shared/heygen.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
 const SYSTEM = (brand: string) =>
@@ -76,26 +74,6 @@ Deno.serve(async (req) => {
       return json(await nsCategories(store.token, store.storeId));
     }
     if (action === "product_create") return json(await createFromDraft(db, userId, String(input.draft_id)));
-    if (action === "heygen_options") {
-      const [avatars, voices] = await Promise.all([hgLooks(), hgVoices()]);
-      return json({ avatars, voices });
-    }
-    if (action === "product_video") {
-      // Vídeo de um produto já cadastrado pelo Studio (rascunho) — ou de um vídeo anterior, para refazer
-      const { data: draft } = input.draft_id
-        ? await db.from("product_drafts").select("name,images,overrides,product_url").eq("id", input.draft_id).eq("user_id", userId).single()
-        : { data: null };
-      const { data: previous } = input.video_id
-        ? await db.from("product_videos").select("name,images,product_url").eq("id", input.video_id).eq("user_id", userId).single()
-        : { data: null };
-      const source = draft
-        ? { name: draft.name ?? "Produto", images: draft.overrides?.social_images?.length ? draft.overrides.social_images : draft.images, url: draft.product_url }
-        : previous
-        ? { name: previous.name, images: previous.images, url: previous.product_url }
-        : null;
-      if (!source) throw new HttpError(404, "Produto não encontrado");
-      return json(await startProductVideo(db, userId, source, { style: input.style, force: true }));
-    }
     if (action === "product_suggest") {
       const { data: draft } = await db.from("product_drafts").select("images,name,template_id").eq("id", input.draft_id).eq("user_id", userId).single();
       if (!draft) throw new HttpError(404, "Rascunho não encontrado");

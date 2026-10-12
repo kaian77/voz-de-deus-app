@@ -3,7 +3,6 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4";
 import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
 import { applyTemplate, nsCreateProduct, type ProductChanges, type ProductTemplate, storeFor } from "./nuvemshop.ts";
-import { startProductVideo } from "./product-video.ts";
 
 /** Próximo horário nobre (13h ou 19h no fuso da marca) com pelo menos 2h de folga. */
 export function nextSlot(timeZone = "America/Sao_Paulo", from = new Date()) {
@@ -21,61 +20,41 @@ const Caption = z.object({
   hashtags: z.array(z.string()).describe("5 a 10 hashtags sem #"),
 });
 
-/** Próximo horário nobre livre (sem outro post da marca no mesmo horário). */
-export async function freeSlot(db: SupabaseClient, userId: string, timeZone = "America/Sao_Paulo") {
-  let slot = nextSlot(timeZone);
-  for (let i = 0; i < 20; i++) {
-    const { count } = await db.from("posts").select("id", { count: "exact", head: true }).eq("user_id", userId)
-      .eq("scheduled_at", slot).in("status", ["pending_approval", "scheduled"]);
-    if (!count) return slot;
-    slot = nextSlot(timeZone, new Date(new Date(slot).getTime() - 3600_000)); // o horário nobre seguinte
-  }
-  return slot;
-}
-
-export type ProductInfo = { name: string; images: string[]; url?: string | null; price?: string; description?: string; caption?: string };
-
-/** Legenda chamativa para o produto (Instagram e TikTok). */
-// deno-lint-ignore no-explicit-any
-export async function productCaption(settings: any, product: ProductInfo, format: "post" | "video" = "post") {
-  const cta = settings?.default_cta || "Garanta o seu pelo link da bio!";
-  let caption = `NOVIDADE NA LOJA! 🔥\n\n${product.name}${product.price ? ` por ${product.price}` : ""}.\n\n${cta}`;
-  if (product.caption?.trim()) return product.caption.trim(); // legenda já escrita no padrão do lojista
-  if (!aiEnabled()) return caption;
-  try {
-    const r = await generateJSON(Caption,
-      `Você é social media de uma loja brasileira e escreve legendas que vendem, em português do Brasil, com energia e no máximo 3 emojis. ` +
-        `Nunca invente características que não estejam nos dados ou na foto.\n\n${brandContext(settings)}`,
-      `Produto novo acabou de chegar na loja: "${product.name}"${product.price ? `, preço ${product.price}` : ""}.\n` +
-        `${product.description ? `Descrição da loja: ${product.description.replace(/<[^>]+>/g, " ").slice(0, 800)}\n` : ""}` +
-        `${format === "video" ? "A legenda acompanha um vídeo curto (Reels/TikTok) em que a apresentadora da marca mostra o produto.\n" : ""}` +
-        `O link do produto não é clicável na legenda: termine com o CTA "${cta}" (ou variação dele). Serve para Instagram e TikTok.`,
-      "low", product.images.slice(0, 3));
-    const tags = [...new Set([...(settings?.default_hashtags ?? "").split(/[\s,#]+/), ...r.hashtags])].filter(Boolean).slice(0, 12);
-    caption = `${r.caption.trim()}\n\n${tags.map((t) => `#${t.replace(/^#/, "")}`).join(" ")}`;
-  } catch (e) {
-    console.error("legenda do produto", e);
-  }
-  return caption;
-}
-
 /**
  * Divulga um produto novo: cria um post (foto ou carrossel) para as redes conectadas com legenda chamativa.
  * Respeita a aprovação da marca: com "Exigir minha aprovação" ligado, o post fica em Aprovações.
- * Com o vídeo da apresentadora ligado (HeyGen), também começa a gerar o vídeo (vira um Reels/TikTok quando ficar pronto).
  */
-export async function announceProduct(db: SupabaseClient, userId: string, product: ProductInfo) {
+export async function announceProduct(
+  db: SupabaseClient,
+  userId: string,
+  product: { name: string; images: string[]; url?: string | null; price?: string; description?: string; caption?: string },
+) {
   const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", userId).maybeSingle();
   if (settings && settings.product_autopost === false) return null;
   const { data: accounts } = await db.from("social_accounts").select("platform").eq("user_id", userId).in("platform", ["instagram", "tiktok"]);
   const platforms = [...new Set((accounts ?? []).map((a) => a.platform as string))];
   if (!platforms.length || !product.images.length) return null;
 
-  if (settings?.video_enabled) {
-    await startProductVideo(db, userId, product).catch((e) => console.error("vídeo do produto", e));
+  const cta = settings?.default_cta || "Garanta o seu pelo link da bio!";
+  let caption = `NOVIDADE NA LOJA! 🔥\n\n${product.name}${product.price ? ` por ${product.price}` : ""}.\n\n${cta}`;
+  if (product.caption?.trim()) {
+    caption = product.caption.trim(); // legenda já escrita no padrão do lojista
+  } else if (aiEnabled()) {
+    try {
+      const r = await generateJSON(Caption,
+        `Você é social media de uma loja brasileira e escreve legendas que vendem, em português do Brasil, com energia e no máximo 3 emojis. ` +
+          `Nunca invente características que não estejam nos dados ou na foto.\n\n${brandContext(settings)}`,
+        `Produto novo acabou de chegar na loja: "${product.name}"${product.price ? `, preço ${product.price}` : ""}.\n` +
+          `${product.description ? `Descrição da loja: ${product.description.replace(/<[^>]+>/g, " ").slice(0, 800)}\n` : ""}` +
+          `O link do produto não é clicável na legenda: termine com o CTA "${cta}" (ou variação dele). Serve para Instagram e TikTok.`,
+        "low", product.images.slice(0, 3));
+      const tags = [...new Set([...(settings?.default_hashtags ?? "").split(/[\s,#]+/), ...r.hashtags])].filter(Boolean).slice(0, 12);
+      caption = `${r.caption.trim()}\n\n${tags.map((t) => `#${t.replace(/^#/, "")}`).join(" ")}`;
+    } catch (e) {
+      console.error("legenda do produto", e);
+    }
   }
 
-  const caption = await productCaption(settings, product);
   const media = product.images.slice(0, 10).map((url) => ({ url, type: "image" }));
   const approval = settings?.approval_required ?? true;
   const { data: post, error } = await db.from("posts").insert({
@@ -85,7 +64,7 @@ export async function announceProduct(db: SupabaseClient, userId: string, produc
     platforms,
     caption,
     media,
-    scheduled_at: await freeSlot(db, userId, settings?.timezone ?? "America/Sao_Paulo"),
+    scheduled_at: nextSlot(settings?.timezone ?? "America/Sao_Paulo"),
     status: approval ? "pending_approval" : "scheduled",
     created_by: "agent",
     notes: `Divulgação automática do produto cadastrado${product.url ? `: ${product.url}` : ""}.`,

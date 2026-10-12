@@ -9,8 +9,6 @@ import { sendMessage, transcript } from "./inbox.ts";
 import { aiEnabled, generateJSON, researchWeb } from "./claude.ts";
 import { nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
 import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
-import { startProductVideo, type VideoStyle } from "./product-video.ts";
-import { hgLooks, hgVoices } from "./heygen.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
 
@@ -246,12 +244,6 @@ const tools = {
       agent_instructions: z.string().optional().describe("Como o agente de mensagens deve atender"),
       agent_knowledge: z.string().optional().describe("Base de conhecimento: FAQ, links, preços, horários"),
       agent_handoff_message: z.string().optional(),
-      video_enabled: z.boolean().optional().describe("Gerar vídeo (Reels/TikTok) com a apresentadora da HeyGen para cada produto novo"),
-      video_style: z.enum(["pov", "presenter"]).optional().describe("pov = só as mãos com a voz da apresentadora; presenter = ela aparece apresentando"),
-      video_presenter_name: z.string().optional().describe("Nome da apresentadora (ex.: Katia)"),
-      video_notes: z.string().optional().describe("Instruções extras para os vídeos"),
-      heygen_avatar_id: z.string().optional().describe("ID do look do avatar na HeyGen (list_heygen_presenters)"),
-      heygen_voice_id: z.string().optional().describe("ID da voz na HeyGen (list_heygen_presenters)"),
     }),
     run: async (ctx: Ctx, input: Record<string, unknown>) => {
       const { data, error } = await ctx.db.from("brand_settings").upsert({ user_id: ctx.userId, ...input, updated_at: new Date().toISOString() }).select().single();
@@ -721,40 +713,6 @@ const tools = {
         name: fields.name ?? name, images: image_urls, url: product.url, price: product.price, description: fields.description, caption,
       }).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
       return { product, post };
-    },
-  },
-
-  list_heygen_presenters: {
-    description: "Lista os avatares (looks) e as vozes da conta HeyGen, para escolher a apresentadora dos vídeos de produto (salve com update_brand_settings: heygen_avatar_id e heygen_voice_id).",
-    input: z.object({}),
-    run: async () => ({ avatars: await hgLooks(), voices: await hgVoices() }),
-  },
-
-  create_product_video: {
-    description: "Gera um vídeo vertical (Reels/TikTok, 20-30 s) com a apresentadora da HeyGen mostrando um produto. Leva alguns minutos; quando fica pronto vira um post (em Aprovações se a marca exigir aprovação). style: pov (só as mãos, com a voz dela) ou presenter (ela aparece).",
-    input: z.object({
-      name: z.string().min(1),
-      image_urls: z.array(z.string().url()).min(1).max(10),
-      price: z.string().optional(),
-      description: z.string().optional(),
-      product_url: z.string().url().optional(),
-      style: z.enum(["pov", "presenter"]).optional(),
-    }),
-    run: async (ctx: Ctx, input: { name: string; image_urls: string[]; price?: string; description?: string; product_url?: string; style?: VideoStyle }) => {
-      for (const u of input.image_urls) assertPublicHttpsUrl(u);
-      return startProductVideo(ctx.db, ctx.userId, {
-        name: input.name, images: input.image_urls, price: input.price, description: input.description, url: input.product_url,
-      }, { style: input.style, force: true });
-    },
-  },
-
-  list_product_videos: {
-    description: "Lista os vídeos de produto com a apresentadora (gerando, prontos ou com erro) e o post criado para cada um.",
-    input: z.object({ limit: z.number().int().min(1).max(50).optional() }),
-    run: async (ctx: Ctx, input: { limit?: number }) => {
-      const { data } = await ctx.db.from("product_videos").select("id,name,style,status,error,video_url,post_id,script,created_at")
-        .eq("user_id", ctx.userId).order("created_at", { ascending: false }).limit(input.limit ?? 10);
-      return data;
     },
   },
 

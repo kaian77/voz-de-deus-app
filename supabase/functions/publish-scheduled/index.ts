@@ -1,10 +1,9 @@
 // Chamado pelo pg_cron a cada minuto (ver SETUP_SOCIAL_STUDIO.md): publica posts e, a cada 2 min,
-// busca comentários/DMs novos do Instagram e acompanha os vídeos da HeyGen.
+// busca comentários/DMs novos do Instagram.
 // Também aceita { post_id } com JWT do usuário para "Publicar agora".
 import { adminClient, corsHeaders, env, handleError, HttpError, json, requireUser, timingSafeEqual } from "../_shared/util.ts";
 import { advancePost, runDuePosts } from "../_shared/publisher.ts";
 import { pollInstagram } from "../_shared/instagram-poller.ts";
-import { advanceProductVideos } from "../_shared/product-video.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -29,9 +28,7 @@ Deno.serve(async (req) => {
     const polled = new Date().getUTCMinutes() % 2 === 0
       ? await pollInstagram(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
       : undefined;
-    // Vídeos da apresentadora (HeyGen) em produção: quando ficam prontos, viram post
-    const videos = await advanceProductVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
-    return json({ processed, polled, videos });
+    return json({ processed, polled });
   } catch (err) {
     return handleError(err);
   }
