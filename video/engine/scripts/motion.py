@@ -773,7 +773,29 @@ GRADES = {
     "bw": "hue=s=0,eq=contrast=1.15",
 }
 
-LAYER_TYPES = {"text": TextLayer, "image": ImageLayer, "shape": ShapeLayer, "counter": CounterLayer, "stars": StarsLayer,
+class ExplodeLayer(Layer):
+    """Vista explodida do pin (explode.py): tinta, metal e tarraxa se separam em 3D e se juntam com impacto."""
+    default_anim = "none"
+
+    def __init__(self, s, comp):
+        super().__init__(s, comp)
+        import explode
+        self.ex = explode
+        self.pin = None
+
+    def sprite(self, t, lt, st):
+        if self.pin is None:
+            s = self.s
+            src = self.c.path(s["src"])
+            im = cutout_cached(src, s.get("cutout_method", "auto")).copy() if s.get("cutout", True) else load_image(src)
+            accent = self.c.color(s.get("label_color", "accent"))
+            accent = accent if isinstance(accent, str) and accent.startswith("#") else "#FFC72C"
+            self.pin = self.ex.ExplodedPin(im, size=int(s.get("w", 1.0) * self.W), fill=s.get("fill", 0.5),
+                                           labels=tuple(s.get("labels", ("TINTA", "METAL", "TARRAXA"))), accent=accent)
+        return self.pin.frame(*self.ex.timeline(lt, float(self.s.get("cycle", 5.0))))
+
+
+LAYER_TYPES = {"explode": ExplodeLayer, "text": TextLayer, "image": ImageLayer, "shape": ShapeLayer, "counter": CounterLayer, "stars": StarsLayer,
                "button": ButtonLayer, "price": PriceLayer, "badge": BadgeLayer, "particles": ParticlesLayer,
                "object3d": Object3DLayer, "video": VideoLayer}
 

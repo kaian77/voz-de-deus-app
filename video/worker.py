@@ -77,10 +77,16 @@ def briefing(brief, name, handle):
     features = [f for f in (brief.get("features") or []) if f][:3]
     scenes = [
         {"type": "hook", "text": brief.get("hook") or f"Chegou *{name}*", "sub": brief.get("hook_sub") or "", "transition": "flash"},
-        {"type": "product", "title": brief.get("title") or name, "subtitle": brief.get("subtitle") or "", "badge": brief.get("badge") or "NOVO", "transition": "zoom"},
-        {"type": "product", "image": "photo.jpg", "cutout": False, "title": brief.get("detail_title") or "Cada detalhe",
-         "subtitle": brief.get("detail_sub") or "", "transition": "whip"},
     ]
+    # Vista explodida: a tinta, o metal e a tarraxa se separam em 3D e se juntam com impacto
+    if brief.get("layers", True):
+        scenes.append({"type": "layers", "title": brief.get("layers_title") or "Por dentro do *pin*",
+                       "subtitle": brief.get("detail_title") or "", "transition": "whip"})
+    scenes.append({"type": "product", "title": brief.get("title") or name, "subtitle": brief.get("subtitle") or "",
+                   "badge": brief.get("badge") or "NOVO", "transition": "zoom"})
+    if not brief.get("layers", True):
+        scenes.append({"type": "product", "image": "photo.jpg", "cutout": False, "title": brief.get("detail_title") or "Cada detalhe",
+                       "subtitle": brief.get("detail_sub") or "", "transition": "whip"})
     if features:
         scenes.append({"type": "features", "title": brief.get("features_title") or "Por que você vai *amar*", "items": features, "transition": "slide"})
     cta = {"type": "cta", "text": brief.get("cta") or "Garanta o seu", "sub": " · ".join(x for x in ["Link na bio", handle] if x),
