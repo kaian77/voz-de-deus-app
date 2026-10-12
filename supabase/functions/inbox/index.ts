@@ -3,6 +3,7 @@
 //   { action: "suggest", conversation_id }         -> IA sugere uma resposta (não envia)
 //   { action: "connect_whatsapp", phone_number_id, access_token, waba_id? }   -> API oficial da Meta
 //   { action: "connect_waha", base_url, session?, api_key? }                   -> WAHA (self-hosted, grátis)
+// Nos dois: label ("Loja", "Pessoal"...) e agent (a IA responde sozinha nesse número?). Dá para ter vários números.
 import { adminClient, assertPublicHttpsUrl, corsHeaders, functionsUrl, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { draftReply, sendMessage } from "../_shared/inbox.ts";
 import { waPhoneInfo, waSubscribeApp, wahaSession, wahaSetWebhook } from "../_shared/whatsapp.ts";
@@ -20,6 +21,10 @@ Deno.serve(async (req) => {
       if (!data) throw new HttpError(404, "Conversa não encontrada");
       return data;
     };
+
+    // Rótulo do número e se a IA responde nele (no pessoal o app manda agent=false por padrão)
+    const label = String(body.label ?? "").trim().slice(0, 40) || null;
+    const agent = typeof body.agent === "boolean" ? body.agent : true;
 
     switch (body.action) {
       case "send": {
@@ -43,7 +48,7 @@ Deno.serve(async (req) => {
           external_id: String(phone_number_id),
           username: info.display_phone_number,
           display_name: info.verified_name,
-          meta: { provider: "meta", waba_id },
+          meta: { provider: "meta", waba_id, label, agent },
           connected_at: new Date().toISOString(),
         }, { onConflict: "platform,external_id" }).select().single();
         if (error) throw error;
@@ -62,7 +67,7 @@ Deno.serve(async (req) => {
           external_id: `waha:${new URL(cfg.base_url).host}:${cfg.session}`,
           username: phone,
           display_name: session.me?.pushName ?? "WhatsApp (WAHA)",
-          meta: { provider: "waha", base_url: cfg.base_url, session: cfg.session },
+          meta: { provider: "waha", base_url: cfg.base_url, session: cfg.session, label, agent },
           connected_at: new Date().toISOString(),
         }, { onConflict: "platform,external_id" }).select().single();
         if (error) throw error;

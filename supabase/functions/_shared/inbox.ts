@@ -195,6 +195,9 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
   if (!aiEnabled() || !conversation.ai_enabled || conversation.status === "needs_human") return;
   const { data: settings } = await db.from("brand_settings").select("agent_enabled").eq("user_id", conversation.user_id).maybeSingle();
   if (!settings?.agent_enabled) return;
+  // Cada número de WhatsApp tem a própria chave (ex.: o pessoal fica sem IA)
+  const { data: account } = await db.from("social_accounts").select("meta").eq("id", conversation.account_id).maybeSingle();
+  if (account?.meta?.agent === false) return;
 
   // Espera um pouco: se a pessoa mandar várias mensagens seguidas, responde só a última (com todo o contexto)
   await sleep(4000);

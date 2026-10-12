@@ -5,9 +5,10 @@ import { Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
-import { useRemoveRow, useTable } from "../lib/hooks";
+import { useRemoveRow, useSaveRow, useTable } from "../lib/hooks";
 import { PlatformIcon, StatusDot } from "./bits";
 import { ConnectedAccount } from "../pages/Accounts";
 
@@ -16,6 +17,7 @@ type Provider = "waha" | "meta";
 export default function WhatsAppConnect() {
   const { data: accounts = [] } = useTable("social_accounts");
   const remove = useRemoveRow("social_accounts");
+  const save = useSaveRow("social_accounts");
   const qc = useQueryClient();
   const list = accounts.filter((a) => a.platform === "whatsapp");
   const [provider, setProvider] = useState<Provider>("waha");
@@ -23,11 +25,13 @@ export default function WhatsAppConnect() {
   const [waha, setWaha] = useState({ base_url: "", session: "default", api_key: "" });
   const [meta, setMeta] = useState({ phone_number_id: "", access_token: "", waba_id: "" });
   const [webhook, setWebhook] = useState<string | null>(null);
+  const [label, setLabel] = useState("Pessoal");
+  const [agent, setAgent] = useState(false);
 
   const connect = async (action: "connect_waha" | "connect_whatsapp", body: Record<string, string>) => {
     setBusy(true);
     try {
-      const r = await api.invoke<{ webhook_url?: string; webhook_configured?: boolean }>("inbox", { action, ...body });
+      const r = await api.invoke<{ webhook_url?: string; webhook_configured?: boolean }>("inbox", { action, ...body, label, agent });
       qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
       toast.success("WhatsApp conectado");
       if (r.webhook_url && !r.webhook_configured) setWebhook(r.webhook_url);
@@ -49,7 +53,7 @@ export default function WhatsAppConnect() {
             <h2 className="text-sm font-semibold">WhatsApp</h2>
             {list.length > 0 ? <StatusDot tone="success">Conectado</StatusDot> : <StatusDot tone="neutral">Não conectado</StatusDot>}
           </div>
-          <p className="mt-1 text-[13px] text-foreground/80">O agente de IA responde quem chamar no seu WhatsApp e passa a conversa para você quando precisa.</p>
+          <p className="mt-1 text-[13px] text-foreground/80">O agente de IA responde quem chamar no seu WhatsApp e passa a conversa para você quando precisa. Dá para conectar mais de um número (ex.: pessoal e loja) e escolher em qual a IA responde.</p>
           <div className="mt-3 space-y-2 text-xs text-muted-foreground">
             <p><span className="font-medium text-foreground">WAHA</span> é gratuito e roda num servidor seu, conectado por QR Code como o WhatsApp Web. Não é oficial: o WhatsApp pode bloquear números que se comportem como robô. Comece com um número secundário e não envie mensagens em massa.</p>
             <p><span className="font-medium text-foreground">API oficial da Meta</span> não tem risco de bloqueio. Responder quem te chamou, em até 24 horas, é gratuito; só mensagens iniciadas por você são cobradas.</p>
@@ -58,7 +62,15 @@ export default function WhatsAppConnect() {
       </div>
 
       <div className="space-y-3">
-        {list.map((a) => <ConnectedAccount key={a.id} account={a} onRemove={() => remove.mutate(a.id)} />)}
+        {list.map((a) => (
+          <div key={a.id} className="space-y-1.5">
+            <ConnectedAccount account={a} onRemove={() => remove.mutate(a.id)} />
+            <label className="flex items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
+              IA responde neste número
+              <Switch checked={a.meta.agent !== false} onCheckedChange={(v) => save.mutate({ id: a.id, meta: { ...a.meta, agent: v } })} />
+            </label>
+          </div>
+        ))}
 
         {webhook && (
           <div className="space-y-2 rounded-md border border-dashed p-3 text-xs">
@@ -86,6 +98,16 @@ export default function WhatsAppConnect() {
               else connect("connect_whatsapp", meta);
             }}
           >
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="wa-label">Nome do número</Label>
+                <Input id="wa-label" className="h-8 text-[13px]" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Pessoal, Loja..." />
+              </div>
+              <div className="flex h-8 items-center gap-2">
+                <Switch id="wa-agent" checked={agent} onCheckedChange={setAgent} />
+                <Label htmlFor="wa-agent">IA responde</Label>
+              </div>
+            </div>
             {provider === "waha" ? (
               <>
                 <div className="space-y-1.5">
