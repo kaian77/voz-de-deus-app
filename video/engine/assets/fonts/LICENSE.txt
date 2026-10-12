@@ -1,0 +1,3 @@
+Poppins (Indian Type Foundry) e Inter Display (Rasmus Andersson) são distribuídas
+sob a SIL Open Font License 1.1 (https://openfontlicense.org). Podem ser usadas,
+embutidas em vídeos e redistribuídas livremente, inclusive em uso comercial.

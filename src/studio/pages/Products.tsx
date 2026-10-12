@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ExternalLink, ImagePlus, Loader2, Plus, ShoppingBag, Sparkles, Trash2 } from "lucide-react";
+import { Clapperboard, ExternalLink, ImagePlus, Loader2, Plus, ShoppingBag, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
 import { useSettings, useTable } from "../lib/hooks";
-import type { ProductDraft, ProductTemplate, ProductTemplateData } from "../lib/types";
+import type { ProductDraft, ProductTemplate, ProductTemplateData, ProductVideo } from "../lib/types";
 import { EmptyState, PageHeader, Panel, relativeTime, StatusDot } from "../components/bits";
 
 type Category = { id: number; name: string; parent: number | null };
@@ -381,6 +381,65 @@ function DraftRow({ draft, templates, onCreate }: { draft: ProductDraft; templat
   );
 }
 
+const VIDEO_STATUS: Record<ProductVideo["status"], { tone: "brand" | "success" | "danger" | "neutral"; label: string }> = {
+  queued: { tone: "neutral", label: "Na fila (pronto em até 1 hora)" },
+  rendering: { tone: "brand", label: "Gerando" },
+  rendered: { tone: "brand", label: "Criando o post" },
+  ready: { tone: "success", label: "Pronto" },
+  failed: { tone: "danger", label: "Erro" },
+};
+
+/** Vídeos animados dos produtos (Reels/TikTok), gerados na fila do GitHub Actions. */
+function VideosPanel() {
+  const qc = useQueryClient();
+  const { data: videos = [] } = useTable("product_videos", { limit: 8 }, { refetchInterval: 30000 });
+  const [redoing, setRedoing] = useState<string | null>(null);
+  if (!videos.length) return null;
+
+  const redo = async (v: ProductVideo) => {
+    setRedoing(v.id);
+    try {
+      await api.invoke("ai", { action: "product_video", video_id: v.id });
+      qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
+      toast.success("Vídeo na fila de novo. Fica pronto em até 1 hora.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRedoing(null);
+    }
+  };
+
+  return (
+    <Panel title="Vídeos dos produtos" description="Vídeos animados de 15 segundos para Reels e TikTok. Quando ficam prontos, viram post em Aprovações." bodyClassName="p-0">
+      <div className="divide-y">
+        {videos.map((v) => (
+          <div key={v.id} className="flex items-center gap-3 px-4 py-2.5">
+            <img src={v.images[0]} alt="" className="h-10 w-10 rounded border object-cover" loading="lazy" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium">{v.name}</p>
+              <p className="text-xs text-muted-foreground">
+                <StatusDot tone={VIDEO_STATUS[v.status].tone}>{VIDEO_STATUS[v.status].label}</StatusDot> · {relativeTime(v.created_at)}
+              </p>
+              {v.status === "failed" && v.error && <p className="truncate text-xs text-danger" title={v.error}>{v.error}</p>}
+            </div>
+            {v.video_url && (
+              <a href={v.video_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
+                Ver <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+            {v.post_id && <Link to="/studio/aprovacoes" className="text-xs underline underline-offset-2">Post</Link>}
+            {(v.status === "failed" || v.status === "ready") && (
+              <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => redo(v)} disabled={redoing === v.id}>
+                {redoing === v.id ? <Loader2 className="animate-spin" /> : <Clapperboard />}Refazer
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 export default function Products() {
   const qc = useQueryClient();
   const { data: accounts = [], isLoading } = useTable("social_accounts");
@@ -399,6 +458,14 @@ export default function Products() {
   const setAutopost = async (v: boolean) => {
     try {
       await api.saveSettings({ product_autopost: v });
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  const setVideo = async (v: boolean) => {
+    try {
+      await api.saveSettings({ video_enabled: v });
       qc.invalidateQueries({ queryKey: ["settings"] });
     } catch (e) {
       toast.error((e as Error).message);
@@ -465,6 +532,20 @@ export default function Products() {
     }
   };
 
+  const [videoFor, setVideoFor] = useState<string | null>(null);
+  const makeVideo = async (draft: ProductDraft) => {
+    setVideoFor(draft.id);
+    try {
+      await api.invoke("ai", { action: "product_video", draft_id: draft.id });
+      qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
+      toast.success("Vídeo na fila. Fica pronto em até 1 hora e aparece em Vídeos dos produtos.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setVideoFor(null);
+    }
+  };
+
   const createAll = async () => {
     setBulk(true);
     for (const d of queue.filter((d) => d.status !== "creating")) await createOne(d, true);
@@ -507,6 +588,17 @@ export default function Products() {
             </span>
             <Switch id="autopost" checked={autopost} onCheckedChange={setAutopost} />
           </label>
+          {autopost && (
+            <label htmlFor="video" className="flex items-center justify-between gap-4 border-b px-4 py-3">
+              <span>
+                <span className="block text-[13px] font-medium">Fazer também um vídeo animado</span>
+                <span className="block text-xs text-muted-foreground">
+                  Vídeo de 15 segundos para Reels e TikTok com a foto do produto, textos feitos pela IA e música. Fica pronto em até 1 hora e vira outro post.
+                </span>
+              </span>
+              <Switch id="video" checked={settings?.video_enabled ?? false} onCheckedChange={setVideo} />
+            </label>
+          )}
           <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between">
             <label className="flex items-center gap-2 text-[13px]">
               <Checkbox checked={grouped} onCheckedChange={(v) => setGrouped(Boolean(v))} />
@@ -527,6 +619,8 @@ export default function Products() {
           )}
         </Panel>
 
+        <VideosPanel />
+
         <TemplateEditor templates={templates} categories={categories.data ?? []} />
 
         {created.length > 0 && (
@@ -539,6 +633,9 @@ export default function Products() {
                     <p className="truncate text-[13px] font-medium">{d.name}</p>
                     <p className="text-xs text-muted-foreground"><StatusDot tone="success">Na loja</StatusDot> · {relativeTime(d.created_at)}</p>
                   </div>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => makeVideo(d)} disabled={videoFor === d.id}>
+                    {videoFor === d.id ? <Loader2 className="animate-spin" /> : <Clapperboard />}Vídeo
+                  </Button>
                   {d.product_url && (
                     <a href={d.product_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
                       Ver na loja <ExternalLink className="h-3 w-3" />

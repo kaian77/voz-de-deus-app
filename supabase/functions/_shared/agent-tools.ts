@@ -9,6 +9,7 @@ import { sendMessage, transcript } from "./inbox.ts";
 import { aiEnabled, generateJSON, researchWeb } from "./claude.ts";
 import { nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
 import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
+import { queueProductVideo } from "./product-video.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
 
@@ -238,6 +239,7 @@ const tools = {
       default_hashtags: z.string().optional(),
       default_cta: z.string().optional(),
       product_autopost: z.boolean().optional().describe("Divulgar no Instagram/TikTok cada produto novo cadastrado"),
+      video_enabled: z.boolean().optional().describe("Gerar também um vídeo animado (Reels/TikTok) para cada produto novo"),
       approval_required: z.boolean().optional(),
       timezone: z.string().optional(),
       agent_enabled: z.boolean().optional().describe("Liga/desliga o agente de IA que responde DMs e WhatsApp"),
@@ -713,6 +715,30 @@ const tools = {
         name: fields.name ?? name, images: image_urls, url: product.url, price: product.price, description: fields.description, caption,
       }).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
       return { product, post };
+    },
+  },
+
+  create_product_video: {
+    description: "Gera um vídeo animado vertical (Reels/TikTok, ~15 s, com música) de um produto a partir das fotos: a IA escreve os textos e o vídeo entra na fila de renderização (fica pronto em até 1 hora). Quando fica pronto vira um post (em Aprovações se a marca exigir aprovação).",
+    input: z.object({
+      name: z.string().min(1),
+      image_urls: z.array(z.string().url()).min(1).max(4).describe("A primeira é a principal (de preferência a foto original, sem moldura)"),
+      description: z.string().optional(),
+      product_url: z.string().url().optional(),
+    }),
+    run: async (ctx: Ctx, input: { name: string; image_urls: string[]; description?: string; product_url?: string }) => {
+      for (const u of input.image_urls) assertPublicHttpsUrl(u);
+      return queueProductVideo(ctx.db, ctx.userId, { name: input.name, images: input.image_urls, description: input.description, url: input.product_url });
+    },
+  },
+
+  list_product_videos: {
+    description: "Lista os vídeos animados de produto (na fila, renderizando, prontos ou com erro) e o post criado para cada um.",
+    input: z.object({ limit: z.number().int().min(1).max(50).optional() }),
+    run: async (ctx: Ctx, input: { limit?: number }) => {
+      const { data } = await ctx.db.from("product_videos").select("id,name,status,error,video_url,post_id,brief,created_at")
+        .eq("user_id", ctx.userId).order("created_at", { ascending: false }).limit(input.limit ?? 10);
+      return data;
     },
   },
 
