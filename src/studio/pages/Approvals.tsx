@@ -13,6 +13,7 @@ import { renderAndUploadSlides } from "../lib/publishing";
 import type { Post } from "../lib/types";
 import { EmptyState, formatDateTime, KIND_LABEL, PageHeader, Panel, PlatformIcon, relativeTime, SectionLabel, SlidePreview, StatusDot } from "../components/bits";
 import { PostThumb } from "../components/PostThumb";
+import { toastPublishResult } from "@/studio/lib/publish-toast";
 
 function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: boolean; onSelect: (v: boolean) => void }) {
   const invalidate = useInvalidate();
@@ -40,9 +41,7 @@ function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: bool
       const media = slides ? await renderAndUploadSlides(slides, post.design) : post.media;
       const saved = await api.update("posts", post.id, { media, status: "publishing", scheduled_at: new Date().toISOString() });
       const result = await api.publishNow(saved);
-      if (result.status === "published") toast.success("Publicado");
-      else if (result.status === "publishing") toast.info("Enviado. O vídeo está processando e sai em instantes.");
-      else toast.error(`Falhou: ${Object.values(result.results ?? {}).map((r) => r?.error).filter(Boolean).join(" | ")}`);
+      toastPublishResult(result);
       invalidate("posts");
     } catch (e) {
       toast.error((e as Error).message);

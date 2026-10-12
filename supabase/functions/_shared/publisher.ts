@@ -2,7 +2,7 @@
 // vídeos que ainda estão processando ficam em "publishing" e são retomados no próximo ciclo do cron.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { igCreateContainer, igPublishContainer, igTokenFor, igWaitContainer } from "./instagram.ts";
-import { ttPublishPhotos, ttPublishStatus, ttPublishVideo, ttTokenFor } from "./tiktok.ts";
+import { TikTokError, ttPublishPhotos, ttPublishStatus, ttPublishVideo, ttTokenFor, ttUploadToInbox } from "./tiktok.ts";
 
 type PlatformResult = {
   status?: "processing" | "published" | "failed";
@@ -12,6 +12,7 @@ type PlatformResult = {
   permalink?: string;
   error?: string;
   account_id?: string;
+  inbox?: boolean; // foi para a caixa de entrada do app do TikTok (falta o criador publicar pelo app)
 };
 
 type Post = {
@@ -74,11 +75,22 @@ async function stepTikTok(db: SupabaseClient, post: Post, r: PlatformResult): Pr
   const token = await ttTokenFor(db, account.id);
   const opts = post.options?.tiktok ?? {};
   if (!r.publish_id) {
-    r.publish_id = ["reel", "video"].includes(post.kind)
-      ? await ttPublishVideo(token, post.caption, tiktokUrl(post.media[0].url), opts)
-      : await ttPublishPhotos(token, post.caption, post.media.filter((m) => m.type === "image").map((m) => tiktokUrl(m.url)), opts);
+    const video = ["reel", "video"].includes(post.kind);
+    const urls = video ? [tiktokUrl(post.media[0].url)] : post.media.filter((m) => m.type === "image").map((m) => tiktokUrl(m.url));
+    try {
+      if (opts.mode === "inbox") throw new TikTokError("inbox", "");
+      r.publish_id = video ? await ttPublishVideo(token, post.caption, urls[0], opts) : await ttPublishPhotos(token, post.caption, urls, opts);
+    } catch (e) {
+      // Antes da auditoria do TikTok a postagem direta só vale para conta privada: manda para o app como rascunho
+      if (!(e instanceof TikTokError) || !["inbox", "unaudited_client_can_only_post_to_private_accounts"].includes(e.code)) throw e;
+      r.publish_id = await ttUploadToInbox(token, post.caption, video ? "video" : "photo", urls);
+      r.inbox = true;
+    }
   }
   const status = await ttPublishStatus(token, r.publish_id);
+  if (r.inbox && status.status === "SEND_TO_USER_INBOX") {
+    return { status: "published", publish_id: r.publish_id, inbox: true, account_id: account.id };
+  }
   if (status.status === "PUBLISH_COMPLETE") {
     return { status: "published", publish_id: r.publish_id, id: status.publicaly_available_post_id?.[0], account_id: account.id };
   }
