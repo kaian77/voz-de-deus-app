@@ -18,6 +18,11 @@ export function aiEnabled() {
 
 type Effort = "low" | "medium" | "high";
 
+/** Tira metades soltas de emoji (um .slice() pode cortar um emoji ao meio e a API recusa o JSON). */
+export function wellFormed(text: string) {
+  return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+}
+
 export async function generateJSON<T extends z.ZodTypeAny>(
   schema: T,
   system: string,
@@ -26,13 +31,14 @@ export async function generateJSON<T extends z.ZodTypeAny>(
   images: string[] = [],
 ): Promise<z.infer<T>> {
   // Imagens por URL pública (ex.: fotos de produto no storage do Studio)
+  prompt = wellFormed(prompt);
   const content = images.length
     ? [...images.slice(0, 8).map((url) => ({ type: "image" as const, source: { type: "url" as const, url } })), { type: "text" as const, text: prompt }]
     : prompt;
   const response = await anthropic().messages.parse({
     model: MODEL(),
     max_tokens: 16000,
-    system,
+    system: wellFormed(system),
     messages: [{ role: "user", content }],
     output_config: { effort, format: zodOutputFormat(schema) },
   });
@@ -45,8 +51,8 @@ export async function generateText(system: string, prompt: string, effort: Effor
   const response = await anthropic().messages.create({
     model: MODEL(),
     max_tokens: 16000,
-    system,
-    messages: [{ role: "user", content: prompt }],
+    system: wellFormed(system),
+    messages: [{ role: "user", content: wellFormed(prompt) }],
     output_config: { effort },
   });
   if (response.stop_reason === "refusal") throw new Error("A IA recusou este pedido.");
@@ -72,6 +78,8 @@ export function brandContext(settings: Record<string, unknown> | null): string {
  */
 export async function researchWeb(system: string, prompt: string, maxUses = 5): Promise<{ text: string; sources: string[] }> {
   const model = MODEL();
+  system = wellFormed(system);
+  prompt = wellFormed(prompt);
   const tool = model.includes("haiku")
     ? { type: "web_search_20250305" as const, name: "web_search" as const, max_uses: maxUses }
     : { type: "web_search_20260209" as const, name: "web_search" as const, max_uses: maxUses };
