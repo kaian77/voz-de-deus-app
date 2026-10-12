@@ -25,7 +25,7 @@ export type Analysis = {
 };
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ")
-  .split(/\s+/).filter((w) => w.length > 2 && !["pin", "pins", "broche", "botton", "metal", "esmaltado", "com", "para", "brax"].includes(w));
+  .split(/\s+/).filter((w) => w.length > 2 && !["pin", "pins", "broche", "botton", "metal", "esmaltado", "com", "para", "brax", "multicolorido"].includes(w));
 const median = (a: number[]) => {
   const s = [...a].sort((x, y) => x - y);
   return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : NaN;
@@ -219,21 +219,23 @@ export async function publishToMercadoLivre(
       .catch((e) => warnings.push(`descrição: ${e instanceof Error ? e.message : e}`));
   };
 
-  // Mesmo SKU já anunciado: atualiza a descrição e tenta reativar em vez de duplicar o anúncio
-  if (product.sku) {
-    const found = await ml<{ results: string[] }>(token, `/users/${acc.external_id}/items/search?seller_sku=${encodeURIComponent(product.sku)}`)
-      .catch(() => ({ results: [] as string[] }));
-    if (found.results[0]) {
-      const id = found.results[0];
-      await setDescription(id, true);
-      let item = await ml<MlItem & { sub_status?: string[] }>(token, `/items/${id}`);
-      if (item.status === "paused") {
-        await ml(token, `/items/${id}`, { method: "PUT", body: { status: "active" } })
-          .catch((e) => warnings.push(`reativar: ${e instanceof Error ? e.message : e}`));
-        item = await ml<MlItem & { sub_status?: string[] }>(token, `/items/${id}`);
-      }
-      return { id, permalink: item.permalink, price: item.price, status: item.status, sub_status: item.sub_status ?? [], updated: true, warnings };
+  // Produto já anunciado (em qualquer status, pelo SKU ou pelo nome): atualiza em vez de duplicar
+  const existing = await findMlListing(token, acc.external_id, product.name, product.sku);
+  if (existing) {
+    const id = existing.id;
+    await setDescription(id, true);
+    const changes: Record<string, unknown> = { available_quantity: product.stock ?? DEFAULT_ML_STOCK };
+    // Anúncio inativo (ex.: "fotos não cumprem os requisitos"): troca pelas fotos da loja
+    if (existing.status !== "active" && product.images.length) changes.pictures = product.images.slice(0, 10).map((source) => ({ source }));
+    await ml(token, `/items/${id}`, { method: "PUT", body: changes })
+      .catch((e) => warnings.push(`atualizar: ${e instanceof Error ? e.message : e}`));
+    let item = await ml<MlItem & { sub_status?: string[] }>(token, `/items/${id}`);
+    if (item.status === "paused") {
+      await ml(token, `/items/${id}`, { method: "PUT", body: { status: "active" } })
+        .catch((e) => warnings.push(`reativar: ${e instanceof Error ? e.message : e}`));
+      item = await ml<MlItem & { sub_status?: string[] }>(token, `/items/${id}`);
     }
+    return { id, permalink: item.permalink, price: item.price, status: item.status, sub_status: item.sub_status ?? [], updated: true, warnings };
   }
 
   const ref = await ml<MlItem>(token, `/items/${analysis.reference_id}`);
@@ -253,7 +255,7 @@ export async function publishToMercadoLivre(
     category_id: ref.category_id,
     price: applyRule(product.price, analysis.rule),
     currency_id: "BRL",
-    available_quantity: product.stock ?? ref.available_quantity ?? 1,
+    available_quantity: product.stock ?? DEFAULT_ML_STOCK,
     buying_mode: "buy_it_now",
     condition: "new",
     listing_type_id: ref.listing_type_id,
@@ -275,6 +277,36 @@ export async function publishToMercadoLivre(
   // deno-lint-ignore no-explicit-any
   const sub_status: string[] = (created as any).sub_status ?? [];
   return { id: created.id, permalink: created.permalink, price: body.price, status: created.status, sub_status, warnings };
+}
+
+/** Estoque padrão dos anúncios do Mercado Livre (o lojista trabalha sempre com 200). */
+const DEFAULT_ML_STOCK = 200;
+
+/**
+ * Anúncio do vendedor para o produto, em qualquer status menos encerrado: primeiro pelo SKU, depois pelo nome.
+ * Com mais de um, prefere o ativo.
+ */
+async function findMlListing(token: string, sellerId: string, name: string, sku?: string): Promise<MlItem | null> {
+  const pick = (items: MlItem[]) => items.find((i) => i.status === "active") ?? items[0] ?? null;
+  if (sku) {
+    const found = await ml<{ results: string[] }>(token, `/users/${sellerId}/items/search?seller_sku=${encodeURIComponent(sku)}`)
+      .catch(() => ({ results: [] as string[] }));
+    if (found.results.length) {
+      const batch = await ml<{ code: number; body: MlItem }[]>(token, `/items?ids=${found.results.slice(0, 20).join(",")}`);
+      const items = batch.filter((r) => r.code === 200 && r.body.status !== "closed").map((r) => r.body);
+      if (items.length) return pick(items);
+    }
+  }
+  const words = norm(name);
+  if (!words.length) return null;
+  const all = (await mlSellerItems(token, sellerId, 1000, "")).filter((i) => i.status !== "closed");
+  const same = all.filter((i) => {
+    const w = norm(i.family_name ?? i.title);
+    const common = w.filter((x) => words.includes(x)).length;
+    // Bem mais rígido que a análise de preços: um falso positivo atualizaria o anúncio de outro pin
+    return common / new Set([...w, ...words]).size >= 0.8;
+  });
+  return pick(same);
 }
 
 /** Descrição em texto puro como o ML exige: sem HTML, sem emoji e com marcadores simples. */
