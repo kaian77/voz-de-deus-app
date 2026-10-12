@@ -65,6 +65,11 @@ export default function WhatsAppConnect() {
         {list.map((a) => (
           <div key={a.id} className="space-y-1.5">
             <ConnectedAccount account={a} onRemove={() => remove.mutate(a.id)} />
+            {a.meta.provider === "waha" && a.meta.status && a.meta.status !== "WORKING" && (
+              <p className="px-1 text-xs text-destructive">
+                {a.meta.status.startsWith("ERRO") ? "Servidor do WAHA fora do ar." : "Desconectado: abra o painel do WAHA e leia o QR Code de novo."} ({a.meta.status})
+              </p>
+            )}
             <label className="flex items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
               IA responde neste número
               <Switch checked={a.meta.agent !== false} onCheckedChange={(v) => save.mutate({ id: a.id, meta: { ...a.meta, agent: v } })} />
