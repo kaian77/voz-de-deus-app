@@ -110,6 +110,19 @@ async function researchCompetitor(username: string, platform: "instagram" | "tik
   };
 }
 
+/** Diagnóstico: últimas notificações da Meta recebidas para as contas do usuário (e as recusadas por assinatura). */
+async function webhookHealth(ctx: Ctx) {
+  const { data: igs } = await ctx.db.from("social_accounts").select("external_id").eq("user_id", ctx.userId).eq("platform", "instagram");
+  const ids = (igs ?? []).map((a) => a.external_id as string);
+  const [mine, rejected] = await Promise.all([
+    ids.length
+      ? ctx.db.from("webhook_log").select("status,kinds,received_at").eq("platform", "instagram").in("account_external_id", ids).order("received_at", { ascending: false }).limit(10)
+      : Promise.resolve({ data: [] }),
+    ctx.db.from("webhook_log").select("received_at").eq("platform", "instagram").eq("status", "bad_signature").order("received_at", { ascending: false }).limit(5),
+  ]);
+  return { received: mine.data ?? [], rejected_bad_signature: rejected.data ?? [] };
+}
+
 async function settings(ctx: Ctx) {
   const { data } = await ctx.db.from("brand_settings").select("*").eq("user_id", ctx.userId).maybeSingle();
   return data;
@@ -191,6 +204,7 @@ const tools = {
         automations: automations.data,
         recent_comments: comments.data,
         conversations_needing_human: waiting.data,
+        instagram_webhooks: await webhookHealth(ctx),
       };
     },
   },
