@@ -209,6 +209,33 @@ export async function publishToMercadoLivre(
   const analysis: Analysis | undefined = acc.meta?.analysis ?? await analyzeMarketplace(db, userId, "mercadolivre");
   if (!analysis?.reference_id) throw new Error("Não achei um anúncio seu no Mercado Livre para usar de modelo");
   const token = await mlTokenFor(db, acc.id);
+  const warnings: string[] = [];
+  const description = product.description ? mlPlainText(product.description) : "";
+  const setDescription = async (id: string, update: boolean) => {
+    if (!description) return;
+    const path = `/items/${id}/description`;
+    const send = (method: string) => ml(token, path, { method, body: { plain_text: description } });
+    await (update ? send("PUT").catch(() => send("POST")) : send("POST"))
+      .catch((e) => warnings.push(`descrição: ${e instanceof Error ? e.message : e}`));
+  };
+
+  // Mesmo SKU já anunciado: atualiza a descrição e tenta reativar em vez de duplicar o anúncio
+  if (product.sku) {
+    const found = await ml<{ results: string[] }>(token, `/users/${acc.external_id}/items/search?seller_sku=${encodeURIComponent(product.sku)}`)
+      .catch(() => ({ results: [] as string[] }));
+    if (found.results[0]) {
+      const id = found.results[0];
+      await setDescription(id, true);
+      let item = await ml<MlItem & { sub_status?: string[] }>(token, `/items/${id}`);
+      if (item.status === "paused") {
+        await ml(token, `/items/${id}`, { method: "PUT", body: { status: "active" } })
+          .catch((e) => warnings.push(`reativar: ${e instanceof Error ? e.message : e}`));
+        item = await ml<MlItem & { sub_status?: string[] }>(token, `/items/${id}`);
+      }
+      return { id, permalink: item.permalink, price: item.price, status: item.status, sub_status: item.sub_status ?? [], updated: true, warnings };
+    }
+  }
+
   const ref = await ml<MlItem>(token, `/items/${analysis.reference_id}`);
 
   const attributes = (ref.attributes ?? [])
@@ -244,10 +271,18 @@ export async function publishToMercadoLivre(
     const { title: _t, ...rest } = body;
     created = await ml<MlItem>(token, "/items", { method: "POST", body: { ...rest, family_name: title } });
   }
-  const warnings: string[] = [];
-  if (product.description) {
-    await ml(token, `/items/${created.id}/description`, { method: "POST", body: { plain_text: product.description.replace(/<[^>]+>/g, "\n").replace(/\n{3,}/g, "\n\n").trim() } })
-      .catch((e) => warnings.push(`descrição: ${e instanceof Error ? e.message : e}`));
-  }
-  return { id: created.id, permalink: created.permalink, price: body.price, status: created.status, warnings };
+  await setDescription(created.id, false);
+  // deno-lint-ignore no-explicit-any
+  const sub_status: string[] = (created as any).sub_status ?? [];
+  return { id: created.id, permalink: created.permalink, price: body.price, status: created.status, sub_status, warnings };
+}
+
+/** Descrição em texto puro como o ML exige: sem HTML, sem emoji e com marcadores simples. */
+export function mlPlainText(text: string) {
+  return text.replace(/<[^>]+>/g, "\n")
+    .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, "")
+    .replace(/^[ \t]*[•●▪◦]\s*/gm, "- ")
+    .replace(/^[ \t]+|[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
