@@ -213,7 +213,8 @@ export async function publishToMercadoLivre(
 
   const attributes = (ref.attributes ?? [])
     .filter((a) => !OWN_ATTRS.has(a.id) && (a.value_id || a.value_name))
-    .map((a) => (a.value_id ? { id: a.id, value_id: a.value_id } : { id: a.id, value_name: a.value_name }));
+    // O value_id de valores próprios do vendedor (ex.: a marca) não existe no catálogo do ML; pelo nome ele resolve
+    .map((a) => (a.value_name ? { id: a.id, value_name: a.value_name } : { id: a.id, value_id: a.value_id }));
   attributes.push({ id: "MODEL", value_name: product.name.slice(0, 60) });
   if (product.sku) attributes.push({ id: "SELLER_SKU", value_name: product.sku });
 
