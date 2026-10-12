@@ -76,7 +76,7 @@ def briefing(brief, name, handle):
     colors = {**COLORS, **{k: v for k, v in (brief.get("colors") or {}).items() if isinstance(v, str) and v.startswith("#")}}
     features = [f for f in (brief.get("features") or []) if f][:3]
     scenes = [
-        {"type": "hook", "text": brief.get("hook") or f"Chegou *{name}*", "sub": brief.get("hook_sub") or "", "transition": "flash"},
+        {"type": "hook", "text": brief.get("hook") or f"Chegou *{name}*", "sub": brief.get("hook_sub") or "", "transition": "fade"},
     ]
     # Vista explodida: a tinta, o metal e a tarraxa se separam em 3D e se juntam com impacto
     if brief.get("layers", True):

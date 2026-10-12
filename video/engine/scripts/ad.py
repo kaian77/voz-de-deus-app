@@ -85,15 +85,17 @@ def build_scene(sc, idx, spec, lay):
         tx = 0.5 if not W else (0.4 if prod_on else 0.5)
         y = sc.get("y", lay.big_text_y())
         size = sc.get("size", 132)
-        layers.append(text(sc["text"], y, size, x=tx, anim="pop-words", upper=True,
-                           hl_box=sc.get("hl_box", True), idle=["shake"], sfx="impact", max_w=mw))
+        # Entrada delicada: o texto surge do desfoque, sem tremor, com um "ding" suave
+        layers.insert(0, {"type": "particles", "kind": "bokeh", "count": 12})
+        layers.append(text(sc["text"], y, size, x=tx, anim="blur", upper=True, hl_box=sc.get("hl_box", True), sfx="ding",
+                           max_w=mw, **{"in": 0.1, "in_dur": 0.9}))
         if sc.get("sub"):
             sy = y + text_h(sc["text"], size, mw, spec.get("format", "9:16")) / 2 + (0.045 if not W else 0.07)
             layers.append(text(sc["sub"], sy, 58, x=tx, max_w=mw, weight="bold", color="accent", anim="slide-up",
                                **{"in": 0.75}))
         if img and sc.get("show_product", True):
             layers.append({"type": "image", "src": img, "cutout": cut, "y": 0.71 if not W else 0.5, "x": 0.5 if not W else 0.82,
-                           "w": 0.5 if not W else 0.3, "h": 0.17 if not W else 0.6, "anim": "slide-up", "in": 0.45,
+                           "w": 0.5 if not W else 0.3, "h": 0.17 if not W else 0.6, "anim": "blur", "in": 0.45, "in_dur": 1.0,
                            "idle": ["float"], "glow": "accent", "glow_strength": 0.5})
     elif t == "layers":  # vista explodida do pin: tinta, metal e tarraxa se separam e se juntam
         layers += [
