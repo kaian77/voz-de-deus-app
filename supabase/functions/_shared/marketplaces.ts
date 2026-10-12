@@ -191,9 +191,9 @@ export async function analyzeMarketplace(db: SupabaseClient, userId: string, pla
   await db.from("social_accounts").update({ meta: { ...(acc.meta ?? {}), analysis: result } }).eq("id", acc.id);
   return result;
 }
-
 // Atributos que são de cada produto (não se copiam do anúncio de referência)
-const OWN_ATTRS = new Set(["SELLER_SKU", "GTIN", "MODEL", "ALPHANUMERIC_MODEL", "LINE", "CHARACTER", "PACKAGE_LENGTH", "PACKAGE_WIDTH", "PACKAGE_HEIGHT", "PACKAGE_WEIGHT"]);
+// Atributos próprios de cada produto (os demais, como marca, material e medidas da embalagem, vêm do anúncio modelo)
+const OWN_ATTRS = new Set(["SELLER_SKU", "GTIN", "MODEL", "ALPHANUMERIC_MODEL", "LINE", "CHARACTER"]);
 
 /**
  * Publica um produto no Mercado Livre copiando o padrão do anúncio de referência do lojista
@@ -215,7 +215,9 @@ export async function publishToMercadoLivre(
     .filter((a) => !OWN_ATTRS.has(a.id) && (a.value_id || a.value_name))
     // O value_id de valores próprios do vendedor (ex.: a marca) não existe no catálogo do ML; pelo nome ele resolve
     .map((a) => (a.value_name ? { id: a.id, value_name: a.value_name } : { id: a.id, value_id: a.value_id }));
-  attributes.push({ id: "MODEL", value_name: product.name.slice(0, 60) });
+  // O ML monta o título com nome + cor + modelo ("Pin Snoopy (metal Esmaltado) Multicolorido Snoopy"): o modelo é só o nome do pin
+  const model = product.name.replace(/\([^)]*\)/g, "").split(" - ")[0].replace(/^\s*(pin|broche|botton)\s+/i, "").trim();
+  attributes.push({ id: "MODEL", value_name: (model || product.name).slice(0, 60) });
   if (product.sku) attributes.push({ id: "SELLER_SKU", value_name: product.sku });
 
   const title = product.name.slice(0, 60);
