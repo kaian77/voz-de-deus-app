@@ -99,7 +99,8 @@ def build_scene(sc, idx, spec, lay):
         layers += [
             {"type": "particles", "kind": "bokeh", "count": 16},
             {"type": "explode", "src": img, "cutout": cut, "x": 0.5, "y": 0.55 if not W else 0.5, "w": 1.0 if not W else 0.6,
-             "fill": sc.get("fill", 0.62), "labels": sc.get("labels", ["TINTA", "METAL", "TARRAXA"]), "anim": "none", "in": 0,
+             "fill": sc.get("fill", 0.62), "labels": sc.get("labels", ["TINTA", "METAL", "TARRAXA DE SILICONE"]), "anim": "none", "in": 0,
+             "stamp": sc.get("stamp", (brand.get("name") or " ").split()[0].upper()),
              "sfx": "whoosh", "sfx_offset": 1.0},
             # impacto quando as camadas se juntam (camada invisível só para o efeito sonoro)
             {"type": "shape", "shape": "circle", "w": 0.01, "opacity": 0, "anim": "none", "in": 3.15, "sfx": "impact"},

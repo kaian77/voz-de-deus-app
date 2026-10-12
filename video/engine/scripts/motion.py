@@ -791,7 +791,8 @@ class ExplodeLayer(Layer):
             accent = self.c.color(s.get("label_color", "accent"))
             accent = accent if isinstance(accent, str) and accent.startswith("#") else "#FFC72C"
             self.pin = self.ex.ExplodedPin(im, size=int(s.get("w", 1.0) * self.W), fill=s.get("fill", 0.5),
-                                           labels=tuple(s.get("labels", ("TINTA", "METAL", "TARRAXA"))), accent=accent)
+                                           labels=tuple(s.get("labels", ("TINTA", "METAL", "TARRAXA DE SILICONE"))), accent=accent,
+                                           stamp=s.get("stamp", "BRAX"))
         return self.pin.frame(*self.ex.timeline(lt, float(self.s.get("cycle", 5.0))))
 
 
