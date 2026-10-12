@@ -201,6 +201,8 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
         return { name: "Coração Dourado", description: "Pin Coração Dourado em metal esmaltado, com brilho delicado.\n\nEnviamos para todo o Brasil." };
       case "product_create":
         throw new Error("No modo demo não há loja conectada para cadastrar o produto.");
+      case "content_ideas":
+        throw new Error("No modo demo o piloto automático não cria posts.");
       case "product_video":
       case "video_only":
       case "video_post":

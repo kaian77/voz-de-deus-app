@@ -25,7 +25,33 @@ const solid = (color: string) => (ctx: CanvasRenderingContext2D) => {
   ctx.fillRect(0, 0, SLIDE_W, SLIDE_H);
 };
 
+const BRAND_TITLE = "Anton, Impact, 'Arial Black', sans-serif";
+
 export const THEMES: Record<ThemeId, Theme> = {
+  marca: {
+    name: "Marca (vermelho, preto e dourado)",
+    background: (ctx) => {
+      gradient(ctx, [[0, "#0d0d0d"], [0.55, "#3a0a0d"], [1, "#e3262e"]]);
+      // Faixas diagonais como no site
+      ctx.save();
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = "#e3262e";
+      for (let x = -SLIDE_H; x < SLIDE_W; x += 160) {
+        ctx.beginPath();
+        ctx.moveTo(x, SLIDE_H);
+        ctx.lineTo(x + 60, SLIDE_H);
+        ctx.lineTo(x + 60 + SLIDE_H * 0.6, 0);
+        ctx.lineTo(x + SLIDE_H * 0.6, 0);
+        ctx.fill();
+      }
+      ctx.restore();
+    },
+    text: "#ffffff",
+    muted: "rgba(255,255,255,0.86)",
+    accent: "#ffc72c",
+    titleFont: BRAND_TITLE,
+    bodyFont: "'Helvetica Neue', Arial, sans-serif",
+  },
   divino: {
     name: "Azul e dourado",
     background: (ctx) => gradient(ctx, [[0, "#0f2a6b"], [0.6, "#1d4ed8"], [1, "#c99a2e"]]),
@@ -89,6 +115,20 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): st
   return lines;
 }
 
+/** Escreve uma linha com *destaques* na cor de destaque; o estado (dentro ou fora do destaque) passa de uma linha para a outra. */
+function drawRich(ctx: CanvasRenderingContext2D, line: string, x: number, y: number, color: string, accent: string, inside: boolean) {
+  for (const part of line.split(/(\*)/)) {
+    if (part === "*") {
+      inside = !inside;
+      continue;
+    }
+    ctx.fillStyle = inside ? accent : color;
+    ctx.fillText(part, x, y);
+    x += ctx.measureText(part).width;
+  }
+  return inside;
+}
+
 /** Diminui a fonte até o texto caber no número máximo de linhas. */
 function fit(ctx: CanvasRenderingContext2D, text: string, font: string, weight: string, start: number, min: number, maxWidth: number, maxLines: number) {
   let size = start;
@@ -116,8 +156,42 @@ function loadImage(url: string) {
   return imageCache.get(url)!;
 }
 
+/** Tema com as cores de uma campanha (ex.: Outubro Rosa): fundo do tom escuro para a cor principal, letras da marca. */
+function paletteTheme(p: NonNullable<CarouselDesign["palette"]>): Theme {
+  return {
+    ...THEMES.marca,
+    name: "Cores do tema",
+    background: (ctx) => gradient(ctx, [[0, p.secondary], [0.5, p.secondary], [1, p.primary]]),
+    accent: p.accent,
+  };
+}
+
+async function fontsReady(theme: Theme) {
+  if (!theme.titleFont.startsWith("Anton") || typeof document === "undefined" || !document.fonts) return;
+  await document.fonts.load("80px Anton").catch(() => undefined);
+}
+
+/** Desenha a foto do produto (inteira) num cartão branco de cantos arredondados. */
+function productCard(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 40;
+  ctx.shadowOffsetY = 16;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.roundRect(x, y, size, size, 36);
+  ctx.fill();
+  ctx.restore();
+  const inner = size - 60;
+  const scale = Math.min(inner / img.width, inner / img.height);
+  const w = img.width * scale;
+  const h = img.height * scale;
+  ctx.drawImage(img, x + (size - w) / 2, y + (size - h) / 2, w, h);
+}
+
 export async function renderSlide(slide: Slide, index: number, total: number, design: CarouselDesign = {}): Promise<HTMLCanvasElement> {
-  const theme = THEMES[design.theme ?? "divino"];
+  const theme = design.palette ? paletteTheme(design.palette) : THEMES[design.theme ?? "marca"] ?? THEMES.marca;
+  await fontsReady(theme);
   const canvas = document.createElement("canvas");
   canvas.width = SLIDE_W;
   canvas.height = SLIDE_H;
@@ -156,18 +230,29 @@ export async function renderSlide(slide: Slide, index: number, total: number, de
   ctx.fillStyle = theme.accent;
   ctx.fillRect(pad, pad - 22, 84, 8);
 
-  const title = fit(ctx, slide.title || "", theme.titleFont, "700", isCover ? 104 : 80, 44, maxWidth, isCover ? 6 : 5);
-  const body = slide.body ? fit(ctx, slide.body, theme.bodyFont, "400", 46, 30, maxWidth, 9) : { size: 0, lines: [] as string[] };
+  // Com foto de produto: texto em cima e a foto num cartão embaixo
+  const product = slide.product_image && !slide.image_url ? await loadImage(slide.product_image) : null;
+  // Anton tem um peso só (sem negrito falso) e fica em maiúsculas, como no site
+  const brandFont = theme.titleFont === BRAND_TITLE;
+  const titleWeight = brandFont ? "400" : "700";
+  const titleText = brandFont ? (slide.title || "").toUpperCase() : slide.title || "";
+  const title = fit(ctx, titleText, theme.titleFont, titleWeight, isCover ? 104 : 80, 44, maxWidth, product ? 3 : isCover ? 6 : 5);
+  const body = slide.body ? fit(ctx, slide.body, theme.bodyFont, "400", product ? 38 : 46, 28, maxWidth, product ? 3 : 9) : { size: 0, lines: [] as string[] };
   const titleLH = title.size * 1.15;
   const bodyLH = body.size * 1.4;
-  const gap = body.lines.length ? 48 : 0;
+  const gap = body.lines.length ? (product ? 28 : 48) : 0;
   const blockH = title.lines.length * titleLH + gap + body.lines.length * bodyLH;
-  let y = Math.max(pad + 80, (SLIDE_H - blockH) / 2) + title.size * 0.85;
+  let y = (product ? pad + 80 : Math.max(pad + 80, (SLIDE_H - blockH) / 2)) + title.size * 0.85;
+  if (product) {
+    const top = pad + 80 + blockH + 48;
+    const size = Math.min(maxWidth, SLIDE_H - pad - 70 - top);
+    if (size > 200) productCard(ctx, product, (SLIDE_W - size) / 2, top, size);
+  }
 
-  ctx.fillStyle = text;
-  ctx.font = `700 ${title.size}px ${theme.titleFont}`;
+  ctx.font = `${titleWeight} ${title.size}px ${theme.titleFont}`;
+  let highlight = false;
   for (const line of title.lines) {
-    ctx.fillText(line, pad, y);
+    highlight = drawRich(ctx, line, pad, y, text, theme.accent, highlight);
     y += titleLH;
   }
   y += gap - titleLH + bodyLH;

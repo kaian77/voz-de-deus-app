@@ -235,6 +235,8 @@ Liga em **Produtos → Fazer também um vídeo animado**; cada produto cadastrad
 
 **Agendar em massa:** em **Publicar → Agendar em massa**, mande várias fotos e vídeos de uma vez. Cada arquivo vira um post (foto = post de imagem; vídeo = Reels e vídeo no TikTok), distribuído nos horários escolhidos a partir de um dia, pulando os horários que já têm post. A IA pode escrever as legendas olhando cada foto (ou um quadro do vídeo).
 
+**Piloto automático de conteúdo:** em **Aprovações**, ligado por padrão. Uma vez por semana o Studio olha as datas comemorativas e campanhas dos próximos 21 dias (Outubro Rosa, Dia do Médico, Natal…), os produtos da loja e os posts que mais engajaram, e cria carrosséis com as fotos dos produtos (nas cores da marca, ou nas do tema) e vídeos quando um produto é a cara do tema. Os carrosséis chegam direto em Aprovações; os vídeos chegam quando terminam de renderizar. Dali: **Aprovar** (no horário sugerido), **Publicar agora** ou selecionar vários e **Agendar em massa** para escolher os dias. Botão **Criar ideias agora** para gerar na hora; pelo Claude: `create_content_ideas`.
+
 ## 11. Mercado Livre e Shopee
 
 **Mercado Livre**
