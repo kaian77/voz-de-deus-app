@@ -7,7 +7,7 @@ import { igRecentMedia, igRequest, igTokenFor } from "./instagram.ts";
 import { handleComment, handleDirectMessage } from "./instagram-events.ts";
 
 const RECENT_MEDIA = 4; // últimos posts verificados (além dos posts com automação específica)
-const WEBHOOK_FRESH_MS = 6 * 3600_000; // webhook recebido nas últimas 6h = não precisa buscar
+const WEBHOOK_FRESH_MS = 20 * 60_000; // webhook recebido nos últimos 20 min = não precisa buscar (um webhook solto não desliga a busca por horas)
 
 type ApiComment = { id: string; text?: string; timestamp?: string; username?: string; from?: { id: string; username?: string } };
 type ApiConversation = {
