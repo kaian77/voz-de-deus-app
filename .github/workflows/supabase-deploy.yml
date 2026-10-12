@@ -40,6 +40,8 @@ jobs:
       ML_CLIENT_SECRET: ${{ secrets.ML_CLIENT_SECRET }}
       SHOPEE_PARTNER_ID: ${{ secrets.SHOPEE_PARTNER_ID }}
       SHOPEE_PARTNER_KEY: ${{ secrets.SHOPEE_PARTNER_KEY }}
+      # Token do GitHub (fine-grained, só este repositório, Actions: read and write) para o vídeo começar na hora
+      VIDEO_DISPATCH_TOKEN: ${{ secrets.VIDEO_DISPATCH_TOKEN }}
       CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
       WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
       META_FB_ACCESS_TOKEN: ${{ secrets.META_FB_ACCESS_TOKEN }}

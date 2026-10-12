@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Clapperboard, ExternalLink, ImagePlus, Loader2, Plus, ShoppingBag, Sparkles, Trash2 } from "lucide-react";
+import { Clapperboard, Download, ExternalLink, ImagePlus, Loader2, Plus, ShoppingBag, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -382,60 +382,177 @@ function DraftRow({ draft, templates, onCreate }: { draft: ProductDraft; templat
 }
 
 const VIDEO_STATUS: Record<ProductVideo["status"], { tone: "brand" | "success" | "danger" | "neutral"; label: string }> = {
-  queued: { tone: "neutral", label: "Na fila (pronto em até 1 hora)" },
+  queued: { tone: "neutral", label: "Na fila" },
   rendering: { tone: "brand", label: "Gerando" },
-  rendered: { tone: "brand", label: "Criando o post" },
+  rendered: { tone: "brand", label: "Finalizando" },
   ready: { tone: "success", label: "Pronto" },
   failed: { tone: "danger", label: "Erro" },
 };
 
-/** Vídeos animados dos produtos (Reels/TikTok), gerados na fila do GitHub Actions. */
-function VideosPanel() {
-  const qc = useQueryClient();
-  const { data: videos = [] } = useTable("product_videos", { limit: 8 }, { refetchInterval: 30000 });
-  const [redoing, setRedoing] = useState<string | null>(null);
-  if (!videos.length) return null;
+const queuedToast = (dispatched?: boolean) =>
+  dispatched ? "Vídeo na fila. Fica pronto em uns 5 minutos." : "Vídeo na fila. Fica pronto em até 1 hora.";
 
-  const redo = async (v: ProductVideo) => {
-    setRedoing(v.id);
+/** Link que baixa o MP4 (o storage do Supabase manda como anexo com ?download=nome). */
+function downloadUrl(v: ProductVideo) {
+  const slug = v.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "video";
+  return `${v.video_url}?download=${encodeURIComponent(`${slug}.mp4`)}`;
+}
+
+/** Vídeo avulso: manda a foto e o nome e só baixa o vídeo (não cadastra produto nem cria post). */
+function VideoOnlyForm() {
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [name, setName] = useState("");
+  const [details, setDetails] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    const urls = files.map((f) => URL.createObjectURL(f));
+    setPreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [files]);
+
+  const pick = (list: FileList | null) => {
+    if (!list?.length) return;
+    setFiles((prev) => [...prev, ...[...list].filter((f) => f.type.startsWith("image/"))].slice(0, 4));
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const generate = async () => {
+    if (!files.length) return toast.error("Escolha a foto do produto");
+    if (!name.trim()) return toast.error("Dê um nome para o produto");
     try {
-      await api.invoke("ai", { action: "product_video", video_id: v.id });
+      const images: string[] = [];
+      for (const [i, file] of files.entries()) {
+        setBusy(`Enviando foto ${i + 1} de ${files.length}`);
+        images.push(await api.upload(await storeImage(await loadBitmap(file)), `${file.name.replace(/\.\w+$/, "")}.jpg`));
+      }
+      setBusy("Escrevendo os textos");
+      const r = await api.invoke<{ dispatched?: boolean }>("ai", { action: "video_only", name: name.trim(), description: details.trim(), images });
       qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
-      toast.success("Vídeo na fila de novo. Fica pronto em até 1 hora.");
+      toast.success(queuedToast(r.dispatched));
+      setFiles([]);
+      setName("");
+      setDetails("");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
-      setRedoing(null);
+      setBusy(null);
     }
   };
 
   return (
-    <Panel title="Vídeos dos produtos" description="Vídeos animados de 15 segundos para Reels e TikTok. Quando ficam prontos, viram post em Aprovações." bodyClassName="p-0">
-      <div className="divide-y">
-        {videos.map((v) => (
-          <div key={v.id} className="flex items-center gap-3 px-4 py-2.5">
-            <img src={v.images[0]} alt="" className="h-10 w-10 rounded border object-cover" loading="lazy" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium">{v.name}</p>
-              <p className="text-xs text-muted-foreground">
-                <StatusDot tone={VIDEO_STATUS[v.status].tone}>{VIDEO_STATUS[v.status].label}</StatusDot> · {relativeTime(v.created_at)}
-              </p>
-              {v.status === "failed" && v.error && <p className="truncate text-xs text-danger" title={v.error}>{v.error}</p>}
-            </div>
-            {v.video_url && (
-              <a href={v.video_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
-                Ver <ExternalLink className="h-3 w-3" />
-              </a>
-            )}
-            {v.post_id && <Link to="/studio/aprovacoes" className="text-xs underline underline-offset-2">Post</Link>}
-            {(v.status === "failed" || v.status === "ready") && (
-              <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => redo(v)} disabled={redoing === v.id}>
-                {redoing === v.id ? <Loader2 className="animate-spin" /> : <Clapperboard />}Refazer
-              </Button>
-            )}
-          </div>
-        ))}
+    <div className="space-y-3 border-b p-4">
+      <div>
+        <p className="text-[13px] font-medium">Só o vídeo, para baixar</p>
+        <p className="text-xs text-muted-foreground">Mande a foto e o nome. O vídeo não é postado nem cadastra produto: quando ficar pronto, é só baixar.</p>
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {previews.map((src, i) => (
+          <button key={src} type="button" className="relative" onClick={() => setFiles((f) => f.filter((_, j) => j !== i))} aria-label="Tirar foto">
+            <img src={src} alt="" className="h-14 w-14 rounded border object-cover" />
+            <span className="absolute -right-1 -top-1 rounded-full border bg-background px-1 text-[10px] leading-4">✕</span>
+          </button>
+        ))}
+        {files.length < 4 && (
+          <Button size="sm" variant="outline" className="h-14" onClick={() => fileRef.current?.click()} disabled={!!busy}>
+            <ImagePlus />{files.length ? "Mais fotos" : "Escolher foto"}
+          </Button>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => pick(e.target.files)} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field id="video-name" label="Nome do produto">
+          <Input id="video-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Maria Gotinha" maxLength={80} />
+        </Field>
+        <Field id="video-details" label="Detalhes (opcional)" hint="O que a IA pode falar no vídeo. Ela não inventa nada além disso e da foto.">
+          <Textarea id="video-details" value={details} onChange={(e) => setDetails(e.target.value)} rows={2} placeholder="Ex.: pin de metal esmaltado, 3 cm, fecho borboleta" />
+        </Field>
+      </div>
+      <Button size="sm" onClick={generate} disabled={!!busy}>
+        {busy ? <Loader2 className="animate-spin" /> : <Clapperboard />}
+        {busy ?? "Gerar vídeo"}
+      </Button>
+    </div>
+  );
+}
+
+/** Vídeos animados dos produtos (Reels/TikTok), gerados na fila do GitHub Actions. */
+function VideosPanel() {
+  const qc = useQueryClient();
+  const { data: videos = [] } = useTable("product_videos", { limit: 12 }, { refetchInterval: 20000 });
+  const [working, setWorking] = useState<string | null>(null);
+
+  const run = async (v: ProductVideo, action: "product_video" | "video_post") => {
+    setWorking(v.id + action);
+    try {
+      const r = await api.invoke<{ dispatched?: boolean; post?: { status: string } }>("ai", { action, video_id: v.id });
+      qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
+      if (action === "video_post") {
+        qc.invalidateQueries({ queryKey: ["table", "posts"] });
+        toast.success(r.post?.status === "pending_approval" ? "Post criado. Está esperando você em Aprovações." : "Post agendado no próximo horário nobre.");
+      } else {
+        toast.success(queuedToast(r.dispatched));
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  return (
+    <Panel
+      title="Vídeos dos produtos"
+      description="Vídeos animados de 15 segundos (9:16) para Reels e TikTok. Os dos produtos cadastrados viram post em Aprovações; os avulsos ficam só para baixar."
+      bodyClassName="p-0"
+    >
+      <VideoOnlyForm />
+      {videos.length === 0 ? (
+        <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">Nenhum vídeo ainda.</p>
+      ) : (
+        <div className="divide-y">
+          {videos.map((v) => (
+            <div key={v.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+              <img src={v.images[0]} alt="" className="h-10 w-10 rounded border object-cover" loading="lazy" />
+              <div className="min-w-0 flex-1 basis-40">
+                <p className="truncate text-[13px] font-medium">{v.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  <StatusDot tone={VIDEO_STATUS[v.status].tone}>{VIDEO_STATUS[v.status].label}</StatusDot>
+                  {v.autopost === false && " · só para baixar"} · {relativeTime(v.created_at)}
+                </p>
+                {v.status === "failed" && v.error && <p className="truncate text-xs text-danger" title={v.error}>{v.error}</p>}
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-x-2">
+                {v.video_url && (
+                  <>
+                    <Button asChild size="sm" variant="outline" className="h-8 text-xs">
+                      <a href={downloadUrl(v)}><Download />Baixar</a>
+                    </Button>
+                    <a href={v.video_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
+                      Ver <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </>
+                )}
+                {v.post_id ? (
+                  <Link to="/studio/aprovacoes" className="text-xs underline underline-offset-2">Post</Link>
+                ) : v.status === "ready" && (
+                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => run(v, "video_post")} disabled={working === v.id + "video_post"}>
+                    {working === v.id + "video_post" && <Loader2 className="animate-spin" />}Postar
+                  </Button>
+                )}
+                {(v.status === "failed" || v.status === "ready") && (
+                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => run(v, "product_video")} disabled={working === v.id + "product_video"}>
+                    {working === v.id + "product_video" ? <Loader2 className="animate-spin" /> : <Clapperboard />}Refazer
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </Panel>
   );
 }
@@ -560,9 +677,9 @@ export default function Products() {
   const makeVideo = async (draft: ProductDraft) => {
     setVideoFor(draft.id);
     try {
-      await api.invoke("ai", { action: "product_video", draft_id: draft.id });
+      const r = await api.invoke<{ dispatched?: boolean }>("ai", { action: "product_video", draft_id: draft.id });
       qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
-      toast.success("Vídeo na fila. Fica pronto em até 1 hora e aparece em Vídeos dos produtos.");
+      toast.success(`${queuedToast(r.dispatched)} Aparece em Vídeos dos produtos.`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -584,6 +701,7 @@ export default function Products() {
         <EmptyState icon={<ShoppingBag />} title="Conecte a sua loja Nuvemshop" action={<Button asChild size="sm"><Link to="/studio/contas">Ir para Contas</Link></Button>}>
           Com a loja conectada, você define um modelo de cadastro uma vez e depois é só mandar as fotos.
         </EmptyState>
+        <div className="mt-6"><VideosPanel /></div>
       </div>
     );
   }
@@ -628,7 +746,7 @@ export default function Products() {
               <span>
                 <span className="block text-[13px] font-medium">Fazer também um vídeo animado</span>
                 <span className="block text-xs text-muted-foreground">
-                  Vídeo de 15 segundos para Reels e TikTok com a foto do produto, textos feitos pela IA e música. Fica pronto em até 1 hora e vira outro post.
+                  Vídeo de 15 segundos para Reels e TikTok com a foto do produto, textos feitos pela IA e música. Vira outro post quando fica pronto.
                 </span>
               </span>
               <Switch id="video" checked={settings?.video_enabled ?? false} onCheckedChange={setVideo} />

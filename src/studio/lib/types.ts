@@ -240,6 +240,8 @@ export interface ProductVideo {
   status: "queued" | "rendering" | "rendered" | "ready" | "failed";
   video_url: string | null;
   post_id: string | null;
+  /** false = vídeo avulso, só para baixar */
+  autopost: boolean;
   error: string | null;
   created_at: string;
 }
