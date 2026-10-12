@@ -204,6 +204,8 @@ const TemplateData = z.object({
   fiscal_ncm: z.string().optional(),
   fiscal_origin: z.string().optional(),
   fiscal_type: z.string().optional(),
+  age_group: z.enum(["newborn", "infant", "toddler", "kids", "adult"]).optional().describe("Faixa etária (Instagram e Google Shopping); padrão adult"),
+  gender: z.enum(["female", "male", "unisex"]).optional().describe("Gênero (Instagram e Google Shopping); padrão unisex"),
 });
 
 const tools = {

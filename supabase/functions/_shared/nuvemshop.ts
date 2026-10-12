@@ -195,13 +195,22 @@ export type ProductTemplate = {
   fiscal_ncm?: string;
   fiscal_origin?: string;
   fiscal_type?: string;
+  /** Instagram e Google Shopping: newborn | infant | toddler | kids | adult */
+  age_group?: string;
+  /** Instagram e Google Shopping: female | male | unisex */
+  gender?: string;
 };
 
 export type ProductChanges = Partial<Omit<ProductTemplate, "name_pattern" | "sku_prefix" | "ai_description" | "ai_guide" | "fiscal_ncm" | "fiscal_origin" | "fiscal_type">> & {
   name?: string;
   sku?: string;
   handle?: string;
+  /** Código do fabricante (Google Shopping); sem um, usamos o SKU */
+  mpn?: string;
 };
+
+const AGE_GROUPS = ["newborn", "infant", "toddler", "kids", "adult"];
+const GENDERS = ["female", "male", "unisex"];
 
 const fill = (text: string | undefined, name: string) => (text ?? "").replaceAll("{nome}", name).trim();
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -262,6 +271,8 @@ export function applyTemplate(template: ProductTemplate, baseName: string, overr
     free_shipping: template.free_shipping ?? false,
     seo_title: fill(template.seo_title, baseName) || undefined,
     seo_description: fill(template.seo_description, baseName) || undefined,
+    age_group: template.age_group || "adult",
+    gender: template.gender || "unisex",
     ...Object.fromEntries(Object.entries(overrides).filter(([, v]) => v !== undefined)),
   };
 }
@@ -292,7 +303,60 @@ export async function nsCreateProduct(token: string, storeId: string, fields: Pr
     images: images.slice(0, 50).map((src, i) => ({ src, position: i + 1 })),
   };
   const created = await ns(token, storeId, "products", { method: "POST", body });
-  return { ...productSummary(created), fiscal: await applyFiscal(token, storeId, created, fiscal) };
+  const shopping = await applyShopping(token, storeId, created, { mpn: fields.mpn ?? fields.sku, age_group: fields.age_group, gender: fields.gender });
+  return { ...productSummary(created), fiscal: await applyFiscal(token, storeId, created, fiscal), shopping };
+}
+
+/** Campos do "Instagram e Google Shopping" (MPN, faixa etária e gênero) de cada variação. Nunca derruba o cadastro. */
+async function applyShopping(token: string, storeId: string, product: any, f: { mpn?: string; age_group?: string; gender?: string }) {
+  const body: Record<string, string> = {};
+  if (f.age_group && AGE_GROUPS.includes(f.age_group)) body.age_group = f.age_group;
+  if (f.gender && GENDERS.includes(f.gender)) body.gender = f.gender;
+  try {
+    for (const v of product.variants ?? []) {
+      const mpn = f.mpn || v.sku;
+      await ns(token, storeId, `products/${product.id}/variants/${v.id}`, { method: "PUT", body: { ...body, ...(mpn ? { mpn: String(mpn).slice(0, 50) } : {}) } });
+    }
+    return "MPN, faixa etária e gênero preenchidos.";
+  } catch (e) {
+    return `Não consegui preencher MPN/faixa etária/gênero (${e instanceof Error ? e.message : e}).`;
+  }
+}
+
+/**
+ * Preenche MPN (= SKU), faixa etária e gênero nas variações que estão sem, uma página de produtos por vez
+ * (a Nuvemshop limita a ~2 chamadas por segundo). Devolve `next` enquanto houver mais páginas.
+ */
+export async function nsFillShopping(token: string, storeId: string, opts: { page?: number; age_group?: string; gender?: string } = {}) {
+  const page = Math.max(1, opts.page ?? 1);
+  const age_group = AGE_GROUPS.includes(opts.age_group ?? "") ? opts.age_group! : "adult";
+  const gender = GENDERS.includes(opts.gender ?? "") ? opts.gender! : "unisex";
+  const list = await ns<any[]>(token, storeId, `products?per_page=30&page=${page}&fields=id,variants`).catch((e) => {
+    if (/404|Last page/i.test(String(e))) return [];
+    throw e;
+  });
+  const products = Array.isArray(list) ? list : [];
+  let updated = 0;
+  let timedOut = false;
+  const started = Date.now();
+  for (const p of products) {
+    for (const v of p.variants ?? []) {
+      const body: Record<string, string> = {};
+      if (!v.age_group) body.age_group = age_group;
+      if (!v.gender) body.gender = gender;
+      if (!v.mpn && v.sku) body.mpn = String(v.sku).slice(0, 50);
+      if (!Object.keys(body).length) continue;
+      await ns(token, storeId, `products/${p.id}/variants/${v.id}`, { method: "PUT", body });
+      updated++;
+      await new Promise((r) => setTimeout(r, 450));
+    }
+    // Limite de tempo da função: a mesma página roda de novo (só mexe no que ainda falta)
+    if (Date.now() - started > 100_000) {
+      timedOut = true;
+      break;
+    }
+  }
+  return { page, products: products.length, updated, next: timedOut ? page : products.length === 30 ? page + 1 : null };
 }
 
 /**
@@ -304,7 +368,7 @@ async function applyFiscal(token: string, storeId: string, product: any, fiscal?
   if (!ncm) return undefined;
   const variant = product.variants?.[0];
   const key = variant && Object.keys(variant).find((k) => /ncm/i.test(k));
-  if (!key) return "A API da loja não expõe o NCM: preencha os dados fiscais no painel da Nuvemshop.";
+  if (!key) return "A Nuvemshop não deixa apps preencherem os dados fiscais (origem, tipo, NCM e CEST): complete no painel da loja.";
   try {
     for (const v of product.variants ?? []) {
       await ns(token, storeId, `products/${product.id}/variants/${v.id}`, { method: "PUT", body: { [key]: ncm } });

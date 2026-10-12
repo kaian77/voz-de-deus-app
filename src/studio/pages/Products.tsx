@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
+import { fillFiscalCsv } from "../lib/fiscal-csv";
 import { useSettings, useTable } from "../lib/hooks";
 import type { ProductDraft, ProductTemplate, ProductTemplateData, ProductVideo } from "../lib/types";
 import { EmptyState, PageHeader, Panel, relativeTime, StatusDot } from "../components/bits";
@@ -63,7 +64,38 @@ async function socialImage(bitmap: ImageBitmap): Promise<Blob> {
 // --------------------------------------------------------------------------------------------
 
 const NUMERIC = ["price", "promotional_price", "stock", "weight", "width", "height", "depth"] as const;
-const TEXT = ["name_pattern", "sku_prefix", "description", "tags", "brand", "seo_title", "seo_description", "ai_guide", "fiscal_ncm", "fiscal_origin", "fiscal_type"] as const;
+const TEXT = ["name_pattern", "sku_prefix", "description", "tags", "brand", "seo_title", "seo_description", "ai_guide", "fiscal_ncm", "fiscal_origin", "fiscal_type", "age_group", "gender"] as const;
+
+const AGE_GROUPS = [["adult", "Adulto"], ["kids", "Infantil"], ["toddler", "Criança pequena"], ["infant", "Bebê"], ["newborn", "Recém-nascido"]] as const;
+const GENDERS = [["unisex", "Unissex"], ["female", "Feminino"], ["male", "Masculino"]] as const;
+
+/** Preenche MPN (= SKU), faixa etária e gênero em todos os produtos que já estão na loja, página por página. */
+function FillShopping({ ageGroup, gender }: { ageGroup: string; gender: string }) {
+  const [progress, setProgress] = useState<string | null>(null);
+  const run = async () => {
+    let page: number | null = 1;
+    let updated = 0;
+    try {
+      while (page) {
+        setProgress(`Página ${page}… ${updated} variações preenchidas`);
+        const r: { updated: number; next: number | null } = await api.invoke("ai", { action: "store_fill_shopping", page, age_group: ageGroup, gender });
+        updated += r.updated;
+        page = r.next;
+      }
+      toast.success(updated ? `Pronto: ${updated} variações preenchidas.` : "Todos os produtos já estavam preenchidos.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setProgress(null);
+    }
+  };
+  return (
+    <Button size="sm" variant="outline" onClick={run} disabled={!!progress}>
+      {progress && <Loader2 className="animate-spin" />}
+      {progress ?? "Preencher nos produtos que já estão na loja"}
+    </Button>
+  );
+}
 
 type Form = Record<(typeof NUMERIC)[number] | (typeof TEXT)[number], string> & {
   name: string;
@@ -244,7 +276,30 @@ function TemplateEditor({ templates, categories }: { templates: ProductTemplate[
           <Field id="tpl-origin" label="Origem"><Input id="tpl-origin" className="h-9" value={form.fiscal_origin} onChange={text("fiscal_origin")} placeholder="0 – Nacional" /></Field>
           <Field id="tpl-type" label="Tipo"><Input id="tpl-type" className="h-9" value={form.fiscal_type} onChange={text("fiscal_type")} placeholder="Revenda" /></Field>
         </div>
-        <p className="-mt-3 text-xs text-muted-foreground">Dados fiscais: o Studio grava o NCM quando a Nuvemshop aceita pela API; se não aceitar, ele avisa para completar no painel da loja.</p>
+        <p className="-mt-3 text-xs text-muted-foreground">
+          Dados fiscais (origem, tipo, NCM e CEST): a Nuvemshop não deixa apps preencherem esses campos. Eles ficam guardados aqui como referência,
+          mas precisam ser completados no painel da loja para emitir a nota.
+        </p>
+
+        <div className="space-y-3 rounded-md border px-3 py-3">
+          <p className="text-[13px] font-medium">Instagram e Google Shopping</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="tpl-age" label="Faixa etária">
+              <Select value={form.age_group || "adult"} onValueChange={(v) => setForm({ ...form, age_group: v })}>
+                <SelectTrigger id="tpl-age" className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>{AGE_GROUPS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+            <Field id="tpl-gender" label="Gênero">
+              <Select value={form.gender || "unisex"} onValueChange={(v) => setForm({ ...form, gender: v })}>
+                <SelectTrigger id="tpl-gender" className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>{GENDERS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <p className="text-xs text-muted-foreground">O MPN recebe o SKU do produto. Vale para os próximos cadastros; para os que já estão na loja:</p>
+          <FillShopping ageGroup={form.age_group || "adult"} gender={form.gender || "unisex"} />
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label htmlFor="tpl-published" className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
@@ -396,6 +451,52 @@ const queuedToast = (dispatched?: boolean) =>
 function downloadUrl(v: ProductVideo) {
   const slug = v.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "video";
   return `${v.video_url}?download=${encodeURIComponent(`${slug}.mp4`)}`;
+}
+
+/** Dados fiscais pela planilha: a API não deixa gravar, mas a importação da Nuvemshop deixa. */
+function FiscalCsv({ template }: { template?: ProductTemplate }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const d = template?.data ?? {};
+
+  const onFile = async (file?: File) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const r = await fillFiscalCsv(file, { ncm: d.fiscal_ncm, origin: d.fiscal_origin, type: d.fiscal_type });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(r.blob);
+      a.download = file.name.replace(/\.csv$/i, "") + "-dados-fiscais.csv";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      const label = { ncm: "NCM", origin: "Origem", type: "Tipo", cest: "CEST" };
+      toast.success(`Planilha pronta: ${r.filled} de ${r.rows} linhas completadas. Agora importe na Nuvemshop.`);
+      if (r.missing.length) toast.info(`Sem valor para: ${r.missing.map((c) => label[c]).join(", ")}. Preencha no modelo de cadastro e gere de novo.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <Panel title="Dados fiscais (nota fiscal)" description="A Nuvemshop não deixa apps preencherem origem, tipo e NCM pelo cadastro automático, mas aceita pela planilha de produtos.">
+      <ol className="list-decimal space-y-1.5 pl-5 text-[13px]">
+        <li>No painel da Nuvemshop: <span className="font-medium">Produtos → Exportar e Importar → Exportar</span> (baixa a planilha .csv).</li>
+        <li>
+          Mande a planilha aqui. O Studio completa só os campos vazios com o modelo de cadastro
+          {d.fiscal_ncm ? ` (NCM ${d.fiscal_ncm}${d.fiscal_origin ? `, ${d.fiscal_origin}` : ""}${d.fiscal_type ? `, ${d.fiscal_type}` : ""})` : ""} e devolve a planilha pronta.
+        </li>
+        <li>De volta na Nuvemshop: <span className="font-medium">Importar</span>, marque <span className="font-medium">“Alterar produtos já existentes”</span> e envie a planilha nova.</li>
+      </ol>
+      <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+      <Button size="sm" className="mt-3" onClick={() => fileRef.current?.click()} disabled={busy}>
+        {busy && <Loader2 className="animate-spin" />}Enviar planilha da Nuvemshop
+      </Button>
+      <p className="mt-2 text-xs text-muted-foreground">Guarde a planilha original como backup. A planilha não sai do seu celular: é preenchida aqui mesmo.</p>
+    </Panel>
+  );
 }
 
 /** Vídeo avulso: manda a foto e o nome e só baixa o vídeo (não cadastra produto nem cria post). */
@@ -776,6 +877,8 @@ export default function Products() {
         <VideosPanel />
 
         <TemplateEditor templates={templates} categories={categories.data ?? []} />
+
+        <FiscalCsv template={defaultTemplate} />
 
         {created.length > 0 && (
           <Panel title="Cadastrados recentemente" bodyClassName="p-0">
