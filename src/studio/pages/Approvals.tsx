@@ -149,8 +149,13 @@ function Autopilot() {
           <span className="block text-xs text-muted-foreground">
             Olha as datas comemorativas e campanhas dos próximos dias (Outubro Rosa, Dia do Médico, Natal…), os seus produtos e o que o seu
             público curte, e cria carrosséis e vídeos com os pins do tema. Tudo chega aqui para você aprovar.
-            {settings?.autopilot_last_run ? ` Última vez: ${relativeTime(settings.autopilot_last_run)}.` : ""}
+            {settings?.autopilot_last_run && !settings.autopilot_error && Date.now() - new Date(settings.autopilot_last_run).getTime() < 6 * 86400_000
+              ? ` Última vez: ${relativeTime(settings.autopilot_last_run)}.`
+              : ""}
           </span>
+          {settings?.autopilot_error && (
+            <span className="mt-1 block text-xs text-danger">A última rodada falhou ({settings.autopilot_error}). Tenta de novo em 1 hora.</span>
+          )}
         </span>
         <Switch id="autopilot" checked={enabled} onCheckedChange={(v) => save({ autopilot_enabled: v })} />
       </label>

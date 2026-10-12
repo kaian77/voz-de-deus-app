@@ -358,14 +358,26 @@ export async function runAutopilot(db: SupabaseClient) {
     .eq("autopilot_enabled", true).or(`autopilot_last_run.is.null,autopilot_last_run.lt."${weekAgo}"`).limit(1);
   const row = due?.[0];
   if (!row) return null;
-  // Trava: só uma execução do cron pega este usuário
-  let claim = db.from("brand_settings").update({ autopilot_last_run: new Date().toISOString() }).eq("user_id", row.user_id);
+  // Trava: só uma execução do cron pega este usuário. A data fica "provisória" (nova tentativa em 2 horas) até
+  // a rodada terminar — assim uma rodada interrompida (deploy, limite de tempo) não espera uma semana.
+  const provisional = new Date(Date.now() - 7 * 86400_000 + 2 * 3600_000).toISOString();
+  let claim = db.from("brand_settings").update({ autopilot_last_run: provisional }).eq("user_id", row.user_id);
   claim = row.autopilot_last_run ? claim.eq("autopilot_last_run", row.autopilot_last_run) : claim.is("autopilot_last_run", null);
   const { data: claimed } = await claim.select("user_id").maybeSingle();
   if (!claimed) return null;
   const job = generateIdeas(db, row.user_id, { count: row.autopilot_per_week ?? 4 })
-    .then((r) => console.log("piloto automático", row.user_id, JSON.stringify(r)))
-    .catch((e) => console.error("piloto automático", row.user_id, e));
+    .then(async (r) => {
+      console.log("piloto automático", row.user_id, JSON.stringify(r));
+      await db.from("brand_settings").update({ autopilot_last_run: new Date().toISOString(), autopilot_error: null }).eq("user_id", row.user_id);
+    })
+    .catch(async (e) => {
+      console.error("piloto automático", row.user_id, e);
+      // Tenta de novo em 1 hora (em vez de esperar a próxima semana) e mostra o erro em Aprovações
+      await db.from("brand_settings").update({
+        autopilot_last_run: new Date(Date.now() - 7 * 86400_000 + 3600_000).toISOString(),
+        autopilot_error: (e instanceof Error ? e.message : String(e)).slice(0, 300),
+      }).eq("user_id", row.user_id);
+    });
   if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(job);
   else await job;
   return { user_id: row.user_id };

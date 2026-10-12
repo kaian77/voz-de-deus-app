@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
     if (action === "content_ideas") {
       // "Criar ideias agora": carrosséis vão para Aprovações; vídeos entram na fila e chegam lá quando ficam prontos
       const r = await generateIdeas(db, userId, { count: Number(input.count) || 4, focus: input.focus ? String(input.focus).slice(0, 500) : undefined });
-      await db.from("brand_settings").update({ autopilot_last_run: new Date().toISOString() }).eq("user_id", userId);
+      await db.from("brand_settings").update({ autopilot_last_run: new Date().toISOString(), autopilot_error: null }).eq("user_id", userId);
       return json(r);
     }
     if (action === "video_post") {
