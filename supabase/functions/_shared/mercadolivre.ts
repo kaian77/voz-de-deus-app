@@ -11,6 +11,10 @@ export function mlRedirectUri() {
 }
 
 export function mlAuthorizeUrl(state: string) {
+  // Sem o secret a troca do código falharia só depois de autorizar no Mercado Livre
+  if (!Deno.env.get("ML_CLIENT_SECRET")) {
+    throw new Error("Falta o secret ML_CLIENT_SECRET: cadastre em GitHub → Settings → Secrets and variables → Actions e rode o deploy");
+  }
   const url = new URL("https://auth.mercadolivre.com.br/authorization");
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", env("ML_APP_ID"));
