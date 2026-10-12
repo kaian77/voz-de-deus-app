@@ -42,8 +42,8 @@ Deno.serve(async (req) => {
     const cleanup = new Date().getUTCMinutes() === 50
       ? await cleanupStorage(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
       : undefined;
-    // A cada 15 minutos: "acorda" os servidores WAHA (o Space grátis dorme se ninguém acessar)
-    const waha = new Date().getUTCMinutes() % 15 === 7
+    // A cada 10 minutos: "acorda" os servidores WAHA (hospedagem grátis dorme após 15 min sem acesso)
+    const waha = new Date().getUTCMinutes() % 10 === 7
       ? await wahaKeepAlive(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
       : undefined;
     return json({ processed, polled, videos, autopilot, cleanup, waha });
