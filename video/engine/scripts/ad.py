@@ -30,9 +30,9 @@ def text_h(txt, size, max_w, fmt, weight="black", upper=True):
     lines, f, lh = layout_words(txt.upper() if upper else txt, max_w * W, size * U, weight, 4)
     return len(lines) * lh / H
 
-DUR = {"hook": 2.2, "text": 2.4, "product": 2.8, "spin3d": 3.2, "features": 4.2, "compare": 3.4, "proof": 3.0,
+DUR = {"layers": 5.2, "hook": 2.2, "text": 2.4, "product": 2.8, "spin3d": 3.2, "features": 4.2, "compare": 3.4, "proof": 3.0,
        "offer": 3.4, "video": 3.0, "cta": 3.0}
-TRANS = {"hook": "none", "text": "zoom", "product": "flash", "spin3d": "zoom", "features": "whip", "compare": "slide",
+TRANS = {"layers": "whip", "hook": "none", "text": "zoom", "product": "flash", "spin3d": "zoom", "features": "whip", "compare": "slide",
          "proof": "zoom", "offer": "bars", "video": "zoom", "cta": "zoom"}
 
 
@@ -95,6 +95,20 @@ def build_scene(sc, idx, spec, lay):
             layers.append({"type": "image", "src": img, "cutout": cut, "y": 0.71 if not W else 0.5, "x": 0.5 if not W else 0.82,
                            "w": 0.5 if not W else 0.3, "h": 0.17 if not W else 0.6, "anim": "slide-up", "in": 0.45,
                            "idle": ["float"], "glow": "accent", "glow_strength": 0.5})
+    elif t == "layers":  # vista explodida do pin: tinta, metal e tarraxa se separam e se juntam
+        layers += [
+            {"type": "particles", "kind": "bokeh", "count": 16},
+            {"type": "explode", "src": img, "cutout": cut, "x": 0.5, "y": 0.55 if not W else 0.5, "w": 1.0 if not W else 0.6,
+             "fill": sc.get("fill", 0.62), "labels": sc.get("labels", ["TINTA", "METAL", "TARRAXA"]), "anim": "none", "in": 0,
+             "sfx": "whoosh", "sfx_offset": 1.0},
+            # impacto quando as camadas se juntam (camada invisível só para o efeito sonoro)
+            {"type": "shape", "shape": "circle", "w": 0.01, "opacity": 0, "anim": "none", "in": 3.15, "sfx": "impact"},
+        ]
+        if sc.get("title"):
+            layers.append(text(sc["title"], 0.13 if not W else 0.12, sc.get("size", 84), max_w=0.88, anim="mask-up", **{"in": 0.2}))
+        if sc.get("subtitle"):
+            layers.append(text(sc["subtitle"], 0.9 if not W else 0.9, 48, max_w=0.88, weight="bold", color="accent",
+                               anim="slide-up", **{"in": 3.4}))
     elif t == "text":
         y = sc.get("y", lay.big_text_y())
         size = sc.get("size", 104)
