@@ -131,8 +131,9 @@ async function storeContext(db: SupabaseClient, userId: string, history: { direc
   try {
     const products = await nsProducts(store.token, store.storeId, { limit: 80 });
     if (products.length) {
-      parts.push("Produtos da loja (preço atual):\n" + products.map((p) =>
-        `- ${p.name}${p.price ? ` — ${p.price}` : ""}${p.stock === 0 ? " (esgotado)" : ""}${p.url ? ` — ${p.url}` : ""}`).join("\n"));
+      // Sem preços: eles variam (modelos e kits) e o cliente confere no site pelo link do produto
+      parts.push("Produtos da loja (para indicar o link certo; não informe preços):\n" + products.map((p) =>
+        `- ${p.name}${p.stock === 0 ? " (esgotado)" : ""}${p.url ? ` — ${p.url}` : ""}`).join("\n"));
     }
   } catch (e) {
     console.error("catálogo", e);

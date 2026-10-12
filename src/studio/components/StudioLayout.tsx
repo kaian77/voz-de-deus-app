@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3, Bot, CalendarDays, CalendarPlus, CheckSquare, Inbox, LayoutGrid, Link2, LogOut, Menu, MessageSquare, Package, PenLine, ShoppingBag, Store, Workflow,
 } from "lucide-react";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { isDemo, resetDemo, supabase } from "../lib/api";
 import { useSettings, useTable } from "../lib/hooks";
 import { Avatar } from "./bits";
+import PageErrorBoundary from "./PageErrorBoundary";
 
 type Item = { to: string; label: string; icon: typeof Bot; end?: boolean; count?: "approvals" | "inbox" };
 const GROUPS: { label?: string; items: Item[] }[] = [
@@ -132,6 +133,7 @@ function Footer({ onSignOut }: { onSignOut: () => void }) {
 export default function StudioLayout() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: accounts } = useTable("social_accounts");
   const ig = accounts?.find((a) => a.platform === "instagram");
 
@@ -177,7 +179,9 @@ export default function StudioLayout() {
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-8 lg:py-8">
-          <Outlet />
+          <PageErrorBoundary key={location.pathname}>
+            <Outlet />
+          </PageErrorBoundary>
         </main>
       </div>
     </div>
