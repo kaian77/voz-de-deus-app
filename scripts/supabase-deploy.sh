@@ -71,6 +71,7 @@ add META_VERIFY_TOKEN "${META_VERIFY_TOKEN:-voz-de-deus-studio}"
 
 # Chaves dos apps (vêm dos secrets do GitHub; só são enviadas quando preenchidas)
 for name in IG_APP_ID IG_APP_SECRET TIKTOK_CLIENT_KEY TIKTOK_CLIENT_SECRET NUVEMSHOP_APP_ID NUVEMSHOP_CLIENT_SECRET ANTHROPIC_API_KEY CLAUDE_MODEL \
+            ML_APP_ID ML_CLIENT_SECRET SHOPEE_PARTNER_ID SHOPEE_PARTNER_KEY \
             WHATSAPP_APP_SECRET META_FB_ACCESS_TOKEN META_FB_IG_USER_ID; do
   [[ -n ${!name:-} ]] && add "$name" "${!name}"
 done

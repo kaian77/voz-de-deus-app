@@ -4,7 +4,7 @@
 -- aceitas hoje (igual à de 20261012000000_nuvemshop.sql), senão falha com contas já conectadas.
 alter table public.social_accounts drop constraint if exists social_accounts_platform_check;
 alter table public.social_accounts add constraint social_accounts_platform_check
-  check (platform in ('instagram', 'tiktok', 'whatsapp', 'nuvemshop'));
+  check (platform in ('instagram', 'tiktok', 'whatsapp', 'nuvemshop', 'mercadolivre', 'shopee'));
 
 alter table public.brand_settings
   add column if not exists agent_enabled boolean not null default false,

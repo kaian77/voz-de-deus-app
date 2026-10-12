@@ -29,3 +29,9 @@ verify_jwt = true
 
 [functions.inbox]
 verify_jwt = true
+
+[functions.oauth-mercadolivre]
+verify_jwt = false
+
+[functions.oauth-shopee]
+verify_jwt = false

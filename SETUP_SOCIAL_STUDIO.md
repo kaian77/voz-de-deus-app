@@ -229,6 +229,23 @@ Cada produto novo pode ganhar um vídeo vertical de ~15 s (foto do produto sem f
 
 Liga em **Produtos → Fazer também um vídeo animado**; cada produto cadastrado tem o botão **Vídeo**. Pelo Claude: `create_product_video` e `list_product_videos`. Os vídeos usam o tempo grátis do GitHub Actions (cada vídeo leva 1–3 minutos).
 
+## 11. Mercado Livre e Shopee
+
+**Mercado Livre**
+1. Em [developers.mercadolivre.com.br](https://developers.mercadolivre.com.br) → **Minhas aplicações → Criar aplicação**:
+   - Redirect URI: `https://<ref>.supabase.co/functions/v1/oauth-mercadolivre`
+   - Escopos: leitura e escrita (*read*, *write*) e *offline_access*.
+2. Secrets do GitHub: `ML_APP_ID` (Client ID) e `ML_CLIENT_SECRET`. Rode o deploy.
+3. Em **Contas → Conectar Mercado Livre**. O Studio lê os anúncios ativos, compara com a loja e mostra a regra de preço.
+
+**Shopee**
+1. Em [open.shopee.com](https://open.shopee.com), cadastre-se como desenvolvedor e crie um app do tipo **Seller In-house System** (passa por aprovação da Shopee).
+   - Redirect URL / domínio: `https://<ref>.supabase.co/functions/v1/oauth-shopee`
+2. Secrets do GitHub: `SHOPEE_PARTNER_ID` e `SHOPEE_PARTNER_KEY` (Live). Rode o deploy.
+3. Em **Contas → Conectar Shopee**.
+
+Publicação: em **Produtos → Publicar também no Mercado Livre**, cada produto novo é publicado usando um anúncio seu como modelo (categoria, tipo de anúncio, frete, garantia e atributos gerais) e a regra de preço descoberta. Pelo Claude: `analyze_marketplace` e `publish_to_mercadolivre`.
+
 ---
 
 ## Arquitetura
