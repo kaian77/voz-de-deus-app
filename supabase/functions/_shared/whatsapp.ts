@@ -1,6 +1,7 @@
 // WhatsApp Cloud API (Meta). Docs: https://developers.facebook.com/docs/whatsapp/cloud-api
 // Regra importante: mensagens livres só dentro de 24h da última mensagem do cliente;
 // fora disso o WhatsApp exige um template aprovado.
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { env } from "./util.ts";
 
 const graph = (path: string) => `https://graph.facebook.com/${env("META_GRAPH_VERSION", "v24.0")}/${path}`;
@@ -97,4 +98,18 @@ export async function wahaSendText(cfg: WahaConfig, chatId: string, text: string
 
 export function wahaSendSeen(cfg: WahaConfig, chatId: string) {
   return waha(cfg, "/api/sendSeen", { session: cfg.session, chatId }).catch(() => null);
+}
+
+/** Consulta cada sessão do WAHA: mantém o servidor acordado e guarda o status (ex.: SCAN_QR_CODE após reiniciar). */
+export async function wahaKeepAlive(db: SupabaseClient) {
+  const { data: accounts } = await db.from("social_accounts").select("id, meta").eq("platform", "whatsapp").eq("meta->>provider", "waha");
+  const out: { id: string; status?: string; error?: string }[] = [];
+  for (const a of accounts ?? []) {
+    const { data: token } = await db.from("account_tokens").select("access_token").eq("account_id", a.id).maybeSingle();
+    const cfg = { base_url: a.meta.base_url, session: a.meta.session, api_key: token?.access_token || null };
+    const status = await wahaSession(cfg).then((s) => s.status, (e) => `ERRO: ${e instanceof Error ? e.message : e}`);
+    if (status !== a.meta.status) await db.from("social_accounts").update({ meta: { ...a.meta, status } }).eq("id", a.id);
+    out.push({ id: a.id, status });
+  }
+  return out;
 }
