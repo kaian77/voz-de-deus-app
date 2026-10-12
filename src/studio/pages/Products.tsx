@@ -390,7 +390,7 @@ const VIDEO_STATUS: Record<ProductVideo["status"], { tone: "brand" | "success" |
 };
 
 const queuedToast = (dispatched?: boolean) =>
-  dispatched ? "Vídeo na fila. Fica pronto em uns 5 minutos." : "Vídeo na fila. Fica pronto em até 1 hora.";
+  dispatched ? "Vídeo na fila. Fica pronto em uns 5 minutos." : "Vídeo na fila. Fica pronto na próxima rodada (9h, 14h ou 19h).";
 
 /** Link que baixa o MP4 (o storage do Supabase manda como anexo com ?download=nome). */
 function downloadUrl(v: ProductVideo) {
