@@ -10,7 +10,7 @@ import { aiEnabled, generateJSON, researchWeb } from "./claude.ts";
 import { nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
 import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
 import { queueProductVideo } from "./product-video.ts";
-import { analyzeMarketplace, publishToMercadoLivre } from "./marketplaces.ts";
+import { analyzeMarketplace, mercadoLivreListings, publishToMercadoLivre } from "./marketplaces.ts";
 import { generateIdeas } from "./content-ideas.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
@@ -762,6 +762,12 @@ const tools = {
     description: "Lê os anúncios atuais do Mercado Livre ou da Shopee, compara os preços com a loja Nuvemshop e descobre o padrão (regra de preço, categoria, tipo de anúncio, frete, dados fiscais e anúncio de referência). O resultado também aparece em get_overview.marketplaces.",
     input: z.object({ platform: z.enum(["mercadolivre", "shopee"]) }),
     run: async (ctx: Ctx, input: { platform: "mercadolivre" | "shopee" }) => analyzeMarketplace(ctx.db, ctx.userId, input.platform),
+  },
+
+  list_mercadolivre_listings: {
+    description: "Anúncios do Mercado Livre (ativos e pausados) com o produto da loja correspondente, e a lista `missing` dos produtos da loja Nuvemshop que ainda não têm anúncio no Mercado Livre.",
+    input: z.object({}),
+    run: async (ctx: Ctx) => mercadoLivreListings(ctx.db, ctx.userId),
   },
 
   publish_to_mercadolivre: {
