@@ -1,0 +1,27 @@
+# Social Studio — Brax Pins Mania
+
+Ferramenta interna da Brax Pins Mania (loja de pins, braxpinsmania.com.br; IG @braxpinsmania; TikTok). O dono fala pt-BR, usa muito o celular e pede para "fazer tudo". Responda em português, curto e direto.
+
+## Onde está cada coisa
+- App (React + Vite + shadcn): `src/studio` — no ar em https://voz-de-deus-app.vercel.app/studio (Vercel publica a `main`).
+- Backend: Supabase Edge Functions (Deno) em `supabase/functions`, código comum em `_shared/`. Projeto `rrlxhnmfsmknzhqpfrhr`.
+  - Deploy: GitHub Action "Supabase deploy" (`scripts/supabase-deploy.sh`) a cada push na `main` que mexe em `supabase/**`. Ela roda TODAS as migrations de novo, então migrations precisam ser idempotentes (`if not exists`).
+  - Secrets das functions vêm dos secrets do repositório no GitHub. Nunca peça token/senha no chat; o dono cadastra em Settings → Secrets and variables → Actions.
+- Cron: `publish-scheduled` (a cada minuto) publica posts, busca comentários/DMs (`instagram-poller.ts`), finaliza vídeos, roda o piloto automático (`content-ideas.ts`) e a limpeza do storage (`storage-cleanup.ts`).
+- Vídeos de produto: Python em `video/` (motor em `video/engine/scripts`: `ad.py` monta as cenas, `motion.py` camadas, `explode.py` vista explodida 3D do pin). Renderiza no workflow `product-videos.yml`, disparado pela function via `VIDEO_DISPATCH_TOKEN`.
+- MCP "Social Studio" (`agent-tools.ts`) expõe as ferramentas do Studio para o Claude (get_overview, list_comments, upsert_automation etc.).
+
+## Fluxo de trabalho
+- Desenvolva na branch indicada pela sessão; leve para a `main` por PR e faça o merge (o dono autorizou).
+- Antes de subir: `npx tsc --noEmit -p tsconfig.app.json`, `npm run build`, e `deno check` nas functions alteradas.
+- Commits/PRs sem identificador de modelo.
+
+## Estado das integrações
+- Instagram: app da Meta publicado (Live), empresa verificada; webhooks de comentários/DMs funcionando para testadores. Análise do app (instagram_business_basic, _manage_comments, _manage_messages) em envio pelo dono.
+- TikTok: app não auditado — postagem direta só em conta privada; o publisher manda para a caixa de entrada do app do TikTok (`ttUploadToInbox`).
+- Nuvemshop conectada. API não grava dados fiscais (NCM etc.) → fluxo de planilha CSV (`src/studio/lib/fiscal-csv.ts`).
+- Mercado Livre: próximo passo (ML_APP_ID 5226202533888505; falta o secret ML_CLIENT_SECRET e conectar).
+- Agente de DM: nunca informar preços (variam por modelo e kits) — mandar o link do site/produto.
+
+## Marca
+Vermelho #E3262E, preto #111111, dourado #FFC72C, branco. Fonte de títulos: Anton (maiúsculas, palavras com *destaque* na cor de acento).
