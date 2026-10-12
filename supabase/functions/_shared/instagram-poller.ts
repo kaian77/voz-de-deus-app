@@ -41,7 +41,8 @@ export async function pollInstagram(db: SupabaseClient) {
     }
     const isNew = (ts?: string) => Boolean(ts && new Date(ts).getTime() > since - 60_000); // 1 min de folga
 
-    const result = { account: account.username, comments: 0, messages: 0, errors: [] as string[] };
+    // seen: o que a API devolveu (diagnóstico: comentários lidos por post e conversas lidas)
+    const result = { account: account.username, comments: 0, messages: 0, errors: [] as string[], seen: [] as Record<string, unknown>[] };
     try {
       const token = await igTokenFor(db, account.id);
 
@@ -56,6 +57,8 @@ export async function pollInstagram(db: SupabaseClient) {
       for (const mediaId of mediaIds) {
         try {
           const r = await igRequest<{ data?: ApiComment[] }>(token, `${mediaId}/comments`, { params: { fields: "id,text,timestamp,username,from", limit: 50 } });
+          const newest = (r.data ?? []).map((c) => c.timestamp ?? "").sort().pop();
+          result.seen.push({ media: mediaId, returned: r.data?.length ?? 0, newest: newest || null });
           for (const c of r.data ?? []) {
             if (!isNew(c.timestamp) || c.from?.id === igUserId || (c.username && c.username === account.username)) continue;
             await handleComment(igUserId, {
@@ -76,6 +79,7 @@ export async function pollInstagram(db: SupabaseClient) {
         const r = await igRequest<{ data?: ApiConversation[] }>(token, "me/conversations", {
           params: { platform: "instagram", fields: "id,updated_time,messages.limit(5){id,message,created_time,from}", limit: 20 },
         });
+        result.seen.push({ conversations: r.data?.length ?? 0, newest: (r.data ?? []).map((c) => c.updated_time ?? "").sort().pop() || null });
         for (const conv of r.data ?? []) {
           if (!isNew(conv.updated_time)) continue;
           // Mais antigas primeiro, para a conversa ficar na ordem certa
