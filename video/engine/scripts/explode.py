@@ -3,8 +3,11 @@
 Tudo sai de uma foto só (o recorte da frente do pin):
 - tinta: o próprio recorte colorido;
 - metal: o mesmo desenho em dourado, com relevo (o pin "sem a tinta");
-- verso: a silhueta em metal polido (níquel) com a marca gravada e o pino soldado no centro;
-- tarraxa: de silicone transparente (como a que acompanha os pins).
+- verso: a silhueta em metal polido (níquel) com a marca em relevo e o pino soldado no centro;
+- tarraxa: cúpula de silicone transparente lilás com base reta (como a que acompanha os pins).
+
+O metal é iluminado como espelho: cada pixel reflete um estúdio escuro com faixas de luz (softbox), e o reflexo muda
+conforme a peça gira. É isso que faz parecer metal e não plástico (o plástico só fica mais claro ou mais escuro).
 
 Uso direto (teste):  python explode.py recorte.png saida_dir [--frames 150]
 No motor de vídeo: camada {"type": "explode", "src": "foto.jpg", "cutout": true, "w": 0.8, "labels": [...]}.
@@ -43,81 +46,234 @@ def split_layers(cut: Image.Image):
     rgb = cut.convert("RGB").filter(ImageFilter.GaussianBlur(0.8))
     edges = np.max(np.dstack([np.asarray(ch.filter(ImageFilter.FIND_EDGES), np.float32) for ch in rgb.split()]), axis=2) / 255
     inside = np.asarray(cut.getchannel("A").filter(ImageFilter.MinFilter(5)), np.float32) / 255
-    thr = max(0.08, float(np.percentile(edges[inside > 0.5], 82))) if (inside > 0.5).any() else 0.15
+    thr = max(0.08, float(np.percentile(edges[inside > 0.5], 87))) if (inside > 0.5).any() else 0.15
     lines = Image.fromarray(((edges > thr) * inside * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(3))
     border = Image.fromarray(((a - inside).clip(0, 1) * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(3))
     relief = np.maximum(np.asarray(lines, np.float32), np.asarray(border, np.float32)) / 255  # 1 = metal em alto-relevo
 
-    # Metal: rebaixado liso e mais escuro; relevo brilhante com luz de cima/esquerda
+    # Metal: linhas e borda em alto-relevo (arredondadas), áreas rebaixadas lisas; borda externa abaulada
     soft = Image.fromarray((relief * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.6))
-    emb = np.asarray(soft.filter(ImageFilter.EMBOSS), np.float32) / 255 - 0.5
-    h, w = a.shape
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    v = 0.42 + 0.12 * (1 - (xx / w * 0.5 + yy / h * 0.5)) + 0.4 * relief + 1.4 * emb
-    metal = np.dstack([np.clip(ramp(np.clip(v, 0, 1), GOLD), 0, 255), a * 255]).astype(np.uint8)
+    dome = np.asarray(cut.getchannel("A").filter(ImageFilter.GaussianBlur(max(2, a.shape[1] // 90))), np.float32) / 255
+    height = 2.4 * np.asarray(soft, np.float32) / 255 + 10 * dome
+    rough = 0.2 * (1 - np.asarray(soft, np.float32) / 255)  # rebaixado acetinado, relevo polido
+    metal = MetalSurface(height, a, GOLD, rough=rough, seed=3, wobble=18, grain=0.15)
 
     # Tinta: só as áreas coloridas (as linhas de metal ficam vazadas)
     paint = np.asarray(cut, np.uint8).copy()
     paint[..., 3] = (paint[..., 3].astype(np.float32) * (1 - np.asarray(soft, np.float32) / 255 * 0.95)).astype(np.uint8)
-    return Image.fromarray(paint, "RGBA"), Image.fromarray(metal, "RGBA")
+    return Image.fromarray(paint, "RGBA"), metal
 
 
-CHROME = [(0.0, (34, 37, 42)), (0.3, (92, 98, 106)), (0.55, (158, 164, 172)), (0.78, (212, 216, 222)), (0.92, (240, 242, 245)),
+CHROME = [(0.0, (18, 20, 24)), (0.25, (58, 62, 70)), (0.5, (128, 134, 142)), (0.72, (196, 200, 208)), (0.88, (236, 238, 242)),
           (1.0, (255, 255, 255))]
 
 
-def back_from(cut: Image.Image, stamp="BRAX", seed=7) -> Image.Image:
-    """Verso de metal polido (níquel), como o dos pins: reflexos fortes, borda em relevo e a marca gravada."""
+def blur_noise(h, w, cells, seed):
+    """Ondulação suave (a chapa estampada nunca é perfeitamente plana)."""
+    rng = np.random.default_rng(seed)
+    small = Image.fromarray(rng.random((cells, cells)).astype(np.float32), "F")  # em float: sem degraus no relevo
+    return np.asarray(small.resize((w, h), Image.BICUBIC), np.float32) - 0.5
+
+
+def studio(r):
+    """Estúdio escuro com softboxes: brilho visto na direção r (espaço da câmera, z aponta para a câmera)."""
+    x, y, z = r[..., 0], r[..., 1], r[..., 2]
+    band = lambda v, c, w: np.exp(-((v - c) / w) ** 2)  # noqa: E731
+    e = 0.04 + 0.12 * (y * 0.5 + 0.5)
+    e += 1.1 * band(y, 0.42, 0.1) * band(x, -0.05, 0.7)  # softbox comprido em cima
+    e += 0.8 * band(x, -0.45, 0.08) * band(y, 0.05, 0.6)  # faixa vertical à esquerda
+    e += 0.5 * band(x, 0.5, 0.06) * band(y, -0.1, 0.5)  # recorte de luz à direita
+    e += 0.55 * band(x - y * 0.6, 0.18, 0.07) * (z > 0.3)  # janela na diagonal, atrás da câmera (o reflexo que cruza a peça)
+    e += 0.22 * np.exp(-((x + 0.25) ** 2 + (y - 0.3) ** 2 + (z - 0.9) ** 2) / 0.25)  # luz de frente (o dourado não fica preto)
+    return e
+
+
+class MetalSurface:
+    """Superfície metálica dada pela altura: a cor de cada pixel é o reflexo do estúdio na direção do espelho."""
+
+    def __init__(self, height, alpha, stops, rough=0.0, seed=1, wobble=0.6, grain=0.0, bowl=0.0):
+        h, w = height.shape
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        height = height + wobble * blur_noise(h, w, 4, seed) - bowl * ((xx - w / 2) ** 2 + (yy - h / 2) ** 2)
+        if grain:
+            height = height + grain * blur_noise(h, w, 40, seed + 1)
+        gy, gx = np.gradient(height)
+        n = np.dstack([-gx, gy, np.full_like(gx, 0.9)])  # y da imagem cresce para baixo, o do plano para cima
+        self.n = n / np.linalg.norm(n, axis=2, keepdims=True)
+        self.alpha = alpha
+        self.stops = stops
+        self.rough = rough
+        self.xy = np.dstack([xx - w / 2, h / 2 - yy])
+        self.size = (w, h)
+
+    def shade(self, R, focal, z=0.0, center=(0, 0, 0), back=False, dim=1.0):
+        """Textura vista com a rotação R (back=True: a face de trás, cujo relevo aponta para -z)."""
+        n = self.n * np.array([1, 1, -1], np.float32) if back else self.n
+        Rt = R.T.astype(np.float32)
+        nc = n @ Rt
+        p = (np.dstack([self.xy, np.full(self.xy.shape[:2], z, np.float32)]) - np.asarray(center, np.float32)) @ Rt
+        v = p - np.array([0, 0, focal], np.float32)
+        v /= np.linalg.norm(v, axis=2, keepdims=True)
+        r = v - 2 * np.sum(v * nc, axis=2, keepdims=True) * nc
+        e = studio(r)
+        if np.ndim(self.rough) or self.rough:
+            e = e * (1 - self.rough) + 0.34 * self.rough  # acetinado: reflexo mais espalhado
+        rgb = ramp(np.clip(e * dim, 0, 1), self.stops)
+        return Image.fromarray(np.dstack([rgb, self.alpha * 255]).astype(np.uint8), "RGBA")
+
+
+def back_from(cut: Image.Image, stamp="BRAX", seed=7) -> MetalSurface:
+    """Verso de metal polido (níquel), como o dos pins: espelhado, borda abaulada e a marca em relevo numa moldura."""
     mask = cut.getchannel("A")
     w, h = mask.size
-    rng = np.random.default_rng(seed)
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
-    # Faixas de reflexo do ambiente (o que faz parecer metal espelhado, e não plástico)
-    u = (xx * 0.8 + yy * 0.55) / max(w, h)
-    v = 0.5 + 0.28 * np.sin(u * 2 * np.pi * 1.6 + 0.6) + 0.16 * np.sin(u * 2 * np.pi * 4.1 + 1.9)
-    v += 0.18 * np.exp(-((u - 0.62) ** 2) / 0.004)  # faixa de brilho estreita
-    v += rng.normal(0, 1, (h, 1)).astype(np.float32) * 0.025 + rng.normal(0, 1, (h, w)).astype(np.float32) * 0.01
-    # Borda em relevo: luz de cima/esquerda, sombra embaixo/direita
-    soft = mask.filter(ImageFilter.GaussianBlur(max(2, w // 120)))
-    emb = np.asarray(soft.filter(ImageFilter.EMBOSS), np.float32) / 255 - 0.5
-    inner = np.asarray(mask.filter(ImageFilter.MinFilter(max(3, (w // 60) | 1))), np.float32) / 255
     a = np.asarray(mask, np.float32) / 255
-    rim = (a - inner).clip(0, 1)
-    v += 1.6 * emb * (0.4 + rim) + 0.12 * rim
-    # Marca gravada em baixo-relevo (espelhada aqui porque o verso é visto de trás)
+    dome = np.asarray(mask.filter(ImageFilter.GaussianBlur(max(2, w // 70))), np.float32) / 255
+    height = 10 * dome
+    # Marca em relevo (espelhada aqui porque o verso é visto de trás)
     if stamp:
         t = Image.new("L", (w, h), 0)
         d = ImageDraw.Draw(t)
-        f = font("black", max(10, int(min(w, h) * 0.085)))
+        f = font("black", max(10, int(min(w, h) * 0.08)))
         tw, th = d.textlength(stamp, font=f), f.size
         cx, cy = w * 0.5, h * 0.72
         pad = th * 0.35
         box = (cx - tw / 2 - pad, cy - th / 2 - pad, cx + tw / 2 + pad, cy + th / 2 + pad)
         if np.asarray(mask.crop(tuple(int(b) for b in box)), np.float32).mean() > 200:  # só se couber dentro da silhueta
-            d.rounded_rectangle(box, radius=pad, outline=255, width=max(2, int(th * 0.12)))
+            d.rounded_rectangle(box, radius=pad * 0.5, outline=255, width=max(2, int(th * 0.12)))
             d.text((cx, cy), stamp, font=f, fill=255, anchor="mm")
-            t = t.transpose(Image.FLIP_LEFT_RIGHT)
-            st = np.asarray(t.filter(ImageFilter.GaussianBlur(1.2)).filter(ImageFilter.EMBOSS), np.float32) / 255 - 0.5
-            v -= 1.4 * st + 0.08 * (np.asarray(t, np.float32) / 255)
-    rgb = ramp(np.clip(v, 0, 1), CHROME)
-    return Image.fromarray(np.dstack([rgb, a * 255]).astype(np.uint8), "RGBA")
+            t = t.transpose(Image.FLIP_LEFT_RIGHT).filter(ImageFilter.GaussianBlur(0.9))
+            height += 4.0 * np.asarray(t, np.float32) / 255
+    return MetalSurface(height, a, CHROME, rough=0.05, seed=seed, wobble=6, bowl=0.0004)
 
 
-def disc(r: int, fill_a: int, rim_a: int, rim_w: int, cap=False) -> Image.Image:
-    """Fatia da tarraxa de silicone transparente: miolo quase invisível, borda mais marcada (é ela que desenha o volume)."""
-    ss = 3
-    R = r * ss
-    s = R * 2 + 8
-    im = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    c = s / 2
-    d.ellipse((c - R, c - R, c + R, c + R), fill=(240, 243, 247, fill_a), outline=(196, 202, 212, rim_a), width=max(2, rim_w * ss))
-    if cap:  # a cabeça vista de frente: reflexos e o furo do pino no meio
-        d.ellipse((c - R * 0.7, c - R * 0.75, c - R * 0.05, c - R * 0.25), fill=(255, 255, 255, 120))
-        d.arc((c - R * 0.82, c - R * 0.82, c + R * 0.82, c + R * 0.82), 20, 160, fill=(255, 255, 255, 110), width=max(2, R // 10))
-        d.ellipse((c - R * 0.1, c - R * 0.1, c + R * 0.1, c + R * 0.1), fill=(120, 126, 136, 200))
-    im = im.filter(ImageFilter.GaussianBlur(ss * 0.7))
-    return im.resize((s // ss, s // ss), Image.LANCZOS)
+LILAC = np.array([214, 206, 250], np.float32)
+
+
+def _over(img, pts, rgba):
+    """Polígono translúcido por cima (o ImageDraw sozinho substitui o alfa em vez de somar)."""
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    x0, y0 = max(0, int(min(xs))), max(0, int(min(ys)))
+    x1, y1 = min(img.width, int(max(xs)) + 2), min(img.height, int(max(ys)) + 2)
+    if x1 <= x0 or y1 <= y0 or rgba[3] < 2:
+        return
+    m = Image.new("L", (x1 - x0, y1 - y0), 0)
+    ImageDraw.Draw(m).polygon([(x - x0, y - y0) for x, y in pts], fill=int(rgba[3]))
+    layer = Image.new("RGBA", m.size, tuple(int(c) for c in rgba[:3]) + (0,))
+    layer.putalpha(m)
+    img.alpha_composite(layer, (x0, y0))
+
+
+def draw_clutch(canvas, cam, R, c, r, ss=2):
+    """Tarraxa de silicone como a dos pins: cúpula lilás transparente sobre uma base reta com aba, furo do pino no meio.
+
+    c = centro da base (lado que encosta no pin, virado para +z); a cúpula cresce para -z, longe da placa.
+    Cada pedacinho da superfície é pintado conforme o ângulo: borda mais densa (silicone), reflexos do estúdio por cima.
+    """
+    cx, cy, zb = c
+    lip, H, fl = r * 0.1, r * 1.05, r * 1.1
+    nphi, nth = 32, 10
+    Rm = np.asarray(R, float)
+    eye = np.array([0, 0, cam.f])
+
+    def cam_q(p):
+        return Rm @ (np.asarray(p, float) - cam.center)
+
+    def scr(q):
+        k = cam.f / (cam.f - q[2])
+        return np.array([cam.S / 2 + q[0] * k, cam.Hc / 2 - q[1] * k])
+
+    faces = []  # (profundidade, pontos 3D, normal, tipo)
+    phis = np.linspace(0, 2 * np.pi, nphi + 1)
+    ths = np.linspace(0, np.pi / 2, nth + 1)
+
+    def dome_pt(th, ph):
+        rho, z = r * math.sin(th), zb - lip - H * math.cos(th)
+        return (cx + rho * math.cos(ph), cy + rho * math.sin(ph), z)
+
+    def dome_n(th, ph):
+        rho, z = r * math.sin(th), -H * math.cos(th)
+        n = np.array([rho / r ** 2 * math.cos(ph), rho / r ** 2 * math.sin(ph), z / H ** 2])
+        return n / (np.linalg.norm(n) + 1e-9)
+
+    for i in range(nth):
+        for j in range(nphi):
+            pts = [dome_pt(ths[i], phis[j]), dome_pt(ths[i + 1], phis[j]), dome_pt(ths[i + 1], phis[j + 1]), dome_pt(ths[i], phis[j + 1])]
+            faces.append((pts, dome_n((ths[i] + ths[i + 1]) / 2, (phis[j] + phis[j + 1]) / 2), "s"))
+    # Base reta mais larga (a aba), com a lateral fina
+    ring = lambda rad, z: [(cx + rad * math.cos(ph), cy + rad * math.sin(ph), z) for ph in phis[:-1]]  # noqa: E731
+    for j in range(nphi):
+        ph = (phis[j] + phis[j + 1]) / 2
+        a0, a1 = phis[j], phis[j + 1]
+        pts = [(cx + fl * math.cos(a0), cy + fl * math.sin(a0), zb), (cx + fl * math.cos(a1), cy + fl * math.sin(a1), zb),
+               (cx + fl * math.cos(a1), cy + fl * math.sin(a1), zb - lip), (cx + fl * math.cos(a0), cy + fl * math.sin(a0), zb - lip)]
+        faces.append((pts, np.array([math.cos(ph), math.sin(ph), 0.0]), "s"))
+    faces.append((ring(fl, zb), np.array([0, 0, 1.0]), "s"))  # face que encosta no pin
+    faces.append((ring(fl, zb - lip), np.array([0, 0, -1.0]), "s"))
+    # Abinha de injeção saindo da base, de um lado
+    t = r * 0.22
+    faces.append(([(cx + fl - t * 0.2, cy + t, zb - lip * 0.5), (cx + fl + t * 1.1, cy + t * 0.25, zb - lip * 0.5),
+                   (cx + fl + t * 1.1, cy - t * 0.25, zb - lip * 0.5), (cx + fl - t * 0.2, cy - t, zb - lip * 0.5)], np.array([0, 0, -1.0]), "s"))
+    # Furo do pino por dentro (a linha que aparece no meio da tarraxa)
+    faces.append(([(cx, cy, zb), (cx, cy, zb - lip - H * 0.82)], None, "line"))
+
+    items = []
+    for pts, n, kind in faces:
+        qs = [cam_q(p) for p in pts]
+        depth = float(np.mean([q[2] for q in qs]))
+        items.append((depth, [scr(q) for q in qs], qs, n, kind))
+    allp = np.array([p for it in items for p in it[1]])
+    x0, y0 = np.floor(allp.min(0)) - 4
+    x1, y1 = np.ceil(allp.max(0)) + 4
+    x0, y0 = max(0, x0), max(0, y0)
+    x1, y1 = min(cam.S, x1), min(cam.Hc, y1)
+    if x1 - x0 < 2 or y1 - y0 < 2:
+        return
+    # Duas cascas: a de trás e a da frente. Dentro de cada casca os pedaços não se somam (sem linhas de malha);
+    # a da frente fica por cima da de trás, e o canal do pino aparece entre as duas.
+    size = (int(x1 - x0) * ss, int(y1 - y0) * ss)
+    shells = {False: Image.new("RGBA", size, (0, 0, 0, 0)), True: Image.new("RGBA", size, (0, 0, 0, 0))}
+    draws = {k: ImageDraw.Draw(v) for k, v in shells.items()}
+    line = None
+    base_front = False
+    for depth, sp, qs, n, kind in sorted(items, key=lambda it: it[0]):  # do mais longe para o mais perto
+        pts = [((p[0] - x0) * ss, (p[1] - y0) * ss) for p in sp]
+        if kind == "line":
+            line = pts
+            continue
+        nc = Rm @ n
+        v = np.mean(qs, axis=0) - eye
+        v /= np.linalg.norm(v)
+        d = float(nc @ v)
+        cos = abs(d)
+        alpha = 0.28 + 0.6 * (1 - cos) ** 2.2
+        col = LILAC * (0.86 + 0.14 * cos)
+        front = d < 0
+        if front:  # virado para a câmera: reflexos do estúdio
+            rr = v - 2 * d * nc
+            sp_ = float(np.clip(studio(rr[None, None, :])[0, 0] - 0.4, 0, 1))
+            col = col + (255 - col) * sp_
+            alpha = min(0.95, alpha + 0.6 * sp_)
+            if n[2] > 0.99:
+                base_front = True
+        draws[front].polygon(pts, fill=tuple(int(c) for c in col) + (int(alpha * 255),))
+    local = shells[False]
+    if line is not None and math.dist(*line) > 3 * ss:  # o canal do pino, visto de lado
+        _over(local, _thick_line(line, 2.0 * ss), (240, 236, 252, 120))
+    local.alpha_composite(shells[True].filter(ImageFilter.GaussianBlur(ss * 1.2)))  # reflexos contínuos, sem facetas
+    if base_front:  # olhando a base: o furo do pino no meio
+        hc = scr(cam_q((cx, cy, zb)))
+        hx, hy, hr = (hc[0] - x0) * ss, (hc[1] - y0) * ss, r * 0.09 * ss
+        _over(local, [(hx + hr * math.cos(a), hy + hr * math.sin(a)) for a in np.linspace(0, 2 * np.pi, 16)], (150, 140, 190, 170))
+    local = local.resize((int(x1 - x0), int(y1 - y0)), Image.LANCZOS)
+    canvas.alpha_composite(local, (int(x0), int(y0)))
+
+
+def _thick_line(pts, w):
+    (ax, ay), (bx, by) = pts
+    dx, dy = bx - ax, by - ay
+    L = math.hypot(dx, dy) or 1
+    nx, ny = -dy / L * w / 2, dx / L * w / 2
+    return [(ax + nx, ay + ny), (bx + nx, by + ny), (bx - nx, by - ny), (ax - nx, ay - ny)]
 
 
 def darken(im: Image.Image, k: float) -> Image.Image:
@@ -192,20 +348,15 @@ class ExplodedPin:
         self.S = size
         self.photo = cut
         self.paint, self.metal = split_layers(cut)
-        self.metal_side = darken(self.metal, 0.55)
         self.back = back_from(cut, stamp)
-        self.back_side = darken(self.back, 0.6)
         a = np.asarray(cut.getchannel("A"), np.float32)
         ys, xs = np.nonzero(a > 128)
         # Centro de massa (onde fica o pino), no sistema do plano (y para cima)
         self.pin_xy = (float(xs.mean() - cut.width / 2), float(cut.height / 2 - ys.mean())) if len(xs) else (0.0, 0.0)
         self.thick = size * 0.018
-        self.post_len = size * 0.24
-        # Tarraxa de silicone: corpo (cilindro) virado para a placa e cabeça redonda mais larga na ponta
-        rb = int(size * 0.042)
-        self.clutch_body, self.clutch_len = disc(rb, 26, 120, 2), size * 0.085
-        self.clutch_head, self.clutch_head_cap, self.clutch_head_len = disc(int(rb * 1.5), 40, 170, 3), disc(int(rb * 1.5), 80, 220, 3, True), size * 0.022
-        self.clutch = self.clutch_head  # medida usada nas etiquetas
+        self.post_len = size * 0.18
+        # Tarraxa: bolinha de silicone com o pino entrando nela (diâmetro ~1/4 da largura do pin, como na foto)
+        self.clutch_r = max(cut.size) * 0.12
         self.labels = labels
         self.accent = accent
         self.Hc = int(size * 1.35)  # quadro mais alto que largo: a pilha explodida cresce na vertical
@@ -218,7 +369,7 @@ class ExplodedPin:
         g = S * 0.25 * explode
         z_paint = 0.6 + g
         z_metal = 0.0
-        z_clutch = -self.thick - self.post_len * 0.55 - g * 1.25
+        z_clutch = -self.thick - self.post_len * 0.62 - g * 1.25  # base da tarraxa (o pino entra até perto da ponta)
         front = facing(R)
         px, py = self.pin_xy
         # Mantém a pilha (da tinta à tarraxa) centralizada enquanto as camadas se afastam
@@ -226,32 +377,34 @@ class ExplodedPin:
 
         def metal_block():
             n = 6
+            f, c = self.cam.f, self.cam.center
+            if front:
+                face = self.metal.shade(R, f, 0.0, c)
+            else:
+                face = self.back.shade(R, f, -self.thick, c, back=True)
+            side = darken(face, 0.45)  # a espessura da chapa
             order = range(n + 1) if front else range(n, -1, -1)  # de trás para a frente, visto da câmera
             for i in order:
                 z = -self.thick + self.thick * i / n
-                if front:
-                    img = self.metal if i == n else self.metal_side
-                else:
-                    img = self.back if i == 0 else self.back_side
-                self.cam.plane(canvas, img, z, R)
+                self.cam.plane(canvas, face if i == (n if front else 0) else side, z, R)
 
         def post():
             a, _ = self.cam.project((px, py, -self.thick), R)
             b, _ = self.cam.project((px, py, -self.thick - self.post_len), R)
             d = ImageDraw.Draw(canvas)
             wpx = max(3, int(S * 0.011))
-            d.line([tuple(a), tuple(b)], fill=(150, 156, 164, 255), width=wpx)
-            d.line([tuple(a + (wpx * 0.25, 0)), tuple(b + (wpx * 0.25, 0))], fill=(235, 238, 242, 255), width=max(1, wpx // 3))
+            # solda em cone na base do pino e o pino de aço com um fio de brilho
+            rs = wpx * 1.6
+            d.ellipse((a[0] - rs, a[1] - rs, a[0] + rs, a[1] + rs), fill=(170, 176, 184, 255))
+            d.line([tuple(a), tuple(b)], fill=(120, 126, 134, 255), width=wpx)
+            d.line([tuple(a + (wpx * 0.2, 0)), tuple(b + (wpx * 0.2, 0))], fill=(240, 242, 246, 255), width=max(1, wpx // 3))
 
         def clutch():
-            # Fatias do corpo e da cabeça ao longo do pino, da mais longe para a mais perto da câmera
-            top = z_clutch + self.clutch_len / 2
-            slices = [(top - self.clutch_len * k / 9, self.clutch_body) for k in range(10)]
-            bottom = top - self.clutch_len
-            slices += [(bottom - self.clutch_head_len * k / 3, self.clutch_head) for k in range(4)]
-            slices[-1] = (slices[-1][0], self.clutch_head_cap)
-            for z, img in sorted(slices, key=lambda s_: s_[0] * (1 if front else -1)):
-                self.cam.plane(canvas, img, z, R, cx=px, cy=py)
+            draw_clutch(canvas, self.cam, R, (px, py, z_clutch), self.clutch_r)
+
+        def hardware():  # o pino entra na tarraxa: desenha o pino e a bolinha transparente por cima
+            post()
+            clutch()
 
         def paint():
             # Montado: a foto original (tinta + linhas de metal); separando: só a tinta
@@ -261,7 +414,7 @@ class ExplodedPin:
                 self.cam.plane(canvas, self.paint, z_paint, R)
 
         # Ordem de desenho: do mais longe para o mais perto da câmera
-        parts = [(z_paint, paint), (z_metal, metal_block), (-self.thick - self.post_len / 2, post), (z_clutch, clutch)]
+        parts = [(z_paint, paint), (z_metal, metal_block), (z_clutch, hardware)]
         view_z = (R @ np.array([0, 0, 1.0]))[2]
         parts.sort(key=lambda p: p[0] * view_z)
         for _, fn in parts:
@@ -289,7 +442,7 @@ class ExplodedPin:
             if i < 2:
                 anchor, _ = self.cam.project((self.paint.width * 0.36, 0, z), R)
             else:
-                anchor, _ = self.cam.project((px + self.clutch.width * 0.45, py, z), R)
+                anchor, _ = self.cam.project((px + self.clutch_r * 0.9, py, z), R)
             # Mesmo tamanho em todas; a etiqueta longa quebra em duas linhas quando não cabe à direita da peça
             x = anchor[0] + self.S * 0.1
             room = self.S - x - 2 * pad - self.S * 0.01
