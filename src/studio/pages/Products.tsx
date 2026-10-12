@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ExternalLink, ImagePlus, Loader2, Plus, ShoppingBag, Sparkles, Trash2 } from "lucide-react";
+import { Clapperboard, ExternalLink, ImagePlus, Loader2, Plus, ShoppingBag, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
 import { useSettings, useTable } from "../lib/hooks";
-import type { ProductDraft, ProductTemplate, ProductTemplateData } from "../lib/types";
+import type { BrandSettings, HeygenLook, HeygenVoice, ProductDraft, ProductTemplate, ProductTemplateData, ProductVideo } from "../lib/types";
 import { EmptyState, PageHeader, Panel, relativeTime, StatusDot } from "../components/bits";
 
 type Category = { id: number; name: string; parent: number | null };
@@ -381,6 +381,224 @@ function DraftRow({ draft, templates, onCreate }: { draft: ProductDraft; templat
   );
 }
 
+const VIDEO_STYLES = [
+  { id: "pov", label: "POV: só as mãos", hint: (name?: string) => `Close no produto, com a voz ${name ? `da ${name}` : "dela"} narrando` },
+  { id: "presenter", label: "Ela apresentando", hint: (name?: string) => `${name ?? "Ela"} aparece falando e mostrando o produto` },
+] as const;
+
+const VIDEO_STATUS: Record<ProductVideo["status"], { tone: "brand" | "success" | "danger"; label: string }> = {
+  generating: { tone: "brand", label: "Gerando na HeyGen" },
+  finishing: { tone: "brand", label: "Finalizando" },
+  ready: { tone: "success", label: "Pronto" },
+  failed: { tone: "danger", label: "Erro" },
+};
+
+/** Vídeo do produto com a apresentadora da marca (HeyGen), para Reels e TikTok. */
+function VideoPanel({ settings }: { settings: BrandSettings | null | undefined }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    video_enabled: false,
+    video_style: "pov" as "pov" | "presenter",
+    video_presenter_name: "",
+    video_notes: "",
+    heygen_avatar_id: "",
+    heygen_voice_id: "",
+  });
+  useEffect(() => {
+    if (!settings) return;
+    setForm({
+      video_enabled: settings.video_enabled ?? false,
+      video_style: settings.video_style ?? "pov",
+      video_presenter_name: settings.video_presenter_name ?? "",
+      video_notes: settings.video_notes ?? "",
+      heygen_avatar_id: settings.heygen_avatar_id ?? "",
+      heygen_voice_id: settings.heygen_voice_id ?? "",
+    });
+  }, [settings]);
+  const [saving, setSaving] = useState(false);
+  const [loadOptions, setLoadOptions] = useState(false);
+  const options = useQuery({
+    queryKey: ["heygen-options"],
+    queryFn: () => api.invoke<{ avatars: HeygenLook[]; voices: HeygenVoice[] }>("ai", { action: "heygen_options" }),
+    enabled: loadOptions,
+    retry: false,
+    staleTime: 10 * 60 * 1000,
+  });
+  const { data: videos = [] } = useTable("product_videos", { limit: 8 }, { refetchInterval: 20000 });
+  const [redoing, setRedoing] = useState<string | null>(null);
+
+  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const avatars = options.data?.avatars ?? [];
+  const voices = options.data?.voices ?? [];
+  const avatar = avatars.find((a) => a.id === form.heygen_avatar_id);
+  const presenter = form.video_presenter_name.trim() || undefined;
+
+  const pickAvatar = (id: string) => {
+    const look = avatars.find((a) => a.id === id);
+    setForm((f) => ({
+      ...f,
+      heygen_avatar_id: id,
+      heygen_voice_id: f.heygen_voice_id || look?.voice_id || "",
+      video_presenter_name: f.video_presenter_name || look?.group || look?.name || "",
+    }));
+  };
+
+  const save = async () => {
+    if (form.video_enabled && !form.heygen_avatar_id && !form.heygen_voice_id) {
+      toast.error("Escolha o avatar e a voz da apresentadora antes de ligar.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.saveSettings({
+        ...form,
+        video_presenter_name: form.video_presenter_name.trim() || null,
+        video_notes: form.video_notes.trim() || null,
+        heygen_avatar_id: form.heygen_avatar_id || null,
+        heygen_voice_id: form.heygen_voice_id || null,
+      });
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      toast.success("Vídeo com a apresentadora salvo");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const redo = async (v: ProductVideo) => {
+    setRedoing(v.id);
+    try {
+      await api.invoke("ai", { action: "product_video", video_id: v.id });
+      qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
+      toast.success("Gerando um vídeo novo. Leva alguns minutos.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRedoing(null);
+    }
+  };
+
+  return (
+    <Panel
+      title="Vídeo com a apresentadora"
+      description="Para cada produto novo, a HeyGen faz um vídeo vertical de 20 a 30 segundos para Reels e TikTok, com o avatar e a voz da sua apresentadora."
+      bodyClassName="p-0"
+    >
+      <label htmlFor="video-enabled" className="flex items-center justify-between gap-4 border-b px-4 py-3">
+        <span>
+          <span className="block text-[13px] font-medium">Gerar vídeo para cada produto novo</span>
+          <span className="block text-xs text-muted-foreground">
+            A IA escreve o roteiro olhando as fotos, a HeyGen grava e o vídeo vira um post no próximo horário nobre livre.
+            {settings?.approval_required !== false ? " Fica em Aprovações até você liberar." : " Publica sozinho."}
+          </span>
+        </span>
+        <Switch id="video-enabled" checked={form.video_enabled} onCheckedChange={(v) => set("video_enabled", v)} />
+      </label>
+
+      <div className="grid gap-4 p-4">
+        <div className="grid gap-1.5">
+          <Label>Formato</Label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {VIDEO_STYLES.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => set("video_style", s.id)}
+                className={cn("rounded-md border px-3 py-2.5 text-left", form.video_style === s.id ? "border-foreground bg-secondary/60" : "hover:bg-secondary/40")}
+              >
+                <span className="block text-[13px] font-medium">{s.label}</span>
+                <span className="block text-xs text-muted-foreground">{s.hint(presenter)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <Label>Avatar e voz na HeyGen</Label>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => (loadOptions ? options.refetch() : setLoadOptions(true))} disabled={options.isFetching}>
+              {options.isFetching && <Loader2 className="animate-spin" />}
+              {options.data ? "Atualizar lista" : "Buscar na HeyGen"}
+            </Button>
+          </div>
+          {options.error && <p className="text-xs text-danger">{(options.error as Error).message}</p>}
+          {options.data ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Select value={form.heygen_avatar_id || undefined} onValueChange={pickAvatar}>
+                <SelectTrigger aria-label="Avatar"><SelectValue placeholder={avatars.length ? "Escolha o avatar" : "Nenhum avatar na conta"} /></SelectTrigger>
+                <SelectContent>
+                  {avatars.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.group && a.group !== a.name ? `${a.group} · ${a.name}` : a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={form.heygen_voice_id || undefined} onValueChange={(v) => set("heygen_voice_id", v)}>
+                <SelectTrigger aria-label="Voz"><SelectValue placeholder="Escolha a voz" /></SelectTrigger>
+                <SelectContent>
+                  {voices.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>{v.name}{v.private ? " (sua)" : v.language ? ` · ${v.language}` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {form.heygen_avatar_id
+                ? `Avatar escolhido: ${form.heygen_avatar_id}${form.heygen_voice_id ? ` · voz: ${form.heygen_voice_id}` : ""}`
+                : "Clique em Buscar na HeyGen para escolher o avatar e a voz da sua apresentadora."}
+            </p>
+          )}
+          {avatar?.image && <img src={avatar.image} alt={avatar.name} className="mt-1 h-20 w-20 rounded-md border object-cover" />}
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="grid gap-1.5">
+            <Label htmlFor="presenter-name">Nome da apresentadora</Label>
+            <Input id="presenter-name" value={form.video_presenter_name} onChange={(e) => set("video_presenter_name", e.target.value)} placeholder="Katia" />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="video-notes">Instruções extras (opcional)</Label>
+            <Textarea id="video-notes" rows={2} value={form.video_notes} onChange={(e) => set("video_notes", e.target.value)} placeholder="Ex.: começar com “Gente, olha isso!” e falar Brax Pins Mania no final" />
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <Button size="sm" onClick={save} disabled={saving}>{saving && <Loader2 className="animate-spin" />}Salvar</Button>
+        </div>
+      </div>
+
+      {videos.length > 0 && (
+        <div className="divide-y border-t">
+          {videos.map((v) => (
+            <div key={v.id} className="flex items-center gap-3 px-4 py-2.5">
+              <img src={v.thumbnail_url ?? v.images[0]} alt="" className="h-12 w-9 rounded border object-cover" loading="lazy" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium">{v.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  <StatusDot tone={VIDEO_STATUS[v.status].tone}>{VIDEO_STATUS[v.status].label}</StatusDot> · {relativeTime(v.created_at)}
+                </p>
+                {v.status === "failed" && v.error && <p className="truncate text-xs text-danger" title={v.error}>{v.error}</p>}
+              </div>
+              {v.video_url && (
+                <a href={v.video_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
+                  Ver vídeo <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+              {v.post_id && <Link to="/studio/aprovacoes" className="text-xs underline underline-offset-2">Post</Link>}
+              {(v.status === "failed" || v.status === "ready") && (
+                <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => redo(v)} disabled={redoing === v.id}>
+                  {redoing === v.id ? <Loader2 className="animate-spin" /> : <Clapperboard />}Refazer
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 export default function Products() {
   const qc = useQueryClient();
   const { data: accounts = [], isLoading } = useTable("social_accounts");
@@ -465,6 +683,20 @@ export default function Products() {
     }
   };
 
+  const [videoFor, setVideoFor] = useState<string | null>(null);
+  const makeVideo = async (draft: ProductDraft) => {
+    setVideoFor(draft.id);
+    try {
+      await api.invoke("ai", { action: "product_video", draft_id: draft.id });
+      qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
+      toast.success("Gerando o vídeo na HeyGen. Leva alguns minutos e aparece em Vídeo com a apresentadora.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setVideoFor(null);
+    }
+  };
+
   const createAll = async () => {
     setBulk(true);
     for (const d of queue.filter((d) => d.status !== "creating")) await createOne(d, true);
@@ -527,6 +759,8 @@ export default function Products() {
           )}
         </Panel>
 
+        <VideoPanel settings={settings} />
+
         <TemplateEditor templates={templates} categories={categories.data ?? []} />
 
         {created.length > 0 && (
@@ -539,6 +773,11 @@ export default function Products() {
                     <p className="truncate text-[13px] font-medium">{d.name}</p>
                     <p className="text-xs text-muted-foreground"><StatusDot tone="success">Na loja</StatusDot> · {relativeTime(d.created_at)}</p>
                   </div>
+                  {(settings?.heygen_avatar_id || settings?.heygen_voice_id) && (
+                    <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => makeVideo(d)} disabled={videoFor === d.id}>
+                      {videoFor === d.id ? <Loader2 className="animate-spin" /> : <Clapperboard />}Vídeo
+                    </Button>
+                  )}
                   {d.product_url && (
                     <a href={d.product_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
                       Ver na loja <ExternalLink className="h-3 w-3" />
