@@ -2,7 +2,7 @@
 // vídeos que ainda estão processando ficam em "publishing" e são retomados no próximo ciclo do cron.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { igCreateContainer, igPublishContainer, igTokenFor, igWaitContainer } from "./instagram.ts";
-import { TikTokError, ttPublishPhotos, ttPublishStatus, ttPublishVideo, ttTokenFor, ttUploadToInbox } from "./tiktok.ts";
+import { TikTokError, tiktokCaption, ttPublishPhotos, ttPublishStatus, ttPublishVideo, ttTokenFor, ttUploadToInbox } from "./tiktok.ts";
 
 type PlatformResult = {
   status?: "processing" | "published" | "failed";
@@ -74,16 +74,17 @@ async function stepTikTok(db: SupabaseClient, post: Post, r: PlatformResult): Pr
   const account = await accountFor(db, post, "tiktok");
   const token = await ttTokenFor(db, account.id);
   const opts = post.options?.tiktok ?? {};
+  const caption = tiktokCaption(post.caption);
   if (!r.publish_id) {
     const video = ["reel", "video"].includes(post.kind);
     const urls = video ? [tiktokUrl(post.media[0].url)] : post.media.filter((m) => m.type === "image").map((m) => tiktokUrl(m.url));
     try {
       if (opts.mode === "inbox") throw new TikTokError("inbox", "");
-      r.publish_id = video ? await ttPublishVideo(token, post.caption, urls[0], opts) : await ttPublishPhotos(token, post.caption, urls, opts);
+      r.publish_id = video ? await ttPublishVideo(token, caption, urls[0], opts) : await ttPublishPhotos(token, caption, urls, opts);
     } catch (e) {
       // Antes da auditoria do TikTok a postagem direta só vale para conta privada: manda para o app como rascunho
       if (!(e instanceof TikTokError) || !["inbox", "unaudited_client_can_only_post_to_private_accounts"].includes(e.code)) throw e;
-      r.publish_id = await ttUploadToInbox(token, post.caption, video ? "video" : "photo", urls);
+      r.publish_id = await ttUploadToInbox(token, caption, video ? "video" : "photo", urls);
       r.inbox = true;
     }
   }

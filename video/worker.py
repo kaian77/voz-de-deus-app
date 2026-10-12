@@ -89,7 +89,8 @@ def briefing(brief, name, handle):
                        "subtitle": brief.get("detail_sub") or "", "transition": "whip"})
     if features:
         scenes.append({"type": "features", "title": brief.get("features_title") or "Por que você vai *amar*", "items": features, "transition": "slide"})
-    cta = {"type": "cta", "text": brief.get("cta") or "Garanta o seu", "sub": " · ".join(x for x in ["Link na bio", handle] if x),
+    # Sem "link na bio"/site: o mesmo vídeo vai para o TikTok, que pune quem manda o cliente para fora
+    cta = {"type": "cta", "text": brief.get("cta") or "Garanta o seu", "sub": handle,
            "show_product": True, "confetti": True, "transition": "zoom"}
     if brief.get("urgency"):
         cta["urgency"] = brief["urgency"]

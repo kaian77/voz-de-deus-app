@@ -22,6 +22,7 @@ Ferramenta interna da Brax Pins Mania (loja de pins, braxpinsmania.com.br; IG @b
 - Nuvemshop conectada. API não grava dados fiscais (NCM etc.) → fluxo de planilha CSV (`src/studio/lib/fiscal-csv.ts`).
 - Mercado Livre: próximo passo (ML_APP_ID 5226202533888505; falta o secret ML_CLIENT_SECRET e conectar).
 - Agente de DM: nunca informar preços (variam por modelo e kits) — mandar o link do site/produto.
+- TikTok: nada de "link na bio", site ou URL no vídeo nem na legenda (TikTok Shop dá violação). O vídeo de produto já sai sem isso e o publisher limpa a legenda com `tiktokCaption`.
 
 ## Marca
 Vermelho #E3262E, preto #111111, dourado #FFC72C, branco. Fonte de títulos: Anton (maiúsculas, palavras com *destaque* na cor de acento).
