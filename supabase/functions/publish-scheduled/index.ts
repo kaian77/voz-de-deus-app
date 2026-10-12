@@ -1,9 +1,10 @@
 // Chamado pelo pg_cron a cada minuto (ver SETUP_SOCIAL_STUDIO.md): publica posts e, a cada 2 min,
-// busca comentários/DMs novos do Instagram.
+// busca comentários/DMs novos do Instagram e cria os posts dos vídeos de produto prontos.
 // Também aceita { post_id } com JWT do usuário para "Publicar agora".
 import { adminClient, corsHeaders, env, handleError, HttpError, json, requireUser, timingSafeEqual } from "../_shared/util.ts";
 import { advancePost, runDuePosts } from "../_shared/publisher.ts";
 import { pollInstagram } from "../_shared/instagram-poller.ts";
+import { finishRenderedVideos } from "../_shared/product-video.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -28,7 +29,9 @@ Deno.serve(async (req) => {
     const polled = new Date().getUTCMinutes() % 2 === 0
       ? await pollInstagram(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
       : undefined;
-    return json({ processed, polled });
+    // Vídeos animados que o GitHub Actions terminou de renderizar viram post
+    const videos = await finishRenderedVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
+    return json({ processed, polled, videos });
   } catch (err) {
     return handleError(err);
   }

@@ -217,6 +217,20 @@ export interface BrandSettings {
   agent_instructions?: string | null;
   agent_knowledge?: string | null;
   agent_handoff_message?: string | null;
+  video_enabled?: boolean;
+}
+
+export interface ProductVideo {
+  id: string;
+  name: string;
+  product_url: string | null;
+  images: string[];
+  brief: Record<string, unknown>;
+  status: "queued" | "rendering" | "rendered" | "ready" | "failed";
+  video_url: string | null;
+  post_id: string | null;
+  error: string | null;
+  created_at: string;
 }
 
 export type Channel = "instagram" | "whatsapp";
@@ -268,6 +282,7 @@ export interface TableMap {
   messages: Message;
   product_templates: ProductTemplate;
   product_drafts: ProductDraft;
+  product_videos: ProductVideo;
 }
 export type TableName = keyof TableMap;
 

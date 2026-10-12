@@ -219,6 +219,16 @@ O *Business Discovery* da Meta lê dados públicos de outras contas profissionai
 
 Sem isso, você pode adicionar anotações ou pedir ao Claude para pesquisar e salvar os dados com `upsert_competitor`.
 
+## 10. Vídeos animados dos produtos (Reels e TikTok)
+
+Cada produto novo pode ganhar um vídeo vertical de ~15 s (foto do produto sem fundo, textos feitos pela IA, música original e efeitos), sem custo por vídeo:
+
+1. O Studio põe o vídeo na fila (`product_videos`) com os textos escritos pela IA olhando a foto.
+2. O workflow **Vídeos dos produtos** (`.github/workflows/product-videos.yml`) roda de hora em hora, das 8h às 20h, renderiza com `video/worker.py` (motor em `video/engine`) e envia o MP4 para o storage. Usa o mesmo secret `SUPABASE_ACCESS_TOKEN` do deploy. Para gerar na hora: **Actions → Vídeos dos produtos → Run workflow**.
+3. O cron do Studio cria o post (Reels + TikTok) no próximo horário nobre livre, em Aprovações se a marca exigir aprovação.
+
+Liga em **Produtos → Fazer também um vídeo animado**; cada produto cadastrado tem o botão **Vídeo**. Pelo Claude: `create_product_video` e `list_product_videos`. Os vídeos usam o tempo grátis do GitHub Actions (cada vídeo leva 1–3 minutos).
+
 ---
 
 ## Arquitetura
