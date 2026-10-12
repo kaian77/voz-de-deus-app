@@ -12,13 +12,17 @@ export interface Slide {
   body?: string;
   footer?: string;
   image_url?: string;
+  /** Foto do produto, mostrada inteira num cartão abaixo do texto */
+  product_image?: string;
 }
 
-export type ThemeId = "divino" | "claro" | "escuro" | "papel" | "vibrante";
+export type ThemeId = "marca" | "divino" | "claro" | "escuro" | "papel" | "vibrante";
 
 export interface CarouselDesign {
   theme?: ThemeId;
   handle?: string;
+  /** Cores de uma campanha (ex.: Outubro Rosa); quando existe, vale no lugar do tema */
+  palette?: { primary: string; secondary: string; accent: string };
 }
 
 export interface PlatformResult {
@@ -220,6 +224,9 @@ export interface BrandSettings {
   agent_handoff_message?: string | null;
   video_enabled?: boolean;
   marketplace_autopublish?: boolean;
+  autopilot_enabled?: boolean;
+  autopilot_per_week?: number;
+  autopilot_last_run?: string | null;
 }
 
 export interface MarketplaceAnalysis {

@@ -26,8 +26,8 @@ KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 MAX_ATTEMPTS = 3
 BATCH = 6
 
-# Cores padrão da marca (terracota, marrom e dourado); o brief pode trazer outras
-COLORS = {"primary": "#C4572E", "secondary": "#24140C", "accent": "#F2C14E", "text": "#FFFFFF"}
+# Cores da marca Brax Pins Mania (vermelho, preto e dourado); o brief pode trazer as de um tema (ex.: Outubro Rosa)
+COLORS = {"primary": "#E3262E", "secondary": "#111111", "accent": "#FFC72C", "text": "#FFFFFF"}
 
 
 def http(method, url, body=None, headers=None, raw=False):

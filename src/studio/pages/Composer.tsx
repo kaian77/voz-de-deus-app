@@ -59,7 +59,7 @@ export default function Composer() {
   const [mode, setMode] = useState<Mode>("design");
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [slides, setSlides] = useState<Slide[]>([{ title: "Seu título de capa aqui", body: "Arraste para o lado →" }]);
-  const [design, setDesign] = useState<CarouselDesign>({ theme: "divino" });
+  const [design, setDesign] = useState<CarouselDesign>({ theme: "marca" });
   const [caption, setCaption] = useState("");
   const [title, setTitle] = useState("");
   const [when, setWhen] = useState("");
@@ -94,7 +94,7 @@ export default function Composer() {
       setSlides(editing.slides);
       setMode(editing.media?.length ? "upload" : "design");
     } else setMode("upload");
-    setDesign(editing.design ?? { theme: "divino" });
+    setDesign(editing.design ?? { theme: "marca" });
     setCaption(editing.caption);
     setTitle(editing.title ?? "");
     setWhen(toLocalInput(editing.scheduled_at));
@@ -302,7 +302,7 @@ export default function Composer() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Modelo visual</Label>
-                    <Select value={design.theme ?? "divino"} onValueChange={(v) => setDesign({ ...design, theme: v as ThemeId })}>
+                    <Select value={design.theme ?? "marca"} onValueChange={(v) => setDesign({ ...design, theme: v as ThemeId, palette: undefined })}>
                       <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Object.entries(THEMES).map(([id, t]) => (

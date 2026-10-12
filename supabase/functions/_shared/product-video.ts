@@ -90,19 +90,26 @@ export async function postVideo(db: SupabaseClient, v: any) {
   const { data: accounts } = await db.from("social_accounts").select("platform").eq("user_id", v.user_id).in("platform", ["instagram", "tiktok"]);
   const platforms = [...new Set((accounts ?? []).map((a) => a.platform as string))];
   if (!platforms.length) return null;
-  const approval = settings?.approval_required ?? true;
+  // Vídeo do piloto automático: vai para Aprovações no horário escolhido para a data (se ainda estiver livre)
+  const approval = v.brief?.approval === true || (settings?.approval_required ?? true);
+  let at: string | null = null;
+  if (typeof v.brief?.post_at === "string" && new Date(v.brief.post_at).getTime() > Date.now() + 30 * 60_000) {
+    const { count } = await db.from("posts").select("id", { count: "exact", head: true }).eq("user_id", v.user_id)
+      .eq("scheduled_at", v.brief.post_at).in("status", ["pending_approval", "scheduled"]);
+    if (!count) at = v.brief.post_at;
+  }
   const { data: post, error } = await db.from("posts").insert({
     user_id: v.user_id,
-    title: `Vídeo: ${v.name}`,
+    title: v.brief?.theme ? `${v.brief.theme}: ${v.name}` : `Vídeo: ${v.name}`,
     kind: "reel",
     platforms,
     caption: v.caption ?? v.name,
     media: [{ url: v.video_url, type: "video" }],
-    scheduled_at: await freeSlot(db, v.user_id, settings?.timezone ?? "America/Sao_Paulo"),
+    scheduled_at: at ?? await freeSlot(db, v.user_id, settings?.timezone ?? "America/Sao_Paulo"),
     status: approval ? "pending_approval" : "scheduled",
     created_by: "agent",
-    notes: `Vídeo animado do produto${v.product_url ? `: ${v.product_url}` : ""}.`,
-    options: {},
+    notes: v.brief?.why || `Vídeo animado do produto${v.product_url ? `: ${v.product_url}` : ""}.`,
+    options: v.brief?.idea_key ? { idea: { key: v.brief.idea_key, theme: v.brief.theme, why: v.brief.why } } : {},
   }).select("id,status").single();
   if (error) throw error;
   await db.from("product_videos").update({ post_id: post.id }).eq("id", v.id);

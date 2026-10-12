@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertCircle, ArrowDown, ArrowUp, ImagePlus, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
@@ -11,9 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
 import { useTable } from "../lib/hooks";
+import { renderAndUploadSlides } from "../lib/publishing";
 import type { Platform, Post } from "../lib/types";
 import TikTokSettings, { TIKTOK_DEFAULTS, tiktokProblem, toApiOptions, useTikTokCreator, type TikTokOptions } from "../components/TikTokSettings";
-import { PageHeader, Panel, PlatformIcon, toLocalInput } from "../components/bits";
+import { PageHeader, Panel, PlatformIcon, SlidePreview, toLocalInput } from "../components/bits";
 
 type Item = {
   id: string;
@@ -29,6 +30,8 @@ type Item = {
   when: string;
   uploading: boolean;
   error?: string;
+  /** Post que já existe (ex.: vindo de Aprovações): só ganha data e hora */
+  post?: Post;
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -126,10 +129,13 @@ function* slots(start: string, times: string[], taken: Set<string>) {
 export default function BulkSchedule() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { data: posts = [] } = useTable("posts");
+  const [params] = useSearchParams();
+  const { data: posts = [], isSuccess: postsLoaded } = useTable("posts");
   const { data: accounts = [] } = useTable("social_accounts");
   const connected = (["instagram", "tiktok"] as Platform[]).filter((p) => accounts.some((a) => a.platform === p));
-  const [platforms, setPlatforms] = useState<Platform[]>([]);
+  const [picked, setPlatforms] = useState<Platform[]>([]);
+  // Só as redes conectadas valem (os posts de Aprovações podem citar uma rede que não está conectada)
+  const platforms = picked.filter((p) => connected.includes(p));
   const [items, setItems] = useState<Item[]>([]);
   const [start, setStart] = useState(() => dayKey(new Date()));
   const [times, setTimes] = useState<string[]>(["13:00", "19:00"]);
@@ -144,9 +150,35 @@ export default function BulkSchedule() {
   const ttCreator = useTikTokCreator(onTikTok);
 
   useEffect(() => {
-    if (!platforms.length && connected.length) setPlatforms(connected);
+    if (!picked.length && connected.length) setPlatforms(connected);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected.join()]);
+
+  // Posts vindos de Aprovações (?posts=id1,id2)
+  const loaded = useRef(false);
+  useEffect(() => {
+    const ids = params.get("posts")?.split(",").filter(Boolean) ?? [];
+    if (loaded.current || !ids.length || !postsLoaded) return;
+    loaded.current = true;
+    const found = ids.map((id) => (posts as Post[]).find((p) => p.id === id)).filter((p): p is Post => !!p && !["published", "publishing"].includes(p.status));
+    setItems((cur) => [
+      ...cur,
+      ...found.map((p): Item => ({
+        id: p.id,
+        name: p.title || "Post",
+        type: ["reel", "video"].includes(p.kind) ? "video" : "image",
+        preview: p.media[0]?.url ?? "",
+        url: p.media[0]?.url ?? "slides",
+        aiImage: p.media.find((m) => m.type === "image")?.url ?? p.slides?.find((x) => x.product_image)?.product_image,
+        caption: p.caption,
+        when: "",
+        uploading: false,
+        post: p,
+      })),
+    ]);
+    const used = [...new Set(found.flatMap((p) => p.platforms))];
+    if (used.length) setPlatforms(used);
+  }, [params, posts, postsLoaded]);
 
   // Libera as prévias locais ao sair da página
   const previews = useRef<string[]>([]);
@@ -159,6 +191,7 @@ export default function BulkSchedule() {
     const taken = new Set<string>();
     if (skipTaken) {
       for (const p of posts as Post[]) {
+        if (items.some((x) => x.post?.id === p.id)) continue; // os que estão sendo reagendados aqui
         if (p.scheduled_at && ["scheduled", "pending_approval", "publishing"].includes(p.status)) taken.add(toLocalInput(p.scheduled_at));
       }
     }
@@ -268,6 +301,21 @@ export default function BulkSchedule() {
     try {
       for (const it of items) {
         const caption = [it.caption.trim(), suffix.trim()].filter(Boolean).join("\n\n");
+        const scheduled_at = new Date(schedule[it.id]!).toISOString();
+        if (it.post) {
+          const p = it.post;
+          const slides = p.slides?.length && !p.media.length ? (p.kind === "carousel" ? p.slides : p.slides.slice(0, 1)) : null;
+          await api.update("posts", p.id, {
+            platforms: p.kind === "story" ? p.platforms : platforms,
+            media: slides ? await renderAndUploadSlides(slides, p.design) : p.media,
+            caption,
+            scheduled_at,
+            status: "scheduled",
+            options: { ...(p.options ?? {}), ...(onTikTok ? { tiktok: toApiOptions(ttOpts) } : {}) },
+          });
+          saved++;
+          continue;
+        }
         await api.insert("posts", {
           platforms,
           kind: it.type === "video" ? "reel" : "image",
@@ -276,7 +324,7 @@ export default function BulkSchedule() {
           design: null,
           caption,
           title: it.name,
-          scheduled_at: new Date(schedule[it.id]!).toISOString(),
+          scheduled_at,
           status: "scheduled",
           results: {},
           options: onTikTok ? { tiktok: toApiOptions(ttOpts) } : {},
@@ -304,7 +352,7 @@ export default function BulkSchedule() {
     <div>
       <PageHeader
         title="Agendar em massa"
-        description="Mande várias fotos e vídeos de uma vez. Cada arquivo vira um post, distribuído nos horários que você escolher."
+        description="Mande várias fotos e vídeos de uma vez (ou traga os posts de Aprovações). Cada um vira um post, distribuído nos dias e horários que você escolher."
         actions={
           <Button size="sm" onClick={save} disabled={saving || !items.length}>
             {saving && <Loader2 className="animate-spin" />}
@@ -346,7 +394,9 @@ export default function BulkSchedule() {
                   return (
                     <div key={it.id} className="grid gap-3 p-3 sm:grid-cols-[84px_minmax(0,1fr)]">
                       <div className="relative w-[84px]">
-                        {it.type === "video" ? (
+                        {it.post && !it.preview && it.post.slides?.length ? (
+                          <SlidePreview slide={it.post.slides[0]} index={0} total={it.post.slides.length} design={it.post.design} className="w-full" />
+                        ) : it.type === "video" ? (
                           <video src={it.preview} className="aspect-[9/16] w-full rounded-md bg-black object-cover" muted playsInline preload="metadata" />
                         ) : (
                           <img src={it.preview} alt="" className="aspect-[4/5] w-full rounded-md border object-cover" />
@@ -359,7 +409,9 @@ export default function BulkSchedule() {
                       <div className="min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{it.name}</span>
-                          <span className="text-xs text-muted-foreground">{it.type === "video" ? `Reels${it.seconds ? ` · ${Math.round(it.seconds)}s` : ""}` : "Foto"}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {it.post?.kind === "carousel" ? `Carrossel · ${it.post.media.length || it.post.slides?.length || 0}` : it.type === "video" ? `Reels${it.seconds ? ` · ${Math.round(it.seconds)}s` : ""}` : "Foto"}
+                          </span>
                           <div className="flex">
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, -1)} aria-label="Mover para cima"><ArrowUp className="h-3.5 w-3.5" /></Button>
                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, 1)} aria-label="Mover para baixo"><ArrowDown className="h-3.5 w-3.5" /></Button>

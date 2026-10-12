@@ -11,6 +11,7 @@ import { nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProduc
 import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
 import { queueProductVideo } from "./product-video.ts";
 import { analyzeMarketplace, publishToMercadoLivre } from "./marketplaces.ts";
+import { generateIdeas } from "./content-ideas.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
 
@@ -25,10 +26,13 @@ const Slide = z.object({
   body: z.string().optional().describe("Texto de apoio"),
   footer: z.string().optional(),
   image_url: z.string().url().optional().describe("Imagem de fundo opcional"),
+  product_image: z.string().url().optional().describe("Foto do produto mostrada inteira num cartão abaixo do texto"),
 });
 const Design = z.object({
-  theme: z.enum(["divino", "claro", "escuro", "papel", "vibrante"]).optional(),
+  theme: z.enum(["marca", "divino", "claro", "escuro", "papel", "vibrante"]).optional(),
   handle: z.string().optional().describe("@ exibido nos slides"),
+  palette: z.object({ primary: z.string(), secondary: z.string(), accent: z.string() }).optional()
+    .describe("Cores de uma campanha (hex), ex.: Outubro Rosa; sem isso vale o tema (padrão 'marca': vermelho, preto e dourado)"),
 }).optional();
 
 function normalizeMedia(items: z.infer<typeof MediaInput>[] = []) {
@@ -436,6 +440,12 @@ const tools = {
       if (input.status) q = q.eq("status", input.status);
       return (await q.order("created_at", { ascending: false }).limit(input.limit ?? 50)).data;
     },
+  },
+
+  create_content_ideas: {
+    description: "Cria posts sozinho a partir das datas comemorativas e campanhas dos próximos dias (Outubro Rosa, Dia do Médico...), dos produtos da loja e do que o público curte: carrosséis com as fotos dos produtos vão para Aprovações e vídeos entram na fila (chegam em Aprovações quando ficam prontos). Use focus para pedir um tema.",
+    input: z.object({ count: z.number().int().min(1).max(8).optional(), focus: z.string().optional() }),
+    run: (ctx: Ctx, input: { count?: number; focus?: string }) => generateIdeas(ctx.db, ctx.userId, input),
   },
 
   get_instagram_profile: {

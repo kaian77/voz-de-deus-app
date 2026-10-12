@@ -8,6 +8,7 @@ import { ns, nsCategories, nsOrders, nsPages, nsProducts, nsStore, storeFor } fr
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { postVideo, queueProductVideo } from "../_shared/product-video.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
+import { generateIdeas } from "../_shared/content-ideas.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
 const SYSTEM = (brand: string) =>
@@ -122,6 +123,12 @@ Deno.serve(async (req) => {
       if (!images.length) throw new HttpError(400, "Envie pelo menos uma foto");
       const notes = String(input.description ?? "").trim().slice(0, 800);
       return json(await queueProductVideo(db, userId, { name, images, description: notes || undefined }, { autopost: false }));
+    }
+    if (action === "content_ideas") {
+      // "Criar ideias agora": carrosséis vão para Aprovações; vídeos entram na fila e chegam lá quando ficam prontos
+      const r = await generateIdeas(db, userId, { count: Number(input.count) || 4, focus: input.focus ? String(input.focus).slice(0, 500) : undefined });
+      await db.from("brand_settings").update({ autopilot_last_run: new Date().toISOString() }).eq("user_id", userId);
+      return json(r);
     }
     if (action === "video_post") {
       // Transforma um vídeo pronto (ex.: avulso) em post de Reels + TikTok
