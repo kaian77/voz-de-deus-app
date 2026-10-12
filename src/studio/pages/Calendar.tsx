@@ -10,6 +10,7 @@ import { useInvalidate, useRemoveRow, useTable } from "../lib/hooks";
 import type { Post } from "../lib/types";
 import { EmptyState, formatDateTime, sentence, formatTime, KIND_LABEL, PageHeader, PlatformIcon, STATUS, StatusBadge } from "../components/bits";
 import { PostThumb } from "../components/PostThumb";
+import { TIKTOK_INBOX_NOTE, toastPublishResult } from "@/studio/lib/publish-toast";
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -26,7 +27,7 @@ function PostActions({ post }: { post: Post }) {
     try {
       const r = await api.publishNow(post);
       if (r.status === "failed") toast.error("A publicação falhou de novo. Veja o motivo na lista.");
-      else toast.success("Publicação enviada");
+      else toastPublishResult(r);
       invalidate("posts");
     } catch (e) {
       toast.error((e as Error).message);
@@ -75,6 +76,7 @@ function PostLine({ post, showDate }: { post: Post; showDate?: boolean }) {
           {post.created_by === "agent" && <><span>·</span><span>criado pelo Claude</span></>}
         </p>
         {errors.map(([p, r]) => <p key={p} className="mt-1 text-xs text-danger">{p === "instagram" ? "Instagram" : "TikTok"}: {r!.error}</p>)}
+        {post.results?.tiktok?.inbox && <p className="mt-1 text-xs text-muted-foreground">TikTok: {TIKTOK_INBOX_NOTE}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <span className="hidden gap-1.5 sm:flex">{post.platforms.map((p) => <PlatformIcon key={p} platform={p} />)}</span>

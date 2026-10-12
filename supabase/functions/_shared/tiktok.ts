@@ -9,6 +9,24 @@ import { env } from "./util.ts";
 export const TIKTOK_SCOPES = ["user.info.basic", "video.publish", "video.upload"];
 const API = "https://open.tiktokapis.com/v2";
 
+/** Erros conhecidos da API, explicados em português. */
+const TT_ERRORS: Record<string, string> = {
+  unaudited_client_can_only_post_to_private_accounts:
+    "o app ainda não foi aprovado na auditoria do TikTok, então a postagem direta só funciona em conta privada",
+  url_ownership_unverified: "o domínio do link da mídia não está verificado no app do TikTok",
+  spam_risk_too_many_posts: "limite de posts do dia atingido no TikTok; tente amanhã",
+  spam_risk_user_banned_from_posting: "a conta está temporariamente impedida de postar pelo TikTok",
+  privacy_level_option_mismatch: "a privacidade escolhida não está disponível para esta conta",
+  access_token_invalid: "a conexão com o TikTok expirou; conecte a conta de novo em Contas",
+  scope_not_authorized: "falta permissão; conecte a conta do TikTok de novo em Contas",
+};
+
+export class TikTokError extends Error {
+  constructor(public code: string, message: string) {
+    super(message);
+  }
+}
+
 async function tt<T = any>(token: string, path: string, body?: unknown, method = "POST"): Promise<T> {
   const res = await fetch(`${API}/${path}`, {
     method,
@@ -17,7 +35,8 @@ async function tt<T = any>(token: string, path: string, body?: unknown, method =
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || (data.error && data.error.code && data.error.code !== "ok")) {
-    throw new Error(`TikTok: ${data.error?.message || data.error?.code || res.status}`);
+    const code = String(data.error?.code || res.status);
+    throw new TikTokError(code, `TikTok: ${TT_ERRORS[code] ?? data.error?.message ?? code}`);
   }
   return data.data as T;
 }
@@ -142,6 +161,27 @@ export async function ttPublishPhotos(token: string, caption: string, imageUrls:
     },
     source_info: { source: "PULL_FROM_URL", photo_cover_index: 0, photo_images: imageUrls.slice(0, 35) },
     post_mode: "DIRECT_POST",
+    media_type: "PHOTO",
+  });
+  return data.publish_id;
+}
+
+/**
+ * Envia para a caixa de entrada do app do TikTok (rascunho): o criador recebe uma notificação, revisa e publica
+ * pelo app. Funciona mesmo antes da auditoria (a postagem direta, não).
+ */
+export async function ttUploadToInbox(token: string, caption: string, kind: "video" | "photo", urls: string[]) {
+  if (kind === "video") {
+    const data = await tt<{ publish_id: string }>(token, "post/publish/inbox/video/init/", {
+      source_info: { source: "PULL_FROM_URL", video_url: urls[0] },
+    });
+    return data.publish_id;
+  }
+  const [firstLine, ...rest] = caption.split("\n");
+  const data = await tt<{ publish_id: string }>(token, "post/publish/content/init/", {
+    post_info: { title: firstLine.slice(0, 90), description: (rest.join("\n").trim() || caption).slice(0, 4000) },
+    source_info: { source: "PULL_FROM_URL", photo_cover_index: 0, photo_images: urls.slice(0, 35) },
+    post_mode: "MEDIA_UPLOAD",
     media_type: "PHOTO",
   });
   return data.publish_id;

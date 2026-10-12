@@ -17,6 +17,7 @@ import { renderAndUploadSlides } from "../lib/publishing";
 import type { CarouselDesign, MediaItem, Platform, Post, PostKind, Slide, ThemeId } from "../lib/types";
 import TikTokSettings, { fromApiOptions, TIKTOK_DEFAULTS, tiktokProblem, toApiOptions, useTikTokCreator, type TikTokOptions } from "../components/TikTokSettings";
 import { Avatar, KIND_LABEL, PageHeader, Panel, PlatformIcon, SectionLabel, SlidePreview, StatusBadge, toLocalInput } from "../components/bits";
+import { toastPublishResult } from "@/studio/lib/publish-toast";
 
 const KINDS: { id: PostKind; hint: string }[] = [
   { id: "image", hint: "1 imagem · 4:5" },
@@ -170,9 +171,7 @@ export default function Composer() {
       const saved = editing ? await api.update("posts", editing.id, row) : await api.insert("posts", { ...row, created_by: "user" });
       if (intent === "publish") {
         const result = await api.publishNow(saved);
-        if (result.status === "published") toast.success(platforms.includes("tiktok") ? "Publicado. No TikTok, pode levar alguns minutos para aparecer no perfil." : "Publicado");
-        else if (result.status === "publishing") toast.info("Enviado — o vídeo está processando e será publicado em instantes.");
-        else toast.error(`Falhou: ${Object.values(result.results ?? {}).map((r) => r?.error).filter(Boolean).join(" | ")}`);
+        toastPublishResult(result);
       } else toast.success(intent === "schedule" ? "Post agendado!" : "Rascunho salvo.");
       await qc.invalidateQueries({ queryKey: ["table", "posts"] });
       navigate("/studio/calendario");

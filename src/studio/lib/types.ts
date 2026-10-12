@@ -32,6 +32,7 @@ export interface PlatformResult {
   id?: string;
   permalink?: string;
   error?: string;
+  inbox?: boolean; // TikTok: foi para a caixa de entrada do app (falta publicar pelo celular)
 }
 
 export interface Post {
