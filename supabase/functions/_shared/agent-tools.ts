@@ -10,6 +10,7 @@ import { aiEnabled, generateJSON, researchWeb } from "./claude.ts";
 import { nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
 import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
 import { queueProductVideo } from "./product-video.ts";
+import { analyzeMarketplace, publishToMercadoLivre } from "./marketplaces.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
 
@@ -208,7 +209,7 @@ const tools = {
     run: async (ctx: Ctx) => {
       const now = new Date().toISOString();
       const [accounts, upcoming, pending, automations, comments, waiting] = await Promise.all([
-        ctx.db.from("social_accounts").select("id,platform,username,display_name,followers_count").eq("user_id", ctx.userId),
+        ctx.db.from("social_accounts").select("id,platform,username,display_name,followers_count,meta").eq("user_id", ctx.userId),
         ctx.db.from("posts").select("id,title,kind,platforms,scheduled_at,status").eq("user_id", ctx.userId).eq("status", "scheduled").gte("scheduled_at", now).order("scheduled_at").limit(15),
         ctx.db.from("posts").select("id,title,kind,platforms,scheduled_at").eq("user_id", ctx.userId).eq("status", "pending_approval").limit(20),
         ctx.db.from("automations").select("id,name,active,keywords,triggered_count").eq("user_id", ctx.userId),
@@ -218,13 +219,15 @@ const tools = {
       return {
         now,
         brand_settings: await settings(ctx),
-        accounts: accounts.data,
+        accounts: (accounts.data ?? []).map(({ meta: _meta, ...a }) => a),
         upcoming_posts: upcoming.data,
         pending_approval: pending.data,
         automations: automations.data,
         recent_comments: comments.data,
         conversations_needing_human: waiting.data,
         instagram_webhooks: await webhookHealth(ctx),
+        marketplaces: (accounts.data ?? []).filter((a) => ["mercadolivre", "shopee"].includes(a.platform))
+          .map((a) => ({ platform: a.platform, username: a.username, analysis: a.meta?.analysis ?? null })),
       };
     },
   },
@@ -240,6 +243,7 @@ const tools = {
       default_cta: z.string().optional(),
       product_autopost: z.boolean().optional().describe("Divulgar no Instagram/TikTok cada produto novo cadastrado"),
       video_enabled: z.boolean().optional().describe("Gerar também um vídeo animado (Reels/TikTok) para cada produto novo"),
+      marketplace_autopublish: z.boolean().optional().describe("Publicar cada produto novo também no Mercado Livre (seguindo o padrão dos anúncios atuais)"),
       approval_required: z.boolean().optional(),
       timezone: z.string().optional(),
       agent_enabled: z.boolean().optional().describe("Liga/desliga o agente de IA que responde DMs e WhatsApp"),
@@ -739,6 +743,28 @@ const tools = {
       const { data } = await ctx.db.from("product_videos").select("id,name,status,error,video_url,post_id,brief,created_at")
         .eq("user_id", ctx.userId).order("created_at", { ascending: false }).limit(input.limit ?? 10);
       return data;
+    },
+  },
+
+  analyze_marketplace: {
+    description: "Lê os anúncios atuais do Mercado Livre ou da Shopee, compara os preços com a loja Nuvemshop e descobre o padrão (regra de preço, categoria, tipo de anúncio, frete, dados fiscais e anúncio de referência). O resultado também aparece em get_overview.marketplaces.",
+    input: z.object({ platform: z.enum(["mercadolivre", "shopee"]) }),
+    run: async (ctx: Ctx, input: { platform: "mercadolivre" | "shopee" }) => analyzeMarketplace(ctx.db, ctx.userId, input.platform),
+  },
+
+  publish_to_mercadolivre: {
+    description: "Publica um produto no Mercado Livre copiando o padrão do anúncio de referência do lojista (categoria, tipo de anúncio, frete, garantia, atributos) e aplicando a regra de preço descoberta (price é o preço da loja).",
+    input: z.object({
+      name: z.string().min(1),
+      image_urls: z.array(z.string().url()).min(1).max(10),
+      price: z.number().positive().describe("Preço na loja Nuvemshop; a regra de preço do marketplace é aplicada em cima"),
+      description: z.string().optional(),
+      sku: z.string().optional(),
+      stock: z.number().int().min(0).optional(),
+    }),
+    run: async (ctx: Ctx, input: { name: string; image_urls: string[]; price: number; description?: string; sku?: string; stock?: number }) => {
+      for (const u of input.image_urls) assertPublicHttpsUrl(u);
+      return publishToMercadoLivre(ctx.db, ctx.userId, { ...input, images: input.image_urls });
     },
   },
 

@@ -4,6 +4,7 @@ import { z } from "npm:zod@4";
 import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
 import { applyTemplate, nsCreateProduct, type ProductChanges, type ProductTemplate, storeFor } from "./nuvemshop.ts";
 import { queueProductVideo } from "./product-video.ts";
+import { publishToMercadoLivre } from "./marketplaces.ts";
 
 /** Próximo horário nobre (13h ou 19h no fuso da marca) com pelo menos 2h de folga. */
 export function nextSlot(timeZone = "America/Sao_Paulo", from = new Date()) {
@@ -213,6 +214,33 @@ export async function buildProduct(
   return { fields: applyTemplate(tpl, baseName, { ...overrides, ...(description !== undefined ? { description } : {}) }), caption: undefined, baseName };
 }
 
+/**
+ * Com "Publicar também nos marketplaces" ligado, publica o produto no Mercado Livre seguindo o padrão
+ * dos anúncios atuais do lojista. Erros não desfazem o cadastro na loja: ficam registrados no rascunho.
+ */
+export async function publishToMarketplaces(
+  db: SupabaseClient,
+  userId: string,
+  draftId: string | null,
+  product: { name: string; description?: string; images: string[]; price: number; sku?: string; stock?: number | null },
+  force = false,
+) {
+  const { data: settings } = await db.from("brand_settings").select("marketplace_autopublish").eq("user_id", userId).maybeSingle();
+  if (!force && !settings?.marketplace_autopublish) return null;
+  const { data: accounts } = await db.from("social_accounts").select("platform").eq("user_id", userId).in("platform", ["mercadolivre"]);
+  const results: Record<string, unknown> = {};
+  for (const platform of new Set((accounts ?? []).map((a) => a.platform as string))) {
+    try {
+      if (!(product.price > 0)) throw new Error("Produto sem preço");
+      results[platform] = await publishToMercadoLivre(db, userId, product);
+    } catch (e) {
+      results[platform] = { error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+  if (draftId && Object.keys(results).length) await db.from("product_drafts").update({ marketplaces: results }).eq("id", draftId);
+  return results;
+}
+
 /** Cria na Nuvemshop o produto de um rascunho (fotos enviadas no Studio). */
 export async function createFromDraft(db: SupabaseClient, userId: string, draftId: string, extra: ProductChanges = {}) {
   const { data: draft } = await db.from("product_drafts").select("*").eq("id", draftId).eq("user_id", userId).single();
@@ -253,7 +281,15 @@ export async function createFromDraft(db: SupabaseClient, userId: string, draftI
       console.error("divulgação", e);
       return null;
     });
-    return { ...data, product, post };
+    const marketplaces = await publishToMarketplaces(db, userId, draft.id, {
+      name: built.fields.name ?? built.baseName,
+      description: built.fields.description,
+      images: draft.images,
+      price: Number(built.fields.price),
+      sku: built.fields.sku,
+      stock: built.fields.stock,
+    });
+    return { ...data, product, post, marketplaces };
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await db.from("product_drafts").update({ status: "failed", error: message }).eq("id", draft.id);

@@ -51,13 +51,13 @@ export interface Post {
 
 export interface SocialAccount {
   id: string;
-  platform: Platform | "whatsapp" | "nuvemshop";
+  platform: Platform | "whatsapp" | "nuvemshop" | "mercadolivre" | "shopee";
   external_id: string;
   username: string | null;
   display_name: string | null;
   avatar_url: string | null;
   followers_count: number | null;
-  meta: { biography?: string; website?: string; media_count?: number; provider?: "meta" | "waha"; url?: string };
+  meta: { biography?: string; website?: string; media_count?: number; provider?: "meta" | "waha"; url?: string; analysis?: MarketplaceAnalysis };
   connected_at: string;
 }
 
@@ -119,6 +119,7 @@ export interface ProductDraft {
   template_id: string | null;
   overrides: Record<string, unknown>;
   status: "pending" | "creating" | "created" | "failed";
+  marketplaces?: Record<string, { id?: string; permalink?: string; price?: number; error?: string }>;
   product_id: string | null;
   product_url: string | null;
   error: string | null;
@@ -218,6 +219,16 @@ export interface BrandSettings {
   agent_knowledge?: string | null;
   agent_handoff_message?: string | null;
   video_enabled?: boolean;
+  marketplace_autopublish?: boolean;
+}
+
+export interface MarketplaceAnalysis {
+  at: string;
+  listings: number;
+  matched: number;
+  rule_text: string;
+  samples: { name: string; store: number; marketplace: number }[];
+  errors: string[];
 }
 
 export interface ProductVideo {

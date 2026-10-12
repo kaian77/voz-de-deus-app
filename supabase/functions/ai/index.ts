@@ -4,9 +4,10 @@ import { z } from "npm:zod@4";
 import { adminClient, corsHeaders, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
 import { readWebPage, runTool } from "../_shared/agent-tools.ts";
-import { nsCategories, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
-import { createFromDraft, suggestProduct, templateFor } from "../_shared/products.ts";
+import { ns, nsCategories, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
+import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { queueProductVideo } from "../_shared/product-video.ts";
+import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
 const SYSTEM = (brand: string) =>
@@ -75,6 +76,26 @@ Deno.serve(async (req) => {
       return json(await nsCategories(store.token, store.storeId));
     }
     if (action === "product_create") return json(await createFromDraft(db, userId, String(input.draft_id)));
+    if (action === "marketplace_analyze") return json(await analyzeMarketplace(db, userId, input.platform === "shopee" ? "shopee" : "mercadolivre"));
+    if (action === "marketplace_publish") {
+      // Publica no Mercado Livre um produto já cadastrado na loja pelo Studio
+      const { data: draft } = await db.from("product_drafts").select("*").eq("id", input.draft_id).eq("user_id", userId).single();
+      if (!draft?.product_id) throw new HttpError(404, "Cadastre o produto na loja primeiro");
+      const store = await storeFor(db, userId);
+      if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
+      // deno-lint-ignore no-explicit-any
+      const p = await ns<any>(store.token, store.storeId, `products/${draft.product_id}`);
+      const v = p.variants?.[0] ?? {};
+      const results = await publishToMarketplaces(db, userId, draft.id, {
+        name: draft.name ?? "Produto",
+        description: (p.description?.pt ?? "") as string,
+        images: draft.images,
+        price: Number(v.price),
+        sku: v.sku || undefined,
+        stock: v.stock ?? null,
+      }, true);
+      return json(results ?? {});
+    }
     if (action === "product_video") {
       // Vídeo animado de um produto cadastrado pelo Studio (ou refazer um vídeo anterior)
       const { data: draft } = input.draft_id

@@ -463,6 +463,30 @@ export default function Products() {
       toast.error((e as Error).message);
     }
   };
+  const hasMl = accounts.some((a) => a.platform === "mercadolivre");
+  const setMarketplace = async (v: boolean) => {
+    try {
+      await api.saveSettings({ marketplace_autopublish: v });
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  const [mlFor, setMlFor] = useState<string | null>(null);
+  const publishMl = async (draft: ProductDraft) => {
+    setMlFor(draft.id);
+    try {
+      const r = await api.invoke<Record<string, { permalink?: string; error?: string }>>("ai", { action: "marketplace_publish", draft_id: draft.id });
+      const ml = r.mercadolivre;
+      if (ml?.error) toast.error(`Mercado Livre: ${ml.error}`);
+      else toast.success("Publicado no Mercado Livre");
+      refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setMlFor(null);
+    }
+  };
   const setVideo = async (v: boolean) => {
     try {
       await api.saveSettings({ video_enabled: v });
@@ -588,6 +612,17 @@ export default function Products() {
             </span>
             <Switch id="autopost" checked={autopost} onCheckedChange={setAutopost} />
           </label>
+          {hasMl && (
+            <label htmlFor="marketplaces" className="flex items-center justify-between gap-4 border-b px-4 py-3">
+              <span>
+                <span className="block text-[13px] font-medium">Publicar também no Mercado Livre</span>
+                <span className="block text-xs text-muted-foreground">
+                  Usa um anúncio seu como modelo (categoria, tipo de anúncio, frete e garantia) e a regra de preço descoberta em Contas.
+                </span>
+              </span>
+              <Switch id="marketplaces" checked={settings?.marketplace_autopublish ?? false} onCheckedChange={setMarketplace} />
+            </label>
+          )}
           {autopost && (
             <label htmlFor="video" className="flex items-center justify-between gap-4 border-b px-4 py-3">
               <span>
@@ -627,20 +662,32 @@ export default function Products() {
           <Panel title="Cadastrados recentemente" bodyClassName="p-0">
             <div className="divide-y">
               {created.map((d) => (
-                <div key={d.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
                   <img src={d.images[0]} alt="" className="h-9 w-9 rounded border object-cover" loading="lazy" />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-40">
                     <p className="truncate text-[13px] font-medium">{d.name}</p>
                     <p className="text-xs text-muted-foreground"><StatusDot tone="success">Na loja</StatusDot> · {relativeTime(d.created_at)}</p>
+                    {d.marketplaces?.mercadolivre?.error && <p className="truncate text-xs text-danger" title={d.marketplaces.mercadolivre.error}>Mercado Livre: {d.marketplaces.mercadolivre.error}</p>}
                   </div>
-                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => makeVideo(d)} disabled={videoFor === d.id}>
-                    {videoFor === d.id ? <Loader2 className="animate-spin" /> : <Clapperboard />}Vídeo
-                  </Button>
-                  {d.product_url && (
-                    <a href={d.product_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
-                      Ver na loja <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
+                  <div className="flex flex-wrap items-center justify-end gap-x-2">
+                    {d.marketplaces?.mercadolivre?.permalink ? (
+                      <a href={d.marketplaces.mercadolivre.permalink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
+                        Mercado Livre <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : hasMl && (
+                      <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => publishMl(d)} disabled={mlFor === d.id}>
+                        {mlFor === d.id && <Loader2 className="animate-spin" />}Mercado Livre
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => makeVideo(d)} disabled={videoFor === d.id}>
+                      {videoFor === d.id ? <Loader2 className="animate-spin" /> : <Clapperboard />}Vídeo
+                    </Button>
+                    {d.product_url && (
+                      <a href={d.product_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
+                        Ver na loja <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
