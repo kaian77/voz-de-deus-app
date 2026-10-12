@@ -25,7 +25,10 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
   const bottom = useRef<HTMLDivElement>(null);
   const windowOpen = conversation.last_inbound_at && Date.now() - new Date(conversation.last_inbound_at).getTime() < 24 * 3600 * 1000;
 
-  useEffect(() => bottom.current?.scrollIntoView({ block: "end" }), [messages.length]);
+  // Entre chaves: no Chrome novo scrollIntoView devolve uma Promise, e o React tentaria chamá-la como limpeza do efeito
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
   useEffect(() => {
     if (conversation.unread) saveConv.mutate({ id: conversation.id, unread: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
