@@ -219,16 +219,6 @@ O *Business Discovery* da Meta lê dados públicos de outras contas profissionai
 
 Sem isso, você pode adicionar anotações ou pedir ao Claude para pesquisar e salvar os dados com `upsert_competitor`.
 
-## 10. Vídeo dos produtos com a apresentadora (HeyGen)
-
-Cada produto novo pode ganhar um vídeo vertical (20 a 30 s) para Reels e TikTok com o avatar e a voz da sua apresentadora na HeyGen.
-
-1. Na HeyGen, abra **Settings → API** e copie a API key (o plano precisa incluir acesso à API).
-2. No GitHub: **Settings → Secrets and variables → Actions → New repository secret**, nome `HEYGEN_API_KEY`. Rode o workflow *Supabase deploy* (ou faça um merge na main).
-3. No Studio, em **Produtos → Vídeo com a apresentadora**: clique em *Buscar na HeyGen*, escolha o avatar e a voz, o formato (POV só com as mãos ou ela apresentando) e ligue *Gerar vídeo para cada produto novo*.
-
-Como funciona: a IA escreve o roteiro olhando as fotos; o **Video Agent** da HeyGen monta o vídeo com as fotos do produto e a voz (e, no formato apresentadora, o rosto) do avatar; o cron acompanha a renderização, copia o MP4 para o storage do Studio e cria o post (Reels + TikTok) no próximo horário nobre livre, em Aprovações se a marca exigir aprovação. Pelo Claude: `list_heygen_presenters`, `create_product_video` e `list_product_videos`.
-
 ---
 
 ## Arquitetura

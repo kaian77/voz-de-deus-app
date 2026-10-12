@@ -217,31 +217,7 @@ export interface BrandSettings {
   agent_instructions?: string | null;
   agent_knowledge?: string | null;
   agent_handoff_message?: string | null;
-  video_enabled?: boolean;
-  video_style?: "pov" | "presenter";
-  video_presenter_name?: string | null;
-  video_notes?: string | null;
-  heygen_avatar_id?: string | null;
-  heygen_voice_id?: string | null;
 }
-
-export interface ProductVideo {
-  id: string;
-  name: string;
-  product_url: string | null;
-  images: string[];
-  style: "pov" | "presenter";
-  script: string | null;
-  status: "generating" | "finishing" | "ready" | "failed";
-  video_url: string | null;
-  thumbnail_url: string | null;
-  post_id: string | null;
-  error: string | null;
-  created_at: string;
-}
-
-export interface HeygenLook { id: string; name: string; group?: string; image?: string; voice_id?: string; private: boolean }
-export interface HeygenVoice { id: string; name: string; language?: string; gender?: string; preview?: string; private: boolean }
 
 export type Channel = "instagram" | "whatsapp";
 
@@ -292,7 +268,6 @@ export interface TableMap {
   messages: Message;
   product_templates: ProductTemplate;
   product_drafts: ProductDraft;
-  product_videos: ProductVideo;
 }
 export type TableName = keyof TableMap;
 
