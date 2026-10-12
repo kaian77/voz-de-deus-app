@@ -205,6 +205,12 @@ export function igSubscribeWebhooks(token: string) {
   return igRequest(token, "me/subscribed_apps", { method: "POST", params: { subscribed_fields: "comments,messages" } });
 }
 
+/** Campos de webhook em que a conta está inscrita para este app (vazio = a Meta não envia nada dela). */
+export async function igSubscribedFields(token: string): Promise<string[]> {
+  const r = await igRequest<{ data?: { subscribed_fields?: string[] }[] }>(token, "me/subscribed_apps");
+  return [...new Set((r.data ?? []).flatMap((d) => d.subscribed_fields ?? []))];
+}
+
 // ---------------------------------------------------------------------------
 // Concorrentes — Business Discovery (só existe na API com Facebook Login).
 // Opcional: configure META_FB_ACCESS_TOKEN + META_FB_IG_USER_ID para ativar.

@@ -2,7 +2,7 @@
 // Expostas por REST (/agent/tools/<nome>) e por MCP (/agent/mcp) na função "agent".
 import { z } from "npm:zod@4";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { businessDiscoveryEnabled, igBusinessDiscovery, igProfile, igRecentMedia, igTokenFor } from "./instagram.ts";
+import { businessDiscoveryEnabled, igBusinessDiscovery, igProfile, igRecentMedia, igSubscribedFields, igSubscribeWebhooks, igTokenFor } from "./instagram.ts";
 import { advancePost, validatePost } from "./publisher.ts";
 import { assertPublicHttpsUrl } from "./util.ts";
 import { sendMessage, transcript } from "./inbox.ts";
@@ -122,7 +122,24 @@ async function webhookHealth(ctx: Ctx) {
     // Inclui os eventos de teste do painel da Meta (vêm com uma conta fictícia), sem expor de qual conta são
     ctx.db.from("webhook_log").select("status,kinds,received_at").eq("platform", "instagram").order("received_at", { ascending: false }).limit(5),
   ]);
-  return { received: mine.data ?? [], rejected_bad_signature: rejected.data ?? [], latest_any_account: any.data ?? [] };
+  // Inscrição da conta no app: sem ela a Meta não envia comentários/DMs reais. Refaz se estiver faltando.
+  const { data: accounts } = await ctx.db.from("social_accounts").select("id,username").eq("user_id", ctx.userId).eq("platform", "instagram");
+  const subscriptions = [];
+  for (const a of accounts ?? []) {
+    try {
+      const token = await igTokenFor(ctx.db, a.id);
+      const before = await igSubscribedFields(token);
+      let after = before;
+      if (!before.includes("comments") || !before.includes("messages")) {
+        await igSubscribeWebhooks(token);
+        after = await igSubscribedFields(token);
+      }
+      subscriptions.push({ username: a.username, before, after });
+    } catch (e) {
+      subscriptions.push({ username: a.username, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { received: mine.data ?? [], rejected_bad_signature: rejected.data ?? [], latest_any_account: any.data ?? [], subscriptions };
 }
 
 async function settings(ctx: Ctx) {
