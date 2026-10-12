@@ -108,6 +108,8 @@ export interface ProductTemplateData {
   fiscal_ncm?: string;
   fiscal_origin?: string;
   fiscal_type?: string;
+  age_group?: string;
+  gender?: string;
 }
 
 export interface ProductTemplate {

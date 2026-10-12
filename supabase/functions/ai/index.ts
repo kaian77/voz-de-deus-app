@@ -4,7 +4,7 @@ import { z } from "npm:zod@4";
 import { adminClient, corsHeaders, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
 import { readWebPage, runTool } from "../_shared/agent-tools.ts";
-import { ns, nsCategories, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
+import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { postVideo, queueProductVideo } from "../_shared/product-video.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
@@ -77,6 +77,12 @@ Deno.serve(async (req) => {
       return json(await nsCategories(store.token, store.storeId));
     }
     if (action === "product_create") return json(await createFromDraft(db, userId, String(input.draft_id)));
+    if (action === "store_fill_shopping") {
+      // MPN, faixa etária e gênero nos produtos que já estão na loja (uma página por chamada)
+      const store = await storeFor(db, userId);
+      if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
+      return json(await nsFillShopping(store.token, store.storeId, { page: Number(input.page) || 1, age_group: input.age_group, gender: input.gender }));
+    }
     if (action === "marketplace_analyze") return json(await analyzeMarketplace(db, userId, input.platform === "shopee" ? "shopee" : "mercadolivre"));
     if (action === "marketplace_publish") {
       // Publica no Mercado Livre um produto já cadastrado na loja pelo Studio
