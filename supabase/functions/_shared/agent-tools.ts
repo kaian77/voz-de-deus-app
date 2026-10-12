@@ -123,7 +123,7 @@ async function webhookHealth(ctx: Ctx) {
     ctx.db.from("webhook_log").select("status,kinds,received_at").eq("platform", "instagram").order("received_at", { ascending: false }).limit(5),
   ]);
   // Inscrição da conta no app: sem ela a Meta não envia comentários/DMs reais. Refaz se estiver faltando.
-  const { data: accounts } = await ctx.db.from("social_accounts").select("id,username").eq("user_id", ctx.userId).eq("platform", "instagram");
+  const { data: accounts } = await ctx.db.from("social_accounts").select("id,username,meta").eq("user_id", ctx.userId).eq("platform", "instagram");
   const subscriptions = [];
   for (const a of accounts ?? []) {
     try {
@@ -134,7 +134,7 @@ async function webhookHealth(ctx: Ctx) {
         await igSubscribeWebhooks(token);
         after = await igSubscribedFields(token);
       }
-      subscriptions.push({ username: a.username, before, after });
+      subscriptions.push({ username: a.username, before, after, last_poll: a.meta?.poll_last ?? null });
     } catch (e) {
       subscriptions.push({ username: a.username, error: e instanceof Error ? e.message : String(e) });
     }

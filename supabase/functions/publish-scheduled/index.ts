@@ -1,7 +1,9 @@
-// Chamado pelo pg_cron a cada minuto (ver SETUP_SOCIAL_STUDIO.md).
+// Chamado pelo pg_cron a cada minuto (ver SETUP_SOCIAL_STUDIO.md): publica posts e, a cada 2 min,
+// busca comentários/DMs novos do Instagram.
 // Também aceita { post_id } com JWT do usuário para "Publicar agora".
 import { adminClient, corsHeaders, env, handleError, HttpError, json, requireUser, timingSafeEqual } from "../_shared/util.ts";
 import { advancePost, runDuePosts } from "../_shared/publisher.ts";
+import { pollInstagram } from "../_shared/instagram-poller.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -21,7 +23,12 @@ Deno.serve(async (req) => {
     }
 
     if (!timingSafeEqual(req.headers.get("x-cron-secret") ?? "", env("CRON_SECRET"))) throw new HttpError(401, "Não autorizado");
-    return json({ processed: await runDuePosts(db) });
+    const processed = await runDuePosts(db);
+    // A cada 2 minutos: busca comentários/DMs novos (enquanto os webhooks da Meta não chegam)
+    const polled = new Date().getUTCMinutes() % 2 === 0
+      ? await pollInstagram(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
+      : undefined;
+    return json({ processed, polled });
   } catch (err) {
     return handleError(err);
   }
