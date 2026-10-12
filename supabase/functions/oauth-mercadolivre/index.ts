@@ -1,5 +1,6 @@
 // GET ?action=start (com JWT do app) -> { url } para autorizar o Studio na conta do Mercado Livre
 // GET ?code=...&state=...            -> retorno do Mercado Livre (Redirect URI do app)
+// POST                                 -> notificações dos tópicos do app (por enquanto só confirma o recebimento)
 import { adminClient, appUrl, corsHeaders, handleError, json, requireUser, signState, verifyState } from "../_shared/util.ts";
 import { ml, mlAuthorizeUrl, mlExchangeCode } from "../_shared/mercadolivre.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
@@ -7,6 +8,8 @@ import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const url = new URL(req.url);
+  // O Mercado Livre exige uma URL de notificações; respondemos 200 para ele não desativar o envio
+  if (req.method === "POST") return json({ ok: true });
   try {
     if (url.searchParams.get("action") === "start") {
       const userId = await requireUser(req);
