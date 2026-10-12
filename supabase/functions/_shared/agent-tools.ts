@@ -114,13 +114,15 @@ async function researchCompetitor(username: string, platform: "instagram" | "tik
 async function webhookHealth(ctx: Ctx) {
   const { data: igs } = await ctx.db.from("social_accounts").select("external_id").eq("user_id", ctx.userId).eq("platform", "instagram");
   const ids = (igs ?? []).map((a) => a.external_id as string);
-  const [mine, rejected] = await Promise.all([
+  const [mine, rejected, any] = await Promise.all([
     ids.length
       ? ctx.db.from("webhook_log").select("status,kinds,received_at").eq("platform", "instagram").in("account_external_id", ids).order("received_at", { ascending: false }).limit(10)
       : Promise.resolve({ data: [] }),
     ctx.db.from("webhook_log").select("received_at").eq("platform", "instagram").eq("status", "bad_signature").order("received_at", { ascending: false }).limit(5),
+    // Inclui os eventos de teste do painel da Meta (vêm com uma conta fictícia), sem expor de qual conta são
+    ctx.db.from("webhook_log").select("status,kinds,received_at").eq("platform", "instagram").order("received_at", { ascending: false }).limit(5),
   ]);
-  return { received: mine.data ?? [], rejected_bad_signature: rejected.data ?? [] };
+  return { received: mine.data ?? [], rejected_bad_signature: rejected.data ?? [], latest_any_account: any.data ?? [] };
 }
 
 async function settings(ctx: Ctx) {
