@@ -105,6 +105,7 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
   if (fn === "ai") {
     switch (body.action) {
       case "caption":
+      case "caption_media":
         return {
           hook: "Deus não esqueceu de você.",
           caption: `Deus não esqueceu de você. 🙏\n\nMesmo quando parece que nada está mudando, Ele está agindo em silêncio. ${body.topic ? `\n\n${body.topic}` : ""}\n\nComente AMÉM se você crê!`,
@@ -201,6 +202,8 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
       case "product_create":
         throw new Error("No modo demo não há loja conectada para cadastrar o produto.");
       case "product_video":
+      case "video_only":
+      case "video_post":
         throw new Error("No modo demo os vídeos não são gerados.");
       case "sync_competitor":
         throw new Error("No modo demo não há conexão com o Instagram.");

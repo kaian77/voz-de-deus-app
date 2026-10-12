@@ -7,6 +7,7 @@ import AuthGate from "./studio/components/AuthGate";
 import StudioLayout from "./studio/components/StudioLayout";
 import Dashboard from "./studio/pages/Dashboard";
 import Composer from "./studio/pages/Composer";
+import BulkSchedule from "./studio/pages/BulkSchedule";
 import Calendar from "./studio/pages/Calendar";
 import Approvals from "./studio/pages/Approvals";
 import Automations from "./studio/pages/Automations";
@@ -36,6 +37,7 @@ const App = () => (
           <Route path="/studio" element={<AuthGate><StudioLayout /></AuthGate>}>
             <Route index element={<Dashboard />} />
             <Route path="criar" element={<Composer />} />
+            <Route path="em-massa" element={<BulkSchedule />} />
             <Route path="calendario" element={<Calendar />} />
             <Route path="aprovacoes" element={<Approvals />} />
             <Route path="automacoes" element={<Automations />} />

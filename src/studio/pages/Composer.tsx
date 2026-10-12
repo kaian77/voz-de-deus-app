@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Bookmark, Heart, Loader2, MessageCircle, Plus, Send, Sparkles, Trash2, Upload, Wand2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Bookmark, CalendarPlus, Heart, Loader2, MessageCircle, Plus, Send, Sparkles, Trash2, Upload, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -227,6 +227,11 @@ export default function Composer() {
         actions={
           <>
             {editing && <StatusBadge status={editing.status} />}
+            {!editing && (
+              <Button variant="outline" size="sm" onClick={() => navigate("/studio/em-massa")}>
+                <CalendarPlus /> Agendar em massa
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setAiOpen("carousel")}>
               <Wand2 /> Gerar carrossel com IA
             </Button>

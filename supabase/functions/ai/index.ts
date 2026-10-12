@@ -6,7 +6,7 @@ import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
 import { readWebPage, runTool } from "../_shared/agent-tools.ts";
 import { ns, nsCategories, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
-import { queueProductVideo } from "../_shared/product-video.ts";
+import { postVideo, queueProductVideo } from "../_shared/product-video.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
@@ -102,11 +102,38 @@ Deno.serve(async (req) => {
         ? await db.from("product_drafts").select("name,images,product_url").eq("id", input.draft_id).eq("user_id", userId).single()
         : { data: null };
       const { data: previous } = input.video_id
-        ? await db.from("product_videos").select("name,images,product_url,caption").eq("id", input.video_id).eq("user_id", userId).single()
+        ? await db.from("product_videos").select("name,images,product_url,caption,autopost,brief").eq("id", input.video_id).eq("user_id", userId).single()
         : { data: null };
       const source = draft ?? previous;
       if (!source?.images?.length) throw new HttpError(404, "Produto não encontrado");
-      return json(await queueProductVideo(db, userId, { name: source.name ?? "Produto", images: source.images, url: source.product_url }));
+      return json(await queueProductVideo(db, userId, {
+        name: source.name ?? "Produto",
+        images: source.images,
+        url: source.product_url,
+        description: previous?.brief?.notes || undefined,
+      }, { autopost: previous ? previous.autopost !== false : true }));
+    }
+    if (action === "video_only") {
+      // Vídeo avulso: só a foto e o nome, para baixar (não vira post nem cadastra produto)
+      const name = String(input.name ?? "").trim().slice(0, 80);
+      const storage = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/media/${userId}/`;
+      const images = (Array.isArray(input.images) ? input.images : []).filter((u: unknown) => typeof u === "string" && u.startsWith(storage)).slice(0, 4);
+      if (!name) throw new HttpError(400, "Dê um nome para o produto");
+      if (!images.length) throw new HttpError(400, "Envie pelo menos uma foto");
+      const notes = String(input.description ?? "").trim().slice(0, 800);
+      return json(await queueProductVideo(db, userId, { name, images, description: notes || undefined }, { autopost: false }));
+    }
+    if (action === "video_post") {
+      // Transforma um vídeo pronto (ex.: avulso) em post de Reels + TikTok
+      const { data: v } = await db.from("product_videos").select("*").eq("id", input.video_id).eq("user_id", userId).single();
+      if (!v || v.status !== "ready" || !v.video_url) throw new HttpError(400, "O vídeo ainda não está pronto");
+      if (v.post_id) {
+        const { data: existing } = await db.from("posts").select("id,status").eq("id", v.post_id).maybeSingle();
+        if (existing) return json({ post: existing });
+      }
+      const post = await postVideo(db, v);
+      if (!post) throw new HttpError(400, "Conecte o Instagram ou o TikTok em Contas para postar");
+      return json({ post });
     }
     if (action === "product_suggest") {
       const { data: draft } = await db.from("product_drafts").select("images,name,template_id").eq("id", input.draft_id).eq("user_id", userId).single();
@@ -131,6 +158,20 @@ Deno.serve(async (req) => {
           `Crie uma legenda para um post do tipo "${input.kind ?? "post"}" para ${(input.platforms ?? ["instagram"]).join(" e ")}.\n` +
           `Tema/briefing: ${input.topic}\n` +
           `Regras: primeira linha é o gancho; parágrafos curtos; termine com CTA; 5 a 12 hashtags relevantes (sem #) separadas no campo hashtags.`));
+
+      case "caption_media": {
+        // Legenda olhando a foto (ou um quadro do vídeo) — usada no agendamento em massa
+        const storage = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/media/${userId}/`;
+        const image = typeof input.image === "string" && input.image.startsWith(storage) ? [input.image] : [];
+        return json(await generateJSON(Caption, system,
+          `Crie uma legenda para um ${input.kind === "reel" ? "Reels/vídeo" : "post de foto"} para ${(input.platforms ?? ["instagram"]).join(" e ")}.\n` +
+          `${image.length ? "Olhe a imagem anexada (é o post ou um quadro do vídeo) e escreva sobre o que aparece nela.\n" : ""}` +
+          `${input.hint ? `Contexto do usuário: ${String(input.hint).slice(0, 600)}\n` : ""}` +
+          `${input.name ? `Nome do arquivo (pode dar uma pista): ${String(input.name).slice(0, 80)}\n` : ""}` +
+          `Regras: primeira linha é o gancho; parágrafos curtos; termine com CTA; 5 a 12 hashtags relevantes (sem #) separadas no campo hashtags. ` +
+          `Não invente preços, medidas, materiais ou promoções que não estejam no contexto ou na imagem.`,
+          "low", image));
+      }
 
       case "carousel":
         return json(await generateJSON(Carousel, system,

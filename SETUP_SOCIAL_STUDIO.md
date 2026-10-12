@@ -229,6 +229,12 @@ Cada produto novo pode ganhar um vídeo vertical de ~15 s (foto do produto sem f
 
 Liga em **Produtos → Fazer também um vídeo animado**; cada produto cadastrado tem o botão **Vídeo**. Pelo Claude: `create_product_video` e `list_product_videos`. Os vídeos usam o tempo grátis do GitHub Actions (cada vídeo leva 1–3 minutos).
 
+**Só o vídeo, para baixar:** em **Produtos → Vídeos dos produtos**, mande a foto e o nome do produto e clique em **Gerar vídeo**. Esse vídeo não cadastra produto nem vira post; quando fica pronto aparece o botão **Baixar** (e **Postar**, se quiser postar depois).
+
+**Vídeo na hora (opcional):** sem configuração, o vídeo fica pronto na próxima rodada do workflow (até 1 hora). Para começar na hora, crie um token do GitHub em **Settings → Developer settings → Personal access tokens → Fine-grained tokens**, só com este repositório e a permissão **Actions: Read and write**, salve como secret `VIDEO_DISPATCH_TOKEN` do repositório e rode o deploy. Aí cada vídeo fica pronto em uns 5 minutos.
+
+**Agendar em massa:** em **Publicar → Agendar em massa**, mande várias fotos e vídeos de uma vez. Cada arquivo vira um post (foto = post de imagem; vídeo = Reels e vídeo no TikTok), distribuído nos horários escolhidos a partir de um dia, pulando os horários que já têm post. A IA pode escrever as legendas olhando cada foto (ou um quadro do vídeo).
+
 ## 11. Mercado Livre e Shopee
 
 **Mercado Livre**
