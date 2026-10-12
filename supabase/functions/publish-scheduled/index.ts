@@ -6,6 +6,7 @@ import { advancePost, runDuePosts } from "../_shared/publisher.ts";
 import { pollInstagram } from "../_shared/instagram-poller.ts";
 import { finishRenderedVideos } from "../_shared/product-video.ts";
 import { runAutopilot } from "../_shared/content-ideas.ts";
+import { cleanupStorage } from "../_shared/storage-cleanup.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -36,7 +37,11 @@ Deno.serve(async (req) => {
     const autopilot = new Date().getUTCMinutes() % 10 === 5
       ? await runAutopilot(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
       : undefined;
-    return json({ processed, polled, videos, autopilot });
+    // Uma vez por hora: apaga os vídeos antigos (já baixados ou publicados) para liberar espaço
+    const cleanup = new Date().getUTCMinutes() === 50
+      ? await cleanupStorage(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
+      : undefined;
+    return json({ processed, polled, videos, autopilot, cleanup });
   } catch (err) {
     return handleError(err);
   }
