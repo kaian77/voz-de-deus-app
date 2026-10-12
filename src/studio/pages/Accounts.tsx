@@ -37,7 +37,7 @@ export function ConnectedAccount({ account, onRemove }: { account: SocialAccount
               ? `${account.meta.analysis.listings} anúncios ativos`
               : "Conectada"
             : account.platform === "whatsapp"
-            ? `+${account.username} · ${account.meta.provider === "waha" ? "WAHA" : "API oficial"}`
+            ? `${account.meta.label ? `${account.meta.label} · ` : ""}+${account.username} · ${account.meta.provider === "waha" ? "WAHA" : "API oficial"}`
             : account.followers_count != null ? `${account.followers_count.toLocaleString("pt-BR")} seguidores` : "Conectada"}
         </p>
       </div>
