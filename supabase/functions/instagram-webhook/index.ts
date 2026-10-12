@@ -125,6 +125,17 @@ async function handleDirectMessage(igUserId: string, event: MessagingEvent) {
   if (recorded) await autoReply(db, recorded.conversation, recorded.message.id);
 }
 
+/** Diagnóstico: guarda que a notificação chegou (sem o conteúdo) e mantém só as mais recentes. */
+async function logWebhook(row: { status: string; account_external_id?: string | null; kinds?: string[] }) {
+  try {
+    const db = adminClient();
+    const { data } = await db.from("webhook_log").insert({ platform: "instagram", kinds: [], ...row }).select("id").single();
+    if (data && data.id % 50 === 0) await db.from("webhook_log").delete().lt("id", data.id - 500);
+  } catch (e) {
+    console.error("webhook_log", e);
+  }
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
 
@@ -136,9 +147,20 @@ Deno.serve(async (req) => {
   const raw = await req.text();
   const signature = req.headers.get("x-hub-signature-256")?.replace("sha256=", "") ?? "";
   const expected = await hmacHex(env("IG_APP_SECRET"), raw);
-  if (!timingSafeEqual(signature, expected)) return new Response("Assinatura inválida", { status: 401 });
+  if (!timingSafeEqual(signature, expected)) {
+    await logWebhook({ status: "bad_signature" });
+    return new Response("Assinatura inválida", { status: 401 });
+  }
 
   const body = JSON.parse(raw);
+  await logWebhook({
+    status: "ok",
+    account_external_id: body.entry?.[0]?.id ? String(body.entry[0].id) : null,
+    kinds: [...new Set((body.entry ?? []).flatMap((e: any) => [
+      ...(e.messaging?.length ? ["messages"] : []),
+      ...(e.changes ?? []).map((c: any) => String(c.field)),
+    ]))] as string[],
+  });
   const jobs: Promise<unknown>[] = [];
   for (const entry of body.entry ?? []) {
     for (const event of entry.messaging ?? []) {
