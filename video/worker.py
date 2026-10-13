@@ -14,6 +14,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -152,20 +153,30 @@ def main():
         requeue_stuck()
         print("queued" if queued() else "empty")
         return
-    for row in queued():
-        claimed = rest("PATCH", f"product_videos?id=eq.{row['id']}&status=eq.queued",
-                       {"status": "rendering", "attempts": row["attempts"] + 1, "error": None})
-        if not claimed:
-            continue
-        print(f"-> {row['name']} ({row['id']})", flush=True)
-        try:
-            url = render(row)
-            rest("PATCH", f"product_videos?id=eq.{row['id']}", {"status": "rendered", "video_url": url, "error": None})
-            print(f"   ok {url}", flush=True)
-        except Exception as e:  # noqa: BLE001 — registra o erro na linha e segue para o próximo
-            last = row["attempts"] + 1 >= MAX_ATTEMPTS
-            rest("PATCH", f"product_videos?id=eq.{row['id']}", {"status": "failed" if last else "queued", "error": str(e)[:500]})
-            print(f"   erro: {e}", flush=True)
+    # Lotes grandes (ex.: 50 vídeos da estratégia): continua pegando a fila até esvaziar ou chegar perto do limite do job
+    started = time.time()
+    while time.time() - started < 35 * 60:
+        rows = queued()
+        if not rows:
+            break
+        for row in rows:
+            render_one(row)
+
+
+def render_one(row):
+    claimed = rest("PATCH", f"product_videos?id=eq.{row['id']}&status=eq.queued",
+                   {"status": "rendering", "attempts": row["attempts"] + 1, "error": None})
+    if not claimed:
+        return
+    print(f"-> {row['name']} ({row['id']})", flush=True)
+    try:
+        url = render(row)
+        rest("PATCH", f"product_videos?id=eq.{row['id']}", {"status": "rendered", "video_url": url, "error": None})
+        print(f"   ok {url}", flush=True)
+    except Exception as e:  # noqa: BLE001 — registra o erro na linha e segue para o próximo
+        last = row["attempts"] + 1 >= MAX_ATTEMPTS
+        rest("PATCH", f"product_videos?id=eq.{row['id']}", {"status": "failed" if last else "queued", "error": str(e)[:500]})
+        print(f"   erro: {e}", flush=True)
 
 
 if __name__ == "__main__":

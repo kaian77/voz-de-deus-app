@@ -20,6 +20,7 @@ import Messages from "./studio/pages/Messages";
 import Orders from "./studio/pages/Orders";
 import Products from "./studio/pages/Products";
 import Legal from "./studio/pages/Legal";
+import StrategyPage from "./studio/pages/Strategy";
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,7 @@ const App = () => (
             <Route path="mensagens" element={<Messages />} />
             <Route path="pedidos" element={<Orders />} />
             <Route path="produtos" element={<Products />} />
+            <Route path="estrategia" element={<StrategyPage />} />
             <Route path="vitrine" element={<Vitrine />} />
             <Route path="concorrentes" element={<Competitors />} />
             <Route path="contas" element={<Accounts />} />

@@ -327,6 +327,7 @@ export interface TableMap {
   product_templates: ProductTemplate;
   product_drafts: ProductDraft;
   product_videos: ProductVideo;
+  strategies: Strategy;
 }
 export type TableName = keyof TableMap;
 
@@ -356,4 +357,34 @@ export interface IgProfileData {
   };
   media: IgMedia[];
   best_times: { slot: string; avg_engagement: number; posts: number }[];
+}
+
+/** Plano do motor de estratégia (gerado pela IA a partir das vendas). */
+export interface StrategyPlan {
+  summary: string;
+  diagnosis: { title: string; detail: string }[];
+  priorities: { title: string; why: string; channel: "tiktok" | "site" | "instagram" | "mercadolivre" | "geral"; actions: string[]; products: string[] }[];
+  tiktok_ads: { advice: string; roi_target: string; budget: string; products: string[] };
+  kits: { name: string; products: string[]; why: string }[];
+  content: { idea: string; format: string; channel: "tiktok" | "instagram" | "ambos"; product: string }[];
+  dates: { date: string; name: string; action: string }[];
+  weekly_checklist: string[];
+}
+
+export interface Strategy {
+  id: string;
+  input: { tiktok?: string | null; goal?: string };
+  data: {
+    period_days: number;
+    products: number;
+    products_without_sales: number;
+    products_without_video: number;
+    site: { orders: number; revenue: number };
+    mercadolivre: { orders: number } | null;
+    top: { name: string; site_qty: number; ml_qty: number; url: string | null; image: string | null }[];
+  };
+  plan: StrategyPlan;
+  video_picks: { id: number; name: string; url: string | null; image: string | null; sold: number }[];
+  videos_queued_at: string | null;
+  created_at: string;
 }

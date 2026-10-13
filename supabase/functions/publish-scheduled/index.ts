@@ -5,7 +5,7 @@ import { adminClient, corsHeaders, env, handleError, HttpError, json, requireUse
 import { advancePost, runDuePosts } from "../_shared/publisher.ts";
 import { pollInstagram } from "../_shared/instagram-poller.ts";
 import { autoLinkPosts } from "../_shared/auto-link.ts";
-import { finishRenderedVideos } from "../_shared/product-video.ts";
+import { finishRenderedVideos, prepareBriefs } from "../_shared/product-video.ts";
 import { runAutopilot } from "../_shared/content-ideas.ts";
 import { cleanupStorage } from "../_shared/storage-cleanup.ts";
 import { wahaKeepAlive } from "../_shared/whatsapp.ts";
@@ -39,6 +39,8 @@ Deno.serve(async (req) => {
     const autolink = await autoLinkPosts(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Vídeos animados que o GitHub Actions terminou de renderizar viram post
     const videos = await finishRenderedVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
+    // Vídeos em lote (estratégia): a IA escreve os textos de alguns por minuto e manda renderizar
+    const briefs = await prepareBriefs(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // A cada 10 minutos: piloto automático de conteúdo (uma vez por semana por usuário, em segundo plano)
     const autopilot = new Date().getUTCMinutes() % 10 === 5
       ? await runAutopilot(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
@@ -57,7 +59,7 @@ Deno.serve(async (req) => {
     const sales = new Date().getUTCMinutes() % 2 === 1
       ? await runSaleAlerts(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
       : undefined;
-    return json({ processed, polled, autolink, videos, autopilot, cleanup, waha, mlsync, sales });
+    return json({ processed, polled, autolink, videos, briefs, autopilot, cleanup, waha, mlsync, sales });
   } catch (err) {
     return handleError(err);
   }

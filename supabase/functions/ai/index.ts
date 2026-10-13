@@ -10,6 +10,7 @@ import { postVideo, queueProductVideo } from "../_shared/product-video.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
+import { generateStrategy } from "../_shared/strategy.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
 const SYSTEM = (brand: string) =>
@@ -209,6 +210,27 @@ Deno.serve(async (req) => {
         await db.from("product_drafts").update({ name: suggestion.name, overrides: { ...(current?.overrides ?? {}), ai: suggestion.listing } }).eq("id", input.draft_id);
       }
       return json(suggestion);
+    }
+    if (action === "strategy_generate") {
+      if (!aiEnabled()) throw new HttpError(400, "Configure ANTHROPIC_API_KEY para usar a IA.");
+      return json(await generateStrategy(db, userId, { tiktok: typeof input.tiktok === "string" ? input.tiktok : undefined, goal: input.goal }));
+    }
+    if (action === "strategy_videos") {
+      // Um vídeo por produto escolhido pela estratégia; a IA escreve os textos aos poucos pelo cron
+      const { data: st } = await db.from("strategies").select("*").eq("id", input.strategy_id).eq("user_id", userId).single();
+      if (!st) throw new HttpError(404, "Estratégia não encontrada");
+      const ids = Array.isArray(input.product_ids) ? new Set(input.product_ids.map(Number)) : null;
+      const picks = (st.video_picks as any[]).filter((p) => !ids || ids.has(Number(p.id))).slice(0, 50);
+      const platforms = Array.isArray(input.platforms) && input.platforms.length ? input.platforms.map(String) : ["tiktok"];
+      let queued = 0;
+      for (const p of picks) {
+        if (!p.images?.length) continue;
+        await queueProductVideo(db, userId, { name: p.name, images: p.images, url: p.url, description: p.description },
+          { defer: true, autopost: true, platforms, why: "Vídeo da estratégia de vendas" });
+        queued++;
+      }
+      await db.from("strategies").update({ videos_queued_at: new Date().toISOString() }).eq("id", st.id);
+      return json({ queued });
     }
     if (!aiEnabled()) throw new HttpError(400, "Configure ANTHROPIC_API_KEY nas secrets do Supabase para usar a IA.");
 

@@ -46,15 +46,8 @@ export async function dispatchRender(): Promise<boolean> {
   return !!res?.ok;
 }
 
-/** Põe o vídeo do produto na fila de renderização. Com autopost false, o vídeo fica só para baixar. */
-export async function queueProductVideo(db: SupabaseClient, userId: string, product: ProductInfo, opts: { autopost?: boolean } = {}) {
-  const images = (product.video_images?.length ? product.video_images : product.images).slice(0, 4);
-  if (!images.length) throw new Error("O produto precisa de pelo menos uma foto");
-  // Evita vídeo duplicado do mesmo produto (ex.: clique duplo)
-  const { data: recent } = await db.from("product_videos").select("*").eq("user_id", userId).eq("name", product.name)
-    .in("status", ["queued", "rendering"]).limit(1).maybeSingle();
-  if (recent) return { ...recent, dispatched: await dispatchRender() };
-
+/** Textos do vídeo (IA olhando a foto) e legenda do post. */
+async function writeBrief(db: SupabaseClient, userId: string, product: ProductInfo, images: string[]) {
   const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", userId).maybeSingle();
   const { data: ig } = await db.from("social_accounts").select("username").eq("user_id", userId).eq("platform", "instagram").limit(1).maybeSingle();
   let brief: Record<string, unknown> = { hook: `Chegou *${product.name}*`, hook_sub: "Novidade na loja", cta: "Garanta o seu", features: [] };
@@ -70,11 +63,8 @@ export async function queueProductVideo(db: SupabaseClient, userId: string, prod
       "low", images.slice(0, 2));
   }
   const caption = await productCaption(settings, { ...product, caption: product.caption }, "video");
-  const { data, error } = await db.from("product_videos").insert({
-    user_id: userId,
-    name: product.name,
-    product_url: product.url ?? null,
-    images,
+  return {
+    caption,
     brief: {
       ...brief,
       ...(brief.theme_colors && !brief.colors ? { colors: brief.theme_colors } : {}),
@@ -83,7 +73,50 @@ export async function queueProductVideo(db: SupabaseClient, userId: string, prod
       handle: ig?.username ? `@${ig.username}` : "",
       // Guardado para o "Refazer" escrever os textos com as mesmas informações
       ...(product.description ? { notes: product.description.replace(/<[^>]+>/g, " ").slice(0, 800) } : {}),
-    },
+    } as Record<string, unknown>,
+  };
+}
+
+/**
+ * Põe o vídeo do produto na fila de renderização. Com autopost false, o vídeo fica só para baixar.
+ * defer: para lotes (ex.: 50 vídeos da estratégia) — só registra; o cron escreve os textos aos poucos (prepareBriefs).
+ * platforms: onde postar quando ficar pronto (padrão: todas as contas conectadas).
+ */
+export async function queueProductVideo(
+  db: SupabaseClient,
+  userId: string,
+  product: ProductInfo,
+  opts: { autopost?: boolean; defer?: boolean; platforms?: string[]; why?: string } = {},
+) {
+  const images = (product.video_images?.length ? product.video_images : product.images).slice(0, 4);
+  if (!images.length) throw new Error("O produto precisa de pelo menos uma foto");
+  // Evita vídeo duplicado do mesmo produto (ex.: clique duplo)
+  const { data: recent } = await db.from("product_videos").select("*").eq("user_id", userId).eq("name", product.name)
+    .in("status", ["pending_brief", "queued", "rendering"]).limit(1).maybeSingle();
+  if (recent) return { ...recent, dispatched: opts.defer ? false : await dispatchRender() };
+
+  const extra = { ...(opts.platforms?.length ? { platforms: opts.platforms } : {}), ...(opts.why ? { why: opts.why } : {}) };
+  if (opts.defer) {
+    const { data, error } = await db.from("product_videos").insert({
+      user_id: userId,
+      name: product.name,
+      product_url: product.url ?? null,
+      images,
+      brief: { ...extra, title: product.name, ...(product.description ? { notes: product.description.slice(0, 800) } : {}) },
+      status: "pending_brief",
+      autopost: opts.autopost ?? true,
+    }).select().single();
+    if (error) throw error;
+    return { ...data, dispatched: false };
+  }
+
+  const { brief, caption } = await writeBrief(db, userId, product, images);
+  const { data, error } = await db.from("product_videos").insert({
+    user_id: userId,
+    name: product.name,
+    product_url: product.url ?? null,
+    images,
+    brief: { ...brief, ...extra },
     caption,
     status: "queued",
     autopost: opts.autopost ?? true,
@@ -92,12 +125,41 @@ export async function queueProductVideo(db: SupabaseClient, userId: string, prod
   return { ...data, dispatched: await dispatchRender() };
 }
 
+/** Cron: escreve os textos dos vídeos em lote (alguns por minuto) e manda para a renderização. */
+export async function prepareBriefs(db: SupabaseClient, max = 3) {
+  const { data: rows } = await db.from("product_videos").select("*").eq("status", "pending_brief").order("created_at").limit(max);
+  const report: Record<string, unknown>[] = [];
+  for (const v of rows ?? []) {
+    // Trava: só uma execução do cron prepara cada vídeo
+    const { data: claimed } = await db.from("product_videos").update({ attempts: v.attempts + 1 }).eq("id", v.id)
+      .eq("status", "pending_brief").eq("attempts", v.attempts).select("id").maybeSingle();
+    if (!claimed) continue;
+    try {
+      const keep = { platforms: v.brief?.platforms, why: v.brief?.why };
+      const { brief, caption } = await writeBrief(db, v.user_id, { name: v.name, images: v.images, url: v.product_url, description: v.brief?.notes }, v.images);
+      await db.from("product_videos").update({
+        brief: { ...brief, ...Object.fromEntries(Object.entries(keep).filter(([, x]) => x)) },
+        caption, status: "queued", attempts: 0,
+      }).eq("id", v.id);
+      report.push({ id: v.id, status: "queued" });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      await db.from("product_videos").update(v.attempts + 1 >= 3 ? { status: "failed", error: message } : { error: message }).eq("id", v.id);
+      report.push({ id: v.id, error: message });
+    }
+  }
+  if (report.some((r) => r.status === "queued")) await dispatchRender();
+  return report;
+}
+
 /** Cria o post (Reels + TikTok) de um vídeo pronto, no próximo horário nobre livre. Devolve null sem contas conectadas. */
 // deno-lint-ignore no-explicit-any
 export async function postVideo(db: SupabaseClient, v: any) {
   const { data: settings } = await db.from("brand_settings").select("approval_required,timezone").eq("user_id", v.user_id).maybeSingle();
   const { data: accounts } = await db.from("social_accounts").select("platform").eq("user_id", v.user_id).in("platform", ["instagram", "tiktok"]);
-  const platforms = [...new Set((accounts ?? []).map((a) => a.platform as string))];
+  let platforms = [...new Set((accounts ?? []).map((a) => a.platform as string))];
+  // Vídeo de lote com destino escolhido (ex.: só TikTok, para o TikTok Shop)
+  if (Array.isArray(v.brief?.platforms) && v.brief.platforms.length) platforms = platforms.filter((p) => v.brief.platforms.includes(p));
   if (!platforms.length) return null;
   // Vídeo do piloto automático: vai para Aprovações no horário escolhido para a data (se ainda estiver livre)
   const approval = v.brief?.approval === true || (settings?.approval_required ?? true);
