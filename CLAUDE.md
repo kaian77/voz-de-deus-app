@@ -22,6 +22,7 @@ Ferramenta interna da Brax Pins Mania (loja de pins, braxpinsmania.com.br; IG @b
 - Nuvemshop conectada. API não grava dados fiscais (NCM etc.) → fluxo de planilha CSV (`src/studio/lib/fiscal-csv.ts`).
 - Mercado Livre: próximo passo (ML_APP_ID 5226202533888505; falta o secret ML_CLIENT_SECRET e conectar).
 - Agente de DM (`inbox.ts` → `runAgent` em `claude.ts`): usa ferramentas da Nuvemshop (buscar_produtos, info_loja, cupons_ativos, consultar_pedido com número + e-mail). Nunca informar preços (variam por modelo e kits) — mandar o link do produto/site. Responde uma vez só a mensagens seguidas.
+- Automação automática por post (`auto-link.ts`, roda no cron a cada 5 min): post novo no IG → acha o produto (options.product do post ou IA pela legenda/foto) e cria automação só daquele post com a palavra da legenda e o link do produto no direct. Liga/desliga: `brand_settings.auto_post_link`.
 - TikTok: nada de "link na bio", site ou URL no vídeo nem na legenda (TikTok Shop dá violação). O vídeo de produto já sai sem isso e o publisher limpa a legenda com `tiktokCaption`.
 
 ## Marca

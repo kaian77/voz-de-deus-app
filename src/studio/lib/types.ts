@@ -221,6 +221,7 @@ export interface BrandSettings {
   default_hashtags: string | null;
   default_cta: string | null;
   product_autopost?: boolean;
+  auto_post_link?: boolean;
   approval_required: boolean;
   timezone: string;
   agent_enabled?: boolean;

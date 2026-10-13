@@ -204,7 +204,12 @@ export default function Composer() {
         scheduled_at: when ? new Date(when).toISOString() : null,
         status: intent === "schedule" ? "scheduled" : intent === "publish" ? "publishing" : "draft",
         results: {},
-        options: { ...(editing?.options ?? {}), ...(onTikTok ? { tiktok: toApiOptions(ttOpts) } : {}) },
+        options: {
+          ...(editing?.options ?? {}),
+          ...(onTikTok ? { tiktok: toApiOptions(ttOpts) } : {}),
+          // Produto vinculado: a automação do post manda o link dele no direct
+          ...(product?.url ? { product: { id: product.id, name: product.name, url: product.url } } : {}),
+        },
       };
       const saved = editing ? await api.update("posts", editing.id, row) : await api.insert("posts", { ...row, created_by: "user" });
       if (intent === "publish") {

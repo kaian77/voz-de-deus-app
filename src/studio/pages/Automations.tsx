@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MoreHorizontal, Plus, Sparkles, Workflow } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useInstagramProfile, useRemoveRow, useSaveRow, useTable } from "../lib/hooks";
+import { useInstagramProfile, useRemoveRow, useSaveRow, useSettings, useTable } from "../lib/hooks";
+import { api } from "../lib/api";
 import { IgMediaTile } from "../components/IgMediaTile";
 import type { Automation } from "../lib/types";
 import { EmptyState, PageHeader, SectionLabel } from "../components/bits";
@@ -168,6 +170,17 @@ export default function Automations() {
   const save = useSaveRow("automations");
   const remove = useRemoveRow("automations");
   const [editing, setEditing] = useState<Partial<Automation> | null>(null);
+  const qc = useQueryClient();
+  const { data: settings } = useSettings();
+  const autoLink = settings?.auto_post_link ?? true;
+  const setAutoLink = async (v: boolean) => {
+    try {
+      await api.saveSettings({ auto_post_link: v });
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
 
   return (
     <div>
@@ -176,6 +189,17 @@ export default function Automations() {
         description="Quem comentar a palavra-chave recebe uma resposta pública e uma mensagem no direct, na hora."
         actions={<Button size="sm" onClick={() => setEditing(blank)}><Plus /> Nova automação</Button>}
       />
+
+      <label htmlFor="auto_post_link" className="mb-4 flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3">
+        <span>
+          <span className="block text-[13px] font-medium">Automação automática em cada post novo</span>
+          <span className="block text-xs text-muted-foreground">
+            Quando sair um post no Instagram (pelo Studio ou pelo app), o Studio descobre o pin do post e cria uma automação só para ele:
+            quem comentar a palavra da legenda (ex.: “comente EU QUERO”) recebe no direct o link desse produto.
+          </span>
+        </span>
+        <Switch id="auto_post_link" checked={autoLink} onCheckedChange={setAutoLink} />
+      </label>
 
       {automations.length === 0 ? (
         <EmptyState icon={<Workflow />} title="Nenhuma automação" action={<Button size="sm" onClick={() => setEditing(blank)}><Plus /> Criar a primeira</Button>}>
