@@ -11,6 +11,7 @@ import { cleanupStorage } from "../_shared/storage-cleanup.ts";
 import { wahaKeepAlive } from "../_shared/whatsapp.ts";
 import { runSaleAlerts } from "../_shared/sale-alerts.ts";
 import { runDailyDigest } from "../_shared/daily.ts";
+import { runDailyVideos } from "../_shared/video-autopilot.ts";
 import { runMlSync } from "../_shared/ml-sync.ts";
 
 Deno.serve(async (req) => {
@@ -62,7 +63,9 @@ Deno.serve(async (req) => {
       : undefined;
     // Resumo do dia no WhatsApp (só às 8h de Brasília, uma vez por dia)
     const digest = await runDailyDigest(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
-    return json({ processed, polled, autolink, videos, briefs, digest, autopilot, cleanup, waha, mlsync, sales });
+    // Vídeos diários do TikTok (às 9h de Brasília, sem repetir produto no ciclo)
+    const daily = await runDailyVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
+    return json({ processed, polled, autolink, videos, briefs, digest, daily, autopilot, cleanup, waha, mlsync, sales });
   } catch (err) {
     return handleError(err);
   }

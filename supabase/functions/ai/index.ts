@@ -11,7 +11,8 @@ import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
 import { finishStrategy, researchStrategy, startStrategy } from "../_shared/strategy.ts";
-import { digestMessage, salesSummary } from "../_shared/daily.ts";
+import { brasiliaNow, digestMessage, salesSummary } from "../_shared/daily.ts";
+import { runVideosFor, videoAutopilotStatus } from "../_shared/video-autopilot.ts";
 import { sendWhatsAppTo } from "../_shared/sale-alerts.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
@@ -214,6 +215,24 @@ Deno.serve(async (req) => {
       return json(suggestion);
     }
     if (action === "sales_summary") return json(await salesSummary(db, userId));
+    // Vídeos diários do TikTok
+    if (action === "video_autopilot_status") return json(await videoAutopilotStatus(db, userId));
+    if (action === "video_autopilot_save") {
+      const perDay = Math.min(Math.max(Number(input.per_day) || 0, 0), 20);
+      await db.from("brand_settings").upsert({ user_id: userId, video_daily: perDay }, { onConflict: "user_id" });
+      return json(await videoAutopilotStatus(db, userId));
+    }
+    if (action === "video_autopilot_restart") {
+      const { data: st } = await db.from("brand_settings").select("video_cycle").eq("user_id", userId).maybeSingle();
+      await db.from("brand_settings").update({ video_cycle: (st?.video_cycle ?? 1) + 1, video_cycle_done_at: null, video_daily_last: null }).eq("user_id", userId);
+      return json(await videoAutopilotStatus(db, userId));
+    }
+    if (action === "video_autopilot_run") {
+      // Faz os de hoje agora; o das 9h de hoje não roda de novo
+      await db.from("brand_settings").update({ video_daily_last: brasiliaNow().date }).eq("user_id", userId);
+      const result = await runVideosFor(db, userId);
+      return json({ ...result, status: await videoAutopilotStatus(db, userId) });
+    }
     if (action === "digest_now") {
       // Manda o resumo do dia agora (teste), para o número dos avisos de venda
       const { data: st } = await db.from("brand_settings").select("brand_name, sale_alert_phone").eq("user_id", userId).maybeSingle();

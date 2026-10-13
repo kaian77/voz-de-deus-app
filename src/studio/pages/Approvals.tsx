@@ -1,19 +1,23 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bot, CalendarPlus, Check, Clapperboard, Loader2, Send, Sparkles } from "lucide-react";
+import { Bot, CalendarPlus, Check, Clapperboard, Download, Loader2, Send, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { api } from "../lib/api";
+import { api, isDemo } from "../lib/api";
 import { useInvalidate, useSettings, useTable } from "../lib/hooks";
 import { renderAndUploadSlides } from "../lib/publishing";
 import type { Post } from "../lib/types";
 import { EmptyState, formatDateTime, KIND_LABEL, PageHeader, Panel, PlatformIcon, relativeTime, SectionLabel, SlidePreview, StatusDot } from "../components/bits";
 import { PostThumb } from "../components/PostThumb";
 import { toastPublishResult } from "@/studio/lib/publish-toast";
+
+/** Nome do arquivo baixado: título do post sem acentos/símbolos. */
+const fileName = (post: Post) =>
+  `${(post.title || "video").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "video"}.mp4`;
 
 /** Aprova um post: renderiza os slides (se houver) e agenda no horário sugerido; sem horário futuro vira rascunho. */
 async function approvePost(post: Post) {
@@ -57,6 +61,7 @@ function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: bool
     }
   };
 
+  const video = post.media.find((m) => m.type === "video");
   const reject = async () => {
     setBusy("reject");
     await api.remove("posts", post.id).catch((e) => toast.error(e.message));
@@ -101,6 +106,12 @@ function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: bool
               {busy === "publish" ? <Loader2 className="animate-spin" /> : <Send />} Publicar agora
             </Button>
             <Button asChild size="sm" variant="outline"><Link to={`/studio/criar?id=${post.id}`}>Editar</Link></Button>
+            {video && (
+              <Button asChild size="sm" variant="outline">
+                {/* ?download= faz o Supabase mandar o arquivo como download (o navegador salva em vez de abrir) */}
+                <a href={`${video.url}${video.url.includes("?") ? "&" : "?"}download=${encodeURIComponent(fileName(post))}`} download><Download /> Baixar</a>
+              </Button>
+            )}
             <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={reject} disabled={!!busy}>Descartar</Button>
           </div>
         </div>
@@ -110,6 +121,76 @@ function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: bool
 }
 
 /** Piloto automático: toda semana o Studio cria posts com as datas comemorativas e os produtos da loja. */
+type VideoPilot = { per_day: number; cycle: number; total: number; done: number; finished_at: string | null; last_run: string | null; pending: number; max_pending: number };
+
+/** Vídeos diários do TikTok: N produtos do site por dia, sem repetir; para quando acabar e espera você recomeçar. */
+function VideoAutopilot() {
+  const qc = useQueryClient();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["video-autopilot"],
+    queryFn: () => api.invoke<VideoPilot>("ai", { action: "video_autopilot_status" }),
+    enabled: !isDemo,
+    retry: false,
+  });
+  const [busy, setBusy] = useState<string | null>(null);
+  const call = async (action: string, extra: Record<string, unknown> = {}, ok?: string) => {
+    setBusy(action);
+    try {
+      const r = await api.invoke<VideoPilot & { status?: VideoPilot; made?: number; skipped?: string }>("ai", { action, ...extra });
+      qc.setQueryData(["video-autopilot"], r.status ?? r);
+      qc.invalidateQueries({ queryKey: ["table"] });
+      if (r.skipped) toast.message(`Nada criado: ${r.skipped}.`);
+      else if (typeof r.made === "number") toast.success(`${r.made} vídeos na fila. Ficam prontos aos poucos e aparecem aqui.`);
+      else if (ok) toast.success(ok);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  if (isDemo || error) return null;
+  const pct = data && data.total ? Math.round((data.done / data.total) * 100) : 0;
+  return (
+    <Panel title="Vídeos diários do TikTok" description="Todo dia às 9h o Studio faz um vídeo de cada produto do site que ainda não ganhou vídeo, com as fotos do site e sem chamada para o site. Nunca repete; quando acabar, para e te avisa." bodyClassName="space-y-3 p-4">
+      {isLoading || !data ? (
+        <p className="text-[13px] text-muted-foreground">Carregando…</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={String(data.per_day)} onValueChange={(v) => call("video_autopilot_save", { per_day: Number(v) }, Number(v) ? `${v} vídeos por dia` : "Vídeos diários desligados")}>
+              <SelectTrigger className="h-9 w-[170px] text-[13px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[0, 5, 10, 15, 20].map((n) => <SelectItem key={n} value={String(n)}>{n ? `${n} vídeos por dia` : "Desligado"}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" disabled={!data.per_day || !!data.finished_at || busy !== null} onClick={() => call("video_autopilot_run")}>
+              {busy === "video_autopilot_run" ? <Loader2 className="animate-spin" /> : <Clapperboard />} Fazer os de hoje agora
+            </Button>
+          </div>
+          <div>
+            <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+              <span>Ciclo {data.cycle}: {data.done} de {data.total} produtos com vídeo</span>
+              <span className="tabular">{pct}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-secondary"><div className="h-full bg-foreground" style={{ width: `${pct}%` }} /></div>
+          </div>
+          {data.finished_at && (
+            <div className="flex flex-col gap-2 rounded-md border border-dashed p-3 text-[13px] sm:flex-row sm:items-center sm:justify-between">
+              <span>Todos os produtos já ganharam vídeo neste ciclo. Parei de criar.</span>
+              <Button size="sm" disabled={busy !== null} onClick={() => call("video_autopilot_restart", {}, "Novo ciclo começado")}>
+                {busy === "video_autopilot_restart" && <Loader2 className="animate-spin" />} Recomeçar
+              </Button>
+            </div>
+          )}
+          {data.pending >= data.max_pending && (
+            <p className="text-xs text-destructive">{data.pending} vídeos esperando aprovação. Aprove (ou descarte) para o piloto continuar; assim o armazenamento grátis não lota.</p>
+          )}
+        </>
+      )}
+    </Panel>
+  );
+}
+
 function Autopilot() {
   const qc = useQueryClient();
   const { data: settings } = useSettings();
@@ -243,6 +324,7 @@ export default function Approvals() {
       />
       <div className="space-y-4">
         <Autopilot />
+        <VideoAutopilot />
         {pending.length === 0 ? (
           <EmptyState icon={<Bot />} title="Nenhum post esperando aprovação">
             Clique em “Criar ideias agora” ou peça ao Claude algo como “crie 3 carrosséis para esta semana”. Eles aparecem aqui.

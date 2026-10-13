@@ -30,7 +30,7 @@ function similarity(a: Set<string>, b: Set<string>) {
   return common / Math.min(a.size, b.size);
 }
 
-async function storeProducts(token: string, storeId: string): Promise<StoreProduct[]> {
+export async function storeProducts(token: string, storeId: string): Promise<StoreProduct[]> {
   const out: StoreProduct[] = [];
   for (let page = 1; page <= 5; page++) {
     const list = await ns<any[]>(token, storeId, `products?per_page=200&page=${page}&published=true`).catch(() => []);

@@ -11,7 +11,12 @@ import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
 import { freeSlot, productCaption, type ProductInfo } from "./products.ts";
 
 const Brief = z.object({
-  hook: z.string().describe("Frase de abertura de até 7 palavras que prende nos 2 primeiros segundos; destaque 1 ou 2 palavras com *asteriscos*"),
+  hook: z.string().describe(
+    "Frase de abertura de até 7 palavras que PARA O SCROLL nos 2 primeiros segundos; destaque 1 ou 2 palavras com *asteriscos*. " +
+      "Use um destes estilos (varie): identificação com a profissão/causa/time ('Todo *enfermeiro* precisa disso'), curiosidade " +
+      "('Ninguém espera esse *detalhe*'), pergunta direta ('Você usaria no *jaleco*?'), orgulho ('Pra quem *ama* o SUS'), " +
+      "presente ('O presente que *todo dentista* quer'). Nada de 'Conheça' ou 'Chegou' sem graça.",
+  ),
   hook_sub: z.string().describe("Linha curta abaixo do gancho, ex.: 'Conheça a Maria Gotinha'"),
   subtitle: z.string().describe("O que é o produto, até 5 palavras, ex.: 'Pin de metal esmaltado'"),
   detail_title: z.string().describe("Título curto da cena da foto original, até 3 palavras"),
@@ -56,12 +61,19 @@ async function writeBrief(db: SupabaseClient, userId: string, product: ProductIn
       `Você escreve os textos curtos de um vídeo animado de produto (Reels/TikTok) de uma loja brasileira. Textos curtíssimos, ` +
         `fortes e em português do Brasil, sem emojis e sem hashtags. Concorde o gênero com o produto (ex.: "Garanta a sua" para ` +
         `"a Maria Gotinha"). Nunca invente características, materiais, medidas, preços, prazos ou promoções que não estejam nos dados, ` +
-        `na foto ou no contexto da marca.\n\n${brandContext(settings)}`,
+        `na foto ou no contexto da marca. O vídeo vai para o TikTok: NUNCA cite site, loja virtual, URL, "link na bio", "link do perfil" ` +
+        `ou "compre pelo site" (o TikTok Shop penaliza); a chamada é só para garantir o produto.\n\n${brandContext(settings)}`,
       `Produto: "${product.name}".\n` +
         `${product.description ? `Informações do produto: ${product.description.replace(/<[^>]+>/g, " ").slice(0, 800)}\n` : ""}` +
         `Escreva os textos do vídeo. O preço não aparece no vídeo. Escolha o enfeite animado (motif) pelo tema e, se o tema tiver cores próprias, theme_colors.`,
       "low", images.slice(0, 2));
   }
+  // Rede de segurança: tira qualquer chamada para site/link que tenha escapado (penalidade no TikTok)
+  const offsite = /link|\bbio\b|site|www\.|\.com|\.br|https?:/i;
+  for (const k of ["hook", "hook_sub", "subtitle", "detail_title", "detail_sub", "cta", "urgency"]) {
+    if (typeof brief[k] === "string" && offsite.test(brief[k] as string)) brief[k] = k === "cta" ? "Garanta o seu" : k === "urgency" ? "" : String(brief[k]).replace(offsite, "").trim();
+  }
+  if (Array.isArray(brief.features)) brief.features = (brief.features as string[]).filter((f) => !offsite.test(f));
   const caption = await productCaption(settings, { ...product, caption: product.caption }, "video");
   return {
     caption,
@@ -86,7 +98,7 @@ export async function queueProductVideo(
   db: SupabaseClient,
   userId: string,
   product: ProductInfo,
-  opts: { autopost?: boolean; defer?: boolean; platforms?: string[]; why?: string } = {},
+  opts: { autopost?: boolean; defer?: boolean; platforms?: string[]; why?: string; source?: string } = {},
 ) {
   const images = (product.video_images?.length ? product.video_images : product.images).slice(0, 4);
   if (!images.length) throw new Error("O produto precisa de pelo menos uma foto");
@@ -95,7 +107,11 @@ export async function queueProductVideo(
     .in("status", ["pending_brief", "queued", "rendering"]).limit(1).maybeSingle();
   if (recent) return { ...recent, dispatched: opts.defer ? false : await dispatchRender() };
 
-  const extra = { ...(opts.platforms?.length ? { platforms: opts.platforms } : {}), ...(opts.why ? { why: opts.why } : {}) };
+  const extra = {
+    ...(opts.platforms?.length ? { platforms: opts.platforms } : {}),
+    ...(opts.why ? { why: opts.why } : {}),
+    ...(opts.source ? { source: opts.source } : {}),
+  };
   if (opts.defer) {
     const { data, error } = await db.from("product_videos").insert({
       user_id: userId,
@@ -135,7 +151,7 @@ export async function prepareBriefs(db: SupabaseClient, max = 3) {
       .eq("status", "pending_brief").eq("attempts", v.attempts).select("id").maybeSingle();
     if (!claimed) continue;
     try {
-      const keep = { platforms: v.brief?.platforms, why: v.brief?.why };
+      const keep = { platforms: v.brief?.platforms, why: v.brief?.why, source: v.brief?.source };
       const { brief, caption } = await writeBrief(db, v.user_id, { name: v.name, images: v.images, url: v.product_url, description: v.brief?.notes }, v.images);
       await db.from("product_videos").update({
         brief: { ...brief, ...Object.fromEntries(Object.entries(keep).filter(([, x]) => x)) },
