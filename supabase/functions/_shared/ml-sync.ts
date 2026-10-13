@@ -260,7 +260,9 @@ export async function runMlSync(db: SupabaseClient) {
       if (cur) {
         cur.queue = [...(cur.inflight?.ids ?? []), ...cur.queue];
         cur.inflight = null;
-        cur.errors.push({ id: 0, name: "Rodada", error: e instanceof Error ? e.message : String(e) });
+        const msg = e instanceof Error ? e.message : String(e);
+        // O mesmo problema a cada minuto (ex.: acesso expirado) fica registrado uma vez só
+        if (cur.errors.at(-1)?.error !== msg) cur.errors.push({ id: 0, name: "Rodada", error: msg });
         await saveSync(db, acc.id, cur);
       }
     }
