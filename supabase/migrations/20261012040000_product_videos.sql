@@ -36,9 +36,9 @@ alter table public.product_videos
   drop column if exists heygen_video_id,
   drop column if exists thumbnail_url;
 alter table public.product_videos drop constraint if exists product_videos_status_check;
-update public.product_videos set status = 'failed' where status not in ('queued', 'rendering', 'rendered', 'ready', 'failed');
+update public.product_videos set status = 'failed' where status not in ('pending_brief', 'queued', 'rendering', 'rendered', 'ready', 'failed');
 alter table public.product_videos add constraint product_videos_status_check
-  check (status in ('queued', 'rendering', 'rendered', 'ready', 'failed'));
+  check (status in ('pending_brief', 'queued', 'rendering', 'rendered', 'ready', 'failed'));
 alter table public.product_videos alter column status set default 'queued';
 
 alter table public.product_videos enable row level security;

@@ -57,7 +57,7 @@ export const api = {
     const order = opts.order ?? "created_at";
     const ascending = opts.ascending ?? false;
     if (isDemo) {
-      const rows = (readDemo()[table] as TableMap[T][]).filter((r) =>
+      const rows = ((readDemo()[table] ?? []) as TableMap[T][]).filter((r) =>
         Object.entries(opts.eq ?? {}).every(([k, v]) => (r as unknown as Record<string, unknown>)[k] === v),
       );
       rows.sort((a, b) => {

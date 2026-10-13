@@ -25,7 +25,7 @@ const Caption = z.object({
 /** Próximo horário nobre livre (sem outro post da marca no mesmo horário). */
 export async function freeSlot(db: SupabaseClient, userId: string, timeZone = "America/Sao_Paulo") {
   let slot = nextSlot(timeZone);
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 150; i++) {
     const { count } = await db.from("posts").select("id", { count: "exact", head: true }).eq("user_id", userId)
       .eq("scheduled_at", slot).in("status", ["pending_approval", "scheduled"]);
     if (!count) return slot;
