@@ -10,7 +10,7 @@ import { postVideo, queueProductVideo } from "../_shared/product-video.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
-import { generateStrategy } from "../_shared/strategy.ts";
+import { finishStrategy, researchStrategy, startStrategy } from "../_shared/strategy.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
 const SYSTEM = (brand: string) =>
@@ -211,9 +211,12 @@ Deno.serve(async (req) => {
       }
       return json(suggestion);
     }
-    if (action === "strategy_generate") {
+    // Estratégia em 3 etapas (cada uma cabe no tempo da function): vendas -> pesquisa de mercado -> plano
+    if (action === "strategy_start" || action === "strategy_research" || action === "strategy_finish") {
       if (!aiEnabled()) throw new HttpError(400, "Configure ANTHROPIC_API_KEY para usar a IA.");
-      return json(await generateStrategy(db, userId, { tiktok: typeof input.tiktok === "string" ? input.tiktok : undefined, goal: input.goal }));
+      if (action === "strategy_start") return json(await startStrategy(db, userId, { tiktok: typeof input.tiktok === "string" ? input.tiktok : undefined, goal: input.goal }));
+      if (action === "strategy_research") return json(await researchStrategy(db, userId, String(input.strategy_id), input.fresh === true));
+      return json(await finishStrategy(db, userId, String(input.strategy_id)));
     }
     if (action === "strategy_videos") {
       // Um vídeo por produto escolhido pela estratégia; a IA escreve os textos aos poucos pelo cron
