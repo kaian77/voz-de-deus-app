@@ -3,7 +3,7 @@
 // A fila fica em social_accounts.meta.ml_sync da conta do Mercado Livre e o cron processa alguns por minuto.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ns, storeFor, txt } from "./nuvemshop.ts";
-import { mlSellerItems, mlTokenFor } from "./mercadolivre.ts";
+import { ML_LOOKUP_FIELDS, mlSellerItems, mlTokenFor } from "./mercadolivre.ts";
 import { publishToMercadoLivre } from "./marketplaces.ts";
 
 /** Produtos por rodada do cron (cada um faz várias chamadas ao ML). */
@@ -18,6 +18,10 @@ export type MlSync = {
   done: SyncResult[];
   errors: SyncResult[];
   skipped: SyncResult[];
+  /** Produtos tirados da fila pela rodada em andamento (voltam para a fila se ela morrer no meio) */
+  inflight?: { ids: number[]; at: string } | null;
+  /** Quantas vezes cada produto já voltou para a fila */
+  retries?: Record<string, number>;
 };
 
 const ENTITIES: Record<string, string> = { nbsp: " ", amp: "&", quot: '"', lt: "<", gt: ">", ordm: "º", ordf: "ª", ndash: "–", mdash: "—", hellip: "…", rsquo: "'", lsquo: "'", ldquo: '"', rdquo: '"', ccedil: "ç", Ccedil: "Ç" };
@@ -120,16 +124,16 @@ async function saveSync(db: SupabaseClient, accountId: string, sync: MlSync) {
   await db.from("social_accounts").update({ meta: { ...(data?.meta ?? {}), ml_sync: sync } }).eq("id", accountId);
 }
 
-/** Junta o resultado da rodada ao estado atual (outra rodada pode ter mexido na fila enquanto esta rodava). */
-async function finishBatch(db: SupabaseClient, accountId: string, r: Pick<MlSync, "done" | "errors" | "skipped">, stop = false) {
+/** Registra o resultado de um produto no estado atual (outra rodada pode ter mexido na fila enquanto esta rodava). */
+async function record(db: SupabaseClient, accountId: string, id: number, r: { done?: SyncResult; error?: SyncResult; skipped?: SyncResult }) {
   const { data } = await db.from("social_accounts").select("meta").eq("id", accountId).single();
   const sync = data?.meta?.ml_sync as MlSync | undefined;
   if (!sync) return 0;
-  if (stop) sync.queue = [];
-  sync.done.push(...r.done);
-  sync.errors.push(...r.errors);
-  sync.skipped.push(...r.skipped);
-  if (!sync.queue.length && !sync.finished_at) sync.finished_at = new Date().toISOString();
+  if (r.done) sync.done.push(r.done);
+  if (r.error) sync.errors.push(r.error);
+  if (r.skipped) sync.skipped.push(r.skipped);
+  if (sync.inflight) sync.inflight.ids = sync.inflight.ids.filter((x) => x !== id);
+  if (!sync.queue.length && !sync.inflight?.ids.length && !sync.finished_at) sync.finished_at = new Date().toISOString();
   await db.from("social_accounts").update({ meta: { ...data!.meta, ml_sync: sync } }).eq("id", accountId);
   return sync.queue.length;
 }
@@ -159,7 +163,7 @@ export async function mlSyncStatus(db: SupabaseClient, userId: string) {
   const sync = acc?.meta?.ml_sync as MlSync | undefined;
   if (!sync) return { running: false };
   return {
-    running: sync.queue.length > 0,
+    running: sync.queue.length > 0 || !!sync.inflight?.ids.length,
     total: sync.total,
     remaining: sync.queue.length,
     updated: sync.done.filter((d) => d.updated).length,
@@ -177,56 +181,89 @@ export async function runMlSync(db: SupabaseClient) {
   const out: unknown[] = [];
   for (const acc of accounts ?? []) {
     const sync = acc.meta?.ml_sync as MlSync | undefined;
-    if (!sync?.queue?.length) continue;
+    if (!sync) continue;
+    const errors: SyncResult[] = [];
+    // Rodada anterior morreu no meio (tempo/CPU da função): devolve os produtos dela para a fila; na 3ª vez, vira erro
+    if (sync.inflight?.ids.length) {
+      if (Date.now() - new Date(sync.inflight.at).getTime() < 3 * 60_000) continue; // ainda pode estar rodando
+      sync.retries ??= {};
+      const back: number[] = [];
+      for (const id of sync.inflight.ids) {
+        sync.retries[id] = (sync.retries[id] ?? 0) + 1;
+        if (sync.retries[id] >= 3) errors.push({ id, name: String(id), error: "A rodada parou no meio 3 vezes com este produto" });
+        else back.push(id);
+      }
+      sync.errors.push(...errors);
+      sync.queue = [...back, ...sync.queue];
+      sync.inflight = null;
+    }
+    if (!sync.queue.length) {
+      if (!sync.finished_at) {
+        sync.finished_at = new Date().toISOString();
+        await saveSync(db, acc.id, sync);
+      }
+      continue;
+    }
     // Tira da fila antes de processar: se a rodada demorar, a próxima não pega os mesmos produtos
     const batch = sync.queue.slice(0, PER_RUN);
     sync.queue = sync.queue.slice(PER_RUN);
+    sync.inflight = { ids: batch, at: new Date().toISOString() };
     await saveSync(db, acc.id, sync);
 
-    const done: SyncResult[] = [], errors: SyncResult[] = [], skipped: SyncResult[] = [];
-    const store = await storeFor(db, acc.user_id);
-    if (!store) {
-      await finishBatch(db, acc.id, { done, errors: [{ id: 0, name: "Loja", error: "Nuvemshop desconectada" }], skipped }, true);
-      continue;
-    }
-    const token = await mlTokenFor(db, acc.id);
-    const sellerItems = await mlSellerItems(token, acc.external_id, 1000, "");
-    for (const id of batch) {
-      let name = String(id);
-      try {
-        // deno-lint-ignore no-explicit-any
-        const p = await ns<any>(store.token, store.storeId, `products/${id}`);
-        name = txt(p.name);
-        // deno-lint-ignore no-explicit-any
-        const v: any = p.variants?.[0] ?? {};
-        const price = Number(v.price || 0); // preço cheio: é com ele que a regra de preço foi descoberta
-        // deno-lint-ignore no-explicit-any
-        const images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
-        const skip = /^\s*(kit|combo)\b/i.test(name) ? "kit (preço e descrição são diferentes)"
-          : /\bteste\b/i.test(name) ? "produto de teste"
-          : !price ? "sem preço"
-          : !images.length ? "sem foto"
-          : null;
-        if (skip) {
-          skipped.push({ id, name, reason: skip });
-          continue;
+    let remaining = sync.queue.length;
+    try {
+      const store = await storeFor(db, acc.user_id);
+      if (!store) throw new Error("Nuvemshop desconectada");
+      const token = await mlTokenFor(db, acc.id);
+      const sellerItems = await mlSellerItems(token, acc.external_id, 1000, "", ML_LOOKUP_FIELDS);
+      for (const id of batch) {
+        let name = String(id);
+        try {
+          // deno-lint-ignore no-explicit-any
+          const p = await ns<any>(store.token, store.storeId, `products/${id}`);
+          name = txt(p.name);
+          // deno-lint-ignore no-explicit-any
+          const v: any = p.variants?.[0] ?? {};
+          const price = Number(v.price || 0); // preço cheio: é com ele que a regra de preço foi descoberta
+          // deno-lint-ignore no-explicit-any
+          const images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
+          const skip = /^\s*(kit|combo)\b/i.test(name) ? "kit (preço e descrição são diferentes)"
+            : /\bteste\b/i.test(name) ? "produto de teste"
+            : !price ? "sem preço"
+            : !images.length ? "sem foto"
+            : null;
+          if (skip) {
+            remaining = await record(db, acc.id, id, { skipped: { id, name, reason: skip } });
+            continue;
+          }
+          // deno-lint-ignore no-explicit-any
+          const theme = (p.categories ?? []).map((c: any) => txt(c.name)).filter(Boolean).slice(0, 2).join(", ") || undefined;
+          const r = await publishToMercadoLivre(db, acc.user_id, {
+            name,
+            description: mlListingDescription({ name, about: plain(txt(p.description)), theme }),
+            images: images.slice(0, 10),
+            price,
+            sku: String(v.sku ?? "").trim() || pinSku(name),
+            stock: 200,
+          }, sellerItems);
+          remaining = await record(db, acc.id, id, {
+            done: { id, name, ml_id: r.id, status: r.status, updated: "updated" in r ? r.updated : false, ...(r.warnings.length ? { error: r.warnings.join("; ") } : {}) },
+          });
+        } catch (e) {
+          remaining = await record(db, acc.id, id, { error: { id, name, error: e instanceof Error ? e.message : String(e) } });
         }
-        // deno-lint-ignore no-explicit-any
-        const theme = (p.categories ?? []).map((c: any) => txt(c.name)).filter(Boolean).slice(0, 2).join(", ") || undefined;
-        const r = await publishToMercadoLivre(db, acc.user_id, {
-          name,
-          description: mlListingDescription({ name, about: plain(txt(p.description)), theme }),
-          images: images.slice(0, 10),
-          price,
-          sku: String(v.sku ?? "").trim() || pinSku(name),
-          stock: 200,
-        }, sellerItems);
-        done.push({ id, name, ml_id: r.id, status: r.status, updated: "updated" in r ? r.updated : false, ...(r.warnings.length ? { error: r.warnings.join("; ") } : {}) });
-      } catch (e) {
-        errors.push({ id, name, error: e instanceof Error ? e.message : String(e) });
+      }
+    } catch (e) {
+      // Falha antes dos produtos (token, loja, lista de anúncios): devolve o lote para a fila e registra o motivo
+      const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
+      const cur = data?.meta?.ml_sync as MlSync | undefined;
+      if (cur) {
+        cur.queue = [...(cur.inflight?.ids ?? []), ...cur.queue];
+        cur.inflight = null;
+        cur.errors.push({ id: 0, name: "Rodada", error: e instanceof Error ? e.message : String(e) });
+        await saveSync(db, acc.id, cur);
       }
     }
-    const remaining = await finishBatch(db, acc.id, { done, errors, skipped });
     out.push({ account: acc.id, processed: batch.length, remaining });
   }
   return out;

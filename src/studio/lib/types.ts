@@ -248,6 +248,7 @@ export interface MlSyncState {
   done: { id: number; name: string; ml_id?: string; status?: string; updated?: boolean; error?: string }[];
   errors: { id: number; name: string; error?: string }[];
   skipped: { id: number; name: string; reason?: string }[];
+  inflight?: { ids: number[]; at: string } | null;
 }
 
 export interface MarketplaceAnalysis {

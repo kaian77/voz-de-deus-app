@@ -111,7 +111,7 @@ function MlSync({ account }: { account: SocialAccount }) {
   const [busy, setBusy] = useState(false);
   const { refetch } = useTable("social_accounts");
   const s = account.meta.ml_sync;
-  const running = !!s?.queue.length;
+  const running = !!s?.queue.length || !!s?.inflight?.ids.length;
   useEffect(() => {
     if (!running) return;
     const t = setInterval(() => void refetch(), 20_000);
