@@ -65,6 +65,24 @@ export function waMessageText(m: any): string {
   }
 }
 
+/**
+ * Chave para comparar telefones: só dígitos, com 55 quando faltar o DDI e sem o 9 extra do celular brasileiro
+ * (o WhatsApp às vezes identifica 61 99133-1525 como 556191331525). Aceita "556191331525@c.us".
+ */
+export function phoneKey(raw: string) {
+  let d = String(raw).split("@")[0].replace(/\D/g, "");
+  if (d.length === 10 || d.length === 11) d = `55${d}`;
+  if (d.length === 13 && d.startsWith("55") && d[4] === "9") d = d.slice(0, 4) + d.slice(5);
+  return d;
+}
+
+/** A IA responde neste contato? Número com IA ligada para todos, ou contato na lista do número. */
+export function agentAllowed(meta: { agent?: boolean; agent_numbers?: string[] } | null | undefined, contactId: string) {
+  if (meta?.agent !== false) return true;
+  const key = phoneKey(contactId);
+  return (meta.agent_numbers ?? []).some((n) => phoneKey(n) === key);
+}
+
 // ---------------------------------------------------------------------------
 // WAHA (https://waha.devlike.pro) — WhatsApp HTTP API self-hosted, grátis (versão Core).
 // Não é oficial: usa o WhatsApp Web. Há risco de bloqueio do número se houver abuso.

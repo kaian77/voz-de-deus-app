@@ -2,7 +2,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4";
 import { igRequest, igTokenFor } from "./instagram.ts";
-import { waSendText, wahaSendText } from "./whatsapp.ts";
+import { agentAllowed, waSendText, wahaSendText } from "./whatsapp.ts";
 import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
 import { sleep } from "./util.ts";
 import { nsFindOrder, nsProducts, storeFor } from "./nuvemshop.ts";
@@ -22,7 +22,7 @@ async function tokenFor(db: SupabaseClient, accountId: string, channel: Channel)
 /** Registra a mensagem recebida. Retorna null se for entrega duplicada do webhook. */
 export async function recordInbound(
   db: SupabaseClient,
-  account: { id: string; user_id: string },
+  account: { id: string; user_id: string; meta?: any },
   channel: Channel,
   contact: { id: string; name?: string; username?: string },
   message: { externalId: string; text: string },
@@ -34,6 +34,8 @@ export async function recordInbound(
     account_id: account.id,
     channel,
     contact_id: contact.id,
+    // Número com IA desligada (ex.: pessoal): a conversa já nasce sem IA, salvo os contatos da lista
+    ai_enabled: channel === "whatsapp" ? agentAllowed(account.meta, contact.id) : true,
     contact_name: contact.name,
     contact_username: contact.username,
   }).select().single()).data;
@@ -195,9 +197,6 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
   if (!aiEnabled() || !conversation.ai_enabled || conversation.status === "needs_human") return;
   const { data: settings } = await db.from("brand_settings").select("agent_enabled").eq("user_id", conversation.user_id).maybeSingle();
   if (!settings?.agent_enabled) return;
-  // Cada número de WhatsApp tem a própria chave (ex.: o pessoal fica sem IA)
-  const { data: account } = await db.from("social_accounts").select("meta").eq("id", conversation.account_id).maybeSingle();
-  if (account?.meta?.agent === false) return;
 
   // Espera um pouco: se a pessoa mandar várias mensagens seguidas, responde só a última (com todo o contexto)
   await sleep(4000);
