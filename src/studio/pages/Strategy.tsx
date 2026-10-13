@@ -11,7 +11,7 @@ import { useTable } from "../lib/hooks";
 import type { Strategy } from "../lib/types";
 import { EmptyState, formatDateTime, PageHeader, Panel, PlatformIcon, SectionLabel } from "../components/bits";
 
-const CHANNEL: Record<string, string> = { tiktok: "TikTok", site: "Site", instagram: "Instagram", mercadolivre: "Mercado Livre", geral: "Geral", ambos: "TikTok + Instagram" };
+const CHANNEL: Record<string, string> = { tiktok: "TikTok Shop", shopee: "Shopee", site: "Site", instagram: "Instagram", mercadolivre: "Mercado Livre", geral: "Geral", ambos: "TikTok + Instagram" };
 const brl = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`;
 
 function Stat({ label, value }: { label: string; value: string | number }) {
@@ -88,11 +88,13 @@ function PlanView({ strategy }: { strategy: Strategy }) {
     <div className="space-y-5">
       <Panel title="Resumo" description={`Gerado em ${formatDateTime(strategy.created_at)} · últimos ${data.period_days} dias`} bodyClassName="space-y-4 p-5">
         <p className="text-[14px] leading-relaxed">{plan.summary}</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <Stat label="Pedidos no site" value={data.site.orders} />
           <Stat label="Faturamento no site" value={brl(data.site.revenue)} />
           <Stat label="Pedidos no Mercado Livre" value={data.mercadolivre ? data.mercadolivre.orders : "—"} />
+          <Stat label="Pedidos na Shopee" value={data.shopee ? data.shopee.orders : "—"} />
           <Stat label="Produtos sem venda" value={`${data.products_without_sales} de ${data.products}`} />
+          <Stat label="Produtos sem vídeo" value={data.products_without_video} />
         </div>
         {plan.diagnosis.length > 0 && (
           <div className="grid gap-2 sm:grid-cols-2">
@@ -110,6 +112,37 @@ function PlanView({ strategy }: { strategy: Strategy }) {
         <List items={plan.weekly_checklist} />
       </Panel>
 
+      {plan.market && (
+        <Panel title="Pesquisa de mercado" description={strategy.research?.at ? `Pesquisa na web de ${formatDateTime(strategy.research.at)}` : undefined} bodyClassName="space-y-4 p-5">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div><SectionLabel className="mb-2">Tendências</SectionLabel><List items={plan.market.trends} /></div>
+            <div><SectionLabel className="mb-2">Oportunidades</SectionLabel><List items={plan.market.opportunities} /></div>
+          </div>
+          {plan.market.prices && <div><SectionLabel className="mb-1">Preços no mercado</SectionLabel><p className="text-[13px]">{plan.market.prices}</p></div>}
+          {plan.market.competitors.length > 0 && (
+            <div>
+              <SectionLabel className="mb-2">Concorrentes</SectionLabel>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {plan.market.competitors.map((c, i) => (
+                  <div key={i} className="rounded-md border p-3">
+                    <p className="text-[13px] font-medium">{c.name} <span className="font-normal text-muted-foreground">· {c.channel}</span></p>
+                    <p className="mt-1 text-xs text-muted-foreground">{c.insight}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!!strategy.research?.sources?.length && (
+            <div>
+              <SectionLabel className="mb-1">Fontes</SectionLabel>
+              <ul className="space-y-0.5 text-xs">
+                {strategy.research.sources.map((u) => <li key={u} className="truncate"><a href={u} target="_blank" rel="noreferrer" className="text-muted-foreground underline underline-offset-2">{u}</a></li>)}
+              </ul>
+            </div>
+          )}
+        </Panel>
+      )}
+
       <Panel title="Prioridades" bodyClassName="divide-y p-0">
         {plan.priorities.map((p, i) => (
           <div key={i} className="space-y-2 p-4">
@@ -123,6 +156,26 @@ function PlanView({ strategy }: { strategy: Strategy }) {
           </div>
         ))}
       </Panel>
+
+      {!!plan.channels?.length && (
+        <Panel title="Plano por canal" bodyClassName="grid gap-4 p-5 lg:grid-cols-2">
+          {plan.channels.map((c, i) => (
+            <div key={i} className="rounded-md border p-3">
+              <p className="text-[13px] font-semibold">{CHANNEL[c.channel] ?? c.channel}</p>
+              <p className="mb-2 mt-0.5 text-xs text-muted-foreground">{c.goal}</p>
+              <List items={c.actions} />
+            </div>
+          ))}
+        </Panel>
+      )}
+
+      {plan.followers && (
+        <Panel title="Ganhar seguidores" bodyClassName="space-y-3 p-5">
+          <p className="text-[13px]">{plan.followers.strategy}</p>
+          <div><SectionLabel className="mb-1">Ritmo</SectionLabel><p className="text-[13px]">{plan.followers.rhythm}</p></div>
+          <List items={plan.followers.actions} />
+        </Panel>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title={<span className="flex items-center gap-2"><PlatformIcon platform="tiktok" className="h-4 w-4" /> Anúncios no TikTok (GMV Max)</span>} bodyClassName="space-y-3 p-5">
@@ -166,31 +219,39 @@ function PlanView({ strategy }: { strategy: Strategy }) {
   );
 }
 
+const STEPS = ["Lendo as vendas do site, Mercado Livre e Shopee…", "Pesquisando o mercado na web (concorrentes, preços, tendências)…", "Montando a estratégia…"];
+
 export default function StrategyPage() {
   const qc = useQueryClient();
-  const { data: list = [], isLoading } = useTable("strategies", { limit: 5 });
-  const latest = list[0];
+  const { data: list = [], isLoading } = useTable("strategies", { limit: 10 });
+  const latest = list.find((s) => (s.status ?? "done") === "done" && s.plan?.summary);
   const [tiktok, setTiktok] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [fresh, setFresh] = useState(false);
+  const [step, setStep] = useState<number | null>(null);
 
   const generate = async () => {
-    setBusy(true);
     try {
-      await api.invoke("ai", { action: "strategy_generate", tiktok });
+      setStep(0);
+      const st = await api.invoke<{ id: string }>("ai", { action: "strategy_start", tiktok });
+      setStep(1);
+      await api.invoke("ai", { action: "strategy_research", strategy_id: st.id, fresh });
+      setStep(2);
+      await api.invoke("ai", { action: "strategy_finish", strategy_id: st.id });
       qc.invalidateQueries({ queryKey: ["table", "strategies"] });
       toast.success("Estratégia pronta");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
-      setBusy(false);
+      setStep(null);
     }
   };
+  const busy = step !== null;
 
   return (
     <div>
       <PageHeader
         title="Estratégia"
-        description="O motor junta as vendas do site e do Mercado Livre, os números do TikTok que você colar e as datas que vêm aí, e monta o plano da semana para vender mais no TikTok e no site e ganhar seguidores."
+        description="O motor junta as vendas do site, do Mercado Livre e da Shopee, os números do TikTok que você colar, uma pesquisa de mercado na web e as datas que vêm aí, e monta as melhores estratégias para vender mais e ganhar seguidores."
       />
       <div className="space-y-5">
         <Panel title="Gerar estratégia" bodyClassName="space-y-3 p-5">
@@ -205,8 +266,14 @@ export default function StrategyPage() {
               placeholder={"Copie da campanha GMV Max, ex.:\nCusto R$ 91,05 · 14 pedidos · receita R$ 606,61\nCaixa Misteriosa: custo 2,47, 2 pedidos, ROI 88\nZé Gotinha Diversidade: custo 8,24, 4 pedidos, ROI 17,9"}
             />
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs text-muted-foreground">Leva uns 30 a 60 segundos. Gere de novo toda semana.</p>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox checked={fresh} onCheckedChange={(v) => setFresh(Boolean(v))} disabled={busy} />
+            Fazer uma pesquisa de mercado nova (senão reaproveita a da última semana)
+          </label>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              {busy ? <span className="flex items-center gap-2 text-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> {step! + 1}/3 · {STEPS[step!]}</span> : "Leva de 1 a 3 minutos. Gere de novo toda semana."}
+            </p>
             <Button onClick={generate} disabled={busy}>{busy ? <Loader2 className="animate-spin" /> : <Sparkles />} Gerar estratégia</Button>
           </div>
         </Panel>

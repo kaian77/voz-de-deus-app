@@ -363,7 +363,10 @@ export interface IgProfileData {
 export interface StrategyPlan {
   summary: string;
   diagnosis: { title: string; detail: string }[];
-  priorities: { title: string; why: string; channel: "tiktok" | "site" | "instagram" | "mercadolivre" | "geral"; actions: string[]; products: string[] }[];
+  market?: { trends: string[]; competitors: { name: string; channel: string; insight: string }[]; prices: string; opportunities: string[] };
+  priorities: { title: string; why: string; channel: string; actions: string[]; products: string[] }[];
+  channels?: { channel: string; goal: string; actions: string[] }[];
+  followers?: { strategy: string; rhythm: string; actions: string[] };
   tiktok_ads: { advice: string; roi_target: string; budget: string; products: string[] };
   kits: { name: string; products: string[]; why: string }[];
   content: { idea: string; format: string; channel: "tiktok" | "instagram" | "ambos"; product: string }[];
@@ -381,10 +384,13 @@ export interface Strategy {
     products_without_video: number;
     site: { orders: number; revenue: number };
     mercadolivre: { orders: number } | null;
-    top: { name: string; site_qty: number; ml_qty: number; url: string | null; image: string | null }[];
+    shopee?: { orders: number } | null;
+    top: { name: string; site_qty: number; ml_qty: number; shopee_qty?: number; url: string | null; image: string | null }[];
   };
   plan: StrategyPlan;
   video_picks: { id: number; name: string; url: string | null; image: string | null; sold: number }[];
   videos_queued_at: string | null;
+  research?: { text: string; sources: string[]; at: string } | null;
+  status?: "research" | "plan" | "done";
   created_at: string;
 }
