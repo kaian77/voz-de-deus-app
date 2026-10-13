@@ -124,6 +124,14 @@ export async function wahaPhoneFromLid(cfg: WahaConfig, lid: string, data?: any)
   return toCus(r?.pn);
 }
 
+/** chatId certo de um telefone (o WhatsApp às vezes registra celular BR sem o 9). */
+export async function wahaChatIdFor(cfg: WahaConfig, phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  const r = await waha<{ numberExists?: boolean; chatId?: string }>(cfg, `/api/contacts/check-exists?phone=${digits}&session=${cfg.session}`).catch(() => null);
+  if (r && r.numberExists === false) throw new Error(`O número ${phone} não tem WhatsApp`);
+  return r?.chatId ?? `${digits}@c.us`;
+}
+
 /** Liga a sessão (quando o servidor reiniciou e ela ficou STOPPED/FAILED). */
 export function wahaStart(cfg: WahaConfig) {
   return waha(cfg, `/api/sessions/${cfg.session}/start`, {}).catch(() => null);
