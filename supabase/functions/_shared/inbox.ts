@@ -24,18 +24,25 @@ export async function recordInbound(
   db: SupabaseClient,
   account: { id: string; user_id: string; meta?: any },
   channel: Channel,
-  contact: { id: string; name?: string; username?: string },
+  contact: { id: string; altId?: string; name?: string; username?: string },
   message: { externalId: string; text: string },
 ) {
   const now = new Date().toISOString();
-  const { data: existing } = await db.from("conversations").select("*").eq("account_id", account.id).eq("contact_id", contact.id).maybeSingle();
+  // altId: id antigo do mesmo contato (WhatsApp "@lid"); a conversa passa a usar o telefone
+  const ids = contact.altId ? [contact.id, contact.altId] : [contact.id];
+  const { data: found } = await db.from("conversations").select("*").eq("account_id", account.id).in("contact_id", ids);
+  let existing = found?.find((c) => c.contact_id === contact.id) ?? found?.[0] ?? null;
+  if (existing && existing.contact_id !== contact.id) {
+    const { data: moved } = await db.from("conversations").update({ contact_id: contact.id }).eq("id", existing.id).select().single();
+    existing = moved ?? existing;
+  }
   const conversation = existing ?? (await db.from("conversations").insert({
     user_id: account.user_id,
     account_id: account.id,
     channel,
     contact_id: contact.id,
     // Número com IA desligada (ex.: pessoal): a conversa já nasce sem IA, salvo os contatos da lista
-    ai_enabled: channel === "whatsapp" ? agentAllowed(account.meta, contact.id) : true,
+    ai_enabled: channel === "whatsapp" ? ids.some((id) => agentAllowed(account.meta, id)) : true,
     contact_name: contact.name,
     contact_username: contact.username,
   }).select().single()).data;
@@ -252,8 +259,10 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
       `Você responde mensagens no WhatsApp em nome do dono deste número, em primeira pessoa, como se fosse ele. ` +
       `Português do Brasil, natural e curto, do jeito que uma pessoa escreve no WhatsApp; não diga que é uma IA, a não ser que perguntem diretamente. ` +
       `Nunca invente fatos, compromissos, horários, valores ou promessas que não estejam nas instruções abaixo. ` +
-      `Peça handoff (handoff=true, reply vazio ou uma frase curta como "já te respondo") quando não souber responder, ` +
-      `quando o assunto for sério ou pessoal demais, ou quando pedirem algo que só o dono pode decidir.\n\n` +
+      `Converse normalmente no papo do dia a dia (cumprimentos, brincadeiras, como está, provocações leves), no estilo das instruções; ` +
+      `não fuja da conversa nem diga "já te respondo" à toa. ` +
+      `Só peça handoff (handoff=true, com reply vazio) quando pedirem algo que só o dono pode decidir ou confirmar ` +
+      `(compromissos, dinheiro, horários, favores), quando o assunto for sério ou delicado, ou quando as instruções mandarem.\n\n` +
       `Instruções do dono:\n${persona}`;
     const result = await generateJSON(AgentReply, personal,
       `Contato: ${conversation.contact_name ?? "sem nome"}\n\nConversa até agora:\n${chat}\n\nEscreva a minha próxima mensagem (EU).`, "low");
