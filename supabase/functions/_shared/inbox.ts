@@ -5,7 +5,7 @@ import { igRequest, igTokenFor } from "./instagram.ts";
 import { agentAllowed, waSendText, wahaSendText } from "./whatsapp.ts";
 import { type AgentTool, aiEnabled, brandContext, generateJSON, runAgent } from "./claude.ts";
 import { sleep } from "./util.ts";
-import { nsCoupons, nsFindOrder, nsPages, nsProducts, nsStore, storeFor } from "./nuvemshop.ts";
+import { nsCoupons, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "./nuvemshop.ts";
 
 export type Channel = "instagram" | "whatsapp";
 type Sender = "contact" | "ai" | "human" | "agent";
@@ -153,7 +153,8 @@ function storeTools(store: { token: string; storeId: string } | null): AgentTool
     },
     {
       name: "cupons_ativos",
-      description: "Cupons de desconto válidos agora na loja (código, desconto, compra mínima, se é só para primeira compra).",
+      description: "Cupons de desconto válidos agora na loja (código, desconto, compra mínima, se é só para primeira compra). " +
+        "NUNCA passe cupons cujo código tenha nome de pessoa (ex.: JULIA10, BRUNO15, MARIA): são de parceiros/influenciadores.",
       input_schema: { type: "object", properties: {} },
       run: async () => {
         const coupons = await nsCoupons(token, storeId);
@@ -161,28 +162,67 @@ function storeTools(store: { token: string; storeId: string } | null): AgentTool
       },
     },
     {
+      name: "historico_cliente",
+      description: "Quantas compras pagas a pessoa já fez na loja, pelo e-mail que ela informou. Use para decidir o cupom (primeira compra x cliente recorrente).",
+      input_schema: { type: "object", properties: { email: { type: "string" } }, required: ["email"] },
+      run: async ({ email }: { email: string }) => {
+        const mail = String(email).trim().toLowerCase();
+        const orders = (await nsOrders(token, storeId, { q: mail, limit: 50 }))
+          .filter((o) => String(o.email ?? "").toLowerCase() === mail && o.status !== "cancelled" && o.payment === "pago");
+        return { compras_pagas: orders.length };
+      },
+    },
+    {
       name: "consultar_pedido",
-      description: "Situação de um pedido (pagamento, envio, rastreio). Exige o número do pedido E o e-mail usado na compra, " +
-        "ambos informados pela própria pessoa nesta conversa. Sem os dois, peça antes de chamar.",
+      description: "Situação de um pedido (pagamento, envio, transportadora, rastreio). Exige o número do pedido E o e-mail ou o nome completo de quem comprou, " +
+        "informados pela própria pessoa nesta conversa. Sem isso, peça antes de chamar. Também traz os canais da transportadora.",
       input_schema: {
         type: "object",
-        properties: { numero: { type: "string" }, email: { type: "string" } },
-        required: ["numero", "email"],
+        properties: { numero: { type: "string" }, email_ou_nome: { type: "string" } },
+        required: ["numero", "email_ou_nome"],
       },
-      run: async ({ numero, email }: { numero: string; email: string }) => {
+      run: async ({ numero, email_ou_nome }: { numero: string; email_ou_nome: string }) => {
         const order = await nsFindOrder(token, storeId, numero);
         if (!order) return { resultado: "pedido não encontrado; peça para conferir o número" };
-        if (!order.email || String(order.email).toLowerCase() !== String(email).trim().toLowerCase()) {
-          return { resultado: "o e-mail não confere com o da compra; não passe nenhum dado do pedido, peça para conferir o e-mail" };
+        if (!buyerMatches(order, email_ou_nome)) {
+          return { resultado: "o e-mail/nome não confere com o da compra; não passe nenhum dado do pedido, peça para conferir" };
         }
         return {
           numero: order.number, pagamento: order.payment, envio: order.shipping, transportadora: order.shipping_option,
           prazo: order.shipping_days, rastreio: order.tracking_number, link_rastreio: order.tracking_url,
           enviado_em: order.shipped_at, cancelado: order.status === "cancelled", itens: order.items,
+          contato_transportadora: carrierContact(`${order.shipping_option ?? ""} ${order.tracking_url ?? ""}`),
         };
       },
     },
   ];
+}
+
+const norm = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9@.\s]/g, " ").replace(/\s+/g, " ").trim();
+
+/** Confere quem pergunta: e-mail igual ao da compra, ou nome e sobrenome que batem com o do comprador. */
+// deno-lint-ignore no-explicit-any
+function buyerMatches(order: any, given: string) {
+  const g = norm(String(given ?? ""));
+  if (!g) return false;
+  if (g.includes("@")) return g === norm(String(order.email ?? ""));
+  const words = g.split(" ").filter((w) => w.length > 1);
+  const buyer = norm(String(order.customer ?? "")).split(" ");
+  return words.length >= 2 && words.every((w) => buyer.includes(w));
+}
+
+/** Canais oficiais da transportadora para o destinatário (sem e-mail público: site e telefone). */
+function carrierContact(info: string) {
+  if (/loggi/i.test(info)) {
+    return { nome: "Loggi", rastreio: "https://www.loggi.com/rastreador", ajuda: "https://www.loggi.com/ajuda" };
+  }
+  if (/correios|sedex|pac\b|mini/i.test(info)) {
+    return {
+      nome: "Correios", rastreio: "https://rastreamento.correios.com.br", fale_conosco: "https://www.correios.com.br/falecomoscorreios",
+      telefone: "3003-0100", como: "No Fale Conosco, registrar manifestação de objeto entregue e não recebido, com o código de rastreio",
+    };
+  }
+  return null;
 }
 
 const FINAL_TOOL: AgentTool = {
@@ -233,8 +273,13 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
       ? `- Use as ferramentas para consultar a loja de verdade: buscar_produtos (o catálogo é grande; procure antes de dizer que não tem), ` +
         `info_loja (frete, trocas, contato), cupons_ativos e consultar_pedido. Só afirme o que veio das ferramentas, da base de conhecimento ou das instruções.\n` +
         `- Produto pedido pelo nome popular (ex.: "homem aranha") pode ter outro nome na loja (ex.: "Zé Aranha"): busque por palavras-chave e explique a versão que a loja tem.\n` +
-        `- Cupom: quando pedirem desconto, consulte cupons_ativos e passe só códigos que vieram de lá, com as condições (primeira compra, valor mínimo, validade). Se não houver, diga com gentileza que no momento não há cupom ativo.\n` +
-        `- Pedido: peça o número do pedido e o e-mail da compra; só depois consulte e passe status e rastreio.\n`
+        `- Cupom: quando pedirem desconto, consulte cupons_ativos e passe só códigos que vieram de lá, com as condições (primeira compra, valor mínimo, validade). ` +
+        `Nunca passe cupom com nome de pessoa no código. Se não houver, diga com gentileza que no momento não há cupom ativo.\n` +
+        `- Pedido: peça o número do pedido e o e-mail (ou nome completo) de quem comprou; só depois consulte e passe status, transportadora e rastreio.\n` +
+        `- "Consta entregue mas não recebi": com muita gentileza e empatia, explique que a parte da loja é embalar com cuidado e postar, e que a entrega ` +
+        `fica sob responsabilidade da transportadora. Passe o nome da transportadora, o código e o link de rastreio e os canais dela (contato_transportadora), ` +
+        `sugira antes conferir com portaria, vizinhos ou familiares, e oriente a abrir a reclamação na transportadora com o código. ` +
+        `Coloque-se à disposição. Não prometa reenvio nem reembolso; se a pessoa voltar dizendo que a transportadora não resolveu, faça handoff.\n`
       : "") +
     `- Nunca invente produtos, preços, números, prazos, cupons, links ou promessas.\n` +
     `Peça handoff (handoff=true) só quando: a pessoa pedir para falar com humano; reclamação séria; pagamento/reembolso/troca com problema; ` +
