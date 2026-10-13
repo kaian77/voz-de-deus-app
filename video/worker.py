@@ -72,6 +72,28 @@ def download_photo(url, path):
     im.convert("RGB").save(path, quality=95)
 
 
+# Enfeite animado pelo tema quando a IA não escolheu (vídeos antigos / piloto automático)
+MOTIF_HINTS = [
+    ("ribbons", ("outubro rosa", "novembro azul", "setembro amarelo", "laço", "conscientiza", "câncer", "cancer", "autismo")),
+    ("hearts", ("amor", "namorad", "mães", "maes", "pais", "coração", "coracao", "doação", "doacao", "sangue")),
+    ("stars", ("natal", "ano novo", "réveillon", "reveillon", "estrela", "festa", "aniversário", "aniversario")),
+    ("petals", ("primavera", "flor", "rosa ", "mulher", "8 de março")),
+]
+
+
+def motif_for(brief, name):
+    if brief.get("motif") in ("hearts", "ribbons", "petals", "stars"):
+        return brief["motif"]
+    if brief.get("motif") == "none":
+        return None
+    text = " ".join(str(brief.get(k) or "") for k in ("theme", "hook", "notes", "why")) + " " + name
+    text = text.lower()
+    for motif, words in MOTIF_HINTS:
+        if any(w in text for w in words):
+            return motif
+    return None
+
+
 def briefing(brief, name, handle):
     colors = {**COLORS, **{k: v for k, v in (brief.get("colors") or {}).items() if isinstance(v, str) and v.startswith("#")}}
     features = [f for f in (brief.get("features") or []) if f][:3]
@@ -101,6 +123,7 @@ def briefing(brief, name, handle):
         "watermark": False,
         "product": {"name": name, "image": "photo.jpg", "cutout": True},
         "music": "auto", "bpm": 118, "style": "pop", "sfx": True, "snap_to_beat": True,
+        "motif": motif_for(brief, name),
         "scenes": scenes,
     }
 

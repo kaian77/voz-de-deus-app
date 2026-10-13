@@ -616,6 +616,27 @@ class BadgeLayer(Layer):
         return im.rotate(s.get("tilt", -12), resample=Image.BICUBIC, expand=True)
 
 
+def motif_shape(d, kind, x, y, size, a, fill, U=1.0):
+    """Desenha um enfeite temático (coração, laço de campanha, pétala ou estrela) centrado em (x, y)."""
+    ca, sa = math.cos(a), math.sin(a)
+    tr = lambda px, py: (x + (px * ca - py * sa) * size, y + (px * sa + py * ca) * size)
+    if kind == "hearts":
+        pts = [tr(16 * math.sin(t) ** 3 / 17, -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)) / 17)
+               for t in (i * math.pi / 24 for i in range(48))]
+        d.polygon(pts, fill=fill)
+    elif kind == "ribbons":
+        # laço de conscientização: alça em cima e as duas pontas cruzando embaixo
+        path = [(-0.42, 1.0), (-0.05, 0.25), (0.28, -0.35), (0.3, -0.75), (0.0, -0.98), (-0.3, -0.75), (-0.28, -0.35), (0.05, 0.25), (0.42, 1.0)]
+        d.line([tr(px, py) for px, py in path], fill=fill, width=max(3, int(size * 0.26)), joint="curve")
+    elif kind == "petals":
+        pts = [tr(0.32 * math.sin(t), 0.6 * math.cos(t) * (1 - 0.25 * math.cos(t))) for t in (i * math.pi / 16 for i in range(32))]
+        d.polygon(pts, fill=fill)
+    else:  # estrela de 5 pontas
+        pts = [tr((0.6 if k % 2 == 0 else 0.25) * math.sin(math.pi * k / 5), -(0.6 if k % 2 == 0 else 0.25) * math.cos(math.pi * k / 5))
+               for k in range(10)]
+        d.polygon(pts, fill=fill)
+
+
 class ParticlesLayer(Layer):
     default_anim = "fade"
 
@@ -660,6 +681,15 @@ class ParticlesLayer(Layer):
                     ang = math.pi * k / 4
                     pts.append((x + rr * math.cos(ang), y + rr * math.sin(ang)))
                 d.polygon(pts, fill=(255, 255, 255, int(255 * tw)))
+            elif kind in ("hearts", "ribbons", "petals", "stars"):
+                # Enfeites do tema (Outubro Rosa = laços, Dia das Mães = corações...): caem balançando e girando devagar
+                sway = 0.035 * math.sin(lt * 1.6 + q["ph"])
+                x = (q["x"] + sway) * W
+                y = ((q["y"] + q["vy"] * lt * 0.32) % 1.15 - 0.075) * H
+                a = math.radians(q["rot"] * 0.25 + 25 * math.sin(lt * 1.3 + q["ph"]))
+                size = 46 * U * q["sz"]
+                alpha = 235 if kind != "stars" else int(255 * (0.55 + 0.45 * math.sin(lt * 4 + q["ph"] * 3)))
+                motif_shape(d, kind, x, y, size, a, q["col"] + (alpha,), U)
             else:  # bokeh: bolinhas suaves subindo
                 if self.dot is None:
                     self.dot = radial_glow(256, "#FFFFFF", 1.0)

@@ -19,6 +19,14 @@ const Brief = z.object({
   features: z.array(z.string()).describe("3 motivos para comprar, até 6 palavras cada, só com o que dá para ver na foto ou está nos dados"),
   cta: z.string().describe("Chamada do botão, até 3 palavras, ex.: 'Garanta a sua'"),
   urgency: z.string().describe("Frase curta acima do botão com um fato real da marca (ex.: 'Enviamos para todo o Brasil'); vazia se não houver"),
+  motif: z.enum(["none", "hearts", "ribbons", "petals", "stars"]).describe(
+    "Enfeite animado que cai pela tela, de acordo com o tema do vídeo/produto: ribbons = laços de campanha (Outubro Rosa, Novembro Azul, " +
+      "Setembro Amarelo, conscientização); hearts = amor, Dia das Mães/Pais/Namorados, doação; stars = Natal, festas, conquistas; " +
+      "petals = flores, primavera, Dia da Mulher; none = produto sem tema especial",
+  ),
+  theme_colors: z.object({ primary: z.string(), secondary: z.string(), accent: z.string() }).nullable().describe(
+    "Só quando o tema tem cores próprias (ex.: Outubro Rosa: primary #E8559A, secondary #2B0A1A, accent #FFC1DA); hex. null = cores da marca",
+  ),
 });
 
 /** Pede ao GitHub para rodar o workflow de vídeos agora. Devolve false quando não há token (fica para o horário). */
@@ -58,7 +66,7 @@ export async function queueProductVideo(db: SupabaseClient, userId: string, prod
         `na foto ou no contexto da marca.\n\n${brandContext(settings)}`,
       `Produto: "${product.name}".\n` +
         `${product.description ? `Informações do produto: ${product.description.replace(/<[^>]+>/g, " ").slice(0, 800)}\n` : ""}` +
-        `Escreva os textos do vídeo. O preço não aparece no vídeo.`,
+        `Escreva os textos do vídeo. O preço não aparece no vídeo. Escolha o enfeite animado (motif) pelo tema e, se o tema tiver cores próprias, theme_colors.`,
       "low", images.slice(0, 2));
   }
   const caption = await productCaption(settings, { ...product, caption: product.caption }, "video");
@@ -69,6 +77,7 @@ export async function queueProductVideo(db: SupabaseClient, userId: string, prod
     images,
     brief: {
       ...brief,
+      ...(brief.theme_colors && !brief.colors ? { colors: brief.theme_colors } : {}),
       title: product.name,
       brand: settings?.brand_name ?? "",
       handle: ig?.username ? `@${ig.username}` : "",
