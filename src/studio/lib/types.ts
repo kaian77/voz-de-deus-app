@@ -234,6 +234,9 @@ export interface BrandSettings {
   autopilot_per_week?: number;
   autopilot_last_run?: string | null;
   autopilot_error?: string | null;
+  sale_alert_phone?: string | null;
+  sale_alert_channels?: string[];
+  sale_alert_since?: string | null;
 }
 
 /** Sincronização da loja com o Mercado Livre (fila processada pelo cron). */

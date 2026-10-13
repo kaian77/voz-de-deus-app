@@ -9,6 +9,7 @@ import { finishRenderedVideos } from "../_shared/product-video.ts";
 import { runAutopilot } from "../_shared/content-ideas.ts";
 import { cleanupStorage } from "../_shared/storage-cleanup.ts";
 import { wahaKeepAlive } from "../_shared/whatsapp.ts";
+import { runSaleAlerts } from "../_shared/sale-alerts.ts";
 import { runMlSync } from "../_shared/ml-sync.ts";
 
 Deno.serve(async (req) => {
@@ -52,7 +53,11 @@ Deno.serve(async (req) => {
       : undefined;
     // Sincronização da loja com o Mercado Livre (alguns produtos por minuto, enquanto houver fila)
     const mlsync = await runMlSync(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    return json({ processed, polled, autolink, videos, autopilot, cleanup, waha, mlsync });
+    // A cada 2 minutos: aviso de venda no WhatsApp (Mercado Livre, Shopee, site)
+    const sales = new Date().getUTCMinutes() % 2 === 1
+      ? await runSaleAlerts(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
+      : undefined;
+    return json({ processed, polled, autolink, videos, autopilot, cleanup, waha, mlsync, sales });
   } catch (err) {
     return handleError(err);
   }

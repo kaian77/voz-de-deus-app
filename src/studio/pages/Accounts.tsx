@@ -8,6 +8,7 @@ import { useRemoveRow, useTable } from "../lib/hooks";
 import type { Platform, SocialAccount } from "../lib/types";
 import { Avatar, PageHeader, PlatformIcon, StatusDot } from "../components/bits";
 import WhatsAppConnect from "../components/WhatsAppConnect";
+import SaleAlerts from "../components/SaleAlerts";
 
 const INFO: Record<Platform, { name: string; features: string; note: string }> = {
   instagram: {
@@ -212,6 +213,7 @@ export default function Accounts() {
           );
         })}
         <WhatsAppConnect />
+        <SaleAlerts />
         <section className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
           <div className="flex gap-4">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border"><PlatformIcon platform="nuvemshop" className="h-5 w-5 text-foreground" /></span>

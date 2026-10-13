@@ -3,12 +3,14 @@
 //   { action: "suggest", conversation_id }         -> IA sugere uma resposta (não envia)
 //   { action: "connect_whatsapp", phone_number_id, access_token, waba_id? }   -> API oficial da Meta
 //   { action: "connect_waha", base_url, session?, api_key? }                   -> WAHA (self-hosted, grátis)
+//   { action: "test_sale_alert", phone }            -> manda um aviso de venda de teste para o número
 //   { action: "whatsapp_settings", account_id, agent?, agent_numbers?, agent_prompt? } -> onde e como a IA responde no número
 // Nos dois: label ("Loja", "Pessoal"...) e agent (a IA responde sozinha nesse número?). Dá para ter vários números.
 import { adminClient, assertPublicHttpsUrl, corsHeaders, functionsUrl, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { draftReply, sendMessage } from "../_shared/inbox.ts";
 import { agentAllowed, waPhoneInfo, waSubscribeApp, wahaSession, wahaSetWebhook, wahaStart } from "../_shared/whatsapp.ts";
 import { aiEnabled } from "../_shared/claude.ts";
+import { saleMessage, sendWhatsAppTo } from "../_shared/sale-alerts.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -78,6 +80,13 @@ Deno.serve(async (req) => {
         const webhookUrl = `${functionsUrl("whatsapp-webhook")}?account=${account.id}&secret=${secret}`;
         const configured = await wahaSetWebhook(cfg, webhookUrl).then(() => true).catch(() => false);
         return json({ account, webhook_url: webhookUrl, webhook_configured: configured, status: session.status });
+      }
+      case "test_sale_alert": {
+        const phone = String(body.phone ?? "").replace(/\D/g, "");
+        if (phone.length < 10) throw new HttpError(400, "Informe o número com DDD");
+        const text = saleMessage({ channel: "mercadolivre", id: "teste", number: "TESTE", items: ["1x Pin Zé Gotinha (exemplo)"], total: "R$ 0,00", buyer: "Teste do Studio" });
+        await sendWhatsAppTo(db, userId, phone, text);
+        return json({ ok: true });
       }
       case "whatsapp_settings": {
         // O navegador só lê social_accounts (segurança); a configuração da IA passa por aqui
