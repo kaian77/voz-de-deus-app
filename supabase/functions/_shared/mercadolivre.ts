@@ -96,21 +96,31 @@ export type MlItem = {
   pictures?: { url?: string; secure_url?: string }[];
 };
 
-/** Anúncios do vendedor (até `max`, ativos por padrão; status "" traz todos), com os dados completos. */
-export async function mlSellerItems(token: string, sellerId: string, max = 200, status = "active"): Promise<MlItem[]> {
-  const ids: string[] = [];
-  for (let offset = 0; offset < max; offset += 50) {
-    const page = await ml<{ results: string[]; paging: { total: number } }>(token, `/users/${sellerId}/items/search?${status ? `status=${status}&` : ""}limit=50&offset=${offset}`);
-    ids.push(...page.results);
-    if (offset + 50 >= page.paging.total) break;
+/**
+ * Anúncios do vendedor (até `max` por status, ativos por padrão; status "" traz todos menos os encerrados), com os dados completos
+ * ou só os campos em `fields` (bem mais leve: o anúncio completo tem dezenas de KB).
+ */
+export async function mlSellerItems(token: string, sellerId: string, max = 200, status = "active", fields?: string[]): Promise<MlItem[]> {
+  const ids = new Set<string>();
+  // "" = todos menos encerrados, status por status (a busca sem filtro não garante trazer os inativos e em revisão)
+  for (const st of status ? [status] : ["active", "paused", "under_review", "inactive"]) {
+    for (let offset = 0; offset < max; offset += 50) {
+      const page = await ml<{ results: string[]; paging: { total: number } }>(token, `/users/${sellerId}/items/search?status=${st}&limit=50&offset=${offset}`);
+      page.results.forEach((id) => ids.add(id));
+      if (offset + 50 >= page.paging.total) break;
+    }
   }
   const items: MlItem[] = [];
-  for (let i = 0; i < ids.length; i += 20) {
-    const batch = await ml<{ code: number; body: MlItem }[]>(token, `/items?ids=${ids.slice(i, i + 20).join(",")}`);
+  const list = [...ids];
+  for (let i = 0; i < list.length; i += 20) {
+    const batch = await ml<{ code: number; body: MlItem }[]>(token, `/items?ids=${list.slice(i, i + 20).join(",")}${fields ? `&attributes=${fields.join(",")}` : ""}`);
     for (const r of batch) if (r.code === 200) items.push(r.body);
   }
   return items;
 }
+
+/** Campos que bastam para achar um anúncio pelo nome ou SKU. */
+export const ML_LOOKUP_FIELDS = ["id", "title", "family_name", "status", "seller_custom_field"];
 
 /** SKU do anúncio: atributo SELLER_SKU ou o campo antigo seller_custom_field. */
 export function mlSku(item: MlItem) {

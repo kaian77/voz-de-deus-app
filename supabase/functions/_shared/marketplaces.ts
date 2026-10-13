@@ -2,7 +2,7 @@
 // dados fiscais) e publicação de produtos novos seguindo esse padrão.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ns, storeFor, txt } from "./nuvemshop.ts";
-import { ml, type MlItem, mlSellerItems, mlSku, mlTokenFor } from "./mercadolivre.ts";
+import { ml, type MlItem, ML_LOOKUP_FIELDS, mlSellerItems, mlSku, mlTokenFor } from "./mercadolivre.ts";
 import { shopeeItems, shopeeTokenFor } from "./shopee.ts";
 
 export type Marketplace = "mercadolivre" | "shopee";
@@ -298,7 +298,7 @@ async function findMlListing(token: string, sellerId: string, name: string, sku?
   }
   const words = norm(name);
   if (!words.length) return null;
-  const all = (sellerItems ?? await mlSellerItems(token, sellerId, 1000, "")).filter((i) => i.status !== "closed");
+  const all = (sellerItems ?? await mlSellerItems(token, sellerId, 1000, "", ML_LOOKUP_FIELDS)).filter((i) => i.status !== "closed");
   const same = all.filter((i) => {
     const w = norm(i.family_name ?? i.title);
     const common = w.filter((x) => words.includes(x)).length;
