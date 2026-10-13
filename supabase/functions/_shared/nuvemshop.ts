@@ -411,3 +411,20 @@ export async function nsUpdateProduct(token: string, storeId: string, nameOrId: 
   }
   return productSummary(await ns(token, storeId, `products/${product.id}`));
 }
+
+/** Cupons válidos agora (ativos, dentro da data e com usos sobrando). */
+export async function nsCoupons(token: string, storeId: string) {
+  const list = await ns<any[]>(token, storeId, "coupons?per_page=100");
+  const today = new Date().toISOString().slice(0, 10);
+  return (Array.isArray(list) ? list : [])
+    .filter((c) => c.valid !== false && !c.deleted_at && (!c.start_date || c.start_date <= today) && (!c.end_date || c.end_date >= today) &&
+      (c.max_uses == null || Number(c.used ?? 0) < Number(c.max_uses)))
+    .map((c) => ({
+      code: c.code,
+      discount: c.type === "percentage" ? `${Number(c.value)}%` : c.type === "shipping" ? "frete grátis" : money(c.value),
+      min_purchase: money(c.min_price),
+      first_purchase_only: Boolean(c.first_consumer_purchase),
+      valid_until: c.end_date || undefined,
+      only_some_products: Boolean(c.categories?.length || c.products?.length),
+    }));
+}

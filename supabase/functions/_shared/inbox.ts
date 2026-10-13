@@ -3,9 +3,9 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4";
 import { igRequest, igTokenFor } from "./instagram.ts";
 import { agentAllowed, waSendText, wahaSendText } from "./whatsapp.ts";
-import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
+import { type AgentTool, aiEnabled, brandContext, generateJSON, runAgent } from "./claude.ts";
 import { sleep } from "./util.ts";
-import { nsFindOrder, nsProducts, storeFor } from "./nuvemshop.ts";
+import { nsCoupons, nsFindOrder, nsPages, nsProducts, nsStore, storeFor } from "./nuvemshop.ts";
 
 export type Channel = "instagram" | "whatsapp";
 type Sender = "contact" | "ai" | "human" | "agent";
@@ -123,53 +123,81 @@ export async function transcript(db: SupabaseClient, conversationId: string, lim
 }
 
 /**
- * Contexto da loja para o agente: catálogo resumido e, se o contato informou número do pedido
- * E o e-mail da compra, a situação do pedido. Sem o e-mail certo, nenhum dado do pedido é revelado.
+ * Ferramentas da loja para o agente: busca no catálogo inteiro, informações e políticas da loja,
+ * cupons ativos e situação de pedido (só com número + e-mail da compra; sem isso nada do pedido é revelado).
  */
-async function storeContext(db: SupabaseClient, userId: string, history: { direction: string; text: string }[]) {
-  const store = await storeFor(db, userId).catch(() => null);
-  if (!store) return "";
-  const parts: string[] = [];
-  try {
-    const products = await nsProducts(store.token, store.storeId, { limit: 80 });
-    if (products.length) {
-      // Sem preços: eles variam (modelos e kits) e o cliente confere no site pelo link do produto
-      parts.push("Produtos da loja (para indicar o link certo; não informe preços):\n" + products.map((p) =>
-        `- ${p.name}${p.stock === 0 ? " (esgotado)" : ""}${p.url ? ` — ${p.url}` : ""}`).join("\n"));
-    }
-  } catch (e) {
-    console.error("catálogo", e);
-  }
-
-  const said = history.filter((m) => m.direction === "in").map((m) => m.text).join("\n");
-  // "pedido 1234", "nº 1234", "#1234" ou uma mensagem só com o número
-  const numbers = [...new Set([
-    ...said.matchAll(/(?:pedido|n[º°o]\.?|#)\s*:?\s*(\d{3,9})/gi),
-    ...said.matchAll(/^\s*(\d{3,9})\s*$/gm),
-  ].map((m) => m[1]))].slice(-2);
-  const emails = [...said.matchAll(/[\w.+-]+@[\w-]+\.[\w.-]+/g)].map((m) => m[0].toLowerCase());
-  const lookups: string[] = [];
-  for (const number of numbers) {
-    const order = await nsFindOrder(store.token, store.storeId, number).catch(() => null);
-    if (!order) {
-      lookups.push(`Pedido ${number}: não encontrado. Peça para a pessoa conferir o número.`);
-    } else if (!emails.length) {
-      lookups.push(`Pedido ${number}: existe. Antes de passar qualquer informação, peça o e-mail usado na compra.`);
-    } else if (!order.email || !emails.includes(String(order.email).toLowerCase())) {
-      lookups.push(`Pedido ${number}: o e-mail informado não confere com o da compra. Não passe dados do pedido; peça para conferir o e-mail ou faça handoff.`);
-    } else {
-      lookups.push(`Pedido ${number} (e-mail confirmado): pagamento ${order.payment}; envio ${order.shipping}` +
-        `${order.shipping_option ? ` via ${order.shipping_option}` : ""}${order.shipping_days ? ` (prazo ${order.shipping_days})` : ""}` +
-        `${order.tracking_number ? `; código de rastreio ${order.tracking_number}` : ""}${order.tracking_url ? ` — ${order.tracking_url}` : ""}` +
-        `${order.status === "cancelled" ? "; pedido CANCELADO" : ""}. Itens: ${order.items.join(", ")}.`);
-    }
-  }
-  parts.push(
-    "Pedidos: para informar a situação de um pedido, a pessoa precisa mandar o número do pedido e o e-mail usado na compra. " +
-      "Só fale da situação de pedidos listados abaixo como \"e-mail confirmado\".\n" + (lookups.join("\n") || "(nenhum pedido consultado nesta conversa)"),
-  );
-  return parts.join("\n\n");
+function storeTools(store: { token: string; storeId: string } | null): AgentTool[] {
+  if (!store) return [];
+  const { token, storeId } = store;
+  return [
+    {
+      name: "buscar_produtos",
+      description: "Busca produtos publicados na loja pelo nome. Use palavras-chave curtas (ex.: 'aranha', 'enfermagem', 'flamengo', 'kit'). " +
+        "Se não achar, tente sinônimos ou só uma palavra. Retorna nome, link e se está esgotado (sem preço).",
+      input_schema: { type: "object", properties: { busca: { type: "string" } }, required: ["busca"] },
+      run: async ({ busca }: { busca: string }) => {
+        const found = await nsProducts(token, storeId, { q: busca, limit: 8 });
+        return found.length
+          ? found.map((p) => ({ nome: p.name, link: p.url, esgotado: p.stock === 0, descricao: p.description.slice(0, 200) }))
+          : { resultado: "nenhum produto encontrado com essa busca" };
+      },
+    },
+    {
+      name: "info_loja",
+      description: "Dados e políticas da loja: contato, endereço e páginas como frete/envio, trocas e devoluções, perguntas frequentes.",
+      input_schema: { type: "object", properties: {} },
+      run: async () => {
+        const [info, pages] = await Promise.all([nsStore(token, storeId), nsPages(token, storeId)]);
+        return { loja: info, paginas: pages.map((p) => ({ titulo: p.title, texto: p.text.slice(0, 2500) })) };
+      },
+    },
+    {
+      name: "cupons_ativos",
+      description: "Cupons de desconto válidos agora na loja (código, desconto, compra mínima, se é só para primeira compra).",
+      input_schema: { type: "object", properties: {} },
+      run: async () => {
+        const coupons = await nsCoupons(token, storeId);
+        return coupons.length ? coupons : { resultado: "nenhum cupom ativo no momento" };
+      },
+    },
+    {
+      name: "consultar_pedido",
+      description: "Situação de um pedido (pagamento, envio, rastreio). Exige o número do pedido E o e-mail usado na compra, " +
+        "ambos informados pela própria pessoa nesta conversa. Sem os dois, peça antes de chamar.",
+      input_schema: {
+        type: "object",
+        properties: { numero: { type: "string" }, email: { type: "string" } },
+        required: ["numero", "email"],
+      },
+      run: async ({ numero, email }: { numero: string; email: string }) => {
+        const order = await nsFindOrder(token, storeId, numero);
+        if (!order) return { resultado: "pedido não encontrado; peça para conferir o número" };
+        if (!order.email || String(order.email).toLowerCase() !== String(email).trim().toLowerCase()) {
+          return { resultado: "o e-mail não confere com o da compra; não passe nenhum dado do pedido, peça para conferir o e-mail" };
+        }
+        return {
+          numero: order.number, pagamento: order.payment, envio: order.shipping, transportadora: order.shipping_option,
+          prazo: order.shipping_days, rastreio: order.tracking_number, link_rastreio: order.tracking_url,
+          enviado_em: order.shipped_at, cancelado: order.status === "cancelled", itens: order.items,
+        };
+      },
+    },
+  ];
 }
+
+const FINAL_TOOL: AgentTool = {
+  name: "responder",
+  description: "Envia a resposta final ao contato. Sempre termine chamando esta ferramenta.",
+  input_schema: {
+    type: "object",
+    properties: {
+      reply: { type: "string", description: "Mensagem a enviar ao contato (vazia se handoff sem mensagem)" },
+      handoff: { type: "boolean", description: "true se um humano precisa assumir" },
+      handoff_reason: { type: "string", description: "Motivo curto do handoff, ou vazio" },
+    },
+    required: ["reply", "handoff", "handoff_reason"],
+  },
+};
 
 /** Gera a resposta da IA (sem enviar). */
 export async function draftReply(db: SupabaseClient, conversation: any) {
@@ -192,20 +220,33 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
     return { ...result, settings, personal: true };
   }
   const lines = history.map((m) => `${m.direction === "in" ? "CONTATO" : "MARCA"}: ${m.text}`).join("\n");
-  const shop = await storeContext(db, conversation.user_id, history);
+  const store = await storeFor(db, conversation.user_id).catch(() => null);
+  const tools = storeTools(store);
   const system =
     `Você é o atendente virtual da marca no ${conversation.channel === "whatsapp" ? "WhatsApp" : "direct do Instagram"}. ` +
-    `Responda em português do Brasil, de forma calorosa, curta (até 3 frases), natural, sem parecer robô, no máximo 1 emoji. ` +
-    `Use SOMENTE as informações da base de conhecimento; nunca invente preços, prazos, links ou promessas. ` +
-    `Peça handoff (handoff=true) quando: a pessoa pedir para falar com humano; reclamação séria; pagamento/reembolso; ` +
+    `Responda em português do Brasil, de forma calorosa, curta (até 3 frases), natural, sem parecer robô, no máximo 1 emoji.\n\n` +
+    `Como atender:\n` +
+    `- Leia a conversa inteira e responda ao que a pessoa quer AGORA, considerando tudo o que já foi dito. Se ela mandou várias mensagens seguidas, responda tudo numa mensagem só.\n` +
+    `- Não repita cumprimentos, perguntas ou links que a MARCA já mandou na conversa. Não faça a mesma pergunta duas vezes.\n` +
+    `- Você está no direct: mande o link direto (do produto ou do site); nunca fale em "link da bio".\n` +
+    (tools.length
+      ? `- Use as ferramentas para consultar a loja de verdade: buscar_produtos (o catálogo é grande; procure antes de dizer que não tem), ` +
+        `info_loja (frete, trocas, contato), cupons_ativos e consultar_pedido. Só afirme o que veio das ferramentas, da base de conhecimento ou das instruções.\n` +
+        `- Produto pedido pelo nome popular (ex.: "homem aranha") pode ter outro nome na loja (ex.: "Zé Aranha"): busque por palavras-chave e explique a versão que a loja tem.\n` +
+        `- Cupom: quando pedirem desconto, consulte cupons_ativos e passe só códigos que vieram de lá, com as condições (primeira compra, valor mínimo, validade). Se não houver, diga com gentileza que no momento não há cupom ativo.\n` +
+        `- Pedido: peça o número do pedido e o e-mail da compra; só depois consulte e passe status e rastreio.\n`
+      : "") +
+    `- Nunca invente produtos, preços, números, prazos, cupons, links ou promessas.\n` +
+    `Peça handoff (handoff=true) só quando: a pessoa pedir para falar com humano; reclamação séria; pagamento/reembolso/troca com problema; ` +
     `assunto delicado (luto, crise, saúde mental grave — nesse caso responda com acolhimento e indique o CVV 188 se houver risco); ` +
-    `ou quando você não souber a resposta.\n\n` +
-    `${brandContext(settings)}\n\nInstruções de atendimento:\n${settings?.agent_instructions ?? "Seja prestativo e acolhedor."}\n\n` +
-    `Base de conhecimento:\n${settings?.agent_knowledge ?? "(vazia)"}` +
-    (shop ? `\n\nDados ao vivo da loja (também valem como base de conhecimento):\n${shop}` : "");
-  const result = await generateJSON(AgentReply, system,
-    `Contato: ${conversation.contact_name ?? conversation.contact_username ?? "sem nome"}\n\nConversa até agora:\n${lines}\n\nEscreva a próxima mensagem da MARCA.`, "low");
-  return { ...result, settings, personal: false };
+    `ou quando nem as ferramentas nem a base resolverem.\n\n` +
+    `${brandContext(settings)}\n\nInstruções de atendimento do dono (têm prioridade):\n${settings?.agent_instructions ?? "Seja prestativo e acolhedor."}\n\n` +
+    `Base de conhecimento:\n${settings?.agent_knowledge ?? "(vazia)"}`;
+  const result = await runAgent<z.infer<typeof AgentReply>>(system,
+    `Contato: ${conversation.contact_name ?? conversation.contact_username ?? "sem nome"}\n\nConversa até agora:\n${lines}\n\n` +
+      `Escreva a próxima mensagem da MARCA (termine com a ferramenta responder).`,
+    [...tools, FINAL_TOOL], "low");
+  return { reply: String(result.reply ?? ""), handoff: Boolean(result.handoff), handoff_reason: String(result.handoff_reason ?? ""), settings, personal: false };
 }
 
 /** Responde automaticamente se o agente estiver ligado para a marca e para a conversa. */
@@ -215,12 +256,17 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
   if (!settings?.agent_enabled) return;
 
   // Espera um pouco: se a pessoa mandar várias mensagens seguidas, responde só a última (com todo o contexto)
-  await sleep(4000);
-  const { data: latest } = await db.from("messages").select("id").eq("conversation_id", conversation.id).eq("direction", "in")
-    .order("created_at", { ascending: false }).limit(1).single();
-  if (latest?.id !== inboundMessageId) return;
+  const isLatest = async () => {
+    const { data: latest } = await db.from("messages").select("id").eq("conversation_id", conversation.id).eq("direction", "in")
+      .order("created_at", { ascending: false }).limit(1).single();
+    return latest?.id === inboundMessageId;
+  };
+  await sleep(6000);
+  if (!(await isLatest())) return;
 
   const draft = await draftReply(db, conversation);
+  // Chegou outra mensagem enquanto a IA pensava: descarta esta resposta (a da mensagem nova já vê tudo)
+  if (!(await isLatest())) return;
   if (draft.handoff) {
     await db.from("conversations").update({ status: "needs_human", handoff_reason: draft.handoff_reason || "Pedido de atendimento humano" }).eq("id", conversation.id);
     // No modo pessoal não manda o aviso da loja ("vou chamar alguém da equipe")

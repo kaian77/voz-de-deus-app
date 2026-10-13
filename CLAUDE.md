@@ -21,7 +21,7 @@ Ferramenta interna da Brax Pins Mania (loja de pins, braxpinsmania.com.br; IG @b
 - TikTok: app não auditado — postagem direta só em conta privada; o publisher manda para a caixa de entrada do app do TikTok (`ttUploadToInbox`).
 - Nuvemshop conectada. API não grava dados fiscais (NCM etc.) → fluxo de planilha CSV (`src/studio/lib/fiscal-csv.ts`).
 - Mercado Livre: próximo passo (ML_APP_ID 5226202533888505; falta o secret ML_CLIENT_SECRET e conectar).
-- Agente de DM: nunca informar preços (variam por modelo e kits) — mandar o link do site/produto.
+- Agente de DM (`inbox.ts` → `runAgent` em `claude.ts`): usa ferramentas da Nuvemshop (buscar_produtos, info_loja, cupons_ativos, consultar_pedido com número + e-mail). Nunca informar preços (variam por modelo e kits) — mandar o link do produto/site. Responde uma vez só a mensagens seguidas.
 - TikTok: nada de "link na bio", site ou URL no vídeo nem na legenda (TikTok Shop dá violação). O vídeo de produto já sai sem isso e o publisher limpa a legenda com `tiktokCaption`.
 
 ## Marca
