@@ -151,11 +151,13 @@ function storeTools(store: { token: string; storeId: string } | null): AgentTool
     },
     {
       name: "info_loja",
-      description: "Dados e políticas da loja: contato, endereço e páginas como frete/envio, trocas e devoluções, perguntas frequentes.",
+      description: "Dados e políticas da loja: contato e páginas como frete/envio, trocas e devoluções, perguntas frequentes.",
       input_schema: { type: "object", properties: {} },
       run: async () => {
         const [info, pages] = await Promise.all([nsStore(token, storeId), nsPages(token, storeId)]);
-        return { loja: info, paginas: pages.map((p) => ({ titulo: p.title, texto: p.text.slice(0, 2500) })) };
+        // Sem endereço: o cadastrado na Nuvemshop é fiscal, não é loja física (a marca vende em feiras)
+        const { address: _address, ...loja } = info;
+        return { loja, paginas: pages.map((p) => ({ titulo: p.title, texto: p.text.slice(0, 2500) })) };
       },
     },
     {
