@@ -3,10 +3,11 @@
 //   { action: "suggest", conversation_id }         -> IA sugere uma resposta (não envia)
 //   { action: "connect_whatsapp", phone_number_id, access_token, waba_id? }   -> API oficial da Meta
 //   { action: "connect_waha", base_url, session?, api_key? }                   -> WAHA (self-hosted, grátis)
+//   { action: "whatsapp_settings", account_id, agent?, agent_numbers?, agent_prompt? } -> onde e como a IA responde no número
 // Nos dois: label ("Loja", "Pessoal"...) e agent (a IA responde sozinha nesse número?). Dá para ter vários números.
 import { adminClient, assertPublicHttpsUrl, corsHeaders, functionsUrl, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { draftReply, sendMessage } from "../_shared/inbox.ts";
-import { waPhoneInfo, waSubscribeApp, wahaSession, wahaSetWebhook, wahaStart } from "../_shared/whatsapp.ts";
+import { agentAllowed, waPhoneInfo, waSubscribeApp, wahaSession, wahaSetWebhook, wahaStart } from "../_shared/whatsapp.ts";
 import { aiEnabled } from "../_shared/claude.ts";
 
 Deno.serve(async (req) => {
@@ -77,6 +78,26 @@ Deno.serve(async (req) => {
         const webhookUrl = `${functionsUrl("whatsapp-webhook")}?account=${account.id}&secret=${secret}`;
         const configured = await wahaSetWebhook(cfg, webhookUrl).then(() => true).catch(() => false);
         return json({ account, webhook_url: webhookUrl, webhook_configured: configured, status: session.status });
+      }
+      case "whatsapp_settings": {
+        // O navegador só lê social_accounts (segurança); a configuração da IA passa por aqui
+        const { data: acc } = await db.from("social_accounts").select("*").eq("id", body.account_id).eq("user_id", userId).eq("platform", "whatsapp").maybeSingle();
+        if (!acc) throw new HttpError(404, "Número não encontrado");
+        const meta = { ...acc.meta };
+        if (typeof body.agent === "boolean") meta.agent = body.agent;
+        if (Array.isArray(body.agent_numbers)) meta.agent_numbers = body.agent_numbers.map((n: unknown) => String(n).trim()).filter(Boolean).slice(0, 200);
+        if (typeof body.agent_prompt === "string") meta.agent_prompt = body.agent_prompt.trim().slice(0, 4000);
+        const { error } = await db.from("social_accounts").update({ meta }).eq("id", acc.id);
+        if (error) throw error;
+        // Liga/desliga a IA nas conversas que já existem conforme a nova regra
+        if (typeof body.agent === "boolean" || Array.isArray(body.agent_numbers)) {
+          const { data: convs } = await db.from("conversations").select("id, contact_id").eq("account_id", acc.id);
+          const on = (convs ?? []).filter((c) => agentAllowed(meta, c.contact_id)).map((c) => c.id);
+          const off = (convs ?? []).filter((c) => !on.includes(c.id)).map((c) => c.id);
+          if (on.length) await db.from("conversations").update({ ai_enabled: true }).in("id", on);
+          if (off.length) await db.from("conversations").update({ ai_enabled: false }).in("id", off);
+        }
+        return json({ meta });
       }
       default:
         throw new HttpError(400, `Ação desconhecida: ${body.action}`);

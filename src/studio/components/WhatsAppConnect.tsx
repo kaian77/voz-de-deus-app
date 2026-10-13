@@ -8,10 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { api, supabase } from "../lib/api";
+import { api } from "../lib/api";
 import { phoneKey } from "../lib/phone";
 import type { SocialAccount } from "../lib/types";
-import { useRemoveRow, useSaveRow, useTable } from "../lib/hooks";
+import { useRemoveRow, useTable } from "../lib/hooks";
 import { PlatformIcon, StatusDot } from "./bits";
 import { ConnectedAccount } from "../pages/Accounts";
 
@@ -20,7 +20,6 @@ type Provider = "waha" | "meta";
 export default function WhatsAppConnect() {
   const { data: accounts = [] } = useTable("social_accounts");
   const remove = useRemoveRow("social_accounts");
-  const save = useSaveRow("social_accounts");
   const qc = useQueryClient();
   const list = accounts.filter((a) => a.platform === "whatsapp");
   const [provider, setProvider] = useState<Provider>("waha");
@@ -167,19 +166,11 @@ function AgentScope({ account }: { account: SocialAccount }) {
   const [busy, setBusy] = useState(false);
   useEffect(() => setNumbers(saved), [saved]);
 
-  // Grava no número e liga/desliga a IA nas conversas que já existem
+  // Grava pelo servidor (o navegador não altera contas) e ajusta a IA nas conversas que já existem
   const apply = async (agent: boolean, list: string[]) => {
     setBusy(true);
     try {
-      await api.update("social_accounts", account.id, { meta: { ...account.meta, agent, agent_numbers: list } });
-      if (supabase) {
-        const { data: convs } = await supabase.from("conversations").select("id, contact_id").eq("account_id", account.id);
-        const keys = new Set(list.map(phoneKey));
-        const on = (convs ?? []).filter((c) => agent || keys.has(phoneKey(c.contact_id))).map((c) => c.id);
-        const off = (convs ?? []).filter((c) => !on.includes(c.id)).map((c) => c.id);
-        if (on.length) await supabase.from("conversations").update({ ai_enabled: true }).in("id", on);
-        if (off.length) await supabase.from("conversations").update({ ai_enabled: false }).in("id", off);
-      }
+      await api.invoke("inbox", { action: "whatsapp_settings", account_id: account.id, agent, agent_numbers: list });
       qc.invalidateQueries({ queryKey: ["table"] });
       toast.success(agent ? "IA ligada em todas as conversas" : list.length ? `IA só em ${list.length} número(s)` : "IA desligada neste número");
     } catch (e) {
@@ -194,7 +185,7 @@ function AgentScope({ account }: { account: SocialAccount }) {
   const savePrompt = async () => {
     setBusy(true);
     try {
-      await api.update("social_accounts", account.id, { meta: { ...account.meta, agent_prompt: prompt.trim() } });
+      await api.invoke("inbox", { action: "whatsapp_settings", account_id: account.id, agent_prompt: prompt });
       qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
       toast.success(prompt.trim() ? "Jeito de responder salvo" : "Este número volta a responder como a loja");
     } catch (e) {
