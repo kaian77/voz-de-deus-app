@@ -71,6 +71,53 @@ Deno.serve(async (req) => {
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
       return json(await nsOrders(store.token, store.storeId, { status: input.status, q: input.q, limit: input.limit ?? 50 }));
     }
+    if (action === "store_products") {
+      // Busca de produtos da loja para vincular a um post
+      const store = await storeFor(db, userId);
+      if (!store) throw new HttpError(400, "Conecte a Nuvemshop em Contas");
+      const list = await nsProducts(store.token, store.storeId, { q: input.q ? String(input.q).slice(0, 80) : undefined, limit: 24 });
+      return json(list.map((p) => ({ id: p.id, name: p.name, image: p.image, url: p.url })));
+    }
+    if (action === "store_product_pick") {
+      // Produto escolhido: copia as fotos para o storage do Studio (o carrossel desenha no navegador e o post publica de lá)
+      const store = await storeFor(db, userId);
+      if (!store) throw new HttpError(400, "Conecte a Nuvemshop em Contas");
+      const id = String(input.id ?? "").replace(/\D/g, "");
+      if (!id) throw new HttpError(400, "Produto inválido");
+      // deno-lint-ignore no-explicit-any
+      const p = await ns<any>(store.token, store.storeId, `products/${id}`);
+      if (!p || Array.isArray(p)) throw new HttpError(404, "Produto não encontrado");
+      const images: string[] = [];
+      // deno-lint-ignore no-explicit-any
+      for (const [i, img] of (p.images ?? []).slice(0, 4).entries() as Iterable<[number, any]>) {
+        const src = String(img?.src ?? "");
+        if (!src) continue;
+        const res = await fetch(src.startsWith("//") ? `https:${src}` : src).catch(() => null);
+        if (!res?.ok) continue;
+        const type = res.headers.get("content-type") ?? "image/jpeg";
+        const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
+        const path = `${userId}/produtos/${id}-${i}.${ext}`;
+        const { error } = await db.storage.from("media").upload(path, new Uint8Array(await res.arrayBuffer()), { contentType: type, upsert: true });
+        if (!error) images.push(db.storage.from("media").getPublicUrl(path).data.publicUrl);
+      }
+      const txt = (v: unknown) => (typeof v === "string" ? v : (v as Record<string, string>)?.pt ?? "");
+      return json({
+        id: p.id, name: txt(p.name), url: p.canonical_url, images,
+        description: txt(p.description).replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim().slice(0, 600),
+      });
+    }
+    if (action === "store_product_video") {
+      // Vídeo animado do produto escolhido no Criar post (vira Reels/TikTok em Aprovações quando fica pronto)
+      const storage = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/media/${userId}/`;
+      const images = (Array.isArray(input.images) ? input.images : []).filter((u: unknown) => typeof u === "string" && u.startsWith(storage)).slice(0, 4);
+      const name = String(input.name ?? "").trim().slice(0, 120);
+      if (!name || !images.length) throw new HttpError(400, "Escolha um produto com foto");
+      const notes = String(input.topic ?? "").trim().slice(0, 500);
+      return json(await queueProductVideo(db, userId, {
+        name, images, url: typeof input.url === "string" ? input.url : undefined,
+        description: [notes && `Tema do vídeo: ${notes}`, String(input.description ?? "").slice(0, 600)].filter(Boolean).join("\n") || undefined,
+      }, { autopost: true }));
+    }
     if (action === "store_categories") {
       const store = await storeFor(db, userId);
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
@@ -170,6 +217,7 @@ Deno.serve(async (req) => {
         return json(await generateJSON(Caption, system,
           `Crie uma legenda para um post do tipo "${input.kind ?? "post"}" para ${(input.platforms ?? ["instagram"]).join(" e ")}.\n` +
           `Tema/briefing: ${input.topic}\n` +
+          (input.product?.name ? `Produto da loja divulgado no post: "${String(input.product.name).slice(0, 120)}". Cite-o pelo nome; não invente preço.\n` : "") +
           `Regras: primeira linha é o gancho; parágrafos curtos; termine com CTA; 5 a 12 hashtags relevantes (sem #) separadas no campo hashtags.`));
 
       case "caption_media": {
@@ -189,6 +237,11 @@ Deno.serve(async (req) => {
       case "carousel":
         return json(await generateJSON(Carousel, system,
           `Crie um carrossel de ${input.slides ?? 7} slides sobre: ${input.topic}\n` +
+          (input.product?.name
+            ? `Produto da loja que deve ser divulgado neste carrossel: "${String(input.product.name).slice(0, 120)}"` +
+              `${input.product.description ? ` (${String(input.product.description).slice(0, 500)})` : ""}. ` +
+              `A foto dele aparece na capa e no último slide: cite o produto pelo nome, ligue o tema a ele e use o CTA para comprar. Não invente preço.\n`
+            : "") +
           `Slide 1 = capa com gancho irresistível (título até 8 palavras). Slides do meio = 1 ideia por slide, título curto + corpo até 25 palavras. ` +
           `Último slide = CTA (salvar, compartilhar, comentar palavra-chave). Também escreva a legenda e hashtags (sem #).`));
 
