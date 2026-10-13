@@ -64,7 +64,7 @@ export interface SocialAccount {
   display_name: string | null;
   avatar_url: string | null;
   followers_count: number | null;
-  meta: { biography?: string; website?: string; media_count?: number; provider?: "meta" | "waha"; label?: string | null; agent?: boolean; agent_numbers?: string[]; agent_prompt?: string; status?: string; url?: string; analysis?: MarketplaceAnalysis };
+  meta: { biography?: string; website?: string; media_count?: number; provider?: "meta" | "waha"; label?: string | null; agent?: boolean; agent_numbers?: string[]; agent_prompt?: string; status?: string; url?: string; analysis?: MarketplaceAnalysis; ml_sync?: MlSyncState };
   connected_at: string;
 }
 
@@ -234,6 +234,17 @@ export interface BrandSettings {
   autopilot_per_week?: number;
   autopilot_last_run?: string | null;
   autopilot_error?: string | null;
+}
+
+/** Sincronização da loja com o Mercado Livre (fila processada pelo cron). */
+export interface MlSyncState {
+  started_at: string;
+  finished_at?: string | null;
+  total: number;
+  queue: number[];
+  done: { id: number; name: string; ml_id?: string; status?: string; updated?: boolean; error?: string }[];
+  errors: { id: number; name: string; error?: string }[];
+  skipped: { id: number; name: string; reason?: string }[];
 }
 
 export interface MarketplaceAnalysis {

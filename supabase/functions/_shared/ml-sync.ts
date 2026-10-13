@@ -1,0 +1,233 @@
+// Sincronização da loja Nuvemshop com o Mercado Livre, em lote e em segundo plano: cada produto da loja
+// atualiza o anúncio que já existe (fotos da loja, descrição no padrão do lojista, estoque) ou vira um anúncio novo.
+// A fila fica em social_accounts.meta.ml_sync da conta do Mercado Livre e o cron processa alguns por minuto.
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { ns, storeFor, txt } from "./nuvemshop.ts";
+import { mlSellerItems, mlTokenFor } from "./mercadolivre.ts";
+import { publishToMercadoLivre } from "./marketplaces.ts";
+
+/** Produtos por rodada do cron (cada um faz várias chamadas ao ML). */
+const PER_RUN = 3;
+
+type SyncResult = { id: number; name: string; ml_id?: string; status?: string; updated?: boolean; error?: string; reason?: string };
+export type MlSync = {
+  started_at: string;
+  finished_at?: string | null;
+  total: number;
+  queue: number[];
+  done: SyncResult[];
+  errors: SyncResult[];
+  skipped: SyncResult[];
+};
+
+const ENTITIES: Record<string, string> = { nbsp: " ", amp: "&", quot: '"', lt: "<", gt: ">", ordm: "º", ordf: "ª", ndash: "–", mdash: "—", hellip: "…", rsquo: "'", lsquo: "'", ldquo: '"', rdquo: '"', ccedil: "ç", Ccedil: "Ç" };
+for (const [v, marks] of Object.entries({ a: "acute grave circ tilde uml", e: "acute grave circ uml", i: "acute grave circ uml", o: "acute grave circ tilde uml", u: "acute grave circ uml" })) {
+  const accents: Record<string, string> = { acute: "́", grave: "̀", circ: "̂", tilde: "̃", uml: "̈" };
+  for (const m of marks.split(" ")) {
+    ENTITIES[v + m] = (v + accents[m]).normalize("NFC");
+    ENTITIES[v.toUpperCase() + m] = (v.toUpperCase() + accents[m]).normalize("NFC");
+  }
+}
+
+/** HTML da Nuvemshop em texto corrido (sem tags, entidades decodificadas). */
+function plain(html: string) {
+  return html.replace(/<[^>]+>/g, " ")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&([a-zA-Z]+);/g, (m, n) => ENTITIES[n] ?? m)
+    .replace(/\s+/g, " ").trim();
+}
+
+/** Nome do pin sem "Pin", sem "(Metal Esmaltado)" e sem o subtítulo: "Zé Bioquímico". */
+export function pinModel(name: string) {
+  return name.replace(/\([^)]*\)/g, "").split(" - ")[0].replace(/^\s*(pin|broche|botton)\s+/i, "").trim() || name.trim();
+}
+
+/** SKU no padrão do lojista: PIN-ZE-GOTINHA-VETERINARIO. */
+export function pinSku(name: string) {
+  return "PIN-" + pinModel(name).normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+/** O ML não aceita links nem contatos na descrição: tira as frases que têm. */
+const noContacts = (s: string) =>
+  s.split(/(?<=[.!?])\s+/)
+    .filter((f) => !/https?:\/\/|www\.|\.com(\.br)?\b|@\w|whats ?app|\(\d{2}\)/i.test(f))
+    .join(" ").replace(/\s+/g, " ").trim();
+
+/** Primeiras frases do texto, até ~`max` caracteres. */
+function firstSentences(text: string, max = 700) {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "));
+  return end > 200 ? cut.slice(0, end + 1) : cut.trimEnd() + "…";
+}
+
+/** Descrição do anúncio no padrão da Brax Pins Mania para o Mercado Livre. */
+export function mlListingDescription(p: { name: string; about: string; theme?: string }) {
+  const short = p.name.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
+  const about = firstSentences(noContacts(p.about));
+  return [
+    `${short.toUpperCase()} – BRAX PINS MANIA`,
+    "",
+    "Leve sua profissão, causa, paixão ou identidade para o dia a dia com um pin exclusivo da Brax Pins Mania.",
+    "",
+    about || `O ${short} é uma peça marcante, colecionável e cheia de significado.`,
+    "",
+    "Produzido em metal de alta resistência com acabamento esmaltado premium, possui excelente definição dos detalhes, cores vivas e acabamento de alta qualidade.",
+    "",
+    "DESTAQUES DO PRODUTO",
+    "- Produto em metal esmaltado",
+    "- Acabamento premium",
+    "- Alta resistência e durabilidade",
+    "- Design exclusivo",
+    "- Ideal para presentear ou colecionar",
+    "- Excelente para profissionais, estudantes e apaixonados pelo tema",
+    "- Produto original Brax Pins Mania",
+    "",
+    "ONDE USAR",
+    "Perfeito para:",
+    ...["Jalecos", "Uniformes", "Crachás", "Cordões", "Mochilas", "Bolsas", "Bonés", "Jaquetas", "Coleções de pins"].map((w) => `- ${w}`),
+    "",
+    "ESPECIFICAÇÕES",
+    "Produto: Pin / Broche",
+    "Material: Metal esmaltado",
+    "Marca: Brax Pins Mania",
+    ...(p.theme ? [`Tema: ${p.theme}`] : []),
+    "Cor predominante: Multicolorido",
+    "Quantidade: 1 unidade",
+    "Condição: Novo",
+    "Origem: Nacional",
+    "",
+    "CONTEÚDO DA EMBALAGEM",
+    `- 1 ${short}`,
+    "",
+    "IMPORTANTE",
+    "As cores podem apresentar pequenas variações dependendo da configuração da tela utilizada.",
+    "Produto enviado cuidadosamente embalado para preservar seu acabamento.",
+    "",
+    "MODELO EXCLUSIVO – POUCAS UNIDADES DISPONÍVEIS.",
+    "Alguns modelos são produzidos em quantidades limitadas e podem não retornar ao estoque após esgotarem. Se gostou, aproveite enquanto está disponível.",
+  ].join("\n");
+}
+
+async function mlAccount(db: SupabaseClient, userId: string) {
+  const { data } = await db.from("social_accounts").select("*").eq("user_id", userId).eq("platform", "mercadolivre").order("connected_at").limit(1).maybeSingle();
+  return data;
+}
+
+/** Grava o estado relendo o meta atual (a análise de preços também escreve nele). */
+async function saveSync(db: SupabaseClient, accountId: string, sync: MlSync) {
+  const { data } = await db.from("social_accounts").select("meta").eq("id", accountId).single();
+  await db.from("social_accounts").update({ meta: { ...(data?.meta ?? {}), ml_sync: sync } }).eq("id", accountId);
+}
+
+/** Junta o resultado da rodada ao estado atual (outra rodada pode ter mexido na fila enquanto esta rodava). */
+async function finishBatch(db: SupabaseClient, accountId: string, r: Pick<MlSync, "done" | "errors" | "skipped">, stop = false) {
+  const { data } = await db.from("social_accounts").select("meta").eq("id", accountId).single();
+  const sync = data?.meta?.ml_sync as MlSync | undefined;
+  if (!sync) return 0;
+  if (stop) sync.queue = [];
+  sync.done.push(...r.done);
+  sync.errors.push(...r.errors);
+  sync.skipped.push(...r.skipped);
+  if (!sync.queue.length && !sync.finished_at) sync.finished_at = new Date().toISOString();
+  await db.from("social_accounts").update({ meta: { ...data!.meta, ml_sync: sync } }).eq("id", accountId);
+  return sync.queue.length;
+}
+
+/** Coloca todos os produtos publicados da loja na fila de sincronização. */
+export async function startMlSync(db: SupabaseClient, userId: string) {
+  const acc = await mlAccount(db, userId);
+  if (!acc) throw new Error("Conecte o Mercado Livre em Contas");
+  const store = await storeFor(db, userId);
+  if (!store) throw new Error("Conecte a Nuvemshop em Contas");
+  const ids: number[] = [];
+  for (let page = 1; page <= 10; page++) {
+    // deno-lint-ignore no-explicit-any
+    const list = await ns<any[]>(store.token, store.storeId, `products?per_page=200&page=${page}&fields=id,published`).catch(() => []);
+    if (!Array.isArray(list) || !list.length) break;
+    ids.push(...list.filter((p) => p.published !== false).map((p) => Number(p.id)));
+    if (list.length < 200) break;
+  }
+  const sync: MlSync = { started_at: new Date().toISOString(), finished_at: null, total: ids.length, queue: ids, done: [], errors: [], skipped: [] };
+  await saveSync(db, acc.id, sync);
+  return { total: ids.length, minutes: Math.ceil(ids.length / PER_RUN) };
+}
+
+/** Estado da sincronização (para o app e o Claude). */
+export async function mlSyncStatus(db: SupabaseClient, userId: string) {
+  const acc = await mlAccount(db, userId);
+  const sync = acc?.meta?.ml_sync as MlSync | undefined;
+  if (!sync) return { running: false };
+  return {
+    running: sync.queue.length > 0,
+    total: sync.total,
+    remaining: sync.queue.length,
+    updated: sync.done.filter((d) => d.updated).length,
+    created: sync.done.filter((d) => !d.updated).length,
+    skipped: sync.skipped,
+    errors: sync.errors,
+    started_at: sync.started_at,
+    finished_at: sync.finished_at,
+  };
+}
+
+/** Rodada do cron: processa alguns produtos da fila de cada conta. */
+export async function runMlSync(db: SupabaseClient) {
+  const { data: accounts } = await db.from("social_accounts").select("id,user_id,external_id,meta").eq("platform", "mercadolivre");
+  const out: unknown[] = [];
+  for (const acc of accounts ?? []) {
+    const sync = acc.meta?.ml_sync as MlSync | undefined;
+    if (!sync?.queue?.length) continue;
+    // Tira da fila antes de processar: se a rodada demorar, a próxima não pega os mesmos produtos
+    const batch = sync.queue.slice(0, PER_RUN);
+    sync.queue = sync.queue.slice(PER_RUN);
+    await saveSync(db, acc.id, sync);
+
+    const done: SyncResult[] = [], errors: SyncResult[] = [], skipped: SyncResult[] = [];
+    const store = await storeFor(db, acc.user_id);
+    if (!store) {
+      await finishBatch(db, acc.id, { done, errors: [{ id: 0, name: "Loja", error: "Nuvemshop desconectada" }], skipped }, true);
+      continue;
+    }
+    const token = await mlTokenFor(db, acc.id);
+    const sellerItems = await mlSellerItems(token, acc.external_id, 1000, "");
+    for (const id of batch) {
+      let name = String(id);
+      try {
+        // deno-lint-ignore no-explicit-any
+        const p = await ns<any>(store.token, store.storeId, `products/${id}`);
+        name = txt(p.name);
+        // deno-lint-ignore no-explicit-any
+        const v: any = p.variants?.[0] ?? {};
+        const price = Number(v.price || 0); // preço cheio: é com ele que a regra de preço foi descoberta
+        // deno-lint-ignore no-explicit-any
+        const images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
+        const skip = /^\s*(kit|combo)\b/i.test(name) ? "kit (preço e descrição são diferentes)"
+          : /\bteste\b/i.test(name) ? "produto de teste"
+          : !price ? "sem preço"
+          : !images.length ? "sem foto"
+          : null;
+        if (skip) {
+          skipped.push({ id, name, reason: skip });
+          continue;
+        }
+        // deno-lint-ignore no-explicit-any
+        const theme = (p.categories ?? []).map((c: any) => txt(c.name)).filter(Boolean).slice(0, 2).join(", ") || undefined;
+        const r = await publishToMercadoLivre(db, acc.user_id, {
+          name,
+          description: mlListingDescription({ name, about: plain(txt(p.description)), theme }),
+          images: images.slice(0, 10),
+          price,
+          sku: String(v.sku ?? "").trim() || pinSku(name),
+          stock: 200,
+        }, sellerItems);
+        done.push({ id, name, ml_id: r.id, status: r.status, updated: "updated" in r ? r.updated : false, ...(r.warnings.length ? { error: r.warnings.join("; ") } : {}) });
+      } catch (e) {
+        errors.push({ id, name, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    const remaining = await finishBatch(db, acc.id, { done, errors, skipped });
+    out.push({ account: acc.id, processed: batch.length, remaining });
+  }
+  return out;
+}

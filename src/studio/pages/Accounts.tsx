@@ -100,6 +100,56 @@ function Analysis({ account }: { account: SocialAccount }) {
       <Button size="sm" variant="ghost" className="mt-1 h-7 px-2 text-xs" onClick={run} disabled={busy}>
         {busy && <Loader2 className="animate-spin" />}Analisar de novo
       </Button>
+      {account.platform === "mercadolivre" && <MlSync account={account} />}
+    </div>
+  );
+}
+
+/** Sincroniza todos os produtos da loja com o Mercado Livre (o cron processa alguns por minuto). */
+function MlSync({ account }: { account: SocialAccount }) {
+  const [busy, setBusy] = useState(false);
+  const { refetch } = useTable("social_accounts");
+  const s = account.meta.ml_sync;
+  const running = !!s?.queue.length;
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => void refetch(), 20_000);
+    return () => clearInterval(t);
+  }, [running, refetch]);
+  const start = async () => {
+    setBusy(true);
+    try {
+      const r = await api.invoke<{ total: number; minutes: number }>("ai", { action: "ml_sync_start" });
+      await refetch();
+      toast.success(`${r.total} produtos na fila (uns ${r.minutes} min)`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const updated = s?.done.filter((d) => d.updated).length ?? 0;
+  const created = (s?.done.length ?? 0) - updated;
+  return (
+    <div className="mt-2 border-t pt-2">
+      {s && (
+        <>
+          <p>
+            <span className="font-medium">Sincronização:</span>{" "}
+            {running ? `${s.total - s.queue.length} de ${s.total} produtos` : `concluída (${s.total} produtos)`}
+          </p>
+          <p className="text-muted-foreground">
+            {updated} atualizados · {created} criados · {s.skipped.length} fora (kits/teste) · {s.errors.length} com erro
+          </p>
+          {s.errors.slice(-3).map((e) => (
+            <p key={e.id} className="truncate text-danger" title={e.error}>{e.name}: {e.error}</p>
+          ))}
+        </>
+      )}
+      <Button size="sm" variant="ghost" className="mt-1 h-7 px-2 text-xs" onClick={start} disabled={busy || running}>
+        {(busy || running) && <Loader2 className="animate-spin" />}
+        {running ? "Sincronizando…" : "Sincronizar com a loja"}
+      </Button>
     </div>
   );
 }
