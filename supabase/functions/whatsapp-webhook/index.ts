@@ -39,7 +39,8 @@ async function handleWaha(accountId: string, secret: string, event: any) {
   if (m.fromMe || !chatId || /@(g\.us|broadcast|newsletter)$/.test(chatId) || chatId === "status@broadcast") return true;
 
   const text = m.body || (m.hasMedia ? `[${m.media?.mimetype?.split("/")[0] ?? "mídia"} enviada]` : "[mensagem]");
-  const name = m._data?.notifyName ?? m._data?.pushName;
+  // WEBJS/NOWEB: notifyName/pushName; GOWS: _data.Info.PushName
+  const name = m._data?.notifyName ?? m._data?.pushName ?? m._data?.Info?.PushName;
   const recorded = await recordInbound(db, account, "whatsapp", { id: chatId, name }, { externalId: `waha:${m.id}`, text });
   if (!recorded) return true;
   const cfg = { base_url: account.meta.base_url, session: account.meta.session, api_key: token.access_token || null };
