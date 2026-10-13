@@ -18,6 +18,7 @@ import type { CarouselDesign, MediaItem, Platform, Post, PostKind, Slide, ThemeI
 import TikTokSettings, { fromApiOptions, TIKTOK_DEFAULTS, tiktokProblem, toApiOptions, useTikTokCreator, type TikTokOptions } from "../components/TikTokSettings";
 import { Avatar, KIND_LABEL, PageHeader, Panel, PlatformIcon, SectionLabel, SlidePreview, StatusBadge, toLocalInput } from "../components/bits";
 import { toastPublishResult } from "@/studio/lib/publish-toast";
+import ProductPicker, { type LinkedProduct } from "../components/ProductPicker";
 
 const KINDS: { id: PostKind; hint: string }[] = [
   { id: "image", hint: "1 imagem · 4:5" },
@@ -72,6 +73,7 @@ export default function Composer() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [ttOpts, setTtOpts] = useState<TikTokOptions>(TIKTOK_DEFAULTS);
   const [videoSeconds, setVideoSeconds] = useState<number>();
+  const [product, setProduct] = useState<LinkedProduct | null>(null);
   const onTikTok = platforms.includes("tiktok") && kind !== "story";
   const ttCreator = useTikTokCreator(onTikTok);
 
@@ -110,6 +112,42 @@ export default function Composer() {
   const designable = kind === "carousel" || kind === "image" || kind === "story";
   const usingDesign = designable && mode === "design";
   const visibleSlides = kind === "carousel" ? slides : slides.slice(0, 1);
+
+  // Foto do produto vinculado: na capa e no último slide (cartão abaixo do texto) e, no modo de arquivos, como imagem do post
+  const withProduct = (list: Slide[], p: LinkedProduct | null, old: LinkedProduct | null) =>
+    list.map((x, i) => {
+      const own = x.product_image && old?.images.includes(x.product_image);
+      const base = own ? { ...x, product_image: undefined } : x;
+      return p?.images[0] && (i === 0 || (i === list.length - 1 && list.length > 1)) && (!x.product_image || own)
+        ? { ...base, product_image: p.images[i === 0 ? 0 : Math.min(1, p.images.length - 1)] }
+        : base;
+    });
+
+  const linkProduct = (p: LinkedProduct | null) => {
+    const old = product;
+    setProduct(p);
+    setSlides((s) => withProduct(s, p, old));
+    setMedia((m) => {
+      const kept = m.filter((x) => !old?.images.includes(x.url));
+      if (!p?.images.length || kind === "reel") return kept;
+      const add = (kind === "carousel" ? p.images : p.images.slice(0, 1)).map((url) => ({ url, type: "image" as const }));
+      return kind === "carousel" ? [...kept, ...add].slice(0, 10) : kept.length ? kept : add;
+    });
+    if (p && !title) setTitle(p.name);
+  };
+
+  const productVideo = async () => {
+    if (!product) return;
+    setBusy("video");
+    try {
+      await api.invoke("ai", { action: "store_product_video", name: product.name, images: product.images, url: product.url, description: product.description, topic: title || topic });
+      toast.success("Vídeo do produto na fila! Fica pronto em alguns minutos e aparece em Aprovações para você revisar.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const togglePlatform = (p: Platform) => {
     setPlatforms((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]));
@@ -187,13 +225,15 @@ export default function Composer() {
     setBusy("ai");
     try {
       if (aiOpen === "caption") {
-        const r = await api.invoke<{ caption: string; hashtags: string[] }>("ai", { action: "caption", topic, kind, platforms });
+        const r = await api.invoke<{ caption: string; hashtags: string[] }>("ai", { action: "caption", topic, kind, platforms, product: product && { name: product.name } });
         setCaption(`${r.caption}\n\n${r.hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ")}`);
       } else {
-        const r = await api.invoke<{ slides: Slide[]; caption: string; hashtags: string[]; title: string }>("ai", { action: "carousel", topic, slides: Number(slideCount) });
+        const r = await api.invoke<{ slides: Slide[]; caption: string; hashtags: string[]; title: string }>("ai", {
+          action: "carousel", topic, slides: Number(slideCount), product: product && { name: product.name, description: product.description },
+        });
         setKind("carousel");
         setMode("design");
-        setSlides(r.slides);
+        setSlides(withProduct(r.slides, product, null));
         setTitle(r.title);
         setCaption(`${r.caption}\n\n${r.hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ")}`);
       }
@@ -285,6 +325,20 @@ export default function Composer() {
                   </button>
                 ))}
               </div>
+            </div>
+          </Panel>
+
+          <Panel title="Produto da loja" description="Opcional: vincule um pin e a foto dele entra no post, no carrossel ou no vídeo.">
+            <div className="space-y-3">
+              <ProductPicker value={product} onChange={linkProduct} />
+              {product && kind === "reel" && (
+                <div className="flex flex-wrap items-center gap-2 rounded-md bg-secondary/50 p-3 text-[13px]">
+                  <span className="flex-1">Sem vídeo pronto? Gere o vídeo animado deste pin (vai para Aprovações quando ficar pronto).</span>
+                  <Button size="sm" onClick={productVideo} disabled={busy !== null}>
+                    {busy === "video" ? <Loader2 className="animate-spin" /> : <Wand2 />} Gerar vídeo do produto
+                  </Button>
+                </div>
+              )}
             </div>
           </Panel>
 
