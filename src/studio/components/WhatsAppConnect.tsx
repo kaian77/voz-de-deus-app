@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Copy, Loader2 } from "lucide-react";
@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { api } from "../lib/api";
+import { api, supabase } from "../lib/api";
+import { phoneKey } from "../lib/phone";
+import type { SocialAccount } from "../lib/types";
 import { useRemoveRow, useSaveRow, useTable } from "../lib/hooks";
 import { PlatformIcon, StatusDot } from "./bits";
 import { ConnectedAccount } from "../pages/Accounts";
@@ -71,10 +74,7 @@ export default function WhatsAppConnect() {
                 {a.meta.status.startsWith("ERRO") ? "Servidor do WAHA fora do ar." : "Desconectado: abra o painel do WAHA e leia o QR Code de novo."} ({a.meta.status})
               </p>
             )}
-            <label className="flex items-center justify-between gap-3 px-1 text-xs text-muted-foreground">
-              IA responde neste número
-              <Switch checked={a.meta.agent !== false} onCheckedChange={(v) => save.mutate({ id: a.id, meta: { ...a.meta, agent: v } })} />
-            </label>
+            <AgentScope account={a} />
           </div>
         ))}
 
@@ -155,5 +155,59 @@ export default function WhatsAppConnect() {
         </div>
       </div>
     </section>
+  );
+}
+
+/** Onde a IA responde neste número: em todas as conversas ou só nos contatos da lista. */
+function AgentScope({ account }: { account: SocialAccount }) {
+  const qc = useQueryClient();
+  const all = account.meta.agent !== false;
+  const saved = (account.meta.agent_numbers ?? []).join("\n");
+  const [numbers, setNumbers] = useState(saved);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setNumbers(saved), [saved]);
+
+  // Grava no número e liga/desliga a IA nas conversas que já existem
+  const apply = async (agent: boolean, list: string[]) => {
+    setBusy(true);
+    try {
+      await api.update("social_accounts", account.id, { meta: { ...account.meta, agent, agent_numbers: list } });
+      if (supabase) {
+        const { data: convs } = await supabase.from("conversations").select("id, contact_id").eq("account_id", account.id);
+        const keys = new Set(list.map(phoneKey));
+        const on = (convs ?? []).filter((c) => agent || keys.has(phoneKey(c.contact_id))).map((c) => c.id);
+        const off = (convs ?? []).filter((c) => !on.includes(c.id)).map((c) => c.id);
+        if (on.length) await supabase.from("conversations").update({ ai_enabled: true }).in("id", on);
+        if (off.length) await supabase.from("conversations").update({ ai_enabled: false }).in("id", off);
+      }
+      qc.invalidateQueries({ queryKey: ["table"] });
+      toast.success(agent ? "IA ligada em todas as conversas" : list.length ? `IA só em ${list.length} número(s)` : "IA desligada neste número");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const parsed = () => numbers.split(/[\n,;]+/).map((n) => n.trim()).filter((n) => phoneKey(n).length >= 12);
+
+  return (
+    <div className="space-y-2 px-1">
+      <label className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        IA responde em todas as conversas
+        <Switch checked={all} disabled={busy} onCheckedChange={(v) => apply(v, account.meta.agent_numbers ?? [])} />
+      </label>
+      {!all && (
+        <div className="space-y-1.5">
+          <Label htmlFor={`nums-${account.id}`} className="text-xs">Só nestes números (um por linha, com DDD)</Label>
+          <Textarea id={`nums-${account.id}`} rows={3} className="text-[13px]" value={numbers} onChange={(e) => setNumbers(e.target.value)} placeholder={"61 99133-1525\n11 98888-7777"} />
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-muted-foreground">Também dá para ligar a IA numa conversa em Mensagens.</p>
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy || numbers === saved} onClick={() => apply(false, parsed())}>
+              {busy && <Loader2 className="animate-spin" />} Salvar
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
