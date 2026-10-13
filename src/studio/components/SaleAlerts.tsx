@@ -5,6 +5,7 @@ import { BellRing, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { api } from "../lib/api";
 import { useSettings, useTable } from "../lib/hooks";
@@ -26,7 +27,21 @@ export default function SaleAlerts() {
   const savedChannels = settings?.sale_alert_channels ?? CHANNELS.map((c) => c.id);
   const [phone, setPhone] = useState(savedPhone);
   const [channels, setChannels] = useState<string[]>(savedChannels);
-  const [busy, setBusy] = useState<"save" | "test" | null>(null);
+  const [busy, setBusy] = useState<"save" | "test" | "digest" | null>(null);
+  const [digest, setDigest] = useState(Boolean(settings?.daily_digest));
+  useEffect(() => setDigest(Boolean(settings?.daily_digest)), [settings?.daily_digest]);
+
+  const sendDigest = async () => {
+    setBusy("digest");
+    try {
+      await api.invoke("ai", { action: "digest_now" });
+      toast.success("Resumo enviado");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
   useEffect(() => setPhone(savedPhone), [savedPhone]);
   useEffect(() => setChannels(savedChannels), [savedChannels.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -37,6 +52,7 @@ export default function SaleAlerts() {
       await api.saveSettings({
         sale_alert_phone: clean || null,
         sale_alert_channels: channels,
+        daily_digest: digest,
         // Só avisa vendas a partir de agora (não manda as antigas de uma vez)
         ...(clean && clean !== savedPhone ? { sale_alert_since: new Date().toISOString() } : {}),
       });
@@ -67,11 +83,11 @@ export default function SaleAlerts() {
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border"><BellRing className="h-5 w-5" /></span>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold">Aviso de venda no WhatsApp</h2>
+            <h2 className="text-sm font-semibold">Avisos no WhatsApp</h2>
             {savedPhone ? <StatusDot tone="success">Ligado</StatusDot> : <StatusDot tone="neutral">Desligado</StatusDot>}
           </div>
           <p className="mt-1 text-[13px] text-foreground/80">
-            A cada venda nova, o Studio manda uma mensagem com o pedido, os itens e o total para o número que você escolher. Sai pelo WhatsApp conectado aqui em cima.
+            A cada venda nova, o Studio manda uma mensagem com o pedido, os itens e o total para o número que você escolher. E, se ligar, todo dia às 8h chega o resumo: vendas de ontem, pedidos para enviar, posts para aprovar, mensagens esperando e as tarefas da semana. Sai pelo WhatsApp conectado aqui em cima.
           </p>
           <p className="mt-2 text-xs text-muted-foreground">Confere a cada 2 minutos. TikTok Shop entra quando a conta for conectada.</p>
         </div>
@@ -92,6 +108,15 @@ export default function SaleAlerts() {
               {c.name}
             </label>
           ))}
+        </div>
+        <div className="space-y-2 border-t pt-3">
+          <label className="flex items-center justify-between gap-3 text-[13px]">
+            Resumo do dia às 8h
+            <Switch checked={digest} onCheckedChange={setDigest} />
+          </label>
+          <Button size="sm" variant="ghost" className="h-7 px-0 text-xs text-muted-foreground" disabled={!hasWhatsApp || !savedPhone || busy !== null} onClick={sendDigest}>
+            {busy === "digest" && <Loader2 className="animate-spin" />} Mandar o resumo agora
+          </Button>
         </div>
         {!hasWhatsApp && <p className="text-xs text-destructive">Conecte um WhatsApp acima para os avisos saírem.</p>}
         <div className="grid grid-cols-2 gap-2">

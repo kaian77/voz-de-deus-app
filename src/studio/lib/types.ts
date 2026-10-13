@@ -237,6 +237,7 @@ export interface BrandSettings {
   sale_alert_phone?: string | null;
   sale_alert_channels?: string[];
   sale_alert_since?: string | null;
+  daily_digest?: boolean;
 }
 
 /** Sincronização da loja com o Mercado Livre (fila processada pelo cron). */
@@ -393,4 +394,21 @@ export interface Strategy {
   research?: { text: string; sources: string[]; at: string } | null;
   status?: "research" | "plan" | "done";
   created_at: string;
+}
+
+/** Resumo de vendas e pendências (Visão geral e resumo diário no WhatsApp). */
+export interface SalesSummary {
+  at: string;
+  channels: Partial<Record<"site" | "mercadolivre" | "shopee", {
+    connected: boolean;
+    error?: string;
+    today: { orders: number; revenue: number };
+    yesterday: { orders: number; revenue: number };
+    week: { orders: number; revenue: number };
+    to_ship: number | null;
+  }>>;
+  total: { today: { orders: number; revenue: number }; yesterday: { orders: number; revenue: number }; week: { orders: number; revenue: number }; to_ship: number };
+  approvals: number;
+  waiting: number;
+  tasks: string[];
 }

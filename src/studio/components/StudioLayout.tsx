@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  BarChart3, Bot, CalendarDays, CalendarPlus, CheckSquare, Inbox, LayoutGrid, Link2, LogOut, Menu, MessageSquare, Package, PenLine, ShoppingBag, Store, Workflow, Target,
+  BarChart3, Bot, CalendarDays, CalendarPlus, CheckSquare, Inbox, LayoutGrid, Link2, LogOut, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Store, Workflow, Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -55,13 +55,49 @@ const GROUPS: { label?: string; items: Item[] }[] = [
   },
 ];
 
-function Nav({ onNavigate }: { onNavigate?: () => void }) {
+function useCounts() {
   const { data: posts } = useTable("posts");
   const { data: conversations } = useTable("conversations", { order: "last_message_at" });
-  const counts = {
+  return {
     approvals: posts?.filter((p) => p.status === "pending_approval").length ?? 0,
     inbox: conversations?.filter((c) => c.status === "needs_human").length ?? 0,
   };
+}
+
+/** Barra fixa no rodapé do celular: o que se usa todo dia a um toque; o resto fica em "Mais". */
+function BottomBar({ onMore }: { onMore: () => void }) {
+  const counts = useCounts();
+  const tab = (to: string, label: string, Icon: typeof Bot, count = 0, end = false) => (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) => cn("relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px]", isActive ? "font-medium text-foreground" : "text-muted-foreground")}
+    >
+      <Icon className="h-5 w-5" strokeWidth={1.75} />
+      {label}
+      {count > 0 && (
+        <span className="tabular absolute left-1/2 top-1 ml-1.5 min-w-4 rounded-full bg-foreground px-1 text-center text-[10px] font-medium leading-4 text-background">{count > 99 ? "99+" : count}</span>
+      )}
+    </NavLink>
+  );
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-30 flex h-16 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" aria-label="Navegação principal">
+      {tab("/studio", "Início", LayoutGrid, 0, true)}
+      {tab("/studio/aprovacoes", "Aprovar", CheckSquare, counts.approvals)}
+      <NavLink to="/studio/criar" className="flex flex-1 items-center justify-center" aria-label="Criar post">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background shadow-sm"><Plus className="h-5 w-5" /></span>
+      </NavLink>
+      {tab("/studio/mensagens", "Mensagens", Inbox, counts.inbox)}
+      <button type="button" onClick={onMore} className="flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] text-muted-foreground">
+        <MoreHorizontal className="h-5 w-5" strokeWidth={1.75} />
+        Mais
+      </button>
+    </nav>
+  );
+}
+
+function Nav({ onNavigate }: { onNavigate?: () => void }) {
+  const counts = useCounts();
   return (
     <nav className="flex flex-col gap-5">
       {GROUPS.map((group, i) => (
@@ -179,11 +215,12 @@ export default function StudioLayout() {
             </Sheet>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-8 lg:py-8">
+        <main className="mx-auto w-full max-w-[1180px] px-4 py-6 pb-24 sm:px-8 lg:py-8">
           <PageErrorBoundary key={location.pathname}>
             <Outlet />
           </PageErrorBoundary>
         </main>
+        <BottomBar onMore={() => setOpen(true)} />
       </div>
     </div>
   );
