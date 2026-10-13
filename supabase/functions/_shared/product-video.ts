@@ -109,7 +109,10 @@ export async function postVideo(db: SupabaseClient, v: any) {
     status: approval ? "pending_approval" : "scheduled",
     created_by: "agent",
     notes: v.brief?.why || `Vídeo animado do produto${v.product_url ? `: ${v.product_url}` : ""}.`,
-    options: v.brief?.idea_key ? { idea: { key: v.brief.idea_key, theme: v.brief.theme, why: v.brief.why } } : {},
+    options: {
+      ...(v.brief?.idea_key ? { idea: { key: v.brief.idea_key, theme: v.brief.theme, why: v.brief.why } } : {}),
+      ...(v.product_url ? { product: { name: v.name, url: v.product_url } } : {}),
+    },
   }).select("id,status").single();
   if (error) throw error;
   await db.from("product_videos").update({ post_id: post.id }).eq("id", v.id);

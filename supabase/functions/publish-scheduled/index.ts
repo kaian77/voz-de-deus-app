@@ -4,6 +4,7 @@
 import { adminClient, corsHeaders, env, handleError, HttpError, json, requireUser, timingSafeEqual } from "../_shared/util.ts";
 import { advancePost, runDuePosts } from "../_shared/publisher.ts";
 import { pollInstagram } from "../_shared/instagram-poller.ts";
+import { autoLinkPosts } from "../_shared/auto-link.ts";
 import { finishRenderedVideos } from "../_shared/product-video.ts";
 import { runAutopilot } from "../_shared/content-ideas.ts";
 import { cleanupStorage } from "../_shared/storage-cleanup.ts";
@@ -32,6 +33,8 @@ Deno.serve(async (req) => {
     const polled = new Date().getUTCMinutes() % 2 === 0
       ? await pollInstagram(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
       : undefined;
+    // Posts novos no Instagram ganham a automação com o link do produto (a função se limita a 1 consulta a cada 5 min)
+    const autolink = await autoLinkPosts(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Vídeos animados que o GitHub Actions terminou de renderizar viram post
     const videos = await finishRenderedVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // A cada 10 minutos: piloto automático de conteúdo (uma vez por semana por usuário, em segundo plano)
@@ -46,7 +49,7 @@ Deno.serve(async (req) => {
     const waha = new Date().getUTCMinutes() % 10 === 7
       ? await wahaKeepAlive(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
       : undefined;
-    return json({ processed, polled, videos, autopilot, cleanup, waha });
+    return json({ processed, polled, autolink, videos, autopilot, cleanup, waha });
   } catch (err) {
     return handleError(err);
   }

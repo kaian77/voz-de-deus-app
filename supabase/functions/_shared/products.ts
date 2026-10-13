@@ -99,7 +99,7 @@ export async function announceProduct(db: SupabaseClient, userId: string, produc
     status: approval ? "pending_approval" : "scheduled",
     created_by: "agent",
     notes: `Divulgação automática do produto cadastrado${product.url ? `: ${product.url}` : ""}.`,
-    options: {},
+    options: product.url ? { product: { name: product.name, url: product.url } } : {},
   }).select("id,status,scheduled_at,platforms").single();
   if (error) throw error;
   return post;
