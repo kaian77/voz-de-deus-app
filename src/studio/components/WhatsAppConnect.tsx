@@ -188,6 +188,21 @@ function AgentScope({ account }: { account: SocialAccount }) {
       setBusy(false);
     }
   };
+  const savedPrompt = account.meta.agent_prompt ?? "";
+  const [prompt, setPrompt] = useState(savedPrompt);
+  useEffect(() => setPrompt(savedPrompt), [savedPrompt]);
+  const savePrompt = async () => {
+    setBusy(true);
+    try {
+      await api.update("social_accounts", account.id, { meta: { ...account.meta, agent_prompt: prompt.trim() } });
+      qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
+      toast.success(prompt.trim() ? "Jeito de responder salvo" : "Este número volta a responder como a loja");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
   const parsed = () => numbers.split(/[\n,;]+/).map((n) => n.trim()).filter((n) => phoneKey(n).length >= 12);
 
   return (
@@ -208,6 +223,23 @@ function AgentScope({ account }: { account: SocialAccount }) {
           </div>
         </div>
       )}
+      <div className="space-y-1.5 pt-1">
+        <Label htmlFor={`prompt-${account.id}`} className="text-xs">Como a IA responde neste número</Label>
+        <Textarea
+          id={`prompt-${account.id}`}
+          rows={4}
+          className="text-[13px]"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder={"Vazio = responde como atendente da loja.\nEx.: Responda curto e informal, do meu jeito. Se for sobre pins, mande braxpinsmania.com.br. Se perguntarem onde estou ou marcarem algo, diga que já respondo."}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] text-muted-foreground">Se a IA não souber, ela não inventa: a conversa vai para você em Mensagens.</p>
+          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy || prompt === savedPrompt} onClick={savePrompt}>
+            {busy && <Loader2 className="animate-spin" />} Salvar
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

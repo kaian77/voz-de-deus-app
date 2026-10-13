@@ -175,6 +175,22 @@ async function storeContext(db: SupabaseClient, userId: string, history: { direc
 export async function draftReply(db: SupabaseClient, conversation: any) {
   const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", conversation.user_id).maybeSingle();
   const history = await transcript(db, conversation.id);
+  // Número com instruções próprias (ex.: WhatsApp pessoal): a IA responde como o dono, sem falar como a loja
+  const { data: account } = await db.from("social_accounts").select("meta").eq("id", conversation.account_id).maybeSingle();
+  const persona = String(account?.meta?.agent_prompt ?? "").trim();
+  if (persona) {
+    const chat = history.map((m) => `${m.direction === "in" ? "CONTATO" : "EU"}: ${m.text}`).join("\n");
+    const personal =
+      `Você responde mensagens no WhatsApp em nome do dono deste número, em primeira pessoa, como se fosse ele. ` +
+      `Português do Brasil, natural e curto, do jeito que uma pessoa escreve no WhatsApp; não diga que é uma IA, a não ser que perguntem diretamente. ` +
+      `Nunca invente fatos, compromissos, horários, valores ou promessas que não estejam nas instruções abaixo. ` +
+      `Peça handoff (handoff=true, reply vazio ou uma frase curta como "já te respondo") quando não souber responder, ` +
+      `quando o assunto for sério ou pessoal demais, ou quando pedirem algo que só o dono pode decidir.\n\n` +
+      `Instruções do dono:\n${persona}`;
+    const result = await generateJSON(AgentReply, personal,
+      `Contato: ${conversation.contact_name ?? "sem nome"}\n\nConversa até agora:\n${chat}\n\nEscreva a minha próxima mensagem (EU).`, "low");
+    return { ...result, settings, personal: true };
+  }
   const lines = history.map((m) => `${m.direction === "in" ? "CONTATO" : "MARCA"}: ${m.text}`).join("\n");
   const shop = await storeContext(db, conversation.user_id, history);
   const system =
@@ -189,7 +205,7 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
     (shop ? `\n\nDados ao vivo da loja (também valem como base de conhecimento):\n${shop}` : "");
   const result = await generateJSON(AgentReply, system,
     `Contato: ${conversation.contact_name ?? conversation.contact_username ?? "sem nome"}\n\nConversa até agora:\n${lines}\n\nEscreva a próxima mensagem da MARCA.`, "low");
-  return { ...result, settings };
+  return { ...result, settings, personal: false };
 }
 
 /** Responde automaticamente se o agente estiver ligado para a marca e para a conversa. */
@@ -207,7 +223,8 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
   const draft = await draftReply(db, conversation);
   if (draft.handoff) {
     await db.from("conversations").update({ status: "needs_human", handoff_reason: draft.handoff_reason || "Pedido de atendimento humano" }).eq("id", conversation.id);
-    const text = draft.reply?.trim() || draft.settings?.agent_handoff_message;
+    // No modo pessoal não manda o aviso da loja ("vou chamar alguém da equipe")
+    const text = draft.reply?.trim() || (draft.personal ? "" : draft.settings?.agent_handoff_message);
     if (text) await sendMessage(db, conversation.id, text, "ai");
     return;
   }
