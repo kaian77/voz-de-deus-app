@@ -23,6 +23,17 @@ import motion  # noqa: E402
 from common import layout_words  # noqa: E402
 
 
+
+MOTIFS = ("hearts", "ribbons", "petals", "stars")
+
+
+def motif_layer(spec, count, **extra):
+    """Partículas do tema do vídeo (spec["motif"]), nas cores do tema; None quando o vídeo não tem tema."""
+    kind = spec.get("motif")
+    if kind not in MOTIFS:
+        return None
+    return {"type": "particles", "kind": kind, "count": count, "colors": ["primary", "accent", "#FFFFFF"], **extra}
+
 def text_h(txt, size, max_w, fmt, weight="black", upper=True):
     """Altura (fração do quadro) que um bloco de texto vai ocupar — para empilhar sem sobrepor."""
     W, H = motion.FORMATS.get(fmt, (1080, 1920))
@@ -86,7 +97,7 @@ def build_scene(sc, idx, spec, lay):
         y = sc.get("y", lay.big_text_y())
         size = sc.get("size", 132)
         # Entrada delicada: o texto surge do desfoque, sem tremor, com um "ding" suave
-        layers.insert(0, {"type": "particles", "kind": "bokeh", "count": 12})
+        layers.insert(0, motif_layer(spec, 12) or {"type": "particles", "kind": "bokeh", "count": 12})
         layers.append(text(sc["text"], y, size, x=tx, anim="blur", upper=True, hl_box=sc.get("hl_box", True), sfx="ding",
                            max_w=mw, **{"in": 0.1, "in_dur": 0.9}))
         if sc.get("sub"):
@@ -122,7 +133,7 @@ def build_scene(sc, idx, spec, lay):
             layers.append(text(sc["sub"], sy, 52, weight="medium", anim="slide-up", **{"in": 0.6}))
     elif t == "product":
         layers += [
-            {"type": "particles", "kind": "sparkle", "count": 22},
+            motif_layer(spec, 16) or {"type": "particles", "kind": "sparkle", "count": 22},
             {"type": "image", "src": img, "cutout": cut, "x": 0.5 if not W else 0.33, "y": 0.45 if not W else 0.52,
              "w": 0.82 if not W else 0.42, "h": 0.46 if not W else 0.78, "anim": "zoom-out", "in_dur": 0.6,
              "idle": ["float", "kenburns"], "glow": "accent", "glow_strength": 0.75},
@@ -233,7 +244,7 @@ def build_scene(sc, idx, spec, lay):
         if sc.get("sub"):
             layers.append(text(sc["sub"], 0.71 if not W else 0.66, 46, x=0.5 if not W else 0.65, weight="medium", anim="fade", **{"in": 0.8}))
         if sc.get("confetti", True):
-            layers.append({"type": "particles", "kind": "confetti", "count": 70, "in": 0.45})
+            layers.append(motif_layer(spec, 26, **{"in": 0.45}) or {"type": "particles", "kind": "confetti", "count": 70, "in": 0.45})
     else:
         raise SystemExit(f"tipo de cena desconhecido: {t}")
 
