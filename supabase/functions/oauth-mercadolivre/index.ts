@@ -22,6 +22,8 @@ Deno.serve(async (req) => {
     const token = await mlExchangeCode(code);
     const me = await ml(token.access_token, "/users/me").catch(() => ({}));
     const db = adminClient();
+    // Reconectar não pode apagar a análise de preços nem a fila de sincronização guardadas na conta
+    const { data: previous } = await db.from("social_accounts").select("meta").eq("platform", "mercadolivre").eq("external_id", String(token.user_id)).maybeSingle();
 
     const { data: account, error } = await db.from("social_accounts").upsert({
       user_id: userId,
@@ -29,7 +31,7 @@ Deno.serve(async (req) => {
       external_id: String(token.user_id),
       username: me.nickname ?? String(token.user_id),
       display_name: me.nickname ?? "Mercado Livre",
-      meta: { permalink: me.permalink, site: me.site_id },
+      meta: { ...(previous?.meta ?? {}), permalink: me.permalink, site: me.site_id },
       connected_at: new Date().toISOString(),
     }, { onConflict: "platform,external_id" }).select().single();
     if (error) throw error;

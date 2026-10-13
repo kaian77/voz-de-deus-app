@@ -32,7 +32,13 @@ async function tokenRequest(params: Record<string, string>): Promise<TokenRespon
     body: new URLSearchParams({ client_id: env("ML_APP_ID"), client_secret: env("ML_CLIENT_SECRET"), ...params }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!data.access_token) throw new Error(`Mercado Livre: ${data.message ?? data.error ?? res.status}`);
+  if (!data.access_token) {
+    // Renovação recusada: sem o escopo offline_access o ML não deixa renovar, ou o refresh token já foi usado
+    if (params.grant_type === "refresh_token" && /unsupported_grant_type|invalid_grant|invalid_token/.test(String(data.error ?? data.message))) {
+      throw new Error("Acesso ao Mercado Livre expirou: ative offline_access no app do ML e conecte de novo em Contas");
+    }
+    throw new Error(`Mercado Livre: ${data.message ?? data.error ?? res.status}`);
+  }
   return data;
 }
 
