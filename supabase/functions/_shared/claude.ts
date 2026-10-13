@@ -102,3 +102,51 @@ export async function researchWeb(system: string, prompt: string, maxUses = 5): 
   }
   return { text: text.trim(), sources: [...sources].slice(0, 10) };
 }
+
+export type AgentTool = {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  // deno-lint-ignore no-explicit-any
+  run?: (input: any) => Promise<unknown>; // sem run = ferramenta final (encerra e devolve o input)
+};
+
+/**
+ * Agente com ferramentas: o modelo consulta o que precisar (produtos, pedidos, cupons...) e termina
+ * chamando a ferramenta final (a que não tem run), cujo input é o resultado.
+ */
+export async function runAgent<T>(system: string, prompt: string, tools: AgentTool[], effort: Effort = "low", maxSteps = 6): Promise<T> {
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: wellFormed(prompt) }];
+  const defs = tools.map(({ name, description, input_schema }) => ({ name, description, input_schema })) as Anthropic.Tool[];
+  const final = tools.find((t) => !t.run)!;
+  for (let step = 0; step < maxSteps; step++) {
+    const last = step === maxSteps - 1;
+    const response = await anthropic().messages.create({
+      model: MODEL(),
+      max_tokens: 16000,
+      system: wellFormed(system),
+      messages,
+      tools: defs,
+      tool_choice: last ? { type: "tool", name: final.name } : { type: "any" },
+      output_config: { effort },
+    });
+    if (response.stop_reason === "refusal") throw new Error("A IA recusou este pedido.");
+    const calls = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    const done = calls.find((c) => c.name === final.name);
+    if (done) return done.input as T;
+    messages.push({ role: "assistant", content: response.content });
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const call of calls) {
+      const tool = tools.find((t) => t.name === call.name);
+      let out: unknown;
+      try {
+        out = tool?.run ? await tool.run(call.input) : { erro: "ferramenta desconhecida" };
+      } catch (e) {
+        out = { erro: e instanceof Error ? e.message : String(e) };
+      }
+      results.push({ type: "tool_result", tool_use_id: call.id, content: wellFormed(JSON.stringify(out ?? null)).slice(0, 12000) });
+    }
+    messages.push({ role: "user", content: results });
+  }
+  throw new Error("O agente não terminou a resposta.");
+}
