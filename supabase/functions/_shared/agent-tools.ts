@@ -7,7 +7,7 @@ import { advancePost, validatePost } from "./publisher.ts";
 import { assertPublicHttpsUrl } from "./util.ts";
 import { sendMessage, transcript } from "./inbox.ts";
 import { aiEnabled, generateJSON, researchWeb } from "./claude.ts";
-import { nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
+import { ns, nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
 import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
 import { queueProductVideo } from "./product-video.ts";
 import { analyzeMarketplace, mercadoLivreListings, publishToMercadoLivre } from "./marketplaces.ts";
@@ -661,6 +661,20 @@ const tools = {
       return order;
     },
   },
+  list_coupons: {
+    description: "Todos os cupons da loja Nuvemshop (inclusive inativos/vencidos), com tipo, valor, usos, datas, valor mínimo e se é só para primeira compra.",
+    input: z.object({}),
+    run: async (ctx: Ctx) => {
+      const s = await store(ctx);
+      // deno-lint-ignore no-explicit-any
+      const list = await ns<any[]>(s.token, s.storeId, "coupons?per_page=200");
+      return (Array.isArray(list) ? list : []).map((c) => ({
+        code: c.code, type: c.type, value: c.value, valid: c.valid, used: c.used, max_uses: c.max_uses, start_date: c.start_date,
+        end_date: c.end_date, min_price: c.min_price, first_consumer_purchase: c.first_consumer_purchase, deleted_at: c.deleted_at,
+      }));
+    },
+  },
+
   list_product_templates: {
     description: "Modelos de cadastro de produto (preço, peso, medidas, categoria, descrição-base, padrão do nome...). O modelo padrão é usado quando nenhum é informado.",
     input: z.object({}),
