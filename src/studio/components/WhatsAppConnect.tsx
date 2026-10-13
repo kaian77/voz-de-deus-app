@@ -31,9 +31,10 @@ export default function WhatsAppConnect() {
   const connect = async (action: "connect_waha" | "connect_whatsapp", body: Record<string, string>) => {
     setBusy(true);
     try {
-      const r = await api.invoke<{ webhook_url?: string; webhook_configured?: boolean }>("inbox", { action, ...body, label, agent });
+      const r = await api.invoke<{ webhook_url?: string; webhook_configured?: boolean; status?: string }>("inbox", { action, ...body, label, agent });
       qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
-      toast.success("WhatsApp conectado");
+      if (r.status && r.status !== "WORKING") toast.warning("Salvo. Agora leia o QR Code no painel do WAHA (a sessão está iniciando).");
+      else toast.success("WhatsApp conectado");
       if (r.webhook_url && !r.webhook_configured) setWebhook(r.webhook_url);
     } catch (e) {
       toast.error((e as Error).message);

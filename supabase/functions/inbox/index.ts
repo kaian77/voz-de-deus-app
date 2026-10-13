@@ -6,7 +6,7 @@
 // Nos dois: label ("Loja", "Pessoal"...) e agent (a IA responde sozinha nesse número?). Dá para ter vários números.
 import { adminClient, assertPublicHttpsUrl, corsHeaders, functionsUrl, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { draftReply, sendMessage } from "../_shared/inbox.ts";
-import { waPhoneInfo, waSubscribeApp, wahaSession, wahaSetWebhook } from "../_shared/whatsapp.ts";
+import { waPhoneInfo, waSubscribeApp, wahaSession, wahaSetWebhook, wahaStart } from "../_shared/whatsapp.ts";
 import { aiEnabled } from "../_shared/claude.ts";
 
 Deno.serve(async (req) => {
@@ -58,8 +58,9 @@ Deno.serve(async (req) => {
       case "connect_waha": {
         const cfg = { base_url: String(body.base_url ?? "").replace(/\/$/, ""), session: body.session || "default", api_key: body.api_key || null };
         assertPublicHttpsUrl(cfg.base_url);
+        // Conecta mesmo sem o QR lido: assim o Studio já mantém o servidor acordado e liga a sessão se ela parar
         const session = await wahaSession(cfg);
-        if (session.status !== "WORKING") throw new HttpError(400, `Sessão "${cfg.session}" está ${session.status}. Escaneie o QR Code no painel do WAHA e tente de novo.`);
+        if (session.status === "STOPPED" || session.status === "FAILED") await wahaStart(cfg);
         const phone = session.me?.id?.split("@")[0] ?? cfg.session;
         const { data: account, error } = await db.from("social_accounts").upsert({
           user_id: userId,
@@ -67,7 +68,7 @@ Deno.serve(async (req) => {
           external_id: `waha:${new URL(cfg.base_url).host}:${cfg.session}`,
           username: phone,
           display_name: session.me?.pushName ?? "WhatsApp (WAHA)",
-          meta: { provider: "waha", base_url: cfg.base_url, session: cfg.session, label, agent },
+          meta: { provider: "waha", base_url: cfg.base_url, session: cfg.session, label, agent, status: session.status },
           connected_at: new Date().toISOString(),
         }, { onConflict: "platform,external_id" }).select().single();
         if (error) throw error;
@@ -75,7 +76,7 @@ Deno.serve(async (req) => {
         await db.from("account_tokens").upsert({ account_id: account.id, access_token: cfg.api_key ?? "", webhook_secret: secret, updated_at: new Date().toISOString() });
         const webhookUrl = `${functionsUrl("whatsapp-webhook")}?account=${account.id}&secret=${secret}`;
         const configured = await wahaSetWebhook(cfg, webhookUrl).then(() => true).catch(() => false);
-        return json({ account, webhook_url: webhookUrl, webhook_configured: configured });
+        return json({ account, webhook_url: webhookUrl, webhook_configured: configured, status: session.status });
       }
       default:
         throw new HttpError(400, `Ação desconhecida: ${body.action}`);
