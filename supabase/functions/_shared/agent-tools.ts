@@ -11,6 +11,7 @@ import { ns, nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsPr
 import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
 import { queueProductVideo } from "./product-video.ts";
 import { analyzeMarketplace, mercadoLivreListings, publishToMercadoLivre } from "./marketplaces.ts";
+import { mlSyncStatus, startMlSync } from "./ml-sync.ts";
 import { generateIdeas } from "./content-ideas.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
@@ -779,9 +780,16 @@ const tools = {
   },
 
   list_mercadolivre_listings: {
-    description: "Anúncios do Mercado Livre (ativos e pausados) com o produto da loja correspondente, e a lista `missing` dos produtos da loja Nuvemshop que ainda não têm anúncio no Mercado Livre.",
+    description: "Anúncios do Mercado Livre (todos menos os encerrados) com o produto da loja correspondente, e a lista `missing` dos produtos da loja Nuvemshop que ainda não têm anúncio no Mercado Livre.",
     input: z.object({}),
     run: async (ctx: Ctx) => mercadoLivreListings(ctx.db, ctx.userId),
+  },
+
+  sync_mercadolivre: {
+    description: "Sincroniza a loja Nuvemshop inteira com o Mercado Livre em segundo plano (3 produtos por minuto): atualiza o anúncio que já existe (fotos da loja, descrição no padrão da marca, estoque 200, reativa os inativos) ou cria um novo. Kits e produtos de teste ficam de fora. action \"start\" começa (refaz do zero); \"status\" mostra o andamento.",
+    input: z.object({ action: z.enum(["start", "status"]) }),
+    run: async (ctx: Ctx, input: { action: "start" | "status" }) =>
+      input.action === "start" ? startMlSync(ctx.db, ctx.userId) : mlSyncStatus(ctx.db, ctx.userId),
   },
 
   publish_to_mercadolivre: {

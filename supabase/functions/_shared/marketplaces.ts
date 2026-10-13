@@ -112,15 +112,12 @@ async function account(db: SupabaseClient, userId: string, platform: Marketplace
   return data;
 }
 
-/** Anúncios do Mercado Livre (ativos e pausados) e os produtos da loja que ainda não têm anúncio lá. */
+/** Anúncios do Mercado Livre (todos menos os encerrados) e os produtos da loja que ainda não têm anúncio lá. */
 export async function mercadoLivreListings(db: SupabaseClient, userId: string) {
   const acc = await account(db, userId, "mercadolivre");
   if (!acc) throw new Error("Conecte o Mercado Livre em Contas");
   const token = await mlTokenFor(db, acc.id);
-  const items = [
-    ...await mlSellerItems(token, acc.external_id, 1000, "active"),
-    ...await mlSellerItems(token, acc.external_id, 1000, "paused"),
-  ];
+  const items = (await mlSellerItems(token, acc.external_id, 1000, "")).filter((i) => i.status !== "closed");
   const store = await storePrices(db, userId);
   const listed = new Set<string>();
   const listings = items.map((it) => {
@@ -203,6 +200,8 @@ export async function publishToMercadoLivre(
   db: SupabaseClient,
   userId: string,
   product: { name: string; description?: string; images: string[]; price: number; sku?: string; stock?: number | null },
+  /** Anúncios do vendedor já carregados (a sincronização em lote busca uma vez só) */
+  sellerItems?: MlItem[],
 ) {
   const acc = await account(db, userId, "mercadolivre");
   if (!acc) throw new Error("Conecte o Mercado Livre em Contas");
@@ -220,7 +219,7 @@ export async function publishToMercadoLivre(
   };
 
   // Produto já anunciado (em qualquer status, pelo SKU ou pelo nome): atualiza em vez de duplicar
-  const existing = await findMlListing(token, acc.external_id, product.name, product.sku);
+  const existing = await findMlListing(token, acc.external_id, product.name, product.sku, sellerItems);
   if (existing) {
     const id = existing.id;
     await setDescription(id, true);
@@ -286,7 +285,7 @@ const DEFAULT_ML_STOCK = 200;
  * Anúncio do vendedor para o produto, em qualquer status menos encerrado: primeiro pelo SKU, depois pelo nome.
  * Com mais de um, prefere o ativo.
  */
-async function findMlListing(token: string, sellerId: string, name: string, sku?: string): Promise<MlItem | null> {
+async function findMlListing(token: string, sellerId: string, name: string, sku?: string, sellerItems?: MlItem[]): Promise<MlItem | null> {
   const pick = (items: MlItem[]) => items.find((i) => i.status === "active") ?? items[0] ?? null;
   if (sku) {
     const found = await ml<{ results: string[] }>(token, `/users/${sellerId}/items/search?seller_sku=${encodeURIComponent(sku)}`)
@@ -299,7 +298,7 @@ async function findMlListing(token: string, sellerId: string, name: string, sku?
   }
   const words = norm(name);
   if (!words.length) return null;
-  const all = (await mlSellerItems(token, sellerId, 1000, "")).filter((i) => i.status !== "closed");
+  const all = (sellerItems ?? await mlSellerItems(token, sellerId, 1000, "")).filter((i) => i.status !== "closed");
   const same = all.filter((i) => {
     const w = norm(i.family_name ?? i.title);
     const common = w.filter((x) => words.includes(x)).length;

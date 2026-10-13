@@ -8,6 +8,7 @@ import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStor
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { postVideo, queueProductVideo } from "../_shared/product-video.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
+import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
@@ -130,6 +131,8 @@ Deno.serve(async (req) => {
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
       return json(await nsFillShopping(store.token, store.storeId, { page: Number(input.page) || 1, age_group: input.age_group, gender: input.gender }));
     }
+    if (action === "ml_sync_start") return json(await startMlSync(db, userId));
+    if (action === "ml_sync_status") return json(await mlSyncStatus(db, userId));
     if (action === "marketplace_analyze") return json(await analyzeMarketplace(db, userId, input.platform === "shopee" ? "shopee" : "mercadolivre"));
     if (action === "marketplace_publish") {
       // Publica no Mercado Livre um produto já cadastrado na loja pelo Studio
