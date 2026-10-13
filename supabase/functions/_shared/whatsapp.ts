@@ -91,6 +91,11 @@ export function wahaSetWebhook(cfg: WahaConfig, url: string) {
   return waha(cfg, `/api/sessions/${cfg.session}`, { config: { webhooks: [{ url, events: ["message"] }] } }, "PUT");
 }
 
+/** Liga a sessão (quando o servidor reiniciou e ela ficou STOPPED/FAILED). */
+export function wahaStart(cfg: WahaConfig) {
+  return waha(cfg, `/api/sessions/${cfg.session}/start`, {}).catch(() => null);
+}
+
 export async function wahaSendText(cfg: WahaConfig, chatId: string, text: string) {
   const data = await waha<{ id?: string | { _serialized?: string } }>(cfg, "/api/sendText", { session: cfg.session, chatId, text });
   return typeof data.id === "string" ? data.id : data.id?._serialized;
@@ -102,13 +107,22 @@ export function wahaSendSeen(cfg: WahaConfig, chatId: string) {
 
 /** Consulta cada sessão do WAHA: mantém o servidor acordado e guarda o status (ex.: SCAN_QR_CODE após reiniciar). */
 export async function wahaKeepAlive(db: SupabaseClient) {
-  const { data: accounts } = await db.from("social_accounts").select("id, meta").eq("platform", "whatsapp").eq("meta->>provider", "waha");
+  const { data: accounts } = await db.from("social_accounts").select("id, username, meta").eq("platform", "whatsapp").eq("meta->>provider", "waha");
   const out: { id: string; status?: string; error?: string }[] = [];
   for (const a of accounts ?? []) {
     const { data: token } = await db.from("account_tokens").select("access_token").eq("account_id", a.id).maybeSingle();
     const cfg = { base_url: a.meta.base_url, session: a.meta.session, api_key: token?.access_token || null };
-    const status = await wahaSession(cfg).then((s) => s.status, (e) => `ERRO: ${e instanceof Error ? e.message : e}`);
-    if (status !== a.meta.status) await db.from("social_accounts").update({ meta: { ...a.meta, status } }).eq("id", a.id);
+    const session = await wahaSession(cfg).catch((e) => ({ status: `ERRO: ${e instanceof Error ? e.message : e}`, me: undefined }));
+    const status = session.status;
+    if (status === "STOPPED" || status === "FAILED") await wahaStart(cfg);
+    // Número conectado depois (QR lido após salvar no Studio): grava o telefone e o nome
+    const phone = session.me?.id?.split("@")[0];
+    if (status !== a.meta.status || (phone && phone !== a.username)) {
+      await db.from("social_accounts").update({
+        meta: { ...a.meta, status },
+        ...(phone ? { username: phone, display_name: session.me?.pushName ?? "WhatsApp" } : {}),
+      }).eq("id", a.id);
+    }
     out.push({ id: a.id, status });
   }
   return out;
