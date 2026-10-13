@@ -4,7 +4,7 @@
 // Mensagem recebida -> registra na caixa de entrada e o agente de IA responde.
 import { adminClient, env, hmacHex, timingSafeEqual } from "../_shared/util.ts";
 import { autoReply, recordInbound } from "../_shared/inbox.ts";
-import { waMarkRead, waMessageText, wahaSendSeen } from "../_shared/whatsapp.ts";
+import { waMarkRead, waMessageText, wahaPhoneFromLid, wahaSendSeen } from "../_shared/whatsapp.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -41,9 +41,12 @@ async function handleWaha(accountId: string, secret: string, event: any) {
   const text = m.body || (m.hasMedia ? `[${m.media?.mimetype?.split("/")[0] ?? "mídia"} enviada]` : "[mensagem]");
   // WEBJS/NOWEB: notifyName/pushName; GOWS: _data.Info.PushName
   const name = m._data?.notifyName ?? m._data?.pushName ?? m._data?.Info?.PushName;
-  const recorded = await recordInbound(db, account, "whatsapp", { id: chatId, name }, { externalId: `waha:${m.id}`, text });
-  if (!recorded) return true;
   const cfg = { base_url: account.meta.base_url, session: account.meta.session, api_key: token.access_token || null };
+  // Contato com id escondido (@lid): usa o telefone de verdade, para a lista de números e o Studio mostrarem certo
+  const phone = chatId.endsWith("@lid") ? await wahaPhoneFromLid(cfg, chatId, m._data) : null;
+  const contact = { id: phone ?? chatId, altId: phone ? chatId : undefined, name };
+  const recorded = await recordInbound(db, account, "whatsapp", contact, { externalId: `waha:${m.id}`, text });
+  if (!recorded) return true;
   await wahaSendSeen(cfg, chatId);
   await autoReply(db, recorded.conversation, recorded.message.id);
   return true;

@@ -109,6 +109,21 @@ export function wahaSetWebhook(cfg: WahaConfig, url: string) {
   return waha(cfg, `/api/sessions/${cfg.session}`, { config: { webhooks: [{ url, events: ["message"] }] } }, "PUT");
 }
 
+/**
+ * O WhatsApp esconde o telefone de alguns contatos e manda um id "@lid". Descobre o telefone (@c.us):
+ * primeiro pelo próprio evento (GOWS: _data.Info.SenderAlt), depois pela API do WAHA.
+ */
+export async function wahaPhoneFromLid(cfg: WahaConfig, lid: string, data?: any): Promise<string | null> {
+  const toCus = (jid?: string | null) => {
+    const digits = String(jid ?? "").split("@")[0].split(":")[0].replace(/\D/g, "");
+    return jid && !String(jid).endsWith("@lid") && digits.length >= 10 ? `${digits}@c.us` : null;
+  };
+  const fromEvent = toCus(data?.Info?.SenderAlt) ?? toCus(data?.Info?.RecipientAlt);
+  if (fromEvent) return fromEvent;
+  const r = await waha<{ pn?: string | null }>(cfg, `/api/${cfg.session}/lids/${encodeURIComponent(lid)}`).catch(() => null);
+  return toCus(r?.pn);
+}
+
 /** Liga a sessão (quando o servidor reiniciou e ela ficou STOPPED/FAILED). */
 export function wahaStart(cfg: WahaConfig) {
   return waha(cfg, `/api/sessions/${cfg.session}/start`, {}).catch(() => null);
