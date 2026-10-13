@@ -15,6 +15,15 @@ import { EmptyState, formatDateTime, KIND_LABEL, PageHeader, Panel, PlatformIcon
 import { PostThumb } from "../components/PostThumb";
 import { toastPublishResult } from "@/studio/lib/publish-toast";
 
+/** Aprova um post: renderiza os slides (se houver) e agenda no horário sugerido; sem horário futuro vira rascunho. */
+async function approvePost(post: Post) {
+  const slides = post.slides?.length && !post.media.length ? (post.kind === "carousel" ? post.slides : post.slides.slice(0, 1)) : null;
+  const media = slides ? await renderAndUploadSlides(slides, post.design) : post.media;
+  const future = !!post.scheduled_at && new Date(post.scheduled_at) > new Date();
+  await api.update("posts", post.id, { media, status: future ? "scheduled" : "draft" });
+  return future;
+}
+
 function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: boolean; onSelect: (v: boolean) => void }) {
   const invalidate = useInvalidate();
   const [busy, setBusy] = useState<"approve" | "reject" | "publish" | null>(null);
@@ -23,9 +32,7 @@ function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: bool
   const approve = async () => {
     setBusy("approve");
     try {
-      const media = slides ? await renderAndUploadSlides(slides, post.design) : post.media;
-      const future = post.scheduled_at && new Date(post.scheduled_at) > new Date();
-      await api.update("posts", post.id, { media, status: future ? "scheduled" : "draft" });
+      const future = await approvePost(post);
       toast.success(future ? `Aprovado. Sai ${formatDateTime(post.scheduled_at)}.` : "Aprovado como rascunho. Defina um horário para agendar.");
       invalidate("posts");
     } catch (e) {
@@ -192,19 +199,44 @@ export default function Approvals() {
   const [selected, setSelected] = useState<string[]>([]);
   const chosen = selected.filter((id) => pending.some((p) => p.id === id));
   const toggle = (id: string, on: boolean) => setSelected((cur) => (on ? [...new Set([...cur, id])] : cur.filter((x) => x !== id)));
+  const invalidate = useInvalidate();
+  const [approving, setApproving] = useState<number | null>(null);
+  const approveSelected = async () => {
+    const list = pending.filter((p) => chosen.includes(p.id));
+    let ok = 0;
+    let drafts = 0;
+    setApproving(0);
+    for (const p of list) {
+      try {
+        if (!(await approvePost(p))) drafts++;
+        ok++;
+      } catch (e) {
+        toast.error(`${p.title || "Post"}: ${(e as Error).message}`);
+      }
+      setApproving(ok);
+    }
+    setApproving(null);
+    setSelected([]);
+    invalidate("posts");
+    toast.success(`${ok} aprovado${ok === 1 ? "" : "s"}${drafts ? ` (${drafts} sem horário futuro viraram rascunho)` : ""}.`);
+  };
 
   return (
     <div>
       <PageHeader
         title="Aprovações"
-        description="Posts que o Studio preparou. Aprove no horário sugerido, publique agora ou selecione vários para escolher os dias no agendamento em massa."
+        description="Posts que o Studio preparou. Aprove no horário sugerido, publique agora ou selecione vários para aprovar de uma vez ou escolher os dias."
         actions={pending.length > 0 ? (
           <>
             <Button size="sm" variant="ghost" onClick={() => setSelected(chosen.length === pending.length ? [] : pending.map((p) => p.id))}>
               {chosen.length === pending.length ? "Limpar seleção" : "Selecionar todos"}
             </Button>
-            <Button size="sm" disabled={!chosen.length} onClick={() => navigate(`/studio/em-massa?posts=${chosen.join(",")}`)}>
-              <CalendarPlus /> Agendar em massa{chosen.length ? ` (${chosen.length})` : ""}
+            <Button size="sm" disabled={!chosen.length || approving !== null} onClick={approveSelected}>
+              {approving !== null ? <Loader2 className="animate-spin" /> : <Check />}
+              {approving !== null ? ` Aprovando ${approving}/${chosen.length}` : ` Aprovar${chosen.length ? ` (${chosen.length})` : ""}`}
+            </Button>
+            <Button size="sm" variant="outline" disabled={!chosen.length || approving !== null} onClick={() => navigate(`/studio/em-massa?posts=${chosen.join(",")}`)}>
+              <CalendarPlus /> Escolher dias
             </Button>
           </>
         ) : undefined}

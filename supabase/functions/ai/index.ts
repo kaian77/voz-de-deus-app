@@ -11,6 +11,8 @@ import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
 import { finishStrategy, researchStrategy, startStrategy } from "../_shared/strategy.ts";
+import { digestMessage, salesSummary } from "../_shared/daily.ts";
+import { sendWhatsAppTo } from "../_shared/sale-alerts.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 
 const SYSTEM = (brand: string) =>
@@ -210,6 +212,14 @@ Deno.serve(async (req) => {
         await db.from("product_drafts").update({ name: suggestion.name, overrides: { ...(current?.overrides ?? {}), ai: suggestion.listing } }).eq("id", input.draft_id);
       }
       return json(suggestion);
+    }
+    if (action === "sales_summary") return json(await salesSummary(db, userId));
+    if (action === "digest_now") {
+      // Manda o resumo do dia agora (teste), para o número dos avisos de venda
+      const { data: st } = await db.from("brand_settings").select("brand_name, sale_alert_phone").eq("user_id", userId).maybeSingle();
+      if (!st?.sale_alert_phone) throw new HttpError(400, "Salve primeiro o número em Contas → Avisos no WhatsApp");
+      await sendWhatsAppTo(db, userId, st.sale_alert_phone, digestMessage(await salesSummary(db, userId), st.brand_name));
+      return json({ ok: true });
     }
     // Estratégia em 3 etapas (cada uma cabe no tempo da function): vendas -> pesquisa de mercado -> plano
     if (action === "strategy_start" || action === "strategy_research" || action === "strategy_finish") {

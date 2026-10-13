@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Check, ChevronRight, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowUpRight, Check, ChevronRight, Package, Plus, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useSettings, useTable } from "../lib/hooks";
-import type { Post } from "../lib/types";
+import { api, isDemo } from "../lib/api";
+import type { Post, SalesSummary } from "../lib/types";
 import { formatTime, KIND_LABEL, sentence, PageHeader, Panel, PlatformIcon, relativeTime, StatusBadge, StatusDot } from "../components/bits";
 import { PostThumb } from "../components/PostThumb";
 
@@ -33,6 +35,79 @@ function AgendaRow({ post }: { post: Post }) {
       <div className="hidden items-center gap-1.5 sm:flex">{post.platforms.map((p) => <PlatformIcon key={p} platform={p} />)}</div>
       <StatusBadge status={post.status} />
     </Link>
+  );
+}
+
+const CHANNEL_LABEL = { site: "Site", mercadolivre: "Mercado Livre", shopee: "Shopee" } as const;
+const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/** Vendas de hoje/semana por canal, pedidos para enviar e as tarefas da estratégia. */
+function Sales() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["sales-summary"],
+    queryFn: () => api.invoke<SalesSummary>("ai", { action: "sales_summary" }),
+    enabled: !isDemo,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  if (isDemo || error) return null;
+  const channels = data ? (Object.entries(data.channels) as [keyof typeof CHANNEL_LABEL, NonNullable<SalesSummary["channels"]["site"]>][]) : [];
+  return (
+    <Panel
+      className="mb-6"
+      title="Vendas"
+      description={data ? `Atualizado ${relativeTime(data.at)}` : "Site, Mercado Livre e Shopee"}
+      action={<Link to="/studio/pedidos" className="text-xs font-medium text-muted-foreground hover:text-foreground">Ver pedidos</Link>}
+      bodyClassName="p-0"
+    >
+      {isLoading || !data ? (
+        <p className="px-4 py-6 text-[13px] text-muted-foreground">Somando as vendas…</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 border-b sm:grid-cols-3">
+            <div className="border-r px-4 py-3">
+              <p className="text-xs text-muted-foreground">Hoje</p>
+              <p className="tabular mt-1 text-[22px] font-semibold leading-none">{brl(data.total.today.revenue)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{data.total.today.orders} pedido{data.total.today.orders === 1 ? "" : "s"}</p>
+            </div>
+            <div className="px-4 py-3 sm:border-r">
+              <p className="text-xs text-muted-foreground">Últimos 7 dias</p>
+              <p className="tabular mt-1 text-[22px] font-semibold leading-none">{brl(data.total.week.revenue)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{data.total.week.orders} pedidos</p>
+            </div>
+            <Link to="/studio/pedidos" className="col-span-2 flex items-center gap-3 border-t px-4 py-3 hover:bg-secondary/50 sm:col-span-1 sm:border-t-0">
+              <Package className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="tabular text-[22px] font-semibold leading-none">{data.total.to_ship}</p>
+                <p className="mt-1 text-xs text-muted-foreground">para enviar</p>
+              </div>
+            </Link>
+          </div>
+          <div className="divide-y">
+            {channels.map(([c, v]) => (
+              <div key={c} className="flex items-center justify-between gap-3 px-4 py-2 text-[13px]">
+                <span>{CHANNEL_LABEL[c]}</span>
+                {v.error ? (
+                  <span className="truncate text-xs text-destructive">{v.error}</span>
+                ) : (
+                  <span className="tabular text-muted-foreground">
+                    hoje {v.today.orders} · semana {v.week.orders} · {brl(v.week.revenue)}{v.to_ship ? ` · ${v.to_ship} p/ enviar` : ""}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          {data.tasks.length > 0 && (
+            <Link to="/studio/estrategia" className="block border-t px-4 py-3 hover:bg-secondary/50">
+              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium"><Target className="h-3.5 w-3.5" /> Tarefas da semana</p>
+              <ul className="space-y-1 text-[13px] text-foreground/85">
+                {data.tasks.map((t, i) => <li key={i} className="flex gap-2"><span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-foreground/40" />{t}</li>)}
+              </ul>
+            </Link>
+          )}
+        </>
+      )}
+    </Panel>
   );
 }
 
@@ -86,6 +161,8 @@ export default function Dashboard() {
           </Button>
         }
       />
+
+      <Sales />
 
       <div className="mb-6 grid grid-cols-2 overflow-hidden rounded-lg border bg-card lg:grid-cols-4">
         <Metric label="Agendados" value={week.filter((p) => p.status === "scheduled").length} hint="próximos 7 dias" to="/studio/calendario" className="border-b border-r lg:border-b-0" />

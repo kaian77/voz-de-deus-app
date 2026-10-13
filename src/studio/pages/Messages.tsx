@@ -68,7 +68,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
     : conversation.channel === "whatsapp" ? `+${conversation.contact_id.split("@")[0]}` : "";
 
   return (
-    <section className="flex h-[calc(100vh-200px)] min-h-[520px] flex-col overflow-hidden rounded-lg border bg-card">
+    <section className="flex h-[calc(100dvh-306px)] min-h-[400px] lg:h-[calc(100vh-200px)] lg:min-h-[520px] flex-col overflow-hidden rounded-lg border bg-card">
       <header className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5">
         <Button variant="ghost" size="icon" className="-ml-2 h-8 w-8 lg:hidden" onClick={onBack} aria-label="Voltar para a lista"><ArrowLeft className="h-4 w-4" /></Button>
         <Avatar name={nameOf(conversation)} />
