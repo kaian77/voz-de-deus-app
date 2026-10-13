@@ -285,7 +285,7 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
       ? `- Use as ferramentas para consultar a loja de verdade: buscar_produtos (o catálogo é grande; procure antes de dizer que não tem), ` +
         `info_loja (frete, trocas, contato), cupons_ativos e consultar_pedido. Só afirme o que veio das ferramentas, da base de conhecimento ou das instruções.\n` +
         `- Produto pedido pelo nome popular (ex.: "homem aranha") pode ter outro nome na loja (ex.: "Zé Aranha"): busque por palavras-chave e explique a versão que a loja tem.\n` +
-        `- Cupom: quando pedirem desconto, consulte cupons_ativos e passe só códigos que vieram de lá, com as condições (primeira compra, valor mínimo, validade). ` +
+        `- Cupom: quando pedirem desconto, passe os cupons da base de conhecimento/instruções (ou de cupons_ativos) — só códigos que vieram de lá, com as condições (primeira compra, valor mínimo, validade). ` +
         `Nunca passe cupom com nome de pessoa no código. Se não houver, diga com gentileza que no momento não há cupom ativo.\n` +
         `- Pedido: peça o número do pedido e o e-mail (ou nome completo) de quem comprou; só depois consulte e passe status, transportadora e rastreio.\n` +
         `- "Consta entregue mas não recebi": com muita gentileza e empatia, explique que a parte da loja é embalar com cuidado e postar, e que a entrega ` +
