@@ -170,12 +170,12 @@ function storeTools(store: { token: string; storeId: string } | null): AgentTool
     },
     {
       name: "historico_cliente",
-      description: "Quantas compras pagas a pessoa já fez na loja, pelo e-mail que ela informou. Use para decidir o cupom (primeira compra x cliente recorrente).",
-      input_schema: { type: "object", properties: { email: { type: "string" } }, required: ["email"] },
-      run: async ({ email }: { email: string }) => {
-        const mail = String(email).trim().toLowerCase();
-        const orders = (await nsOrders(token, storeId, { q: mail, limit: 50 }))
-          .filter((o) => String(o.email ?? "").toLowerCase() === mail && o.status !== "cancelled" && o.payment === "pago");
+      description: "Quantas compras pagas a pessoa já fez na loja, pelo e-mail ou nome completo que ela informou nesta conversa (pode reaproveitar o que ela já disse). " +
+        "Use para decidir o cupom (primeira compra x cliente recorrente).",
+      input_schema: { type: "object", properties: { email_ou_nome: { type: "string" } }, required: ["email_ou_nome"] },
+      run: async ({ email_ou_nome }: { email_ou_nome: string }) => {
+        const orders = (await nsOrders(token, storeId, { q: String(email_ou_nome).trim(), limit: 50 }))
+          .filter((o) => buyerMatches(o, email_ou_nome) && o.status !== "cancelled" && o.payment === "pago");
         return { compras_pagas: orders.length };
       },
     },
@@ -276,7 +276,10 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
     `Responda em português do Brasil, de forma calorosa, curta (até 3 frases), natural, sem parecer robô, no máximo 1 emoji.\n\n` +
     `Como atender:\n` +
     `- Leia a conversa inteira e responda ao que a pessoa quer AGORA, considerando tudo o que já foi dito. Se ela mandou várias mensagens seguidas, responda tudo numa mensagem só.\n` +
-    `- Não repita cumprimentos, perguntas ou links que a MARCA já mandou na conversa. Não faça a mesma pergunta duas vezes.\n` +
+    `- Não repita cumprimentos, perguntas ou links que a MARCA já mandou na conversa. Não faça a mesma pergunta duas vezes. ` +
+    `Se a pessoa só cumprimentar de novo, responda curto e pergunte como pode ajudar, sem link.\n` +
+    `- Link só quando ajudar naquele momento (produto pedido, preço, quer comprar). Nunca mande o link do site em cumprimento, nem se ele já foi mandado na conversa.\n` +
+    `- Aproveite o que a pessoa já informou (nome, e-mail, número do pedido) em vez de pedir de novo.\n` +
     `- Você está no direct: mande o link direto (do produto ou do site); nunca fale em "link da bio".\n` +
     (tools.length
       ? `- Use as ferramentas para consultar a loja de verdade: buscar_produtos (o catálogo é grande; procure antes de dizer que não tem), ` +
@@ -299,7 +302,7 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
   const result = await runAgent<z.infer<typeof AgentReply>>(system,
     `Contato: ${conversation.contact_name ?? conversation.contact_username ?? "sem nome"}\n\nConversa até agora:\n${lines}\n\n` +
       `Escreva a próxima mensagem da MARCA (termine com a ferramenta responder).`,
-    [...tools, FINAL_TOOL], "low");
+    [...tools, FINAL_TOOL], "medium");
   return { reply: String(result.reply ?? ""), handoff: Boolean(result.handoff), handoff_reason: String(result.handoff_reason ?? ""), settings, personal: false };
 }
 
