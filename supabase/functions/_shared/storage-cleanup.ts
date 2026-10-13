@@ -1,6 +1,7 @@
 // Limpeza do storage (o plano grátis do Supabase guarda 1 GB). Só vídeos, que são os arquivos grandes:
 // - vídeo avulso (só para baixar): apagado 30 dias depois de criado;
-// - vídeo de post: apagado 14 dias depois de publicado (o Instagram e o TikTok guardam a cópia deles);
+// - vídeo de post: apagado 1 dia depois de publicado (o Instagram e o TikTok já guardam a cópia deles;
+//   no TikTok o vídeo vai para a caixa de entrada do app na hora de publicar);
 // - vídeo pronto que não virou post (post descartado): apagado depois de 30 dias.
 // Posts agendados ou esperando aprovação nunca perdem o vídeo.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
@@ -21,7 +22,7 @@ export async function cleanupStorage(db: SupabaseClient) {
 
   // 1) Vídeos animados dos produtos
   const { data: videos } = await db.from("product_videos").select("id,user_id,video_url,autopost,post_id,status,created_at,updated_at")
-    .not("video_url", "is", null).is("file_deleted_at", null).in("status", ["ready", "failed"]).lt("created_at", ago(14)).limit(BATCH);
+    .not("video_url", "is", null).is("file_deleted_at", null).in("status", ["ready", "failed"]).lt("created_at", ago(1)).order("created_at").limit(BATCH * 6);
   const postIds = (videos ?? []).map((v) => v.post_id).filter(Boolean);
   const { data: linked } = postIds.length
     ? await db.from("posts").select("id,status,published_at").in("id", postIds)
@@ -32,7 +33,7 @@ export async function cleanupStorage(db: SupabaseClient) {
     const expired = v.autopost === false
       ? v.created_at < ago(30)
       : post
-      ? post.status === "published" && !!post.published_at && post.published_at < ago(14)
+      ? post.status === "published" && !!post.published_at && post.published_at < ago(1)
       : v.updated_at < ago(30);
     if (!expired) continue;
     const path = storagePath(v.video_url!);
@@ -45,7 +46,7 @@ export async function cleanupStorage(db: SupabaseClient) {
   }
 
   // 2) Vídeos enviados para posts já publicados
-  const { data: published } = await db.from("posts").select("id,media").eq("status", "published").lt("published_at", ago(14))
+  const { data: published } = await db.from("posts").select("id,media").eq("status", "published").lt("published_at", ago(1))
     .contains("media", [{ type: "video" }]).limit(BATCH);
   for (const p of published ?? []) {
     let changed = false;
