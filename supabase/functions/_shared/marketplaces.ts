@@ -112,21 +112,62 @@ async function account(db: SupabaseClient, userId: string, platform: Marketplace
   return data;
 }
 
-/** Anúncios do Mercado Livre (todos menos os encerrados) e os produtos da loja que ainda não têm anúncio lá. */
+/**
+ * Anúncios do Mercado Livre (todos menos os encerrados), os produtos da loja que ainda não têm anúncio lá
+ * e um diagnóstico dos anúncios fora do ar (status, sub_status, tags e o que o ML diz das infrações).
+ */
 export async function mercadoLivreListings(db: SupabaseClient, userId: string) {
   const acc = await account(db, userId, "mercadolivre");
   if (!acc) throw new Error("Conecte o Mercado Livre em Contas");
   const token = await mlTokenFor(db, acc.id);
-  const items = (await mlSellerItems(token, acc.external_id, 1000, "")).filter((i) => i.status !== "closed");
+  const fields = ["id", "title", "family_name", "price", "status", "sub_status", "tags", "permalink", "seller_custom_field"];
+  const items = (await mlSellerItems(token, acc.external_id, 1000, "", fields)).filter((i) => i.status !== "closed");
   const store = await storePrices(db, userId);
   const listed = new Set<string>();
-  const listings = items.map((it) => {
-    const m = matchStore(store, it.title, mlSku(it));
+  // deno-lint-ignore no-explicit-any
+  const listings = items.map((it: any) => {
+    const m = matchStore(store, it.title, it.seller_custom_field);
     if (m) listed.add(m.name);
-    return { id: it.id, title: it.title, price: it.price, status: it.status, permalink: it.permalink, store_product: m?.name ?? null };
+    return { id: it.id, title: it.title, price: it.price, status: it.status, sub_status: it.sub_status ?? [], tags: it.tags ?? [], store_product: m?.name ?? null };
   });
   const missing = store.filter((s) => !listed.has(s.name)).map((s) => ({ name: s.name, price: s.price }));
-  return { listings, store_products: store.length, missing };
+
+  // Diagnóstico: contagem por motivo e o que as APIs de moderação/saúde dizem de alguns anúncios fora do ar
+  const problems = listings.filter((l) => l.status !== "active");
+  const by_reason: Record<string, number> = {};
+  for (const p of problems) {
+    const key = `${p.status}: ${[...p.sub_status].sort().join(",") || "-"}`;
+    by_reason[key] = (by_reason[key] ?? 0) + 1;
+  }
+  const probe = async (path: string) => {
+    try {
+      return JSON.stringify(await ml(token, path)).slice(0, 2500);
+    } catch (e) {
+      return `erro: ${e instanceof Error ? e.message : e}`;
+    }
+  };
+  const samples: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  for (const p of problems) {
+    const key = `${p.status}:${p.sub_status.join(",")}`;
+    if (seen.has(key) || samples.length >= 4) continue;
+    seen.add(key);
+    samples.push({
+      id: p.id, title: p.title, status: p.status, sub_status: p.sub_status, tags: p.tags,
+      infractions: await probe(`/moderations/infractions/${acc.external_id}?related_item_id=${p.id}`),
+      health: await probe(`/items/${p.id}/health`),
+      actions: await probe(`/items/${p.id}/health/actions`),
+    });
+  }
+  return {
+    store_products: store.length,
+    active: listings.length - problems.length,
+    not_active: problems.length,
+    by_reason,
+    samples,
+    problems: problems.map((p) => ({ id: p.id, title: p.title, status: p.status, sub_status: p.sub_status, store_product: p.store_product })),
+    missing,
+  };
 }
 
 /** Lê os anúncios do marketplace, compara com a loja e guarda o padrão em social_accounts.meta.analysis. */
