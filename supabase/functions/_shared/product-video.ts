@@ -48,12 +48,12 @@ export function videoOptions(input: Record<string, unknown>, previous?: Record<s
   return { instructions: raw?.trim().slice(0, 1500) || undefined, style: style ?? "cinema" };
 }
 
-/** Pede ao GitHub para rodar o workflow de vídeos agora. Devolve false quando não há token (fica para o horário). */
-export async function dispatchRender(): Promise<boolean> {
+/** Pede ao GitHub para rodar o workflow (de vídeos, por padrão) agora. Devolve false quando não há token (fica para o horário). */
+export async function dispatchRender(workflow = "product-videos.yml"): Promise<boolean> {
   const token = Deno.env.get("VIDEO_DISPATCH_TOKEN");
   if (!token) return false;
   const repo = Deno.env.get("VIDEO_REPO") || "kaian77/voz-de-deus-app";
-  const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/product-videos.yml/dispatches`, {
+  const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "BraxStudio", "X-GitHub-Api-Version": "2022-11-28" },
     body: JSON.stringify({ ref: "main" }),

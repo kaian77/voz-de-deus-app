@@ -255,7 +255,16 @@ const OWN_ATTRS = new Set(["SELLER_SKU", "GTIN", "MODEL", "ALPHANUMERIC_MODEL", 
 export async function publishToMercadoLivre(
   db: SupabaseClient,
   userId: string,
-  product: { name: string; description?: string; images: string[]; price: number; sku?: string; stock?: number | null },
+  product: {
+    name: string;
+    description?: string;
+    images: string[];
+    price: number;
+    sku?: string;
+    stock?: number | null;
+    /** Fotos já tratadas para o ML (tabela ml_photos): substituem as do anúncio mesmo ativo */
+    ml_ready_pictures?: boolean;
+  },
   /** Anúncios do vendedor já carregados (a sincronização em lote busca uma vez só) */
   sellerItems?: MlItem[],
 ) {
@@ -280,12 +289,23 @@ export async function publishToMercadoLivre(
     const id = existing.id;
     await setDescription(id, true);
     const changes: Record<string, unknown> = { available_quantity: product.stock ?? DEFAULT_ML_STOCK };
-    // SKU próprio do produto (muitos anúncios antigos dividem o mesmo SKU, e os dados fiscais vão por SKU)
-    if (product.sku) changes.attributes = [{ id: "SELLER_SKU", value_name: product.sku }];
-    // Anúncio inativo (ex.: "fotos não cumprem os requisitos"): troca pelas fotos da loja
-    if (existing.status !== "active" && product.images.length) changes.pictures = await mlPictures(token, product.images);
+    // Fotos já no padrão do ML (fundo branco, 1200x1200) sempre substituem; as da loja, só em anúncio inativo
+    if (product.images.length && (product.ml_ready_pictures || existing.status !== "active")) {
+      changes.pictures = await mlPictures(token, product.images);
+    }
     await ml(token, `/items/${id}`, { method: "PUT", body: changes })
       .catch((e) => warnings.push(`atualizar: ${e instanceof Error ? e.message : e}`));
+    // Título no modelo User Products = nome + cor + estampa: anúncios antigos vieram do modelo com "Branco Zé Gotinha"
+    // (o ML pausa por "título não corresponde ao produto"). Vai separado para um atributo recusado não travar o resto.
+    const model = pinModelName(product.name);
+    const attrs = [
+      ...(product.sku ? [{ id: "SELLER_SKU", value_name: product.sku }] : []), // os dados fiscais vão por SKU
+      { id: "COLOR", value_name: "Multicolorido" },
+      { id: "PATTERN_NAME", value_name: model },
+      { id: "MODEL", value_name: model },
+    ];
+    await ml(token, `/items/${id}`, { method: "PUT", body: { attributes: attrs } })
+      .catch((e) => warnings.push(`atributos: ${e instanceof Error ? e.message : e}`));
     if (product.sku) await setMlFiscal(token, analysis.reference_id, product.sku, product.name).catch((e) => warnings.push(`fiscal: ${e instanceof Error ? e.message : e}`));
     let item = await ml<MlItem & { sub_status?: string[] }>(token, `/items/${id}`);
     if (item.status === "paused") {
@@ -303,8 +323,7 @@ export async function publishToMercadoLivre(
     // O value_id de valores próprios do vendedor (ex.: a marca) não existe no catálogo do ML; pelo nome ele resolve
     .map((a) => (a.value_name ? { id: a.id, value_name: a.value_name } : { id: a.id, value_id: a.value_id }));
   // O ML monta o título com nome + cor + modelo ("Pin Snoopy (metal Esmaltado) Multicolorido Snoopy"): o modelo é só o nome do pin
-  const model = product.name.replace(/\([^)]*\)/g, "").split(" - ")[0].replace(/^\s*(pin|broche|botton)\s+/i, "").trim();
-  attributes.push({ id: "MODEL", value_name: (model || product.name).slice(0, 60) });
+  attributes.push({ id: "MODEL", value_name: pinModelName(product.name) });
   attributes.push({ id: "COLOR", value_name: "Multicolorido" });
   if (product.sku) attributes.push({ id: "SELLER_SKU", value_name: product.sku });
 
@@ -337,6 +356,11 @@ export async function publishToMercadoLivre(
   // deno-lint-ignore no-explicit-any
   const sub_status: string[] = (created as any).sub_status ?? [];
   return { id: created.id, permalink: created.permalink, price: body.price, status: created.status, sub_status, warnings };
+}
+
+/** Nome do pin sem "Pin", sem "(Metal Esmaltado)" e sem o subtítulo: "Zé Bioquímico" (modelo/estampa no ML). */
+export function pinModelName(name: string) {
+  return (name.replace(/\([^)]*\)/g, "").split(" - ")[0].replace(/^\s*(pin|broche|botton)\s+/i, "").trim() || name.trim()).slice(0, 60);
 }
 
 /** Nome do anúncio (o ML junta a cor no fim): sem "(Metal Esmaltado)" e cortado em palavra inteira até 60 letras. */
