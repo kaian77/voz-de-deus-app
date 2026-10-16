@@ -21,6 +21,7 @@ import Orders from "./studio/pages/Orders";
 import Products from "./studio/pages/Products";
 import Legal from "./studio/pages/Legal";
 import StrategyPage from "./studio/pages/Strategy";
+import Videos from "./studio/pages/Videos";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,7 @@ const App = () => (
             <Route index element={<Dashboard />} />
             <Route path="criar" element={<Composer />} />
             <Route path="em-massa" element={<BulkSchedule />} />
+            <Route path="videos" element={<Videos />} />
             <Route path="calendario" element={<Calendar />} />
             <Route path="aprovacoes" element={<Approvals />} />
             <Route path="automacoes" element={<Automations />} />

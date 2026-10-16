@@ -94,6 +94,7 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
     ],
     product_drafts: [],
     product_videos: [],
+    ai_videos: [],
     strategies: [],
     brand_settings: [
       { brand_name: "Minha Marca", niche: "Conteúdo cristão / devocional", audience: "Cristãos 25–55 anos, maioria mulheres, Brasil", tone: "Acolhedor, esperançoso, simples", default_hashtags: "fé palavradedeus deus jesus oração", default_cta: "Comente AMÉM para receber uma oração no direct", approval_required: true, timezone: "America/Sao_Paulo",
@@ -204,6 +205,13 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
         throw new Error("No modo demo não há loja conectada para cadastrar o produto.");
       case "content_ideas":
         throw new Error("No modo demo o piloto automático não cria posts.");
+      case "ai_video_providers":
+        return { kling: false, higgsfield: false };
+      case "ai_video_check":
+        return [];
+      case "ai_video_create":
+      case "ai_video_post":
+      case "ai_video_delete":
       case "product_video":
       case "video_only":
       case "video_post":

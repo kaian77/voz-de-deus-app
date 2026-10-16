@@ -6,6 +6,7 @@ import { advancePost, runDuePosts } from "../_shared/publisher.ts";
 import { pollInstagram } from "../_shared/instagram-poller.ts";
 import { autoLinkPosts } from "../_shared/auto-link.ts";
 import { finishRenderedVideos, prepareBriefs } from "../_shared/product-video.ts";
+import { pollAiVideos } from "../_shared/ai-video.ts";
 import { runAutopilot } from "../_shared/content-ideas.ts";
 import { cleanupStorage } from "../_shared/storage-cleanup.ts";
 import { wahaKeepAlive } from "../_shared/whatsapp.ts";
@@ -43,6 +44,8 @@ Deno.serve(async (req) => {
     const videos = await finishRenderedVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Vídeos em lote (estratégia): a IA escreve os textos de alguns por minuto e manda renderizar
     const briefs = await prepareBriefs(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
+    // Vídeos IA (Kling / Higgsfield): confere as tarefas em andamento e guarda os prontos no storage
+    const aivideos = await pollAiVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // A cada 10 minutos: piloto automático de conteúdo (uma vez por semana por usuário, em segundo plano)
     const autopilot = new Date().getUTCMinutes() % 10 === 5
       ? await runAutopilot(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
@@ -65,7 +68,7 @@ Deno.serve(async (req) => {
     const digest = await runDailyDigest(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Vídeos diários do TikTok (às 9h de Brasília, sem repetir produto no ciclo)
     const daily = await runDailyVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
-    return json({ processed, polled, autolink, videos, briefs, digest, daily, autopilot, cleanup, waha, mlsync, sales });
+    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, cleanup, waha, mlsync, sales });
   } catch (err) {
     return handleError(err);
   }
