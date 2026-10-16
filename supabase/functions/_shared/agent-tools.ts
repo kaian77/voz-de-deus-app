@@ -9,7 +9,7 @@ import { sendMessage, transcript } from "./inbox.ts";
 import { aiEnabled, generateJSON, researchWeb } from "./claude.ts";
 import { ns, nsCategories, nsCreateProduct, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, nsUpdateProduct, storeFor } from "./nuvemshop.ts";
 import { announceProduct, buildProduct, createFromDraft, templateFor } from "./products.ts";
-import { queueProductVideo } from "./product-video.ts";
+import { queueProductVideo, videoOptions } from "./product-video.ts";
 import { analyzeMarketplace, mercadoLivreListings, publishToMercadoLivre } from "./marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "./ml-sync.ts";
 import { generateIdeas } from "./content-ideas.ts";
@@ -753,13 +753,16 @@ const tools = {
     description: "Gera um vídeo animado vertical (Reels/TikTok, ~15 s, com música) de um produto a partir das fotos: a IA escreve os textos e o vídeo entra na fila de renderização (fica pronto em até 1 hora). Quando fica pronto vira um post (em Aprovações se a marca exigir aprovação).",
     input: z.object({
       name: z.string().min(1),
-      image_urls: z.array(z.string().url()).min(1).max(4).describe("A primeira é a principal (de preferência a foto original, sem moldura)"),
+      image_urls: z.array(z.string().url()).min(1).max(7).describe("A primeira é a principal (de preferência a foto original, sem moldura); no estilo cinema cada foto vira closes"),
       description: z.string().optional(),
       product_url: z.string().url().optional(),
+      instructions: z.string().max(1500).optional().describe("Pedido do dono para o vídeo: tema, gancho, frases exatas entre aspas, cores, clima"),
+      style: z.enum(["cinema", "classic"]).optional().describe("cinema (padrão): closes de câmera sobre a foto original, luz e textos premium; classic: animação antiga"),
     }),
-    run: async (ctx: Ctx, input: { name: string; image_urls: string[]; description?: string; product_url?: string }) => {
+    run: async (ctx: Ctx, input: { name: string; image_urls: string[]; description?: string; product_url?: string; instructions?: string; style?: "cinema" | "classic" }) => {
       for (const u of input.image_urls) assertPublicHttpsUrl(u);
-      return queueProductVideo(ctx.db, ctx.userId, { name: input.name, images: input.image_urls, description: input.description, url: input.product_url });
+      return queueProductVideo(ctx.db, ctx.userId, { name: input.name, images: input.image_urls, description: input.description, url: input.product_url },
+        videoOptions(input));
     },
   },
 

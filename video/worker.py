@@ -22,6 +22,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 AD = os.path.join(HERE, "engine", "scripts", "ad.py")
+CINEMA = os.path.join(HERE, "engine", "scripts", "cinema.py")
 URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 MAX_ATTEMPTS = 3
@@ -101,13 +102,13 @@ def briefing(brief, name, handle):
     scenes = [
         {"type": "hook", "text": brief.get("hook") or f"Chegou *{name}*", "sub": brief.get("hook_sub") or "", "transition": "fade"},
     ]
-    # Vista explodida: a tinta, o metal e a tarraxa se separam em 3D e se juntam com impacto
-    if brief.get("layers", True):
+    # Vista explodida em 3D: só quando pedida (brief.layers = true); por padrão o vídeo mostra a foto real
+    if brief.get("layers") is True:
         scenes.append({"type": "layers", "title": brief.get("layers_title") or "Por dentro do *pin*",
                        "subtitle": brief.get("detail_title") or "", "transition": "whip"})
     scenes.append({"type": "product", "title": brief.get("title") or name, "subtitle": brief.get("subtitle") or "",
                    "badge": brief.get("badge") or "NOVO", "transition": "zoom"})
-    if not brief.get("layers", True):
+    if brief.get("layers") is not True:
         scenes.append({"type": "product", "image": "photo.jpg", "cutout": False, "title": brief.get("detail_title") or "Cada detalhe",
                        "subtitle": brief.get("detail_sub") or "", "transition": "whip"})
     if features:
@@ -129,14 +130,42 @@ def briefing(brief, name, handle):
     }
 
 
+def cinema_spec(brief, name, photos):
+    """Roteiro do estilo cinematográfico: só a câmera se mexe sobre as fotos originais."""
+    colors = {**COLORS, **{k: v for k, v in (brief.get("colors") or {}).items() if isinstance(v, str) and v.startswith("#")}}
+    return {
+        "photos": photos, "name": name,
+        "hook": brief.get("hook") or f"Chegou *{name}*", "hook_sub": brief.get("hook_sub") or "",
+        "features": [f for f in (brief.get("features") or []) if f][:3],
+        "title": brief.get("title") or name, "subtitle": brief.get("subtitle") or "",
+        "cta": brief.get("cta") or "Garanta o seu", "urgency": brief.get("urgency") or "",
+        "handle": brief.get("handle") or "", "brand": brief.get("brand") or "",
+        "colors": colors, "teaser": brief.get("teaser") is True,
+    }
+
+
 def render(row):
     with tempfile.TemporaryDirectory() as tmp:
-        download_photo(row["images"][0], os.path.join(tmp, "photo.jpg"))
         brief = row.get("brief") or {}
+        style = brief.get("style") or "cinema"
+        photos = []
+        for i, url in enumerate(row["images"][: 7 if style == "cinema" else 1]):
+            name = "photo.jpg" if i == 0 else f"photo{i}.jpg"
+            try:
+                download_photo(url, os.path.join(tmp, name))
+                photos.append(name)
+            except Exception as e:  # noqa: BLE001 — foto extra com problema não derruba o vídeo
+                if i == 0:
+                    raise
+                print(f"   foto {i + 1} ignorada: {e}", flush=True)
+        if style == "cinema":
+            spec, engine = cinema_spec(brief, row["name"], photos), CINEMA
+        else:
+            spec, engine = briefing(brief, row["name"], brief.get("handle") or ""), AD
         with open(os.path.join(tmp, "briefing.json"), "w", encoding="utf-8") as f:
-            json.dump(briefing(brief, row["name"], brief.get("handle") or ""), f, ensure_ascii=False)
+            json.dump(spec, f, ensure_ascii=False)
         out = os.path.join(tmp, "video.mp4")
-        p = subprocess.run([sys.executable, AD, "briefing.json", "video.mp4"], cwd=tmp, capture_output=True, text=True, timeout=900)
+        p = subprocess.run([sys.executable, engine, "briefing.json", "video.mp4"], cwd=tmp, capture_output=True, text=True, timeout=900)
         if p.returncode != 0 or not os.path.exists(out):
             raise RuntimeError(f"render falhou: {(p.stderr or p.stdout)[-400:]}")
         with open(out, "rb") as f:

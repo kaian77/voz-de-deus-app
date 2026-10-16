@@ -16,6 +16,7 @@ import { fillFiscalCsv } from "../lib/fiscal-csv";
 import { useSettings, useTable } from "../lib/hooks";
 import type { ProductDraft, ProductTemplate, ProductTemplateData, ProductVideo } from "../lib/types";
 import { EmptyState, PageHeader, Panel, relativeTime, StatusDot } from "../components/bits";
+import { EMPTY_BRIEF, VideoBriefDialog, VideoBriefFields, type VideoBrief } from "../components/VideoBrief";
 
 type Category = { id: number; name: string; parent: number | null };
 
@@ -507,6 +508,7 @@ function VideoOnlyForm() {
   const [previews, setPreviews] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [details, setDetails] = useState("");
+  const [brief, setBrief] = useState<VideoBrief>(EMPTY_BRIEF);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
@@ -517,7 +519,7 @@ function VideoOnlyForm() {
 
   const pick = (list: FileList | null) => {
     if (!list?.length) return;
-    setFiles((prev) => [...prev, ...[...list].filter((f) => f.type.startsWith("image/"))].slice(0, 4));
+    setFiles((prev) => [...prev, ...[...list].filter((f) => f.type.startsWith("image/"))].slice(0, 7));
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -531,12 +533,13 @@ function VideoOnlyForm() {
         images.push(await api.upload(await storeImage(await loadBitmap(file)), `${file.name.replace(/\.\w+$/, "")}.jpg`));
       }
       setBusy("Escrevendo os textos");
-      const r = await api.invoke<{ dispatched?: boolean }>("ai", { action: "video_only", name: name.trim(), description: details.trim(), images });
+      const r = await api.invoke<{ dispatched?: boolean }>("ai", { action: "video_only", name: name.trim(), description: details.trim(), images, ...brief });
       qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
       toast.success(queuedToast(r.dispatched));
       setFiles([]);
       setName("");
       setDetails("");
+      setBrief(EMPTY_BRIEF);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -557,7 +560,7 @@ function VideoOnlyForm() {
             <span className="absolute -right-1 -top-1 rounded-full border bg-background px-1 text-[10px] leading-4">✕</span>
           </button>
         ))}
-        {files.length < 4 && (
+        {files.length < 7 && (
           <Button size="sm" variant="outline" className="h-14" onClick={() => fileRef.current?.click()} disabled={!!busy}>
             <ImagePlus />{files.length ? "Mais fotos" : "Escolher foto"}
           </Button>
@@ -572,6 +575,7 @@ function VideoOnlyForm() {
           <Textarea id="video-details" value={details} onChange={(e) => setDetails(e.target.value)} rows={2} placeholder="Ex.: pin de metal esmaltado, 3 cm, fecho borboleta" />
         </Field>
       </div>
+      <VideoBriefFields value={brief} onChange={setBrief} idPrefix="video-only" />
       <Button size="sm" onClick={generate} disabled={!!busy}>
         {busy ? <Loader2 className="animate-spin" /> : <Clapperboard />}
         {busy ?? "Gerar vídeo"}
@@ -585,11 +589,12 @@ function VideosPanel() {
   const qc = useQueryClient();
   const { data: videos = [] } = useTable("product_videos", { limit: 12 }, { refetchInterval: 20000 });
   const [working, setWorking] = useState<string | null>(null);
+  const [redo, setRedo] = useState<ProductVideo | null>(null);
 
-  const run = async (v: ProductVideo, action: "product_video" | "video_post") => {
+  const run = async (v: ProductVideo, action: "product_video" | "video_post", brief?: VideoBrief) => {
     setWorking(v.id + action);
     try {
-      const r = await api.invoke<{ dispatched?: boolean; post?: { status: string } }>("ai", { action, video_id: v.id });
+      const r = await api.invoke<{ dispatched?: boolean; post?: { status: string } }>("ai", { action, video_id: v.id, ...brief });
       qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
       if (action === "video_post") {
         qc.invalidateQueries({ queryKey: ["table", "posts"] });
@@ -611,6 +616,17 @@ function VideosPanel() {
       bodyClassName="p-0"
     >
       <VideoOnlyForm />
+      <VideoBriefDialog
+        open={!!redo}
+        onOpenChange={(o) => !o && setRedo(null)}
+        title={`Refazer o vídeo: ${redo?.name ?? ""}`}
+        description="Diga o que mudar. Em branco, a IA escreve tudo de novo."
+        initial={{
+          instructions: typeof redo?.brief?.instructions === "string" ? redo.brief.instructions : "",
+          style: redo?.brief?.style === "classic" ? "classic" : "cinema",
+        }}
+        onConfirm={(b) => (redo ? run(redo, "product_video", b) : undefined)}
+      />
       {videos.length === 0 ? (
         <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">Nenhum vídeo ainda.</p>
       ) : (
@@ -646,7 +662,7 @@ function VideosPanel() {
                   </Button>
                 )}
                 {(v.status === "failed" || v.status === "ready") && (
-                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => run(v, "product_video")} disabled={working === v.id + "product_video"}>
+                  <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setRedo(v)} disabled={working === v.id + "product_video"}>
                     {working === v.id + "product_video" ? <Loader2 className="animate-spin" /> : <Clapperboard />}Refazer
                   </Button>
                 )}
@@ -776,10 +792,11 @@ export default function Products() {
   };
 
   const [videoFor, setVideoFor] = useState<string | null>(null);
-  const makeVideo = async (draft: ProductDraft) => {
+  const [videoDraft, setVideoDraft] = useState<ProductDraft | null>(null);
+  const makeVideo = async (draft: ProductDraft, brief?: VideoBrief) => {
     setVideoFor(draft.id);
     try {
-      const r = await api.invoke<{ dispatched?: boolean }>("ai", { action: "product_video", draft_id: draft.id });
+      const r = await api.invoke<{ dispatched?: boolean }>("ai", { action: "product_video", draft_id: draft.id, ...brief });
       qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
       toast.success(`${queuedToast(r.dispatched)} Aparece em Vídeos dos produtos.`);
     } catch (e) {
@@ -811,6 +828,13 @@ export default function Products() {
   return (
     <div>
       <PageHeader title="Produtos" description="Mande as fotos, dê o nome (ou deixe a IA dar) e o Studio cadastra na loja usando o seu modelo." />
+      <VideoBriefDialog
+        open={!!videoDraft}
+        onOpenChange={(o) => !o && setVideoDraft(null)}
+        title={`Vídeo: ${videoDraft?.name ?? "produto"}`}
+        description="Escreva o que você quer no vídeo, ou deixe em branco para a IA fazer sozinha."
+        onConfirm={(b) => (videoDraft ? makeVideo(videoDraft, b) : undefined)}
+      />
       <div className="grid gap-6">
         <Panel
           title="Fotos para cadastrar"
@@ -901,7 +925,7 @@ export default function Products() {
                         {mlFor === d.id && <Loader2 className="animate-spin" />}Mercado Livre
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => makeVideo(d)} disabled={videoFor === d.id}>
+                    <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setVideoDraft(d)} disabled={videoFor === d.id}>
                       {videoFor === d.id ? <Loader2 className="animate-spin" /> : <Clapperboard />}Vídeo
                     </Button>
                     {d.product_url && (
