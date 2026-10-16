@@ -8,12 +8,17 @@ on:
   schedule:
     - cron: "41 */3 * * *"
 
+# Uma rodada nova substitui a anterior (as fotos que ela tinha pego voltam para a fila)
 concurrency:
   group: ml-photos
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   photos:
+    # 4 jobs em paralelo dividindo a fila (cada foto é "pega" por um só)
+    strategy:
+      matrix:
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
