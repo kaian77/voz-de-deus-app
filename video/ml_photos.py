@@ -15,6 +15,7 @@ import datetime as dt
 import hashlib
 import io
 import os
+import random
 import sys
 import time
 import urllib.request
@@ -55,10 +56,24 @@ def on_white(im, fill):
     return canvas
 
 
-def cover(im):
-    from common import cutout  # recorte com rembg (cai para fundo liso se faltar)
+_SESSION = []
 
-    cut = cutout(im, method="auto")
+
+def cutout(im):
+    """Recorte com rembg, com o modelo carregado uma vez só (sem sessão, o rembg recarrega o modelo a cada foto)."""
+    from common import cutout as flat_cutout, trim
+
+    try:
+        from rembg import new_session, remove
+    except ImportError:
+        return flat_cutout(im, method="flat")
+    if not _SESSION:
+        _SESSION.append(new_session("u2net"))
+    return trim(remove(im, session=_SESSION[0]))
+
+
+def cover(im):
+    cut = cutout(im)
     import numpy as np
 
     solid = float((np.asarray(cut.getchannel("A")) > 128).mean())
@@ -91,6 +106,7 @@ def main():
         rows = queued()
         if not rows:
             break
+        random.shuffle(rows)  # vários jobs em paralelo: cada um começa por uma foto diferente
         for row in rows:
             attempts = row["attempts"] + 1
             claimed = rest("PATCH", f"ml_photos?id=eq.{row['id']}&status=eq.queued&attempts=eq.{row['attempts']}", {"attempts": attempts})
