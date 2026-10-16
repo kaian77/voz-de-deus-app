@@ -786,7 +786,7 @@ const tools = {
   },
 
   sync_mercadolivre: {
-    description: "Sincroniza a loja Nuvemshop inteira com o Mercado Livre em segundo plano (3 produtos por minuto): atualiza o anúncio que já existe (fotos da loja, descrição no padrão da marca, estoque 200, reativa os inativos) ou cria um novo. Kits e produtos de teste ficam de fora. action \"start\" começa (refaz do zero); \"status\" mostra o andamento.",
+    description: "Sincroniza a loja Nuvemshop inteira com o Mercado Livre em segundo plano (3 produtos por minuto): atualiza o anúncio que já existe (fotos da loja tratadas no padrão do ML — 1200x1200, fundo branco, pin centralizado —, título sem cor/estampa errada, descrição no padrão da marca, estoque 200, reativa os inativos) ou cria um novo. Kits e produtos de teste ficam de fora. action \"start\" começa (refaz do zero); \"status\" mostra o andamento.",
     input: z.object({ action: z.enum(["start", "status"]) }),
     run: async (ctx: Ctx, input: { action: "start" | "status" }) =>
       input.action === "start" ? startMlSync(ctx.db, ctx.userId) : mlSyncStatus(ctx.db, ctx.userId),
