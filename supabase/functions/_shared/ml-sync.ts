@@ -144,14 +144,7 @@ export async function startMlSync(db: SupabaseClient, userId: string) {
   if (!acc) throw new Error("Conecte o Mercado Livre em Contas");
   const store = await storeFor(db, userId);
   if (!store) throw new Error("Conecte a Nuvemshop em Contas");
-  const ids: number[] = [];
-  for (let page = 1; page <= 10; page++) {
-    // deno-lint-ignore no-explicit-any
-    const list = await ns<any[]>(store.token, store.storeId, `products?per_page=200&page=${page}&fields=id,published`).catch(() => []);
-    if (!Array.isArray(list) || !list.length) break;
-    ids.push(...list.filter((p) => p.published !== false).map((p) => Number(p.id)));
-    if (list.length < 200) break;
-  }
+  const ids = await storeProductIds(store.token, store.storeId);
   const sync: MlSync = { started_at: new Date().toISOString(), finished_at: null, total: ids.length, queue: ids, done: [], errors: [], skipped: [] };
   await saveSync(db, acc.id, sync);
   return { total: ids.length, minutes: Math.ceil(ids.length / PER_RUN) };
@@ -267,6 +260,58 @@ export async function runMlSync(db: SupabaseClient) {
       }
     }
     out.push({ account: acc.id, processed: batch.length, remaining });
+  }
+  return out;
+}
+
+/** Ids publicados da loja (até 2.000). */
+async function storeProductIds(token: string, storeId: string) {
+  const ids: number[] = [];
+  for (let page = 1; page <= 10; page++) {
+    // deno-lint-ignore no-explicit-any
+    const list = await ns<any[]>(token, storeId, `products?per_page=200&page=${page}&fields=id,published`);
+    if (!Array.isArray(list) || !list.length) break;
+    ids.push(...list.filter((p) => p.published !== false).map((p) => Number(p.id)));
+    if (list.length < 200) break;
+  }
+  return ids;
+}
+
+/**
+ * Produto novo na loja (cadastrado pelo Studio ou direto na Nuvemshop) → entra na fila da sincronização
+ * e vira anúncio no Mercado Livre no padrão da marca. Liga/desliga: brand_settings.marketplace_autopublish.
+ * Na primeira vez só guarda os produtos que já existem (esses a sincronização completa cobre).
+ */
+export async function watchNewProducts(db: SupabaseClient) {
+  const { data: accounts } = await db.from("social_accounts").select("id,user_id,meta").eq("platform", "mercadolivre");
+  const out: unknown[] = [];
+  for (const acc of accounts ?? []) {
+    const { data: settings } = await db.from("brand_settings").select("marketplace_autopublish").eq("user_id", acc.user_id).maybeSingle();
+    if (!settings?.marketplace_autopublish) continue;
+    try {
+      const store = await storeFor(db, acc.user_id);
+      if (!store) continue;
+      const ids = await storeProductIds(store.token, store.storeId);
+      if (!ids.length) continue; // loja fora do ar: não zera a lista de conhecidos
+      const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
+      const meta = data?.meta ?? {};
+      const known: number[] | undefined = Array.isArray(meta.ml_known) ? meta.ml_known : undefined;
+      const fresh = known ? ids.filter((id) => !known.includes(id)) : [];
+      let sync = meta.ml_sync as MlSync | undefined;
+      if (fresh.length) {
+        const queued = new Set([...(sync?.queue ?? []), ...(sync?.inflight?.ids ?? [])]);
+        const add = fresh.filter((id) => !queued.has(id));
+        sync = sync
+          ? { ...sync, total: sync.total + add.length, queue: [...sync.queue, ...add], finished_at: null, done: sync.done.slice(-300) }
+          : { started_at: new Date().toISOString(), finished_at: null, total: add.length, queue: add, done: [], errors: [], skipped: [] };
+        out.push({ account: acc.id, queued: add });
+      }
+      await db.from("social_accounts").update({
+        meta: { ...meta, ml_known: [...new Set([...(known ?? []), ...ids])], ...(sync ? { ml_sync: sync } : {}) },
+      }).eq("id", acc.id);
+    } catch (e) {
+      out.push({ account: acc.id, error: e instanceof Error ? e.message : String(e) });
+    }
   }
   return out;
 }

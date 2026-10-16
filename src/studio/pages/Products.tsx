@@ -837,7 +837,7 @@ export default function Products() {
               <span>
                 <span className="block text-[13px] font-medium">Publicar também no Mercado Livre</span>
                 <span className="block text-xs text-muted-foreground">
-                  Usa um anúncio seu como modelo (categoria, tipo de anúncio, frete e garantia) e a regra de preço descoberta em Contas.
+                  Todo produto novo da loja (cadastrado aqui ou direto na Nuvemshop) vira anúncio em até 10 min, no padrão dos seus anúncios e com a regra de preço descoberta em Contas.
                 </span>
               </span>
               <Switch id="marketplaces" checked={settings?.marketplace_autopublish ?? false} onCheckedChange={setMarketplace} />

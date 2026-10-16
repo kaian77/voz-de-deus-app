@@ -13,7 +13,7 @@ import { wahaKeepAlive } from "../_shared/whatsapp.ts";
 import { runSaleAlerts } from "../_shared/sale-alerts.ts";
 import { runDailyDigest } from "../_shared/daily.ts";
 import { runDailyVideos } from "../_shared/video-autopilot.ts";
-import { runMlSync } from "../_shared/ml-sync.ts";
+import { runMlSync, watchNewProducts } from "../_shared/ml-sync.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -60,6 +60,10 @@ Deno.serve(async (req) => {
       : undefined;
     // Sincronização da loja com o Mercado Livre (alguns produtos por minuto, enquanto houver fila)
     const mlsync = await runMlSync(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    // A cada 10 minutos: produto novo na loja entra na fila do Mercado Livre
+    const mlnew = new Date().getUTCMinutes() % 10 === 3
+      ? await watchNewProducts(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
+      : undefined;
     // A cada 2 minutos: aviso de venda no WhatsApp (Mercado Livre, Shopee, site)
     const sales = new Date().getUTCMinutes() % 2 === 1
       ? await runSaleAlerts(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
@@ -68,7 +72,7 @@ Deno.serve(async (req) => {
     const digest = await runDailyDigest(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Vídeos diários do TikTok (às 9h de Brasília, sem repetir produto no ciclo)
     const daily = await runDailyVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
-    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, cleanup, waha, mlsync, sales });
+    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, cleanup, waha, mlsync, mlnew, sales });
   } catch (err) {
     return handleError(err);
   }
