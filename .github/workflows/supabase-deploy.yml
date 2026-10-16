@@ -47,6 +47,12 @@ jobs:
       WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
       META_FB_ACCESS_TOKEN: ${{ secrets.META_FB_ACCESS_TOKEN }}
       META_FB_IG_USER_ID: ${{ secrets.META_FB_IG_USER_ID }}
+      # Vídeos IA: chaves do Kling (API oficial) e do Higgsfield
+      KLING_ACCESS_KEY: ${{ secrets.KLING_ACCESS_KEY }}
+      KLING_SECRET_KEY: ${{ secrets.KLING_SECRET_KEY }}
+      KLING_API_BASE: ${{ vars.KLING_API_BASE }}
+      HIGGSFIELD_API_KEY: ${{ secrets.HIGGSFIELD_API_KEY }}
+      HIGGSFIELD_API_SECRET: ${{ secrets.HIGGSFIELD_API_SECRET }}
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1

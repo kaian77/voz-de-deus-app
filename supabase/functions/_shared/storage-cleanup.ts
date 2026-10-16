@@ -2,7 +2,8 @@
 // - vídeo avulso (só para baixar): apagado 30 dias depois de criado;
 // - vídeo de post: apagado 1 dia depois de publicado (o Instagram e o TikTok já guardam a cópia deles;
 //   no TikTok o vídeo vai para a caixa de entrada do app na hora de publicar);
-// - vídeo pronto que não virou post (post descartado): apagado depois de 30 dias.
+// - vídeo pronto que não virou post (post descartado): apagado depois de 30 dias;
+// - vídeo IA (Kling/Higgsfield): apagado 30 dias depois de criado.
 // Posts agendados ou esperando aprovação nunca perdem o vídeo.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
@@ -43,6 +44,25 @@ export async function cleanupStorage(db: SupabaseClient) {
       removed.push(path);
     }
     await db.from("product_videos").update({ video_url: null, file_deleted_at: new Date().toISOString() }).eq("id", v.id);
+  }
+
+  // 1b) Vídeos IA com mais de 30 dias (menos os que estão num post ainda por publicar)
+  const { data: aiVideos } = await db.from("ai_videos").select("id,video_url,post_id").eq("status", "done")
+    .not("video_url", "is", null).is("file_deleted_at", null).lt("created_at", ago(30)).order("created_at").limit(BATCH);
+  const aiPostIds = (aiVideos ?? []).map((v) => v.post_id).filter(Boolean);
+  const { data: aiPosts } = aiPostIds.length
+    ? await db.from("posts").select("id,status").in("id", aiPostIds).in("status", ["pending_approval", "scheduled", "publishing"])
+    : { data: [] as { id: string }[] };
+  const waiting = new Set((aiPosts ?? []).map((p) => p.id));
+  for (const v of aiVideos ?? []) {
+    if (v.post_id && waiting.has(v.post_id)) continue;
+    const path = storagePath(v.video_url!);
+    if (path) {
+      const { error } = await db.storage.from("media").remove([path]);
+      if (error) continue;
+      removed.push(path);
+    }
+    await db.from("ai_videos").update({ video_url: null, file_deleted_at: new Date().toISOString() }).eq("id", v.id);
   }
 
   // 2) Vídeos enviados para posts já publicados

@@ -7,6 +7,7 @@ import { readWebPage, runTool } from "../_shared/agent-tools.ts";
 import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { postVideo, queueProductVideo } from "../_shared/product-video.ts";
+import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
@@ -201,6 +202,25 @@ Deno.serve(async (req) => {
       const post = await postVideo(db, v);
       if (!post) throw new HttpError(400, "Conecte o Instagram ou o TikTok em Contas para postar");
       return json({ post });
+    }
+    // Vídeos IA (Kling / Higgsfield)
+    if (action === "ai_video_providers") return json(aiVideoProviders());
+    if (action === "ai_video_create") return json(await startAiVideo(db, userId, input));
+    if (action === "ai_video_check") {
+      if (input.id) {
+        const { data: v } = await db.from("ai_videos").select("*").eq("id", input.id).eq("user_id", userId).maybeSingle();
+        if (!v) throw new HttpError(404, "Vídeo não encontrado");
+        return json(await checkAiVideo(db, v));
+      }
+      return json(await pollAiVideos(db, userId));
+    }
+    if (action === "ai_video_post") return json({ post: await aiVideoPost(db, userId, String(input.id), input.caption ? String(input.caption) : undefined) });
+    if (action === "ai_video_delete") {
+      const { data: v } = await db.from("ai_videos").select("id,video_url").eq("id", input.id).eq("user_id", userId).maybeSingle();
+      if (!v) throw new HttpError(404, "Vídeo não encontrado");
+      if (v.video_url?.includes(`/storage/v1/object/public/media/${userId}/ia/`)) await db.storage.from("media").remove([`${userId}/ia/${v.id}.mp4`]);
+      await db.from("ai_videos").delete().eq("id", v.id);
+      return json({ ok: true });
     }
     if (action === "product_suggest") {
       const { data: draft } = await db.from("product_drafts").select("images,name,template_id").eq("id", input.draft_id).eq("user_id", userId).single();

@@ -278,6 +278,24 @@ export interface ProductVideo {
   created_at: string;
 }
 
+export type AiVideoProvider = "kling" | "higgsfield";
+
+/** Vídeo gerado por IA (Kling / Higgsfield) na seção Vídeos IA. */
+export interface AiVideo {
+  id: string;
+  provider: AiVideoProvider;
+  model: string;
+  prompt: string;
+  image_url: string | null;
+  params: Record<string, unknown>;
+  status: "processing" | "done" | "failed";
+  video_url: string | null;
+  error: string | null;
+  post_id: string | null;
+  file_deleted_at?: string | null;
+  created_at: string;
+}
+
 export type Channel = "instagram" | "whatsapp";
 
 export interface Conversation {
@@ -328,6 +346,7 @@ export interface TableMap {
   product_templates: ProductTemplate;
   product_drafts: ProductDraft;
   product_videos: ProductVideo;
+  ai_videos: AiVideo;
   strategies: Strategy;
 }
 export type TableName = keyof TableMap;
