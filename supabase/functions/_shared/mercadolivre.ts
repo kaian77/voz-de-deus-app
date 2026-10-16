@@ -108,8 +108,8 @@ export type MlItem = {
  */
 export async function mlSellerItems(token: string, sellerId: string, max = 200, status = "active", fields?: string[]): Promise<MlItem[]> {
   const ids = new Set<string>();
-  // "" = todos menos encerrados, status por status (a busca sem filtro não garante trazer os inativos e em revisão)
-  for (const st of status ? [status] : ["active", "paused", "under_review", "inactive"]) {
+  // "" = todos menos encerrados, status por status ("pending" = inativo por política/moderação, à espera de correção)
+  for (const st of status ? [status] : ["active", "paused", "pending", "not_yet_active"]) {
     for (let offset = 0; offset < max; offset += 50) {
       const page = await ml<{ results: string[]; paging: { total: number } }>(token, `/users/${sellerId}/items/search?status=${st}&limit=50&offset=${offset}`);
       page.results.forEach((id) => ids.add(id));

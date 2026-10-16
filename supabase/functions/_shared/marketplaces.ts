@@ -245,7 +245,8 @@ export async function analyzeMarketplace(db: SupabaseClient, userId: string, pla
 }
 
 // Atributos próprios de cada produto (os demais, como marca, material e medidas da embalagem, vêm do anúncio modelo)
-const OWN_ATTRS = new Set(["SELLER_SKU", "GTIN", "MODEL", "ALPHANUMERIC_MODEL", "LINE", "CHARACTER"]);
+// COLOR e PATTERN_NAME do modelo ("Branco", "Zé Gotinha") iam parar no título de todos os pins
+const OWN_ATTRS = new Set(["SELLER_SKU", "GTIN", "MODEL", "ALPHANUMERIC_MODEL", "LINE", "CHARACTER", "COLOR", "PATTERN_NAME"]);
 
 /**
  * Publica um produto no Mercado Livre copiando o padrão do anúncio de referência do lojista
@@ -279,10 +280,13 @@ export async function publishToMercadoLivre(
     const id = existing.id;
     await setDescription(id, true);
     const changes: Record<string, unknown> = { available_quantity: product.stock ?? DEFAULT_ML_STOCK };
+    // SKU próprio do produto (muitos anúncios antigos dividem o mesmo SKU, e os dados fiscais vão por SKU)
+    if (product.sku) changes.attributes = [{ id: "SELLER_SKU", value_name: product.sku }];
     // Anúncio inativo (ex.: "fotos não cumprem os requisitos"): troca pelas fotos da loja
     if (existing.status !== "active" && product.images.length) changes.pictures = product.images.slice(0, 10).map((source) => ({ source }));
     await ml(token, `/items/${id}`, { method: "PUT", body: changes })
       .catch((e) => warnings.push(`atualizar: ${e instanceof Error ? e.message : e}`));
+    if (product.sku) await setMlFiscal(token, analysis.reference_id, product.sku, product.name).catch((e) => warnings.push(`fiscal: ${e instanceof Error ? e.message : e}`));
     let item = await ml<MlItem & { sub_status?: string[] }>(token, `/items/${id}`);
     if (item.status === "paused") {
       await ml(token, `/items/${id}`, { method: "PUT", body: { status: "active" } })
@@ -301,9 +305,10 @@ export async function publishToMercadoLivre(
   // O ML monta o título com nome + cor + modelo ("Pin Snoopy (metal Esmaltado) Multicolorido Snoopy"): o modelo é só o nome do pin
   const model = product.name.replace(/\([^)]*\)/g, "").split(" - ")[0].replace(/^\s*(pin|broche|botton)\s+/i, "").trim();
   attributes.push({ id: "MODEL", value_name: (model || product.name).slice(0, 60) });
+  attributes.push({ id: "COLOR", value_name: "Multicolorido" });
   if (product.sku) attributes.push({ id: "SELLER_SKU", value_name: product.sku });
 
-  const title = product.name.slice(0, 60);
+  const title = mlFamilyName(product.name);
   const body: Record<string, unknown> = {
     title,
     category_id: ref.category_id,
@@ -328,9 +333,57 @@ export async function publishToMercadoLivre(
     created = await ml<MlItem>(token, "/items", { method: "POST", body: { ...rest, family_name: title } });
   }
   await setDescription(created.id, false);
+  if (product.sku) await setMlFiscal(token, analysis.reference_id, product.sku, product.name).catch((e) => warnings.push(`fiscal: ${e instanceof Error ? e.message : e}`));
   // deno-lint-ignore no-explicit-any
   const sub_status: string[] = (created as any).sub_status ?? [];
   return { id: created.id, permalink: created.permalink, price: body.price, status: created.status, sub_status, warnings };
+}
+
+/** Nome do anúncio (o ML junta a cor no fim): sem "(Metal Esmaltado)" e cortado em palavra inteira até 60 letras. */
+export function mlFamilyName(name: string) {
+  const clean = name.replace(/\s*\((metal|pin)[^)]*\)/gi, "").replace(/\s+/g, " ").trim() || name.trim();
+  if (clean.length <= 60) return clean;
+  const cut = clean.slice(0, 60);
+  return cut.slice(0, cut.lastIndexOf(" ") > 30 ? cut.lastIndexOf(" ") : 60)
+    .replace(/(\s+(em|de|da|do|das|dos|e|a|o|com|para|na|no))+$/i, "").replace(/[\s\-–,]+$/, "");
+}
+
+/** NCM dos pins (7117.90.00), conforme o cadastro da loja. */
+const ML_NCM = "71179000";
+
+/**
+ * Dados fiscais do SKU no Mercado Livre (para o ML emitir a nota): copia o formato do SKU do anúncio
+ * modelo (custo, origem, CSOSN, pesos) trocando o NCM. Cria; se já existir, atualiza.
+ */
+// deno-lint-ignore no-explicit-any
+let refFiscal: { id: string; sku: any } | null = null;
+async function setMlFiscal(token: string, referenceId: string, sku: string, name: string) {
+  if (refFiscal?.id !== referenceId) {
+    // deno-lint-ignore no-explicit-any
+    const d = await ml<any>(token, `/items/${referenceId}/fiscal_information/detail`).catch(() => null);
+    refFiscal = { id: referenceId, sku: d?.sku ?? {} };
+  }
+  const r = refFiscal.sku;
+  const { empty: _e, ...tax } = r.tax_information ?? {};
+  const body = {
+    sku,
+    title: name.slice(0, 120),
+    type: "single",
+    cost: r.cost ?? 6,
+    measurement_unit: "UN",
+    register_type: r.register_type ?? "final",
+    tax_information: { origin_type: "reseller", origin_detail: "0", csosn: "102", ...tax, ncm: ML_NCM },
+  };
+  try {
+    await ml(token, "/items/fiscal_information", { method: "POST", body });
+  } catch (e) {
+    // Já existe dado fiscal para o SKU: atualiza
+    try {
+      await ml(token, `/items/fiscal_information/${encodeURIComponent(sku)}`, { method: "PUT", body });
+    } catch (e2) {
+      throw new Error(`${e instanceof Error ? e.message : e} / ${e2 instanceof Error ? e2.message : e2}`);
+    }
+  }
 }
 
 /** Estoque padrão dos anúncios do Mercado Livre (o lojista trabalha sempre com 200). */
