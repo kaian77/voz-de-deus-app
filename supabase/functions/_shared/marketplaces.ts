@@ -2,7 +2,7 @@
 // dados fiscais) e publicação de produtos novos seguindo esse padrão.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ns, storeFor, txt } from "./nuvemshop.ts";
-import { ml, type MlItem, ML_LOOKUP_FIELDS, mlSellerItems, mlSku, mlTokenFor } from "./mercadolivre.ts";
+import { ml, type MlItem, ML_LOOKUP_FIELDS, mlPictures, mlSellerItems, mlSku, mlTokenFor } from "./mercadolivre.ts";
 import { shopeeItems, shopeeTokenFor } from "./shopee.ts";
 
 export type Marketplace = "mercadolivre" | "shopee";
@@ -283,7 +283,7 @@ export async function publishToMercadoLivre(
     // SKU próprio do produto (muitos anúncios antigos dividem o mesmo SKU, e os dados fiscais vão por SKU)
     if (product.sku) changes.attributes = [{ id: "SELLER_SKU", value_name: product.sku }];
     // Anúncio inativo (ex.: "fotos não cumprem os requisitos"): troca pelas fotos da loja
-    if (existing.status !== "active" && product.images.length) changes.pictures = product.images.slice(0, 10).map((source) => ({ source }));
+    if (existing.status !== "active" && product.images.length) changes.pictures = await mlPictures(token, product.images);
     await ml(token, `/items/${id}`, { method: "PUT", body: changes })
       .catch((e) => warnings.push(`atualizar: ${e instanceof Error ? e.message : e}`));
     if (product.sku) await setMlFiscal(token, analysis.reference_id, product.sku, product.name).catch((e) => warnings.push(`fiscal: ${e instanceof Error ? e.message : e}`));
@@ -318,7 +318,7 @@ export async function publishToMercadoLivre(
     buying_mode: "buy_it_now",
     condition: "new",
     listing_type_id: ref.listing_type_id,
-    pictures: product.images.slice(0, 10).map((source) => ({ source })),
+    pictures: await mlPictures(token, product.images),
     attributes,
     sale_terms: (ref.sale_terms ?? []).map((t) => (t.value_id ? { id: t.id, value_id: t.value_id } : { id: t.id, value_name: t.value_name })),
     shipping: ref.shipping ? { mode: ref.shipping.mode, local_pick_up: ref.shipping.local_pick_up ?? false, free_shipping: ref.shipping.free_shipping ?? false } : undefined,
