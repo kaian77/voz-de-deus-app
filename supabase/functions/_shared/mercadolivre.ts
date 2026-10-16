@@ -132,3 +132,29 @@ export const ML_LOOKUP_FIELDS = ["id", "title", "family_name", "status", "seller
 export function mlSku(item: MlItem) {
   return item.attributes?.find((a) => a.id === "SELLER_SKU")?.value_name ?? item.seller_custom_field ?? null;
 }
+
+/**
+ * Sobe a foto direto para o ML (o Studio baixa e envia o arquivo) e devolve o id dela.
+ * Mandar só o link (`source`) deixava anúncios dias em "picture_download_pending".
+ */
+export async function mlUploadPicture(token: string, url: string): Promise<string> {
+  const img = await fetch(url);
+  if (!img.ok) throw new Error(`foto ${img.status}`);
+  const blob = await img.blob();
+  const form = new FormData();
+  form.append("file", blob, url.split("/").pop()?.split("?")[0] || "foto.jpg");
+  const res = await fetch(`${API}/pictures/items/upload`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.id) throw new Error(`Mercado Livre (foto): ${data.message ?? data.error ?? res.status}`);
+  return data.id as string;
+}
+
+/** Fotos para o anúncio: sobe cada uma; se o envio falhar, cai no link (o ML tenta baixar). */
+export async function mlPictures(token: string, urls: string[]) {
+  const out: ({ id: string } | { source: string })[] = [];
+  for (const url of urls.slice(0, 10)) {
+    out.push(await mlUploadPicture(token, url).then((id) => ({ id })).catch(() => ({ source: url })));
+  }
+  return out;
+}
+
