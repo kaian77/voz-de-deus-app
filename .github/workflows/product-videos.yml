@@ -56,8 +56,10 @@ jobs:
         if: steps.queue.outputs.status == 'queued'
         uses: actions/cache@v4
         with:
-          path: ~/.u2net
-          key: u2net-v1
+          path: |
+            ~/.u2net
+            ~/.rembg
+          key: u2net-v2
 
       - name: Renderizar
         if: steps.queue.outputs.status == 'queued'

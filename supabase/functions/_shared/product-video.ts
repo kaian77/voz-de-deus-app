@@ -30,9 +30,23 @@ const Brief = z.object({
       "petals = flores, primavera, Dia da Mulher; none = produto sem tema especial",
   ),
   theme_colors: z.object({ primary: z.string(), secondary: z.string(), accent: z.string() }).nullable().describe(
-    "Só quando o tema tem cores próprias (ex.: Outubro Rosa: primary #E8559A, secondary #2B0A1A, accent #FFC1DA); hex. null = cores da marca",
+    "Só quando o tema tem cores próprias (ex.: Outubro Rosa: primary #E8559A, secondary #2B0A1A, accent #FFC1DA; BTS/K-pop: " +
+      "primary #8E44EC, secondary #14051F, accent #FFC72C); hex. null = cores da marca",
+  ),
+  teaser: z.boolean().describe(
+    "true só quando o pedido do dono quer mistério/suspense sem mostrar o produto inteiro (ex.: 'adivinhe', 'em breve', 'lançamento surpresa')",
   ),
 });
+
+export type VideoStyle = "cinema" | "classic";
+export type VideoOptions = { instructions?: string; style?: VideoStyle };
+
+/** Observações do dono e estilo escolhido (vêm da tela; vazios = a IA decide sozinha). */
+export function videoOptions(input: Record<string, unknown>, previous?: Record<string, unknown> | null): VideoOptions {
+  const raw = typeof input.instructions === "string" ? input.instructions : (previous?.instructions as string | undefined);
+  const style = input.style === "classic" || input.style === "cinema" ? input.style : (previous?.style as VideoStyle | undefined);
+  return { instructions: raw?.trim().slice(0, 1500) || undefined, style: style ?? "cinema" };
+}
 
 /** Pede ao GitHub para rodar o workflow (de vídeos, por padrão) agora. Devolve false quando não há token (fica para o horário). */
 export async function dispatchRender(workflow = "product-videos.yml"): Promise<boolean> {
@@ -52,7 +66,7 @@ export async function dispatchRender(workflow = "product-videos.yml"): Promise<b
 }
 
 /** Textos do vídeo (IA olhando a foto) e legenda do post. */
-async function writeBrief(db: SupabaseClient, userId: string, product: ProductInfo, images: string[]) {
+async function writeBrief(db: SupabaseClient, userId: string, product: ProductInfo, images: string[], instructions?: string) {
   const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", userId).maybeSingle();
   const { data: ig } = await db.from("social_accounts").select("username").eq("user_id", userId).eq("platform", "instagram").limit(1).maybeSingle();
   let brief: Record<string, unknown> = { hook: `Chegou *${product.name}*`, hook_sub: "Novidade na loja", cta: "Garanta o seu", features: [] };
@@ -65,7 +79,12 @@ async function writeBrief(db: SupabaseClient, userId: string, product: ProductIn
         `ou "compre pelo site" (o TikTok Shop penaliza); a chamada é só para garantir o produto.\n\n${brandContext(settings)}`,
       `Produto: "${product.name}".\n` +
         `${product.description ? `Informações do produto: ${product.description.replace(/<[^>]+>/g, " ").slice(0, 800)}\n` : ""}` +
-        `Escreva os textos do vídeo. O preço não aparece no vídeo. Escolha o enfeite animado (motif) pelo tema e, se o tema tiver cores próprias, theme_colors.`,
+        `Escreva os textos do vídeo. O preço não aparece no vídeo. Escolha o enfeite animado (motif) pelo tema e, se o tema tiver cores próprias, theme_colors.` +
+        (instructions
+          ? `\n\nPEDIDO DO DONO PARA ESTE VÍDEO (tem prioridade sobre o resto; frases entre aspas vão exatamente como ele escreveu, ` +
+            `em hook, hook_sub, cta, urgency ou features conforme o lugar que ele indicar; siga o tema, o tom e as cores pedidas, ` +
+            `mas continue sem inventar preço, promoção ou característica que não exista):\n${instructions}`
+          : ""),
       "low", images.slice(0, 2));
   }
   // Rede de segurança: tira qualquer chamada para site/link que tenha escapado (penalidade no TikTok)
@@ -98,9 +117,9 @@ export async function queueProductVideo(
   db: SupabaseClient,
   userId: string,
   product: ProductInfo,
-  opts: { autopost?: boolean; defer?: boolean; platforms?: string[]; why?: string; source?: string } = {},
+  opts: { autopost?: boolean; defer?: boolean; platforms?: string[]; why?: string; source?: string } & VideoOptions = {},
 ) {
-  const images = (product.video_images?.length ? product.video_images : product.images).slice(0, 4);
+  const images = (product.video_images?.length ? product.video_images : product.images).slice(0, 7);
   if (!images.length) throw new Error("O produto precisa de pelo menos uma foto");
   // Evita vídeo duplicado do mesmo produto (ex.: clique duplo)
   const { data: recent } = await db.from("product_videos").select("*").eq("user_id", userId).eq("name", product.name)
@@ -111,6 +130,8 @@ export async function queueProductVideo(
     ...(opts.platforms?.length ? { platforms: opts.platforms } : {}),
     ...(opts.why ? { why: opts.why } : {}),
     ...(opts.source ? { source: opts.source } : {}),
+    ...(opts.instructions ? { instructions: opts.instructions } : {}),
+    style: opts.style ?? "cinema",
   };
   if (opts.defer) {
     const { data, error } = await db.from("product_videos").insert({
@@ -126,7 +147,7 @@ export async function queueProductVideo(
     return { ...data, dispatched: false };
   }
 
-  const { brief, caption } = await writeBrief(db, userId, product, images);
+  const { brief, caption } = await writeBrief(db, userId, product, images, opts.instructions);
   const { data, error } = await db.from("product_videos").insert({
     user_id: userId,
     name: product.name,
@@ -151,8 +172,8 @@ export async function prepareBriefs(db: SupabaseClient, max = 3) {
       .eq("status", "pending_brief").eq("attempts", v.attempts).select("id").maybeSingle();
     if (!claimed) continue;
     try {
-      const keep = { platforms: v.brief?.platforms, why: v.brief?.why, source: v.brief?.source };
-      const { brief, caption } = await writeBrief(db, v.user_id, { name: v.name, images: v.images, url: v.product_url, description: v.brief?.notes }, v.images);
+      const keep = { platforms: v.brief?.platforms, why: v.brief?.why, source: v.brief?.source, instructions: v.brief?.instructions, style: v.brief?.style };
+      const { brief, caption } = await writeBrief(db, v.user_id, { name: v.name, images: v.images, url: v.product_url, description: v.brief?.notes }, v.images, v.brief?.instructions);
       await db.from("product_videos").update({
         brief: { ...brief, ...Object.fromEntries(Object.entries(keep).filter(([, x]) => x)) },
         caption, status: "queued", attempts: 0,

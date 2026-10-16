@@ -19,6 +19,7 @@ import TikTokSettings, { fromApiOptions, TIKTOK_DEFAULTS, tiktokProblem, toApiOp
 import { Avatar, KIND_LABEL, PageHeader, Panel, PlatformIcon, SectionLabel, SlidePreview, StatusBadge, toLocalInput } from "../components/bits";
 import { toastPublishResult } from "@/studio/lib/publish-toast";
 import ProductPicker, { type LinkedProduct } from "../components/ProductPicker";
+import { VideoBriefDialog, type VideoBrief } from "../components/VideoBrief";
 
 const KINDS: { id: PostKind; hint: string }[] = [
   { id: "image", hint: "1 imagem · 4:5" },
@@ -136,11 +137,12 @@ export default function Composer() {
     if (p && !title) setTitle(p.name);
   };
 
-  const productVideo = async () => {
+  const [videoAsk, setVideoAsk] = useState(false);
+  const productVideo = async (brief: VideoBrief) => {
     if (!product) return;
     setBusy("video");
     try {
-      await api.invoke("ai", { action: "store_product_video", name: product.name, images: product.images, url: product.url, description: product.description, topic: title || topic });
+      await api.invoke("ai", { action: "store_product_video", name: product.name, images: product.images, url: product.url, description: product.description, topic: title || topic, ...brief });
       toast.success("Vídeo do produto na fila! Fica pronto em alguns minutos e aparece em Aprovações para você revisar.");
     } catch (e) {
       toast.error((e as Error).message);
@@ -339,11 +341,18 @@ export default function Composer() {
               {product && kind === "reel" && (
                 <div className="flex flex-wrap items-center gap-2 rounded-md bg-secondary/50 p-3 text-[13px]">
                   <span className="flex-1">Sem vídeo pronto? Gere o vídeo animado deste pin (vai para Aprovações quando ficar pronto).</span>
-                  <Button size="sm" onClick={productVideo} disabled={busy !== null}>
+                  <Button size="sm" onClick={() => setVideoAsk(true)} disabled={busy !== null}>
                     {busy === "video" ? <Loader2 className="animate-spin" /> : <Wand2 />} Gerar vídeo do produto
                   </Button>
                 </div>
               )}
+              <VideoBriefDialog
+                open={videoAsk}
+                onOpenChange={setVideoAsk}
+                title={`Vídeo: ${product?.name ?? "produto"}`}
+                description="Escreva o que você quer no vídeo, ou deixe em branco para a IA fazer sozinha."
+                onConfirm={productVideo}
+              />
             </div>
           </Panel>
 

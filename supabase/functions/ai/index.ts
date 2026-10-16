@@ -6,7 +6,7 @@ import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
 import { readWebPage, runTool } from "../_shared/agent-tools.ts";
 import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
-import { postVideo, queueProductVideo } from "../_shared/product-video.ts";
+import { postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
       return json(await queueProductVideo(db, userId, {
         name, images, url: typeof input.url === "string" ? input.url : undefined,
         description: [notes && `Tema do vídeo: ${notes}`, String(input.description ?? "").slice(0, 600)].filter(Boolean).join("\n") || undefined,
-      }, { autopost: true }));
+      }, { autopost: true, ...videoOptions(input) }));
     }
     if (action === "store_categories") {
       const store = await storeFor(db, userId);
@@ -173,17 +173,17 @@ Deno.serve(async (req) => {
         images: source.images,
         url: source.product_url,
         description: previous?.brief?.notes || undefined,
-      }, { autopost: previous ? previous.autopost !== false : true }));
+      }, { autopost: previous ? previous.autopost !== false : true, ...videoOptions(input, previous?.brief) }));
     }
     if (action === "video_only") {
       // Vídeo avulso: só a foto e o nome, para baixar (não vira post nem cadastra produto)
       const name = String(input.name ?? "").trim().slice(0, 80);
       const storage = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/media/${userId}/`;
-      const images = (Array.isArray(input.images) ? input.images : []).filter((u: unknown) => typeof u === "string" && u.startsWith(storage)).slice(0, 4);
+      const images = (Array.isArray(input.images) ? input.images : []).filter((u: unknown) => typeof u === "string" && u.startsWith(storage)).slice(0, 7);
       if (!name) throw new HttpError(400, "Dê um nome para o produto");
       if (!images.length) throw new HttpError(400, "Envie pelo menos uma foto");
       const notes = String(input.description ?? "").trim().slice(0, 800);
-      return json(await queueProductVideo(db, userId, { name, images, description: notes || undefined }, { autopost: false }));
+      return json(await queueProductVideo(db, userId, { name, images, description: notes || undefined }, { autopost: false, ...videoOptions(input) }));
     }
     if (action === "content_ideas") {
       // "Criar ideias agora": carrosséis vão para Aprovações; vídeos entram na fila e chegam lá quando ficam prontos
