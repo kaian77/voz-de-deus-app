@@ -159,7 +159,21 @@ export async function mercadoLivreListings(db: SupabaseClient, userId: string) {
       actions: await probe(`/items/${p.id}/health/actions`),
     });
   }
+  // Anúncio modelo: atributos (de onde vem o título montado pelo ML) e dados fiscais, para copiar o formato
+  const refId = acc.meta?.analysis?.reference_id as string | undefined;
+  // deno-lint-ignore no-explicit-any
+  const ref = refId ? await ml<any>(token, `/items/${refId}`).catch(() => null) : null;
+  const reference = ref && {
+    id: ref.id, title: ref.title, family_name: ref.family_name, user_product_id: ref.user_product_id, seller_custom_field: ref.seller_custom_field,
+    // deno-lint-ignore no-explicit-any
+    attributes: (ref.attributes ?? []).map((a: any) => `${a.id}=${a.value_name ?? a.value_id}`),
+    fiscal_detail: await probe(`/items/${refId}/fiscal_information/detail`),
+    fiscal_by_sku: ref.seller_custom_field ? await probe(`/items/fiscal_information/${encodeURIComponent(ref.seller_custom_field)}`) : null,
+  };
+  const search_filters = await probe(`/users/${acc.external_id}/items/search?include_filters=true&limit=1`);
   return {
+    reference,
+    search_filters,
     store_products: store.length,
     active: listings.length - problems.length,
     not_active: problems.length,
