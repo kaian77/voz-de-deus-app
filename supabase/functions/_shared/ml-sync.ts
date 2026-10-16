@@ -158,7 +158,13 @@ export async function mlSyncStatus(db: SupabaseClient, userId: string) {
   const acc = await mlAccount(db, userId);
   const sync = acc?.meta?.ml_sync as MlSync | undefined;
   if (!sync) return { running: false };
+  const photos: Record<string, number> = {};
+  for (const status of ["queued", "done", "failed"]) {
+    const { count } = await db.from("ml_photos").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", status);
+    photos[status] = count ?? 0;
+  }
   return {
+    photos,
     running: sync.queue.length > 0 || !!sync.inflight?.ids.length,
     total: sync.total,
     remaining: sync.queue.length,
