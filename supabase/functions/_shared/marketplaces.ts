@@ -325,9 +325,10 @@ export async function publishToMercadoLivre(
     await ml(token, `/items/${id}`, { method: "PUT", body: { attributes: attrs } })
       .catch((e) => warnings.push(`atributos: ${e instanceof Error ? e.message : e}`));
     // Sem "tempo de disponibilidade" (prazo de fabricação): o ML rebaixa o anúncio que tem (pin tem pronta entrega)
-    // (a lista de anúncios da sincronização não traz sale_terms; sem prazo o ML só recusa, e a análise de qualidade mostra se ficou)
+    // (a lista de anúncios da sincronização não traz sale_terms, então tenta em todos; o aviso mostra se o ML recusou)
     if (existing.sale_terms?.some((t) => t.id === "MANUFACTURING_TIME") || !existing.sale_terms) {
-      await ml(token, `/items/${id}`, { method: "PUT", body: { sale_terms: [{ id: "MANUFACTURING_TIME", value_id: null, value_name: null }] } }).catch(() => {});
+      await ml(token, `/items/${id}`, { method: "PUT", body: { sale_terms: [{ id: "MANUFACTURING_TIME", value_id: null, value_name: null }] } })
+        .catch((e) => warnings.push(`prazo: ${e instanceof Error ? e.message : e}`));
     }
     if (product.sku) await setMlFiscal(token, analysis.reference_id, product.sku, product.name).catch((e) => warnings.push(`fiscal: ${e instanceof Error ? e.message : e}`));
     let item = await ml<MlItem & { sub_status?: string[] }>(token, `/items/${id}`);
