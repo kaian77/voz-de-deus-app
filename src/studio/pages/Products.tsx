@@ -593,7 +593,7 @@ function VideosPanel() {
   const removeVideo = async (v: ProductVideo) => {
     if (!confirm(v.post_id ? "Apagar este vídeo do Studio? O post que já saiu no Instagram/TikTok continua lá (apague pelo app)." : "Apagar este vídeo?")) return;
     try {
-      await api.remove("product_videos", v.id);
+      await api.invoke("ai", { action: "product_video_delete", id: v.id });
       qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
     } catch (e) {
       toast.error((e as Error).message);
