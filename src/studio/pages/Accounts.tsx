@@ -198,7 +198,7 @@ function MlQuality({ account }: { account: SocialAccount }) {
           {q.auto.map((r) => <p key={r.title} className="text-muted-foreground">✓ {r.fix} ({r.count})</p>)}
           {q.owner.length > 0 && <p className="mt-1 font-medium">Depende de você</p>}
           {q.owner.map((r) => <p key={r.title} className="text-muted-foreground">• {r.title} ({r.count}): {r.todo}</p>)}
-          {q.experience.map((e) => <p key={e.id} className="truncate text-danger" title={e.text}>Experiência {e.color}: {e.title}</p>)}
+          {q.experience_summary && <p className="mt-1 text-danger">{q.experience_summary}</p>}
         </>
       ) : (
         <p className="text-muted-foreground">Analisa a nota de qualidade de cada anúncio e corrige fotos, título, ficha e descrição.</p>
