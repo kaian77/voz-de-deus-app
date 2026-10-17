@@ -182,39 +182,43 @@ def run(search):
     area = geocode(search["place"])
     if not area:
         raise RuntimeError(f"não achei \"{search['place']}\" no mapa; escreva bairro e cidade (ex.: Sobradinho DF)")
-    lat, lng, bbox = area
+    lat, lng, region = area
     wanted = max(1, min(int(search["wanted"]), 200))
-    bbox = around(lat, lng, bbox, 2.5 if wanted <= 30 else 4)
-    rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"lat": lat, "lng": lng, "bbox": bbox, "updated_at": now()})
-
-    # Só uns 30-50% das empresas não têm site e têm celular: pede bem mais do que o necessário
-    n = 1 if wanted <= 15 else 2 if wanted <= 60 else 3
-    depth = 5 if wanted <= 30 else 10
-    keyword = f"{search['query']} em {search['place']}"
+    base = 2.5 if wanted <= 30 else 4
     places, phones = known(search["user_id"])
-    found, errors = 0, []
-    for i, cell in enumerate(cells(bbox, n), 1):
-        try:
-            rows = scrape(keyword, cell, depth)
-        except Exception as e:  # um pedaço que falha não perde os outros
-            errors.append(str(e))
-            print(f"  pedaço {i}: {e}")
-            continue
-        fresh = []
-        for row in rows:
-            lead = to_lead(row, search)
-            if lead and inside(lead, bbox) and lead["place_id"] not in places and lead["whatsapp"] not in phones:
-                places.add(lead["place_id"])
-                phones.add(lead["whatsapp"])
-                fresh.append(lead)
-        fresh = fresh[: wanted - found]
-        if fresh:
-            http("POST", f"{URL}/rest/v1/leads?on_conflict=user_id,place_id", fresh, {"Prefer": "resolution=ignore-duplicates,return=minimal"})
-            found += len(fresh)
-        print(f"  pedaço {i}: {len(rows)} lugares, {len(fresh)} leads novos ({found}/{wanted})")
-        rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"found": found, "updated_at": now()})
+    found, errors, i = 0, [], 0
+    # 1ª rodada: o miolo do lugar. Se vier pouco (nichos pequenos, poucas empresas sem site), a 2ª rodada
+    # amplia a área (até ~2,4x) e varre em 4 pedaços buscando só o tema, para o Maps mostrar o que está perto de cada um.
+    rounds = [(base, 1 if wanted <= 15 else 2, f"{search['query']} em {search['place']}"), (base * 2.4, 2, search["query"])]
+    for km, n, keyword in rounds:
         if found >= wanted:
             break
+        bbox = around(lat, lng, region, km)
+        rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"lat": lat, "lng": lng, "bbox": bbox, "updated_at": now()})
+        depth = 5 if wanted <= 30 and km == base else 10
+        for cell in cells(bbox, n):
+            i += 1
+            try:
+                rows = scrape(keyword, cell, depth)
+            except Exception as e:  # um pedaço que falha não perde os outros
+                errors.append(str(e))
+                print(f"  pedaço {i}: {e}")
+                continue
+            fresh = []
+            for row in rows:
+                lead = to_lead(row, search)
+                if lead and inside(lead, bbox) and lead["place_id"] not in places and lead["whatsapp"] not in phones:
+                    places.add(lead["place_id"])
+                    phones.add(lead["whatsapp"])
+                    fresh.append(lead)
+            fresh = fresh[: wanted - found]
+            if fresh:
+                http("POST", f"{URL}/rest/v1/leads?on_conflict=user_id,place_id", fresh, {"Prefer": "resolution=ignore-duplicates,return=minimal"})
+                found += len(fresh)
+            print(f"  pedaço {i} ({km:g} km): {len(rows)} lugares, {len(fresh)} leads novos ({found}/{wanted})")
+            rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"found": found, "updated_at": now()})
+            if found >= wanted:
+                break
     if not found and errors:
         raise RuntimeError(errors[-1])
     rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"status": "done", "found": found, "updated_at": now()})
@@ -222,8 +226,11 @@ def run(search):
 
 def main():
     if "--check" in sys.argv:
-        if "--retry-failed" in sys.argv:  # rodada manual: buscas que falharam voltam para a fila
+        if "--retry-failed" in sys.argv:  # rodada manual: buscas que falharam ou vieram incompletas voltam para a fila
             rest("PATCH", "lead_searches?status=eq.failed", {"status": "queued", "error": None})
+            for r in rest("GET", "lead_searches?status=eq.done&select=id,found,wanted") or []:
+                if r["found"] < r["wanted"]:
+                    rest("PATCH", f"lead_searches?id=eq.{r['id']}", {"status": "queued"})
         requeue_stuck()
         print("queued" if queued() else "empty")
         return

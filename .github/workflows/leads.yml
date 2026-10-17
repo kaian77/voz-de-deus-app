@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       retry_failed:
-        description: "Tentar de novo as buscas que falharam"
+        description: "Tentar de novo as buscas que falharam ou vieram incompletas"
         type: boolean
         default: false
   schedule:
