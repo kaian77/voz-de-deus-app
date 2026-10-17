@@ -12,7 +12,7 @@ import { announceProduct, buildProduct, createFromDraft, templateFor } from "./p
 import { queueProductVideo, videoOptions } from "./product-video.ts";
 import { analyzeMarketplace, mercadoLivreListings, publishToMercadoLivre } from "./marketplaces.ts";
 import { fixSharedListings, mlSyncStatus, queueKits, retryMlProblems, startMlSync } from "./ml-sync.ts";
-import { improveMlShowcase, setMlPremium } from "./ml-quality.ts";
+import { improveMlShowcase, mlReviews, setMlPremium } from "./ml-quality.ts";
 import { generateIdeas } from "./content-ideas.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
@@ -797,10 +797,11 @@ const tools = {
   },
 
   sync_mercadolivre: {
-    description: "Sincroniza a loja Nuvemshop inteira com o Mercado Livre em segundo plano (3 produtos por minuto): atualiza o anúncio que já existe (fotos da loja tratadas no padrão do ML — 1200x1200, fundo branco, pin centralizado —, título sem cor/estampa errada, descrição no padrão da marca, estoque 200, reativa os inativos) ou cria um novo. Kits entram com o preço do site e formato Kit; caixa surpresa e produtos de teste ficam de fora. action \"start\" começa (refaz do zero); \"status\" mostra o andamento (shared = pins diferentes no mesmo anúncio); \"fix_shared\" separa esses pins (o primeiro fica com o anúncio, os outros ganham anúncio próprio); \"kits\" põe na fila os kits e combos (preço do site + regra, formato Kit); \"retry\" refaz os anúncios com aviso do ML ou parados esperando correção; \"quality\" = melhorar vitrine (o mesmo que improve_mercadolivre fix).",
-    input: z.object({ action: z.enum(["start", "status", "fix_shared", "kits", "retry", "quality"]) }),
-    run: async (ctx: Ctx, input: { action: "start" | "status" | "fix_shared" | "kits" | "retry" | "quality" }) =>
+    description: "Sincroniza a loja Nuvemshop inteira com o Mercado Livre em segundo plano (3 produtos por minuto): atualiza o anúncio que já existe (fotos da loja tratadas no padrão do ML — 1200x1200, fundo branco, pin centralizado —, título sem cor/estampa errada, descrição no padrão da marca, estoque 200, reativa os inativos) ou cria um novo. Kits entram com o preço do site e formato Kit; caixa surpresa e produtos de teste ficam de fora. action \"start\" começa (refaz do zero); \"status\" mostra o andamento (shared = pins diferentes no mesmo anúncio); \"fix_shared\" separa esses pins (o primeiro fica com o anúncio, os outros ganham anúncio próprio); \"kits\" põe na fila os kits e combos (preço do site + regra, formato Kit); \"retry\" refaz os anúncios com aviso do ML ou parados esperando correção; \"quality\" = melhorar vitrine (o mesmo que improve_mercadolivre fix); \"reviews\" = avaliações reais dos compradores no ML.",
+    input: z.object({ action: z.enum(["start", "status", "fix_shared", "kits", "retry", "quality", "reviews"]) }),
+    run: async (ctx: Ctx, input: { action: "start" | "status" | "fix_shared" | "kits" | "retry" | "quality" | "reviews" }) =>
       input.action === "start" ? startMlSync(ctx.db, ctx.userId)
+      : input.action === "reviews" ? mlReviews(ctx.db, ctx.userId)
       : input.action === "quality" ? improveMlShowcase(ctx.db, ctx.userId, { fix: true })
       : input.action === "retry" ? retryMlProblems(ctx.db, ctx.userId)
       : input.action === "fix_shared" ? fixSharedListings(ctx.db, ctx.userId)

@@ -164,3 +164,28 @@ export async function setMlPremium(db: SupabaseClient, userId: string) {
   });
   return { changed, total: items.length, errors };
 }
+
+/**
+ * Avaliações reais dos compradores no Mercado Livre (opiniões dos anúncios com venda), para a página de avaliações do site.
+ */
+export async function mlReviews(db: SupabaseClient, userId: string) {
+  const acc = await mlAccount(db, userId);
+  if (!acc) throw new Error("Conecte o Mercado Livre em Contas");
+  const token = await mlTokenFor(db, acc.id);
+  const items = (await mlSellerItems(token, acc.external_id, 1000, "", ["id", "title", "sold_quantity", "permalink"])).filter((i) => (i.sold_quantity ?? 0) > 0);
+  const out: { item: string; title: string; permalink?: string; rating: number; review_title?: string; content: string; date: string }[] = [];
+  let average: number | null = null;
+  let total = 0;
+  await pool(items, 6, async (it) => {
+    // deno-lint-ignore no-explicit-any
+    const r = await ml<any>(token, `/reviews/item/${it.id}?limit=50`).catch(() => null);
+    if (!r) return;
+    total += r.paging?.total ?? 0;
+    for (const v of r.reviews ?? []) {
+      if (!v.content && !v.title) continue;
+      out.push({ item: it.id, title: it.title, permalink: it.permalink, rating: v.rate, review_title: v.title || undefined, content: v.content ?? "", date: v.date_created });
+    }
+  });
+  if (out.length) average = Math.round((out.reduce((s, r) => s + r.rating, 0) / out.length) * 10) / 10;
+  return { items_with_sales: items.length, reviews_total: total, with_text: out.length, average, reviews: out.sort((a, b) => b.date.localeCompare(a.date)) };
+}
