@@ -95,6 +95,8 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
     product_drafts: [],
     product_videos: [],
     ai_videos: [],
+    lead_searches: [],
+    leads: [],
     strategies: [],
     brand_settings: [
       { brand_name: "Minha Marca", niche: "Conteúdo cristão / devocional", audience: "Cristãos 25–55 anos, maioria mulheres, Brasil", tone: "Acolhedor, esperançoso, simples", default_hashtags: "fé palavradedeus deus jesus oração", default_cta: "Comente AMÉM para receber uma oração no direct", approval_required: true, timezone: "America/Sao_Paulo",

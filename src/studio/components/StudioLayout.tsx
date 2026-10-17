@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  BarChart3, Bot, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Inbox, LayoutGrid, Link2, LogOut, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Store, Workflow, Target,
+  BarChart3, Bot, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Inbox, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Store, Workflow, Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -46,6 +46,10 @@ const GROUPS: { label?: string; items: Item[] }[] = [
       { to: "/studio/vitrine", label: "Vitrine", icon: Store },
       { to: "/studio/concorrentes", label: "Concorrentes", icon: BarChart3 },
     ],
+  },
+  {
+    label: "Renda extra",
+    items: [{ to: "/studio/leads", label: "Leads", icon: MapPin }],
   },
   {
     label: "Configurar",

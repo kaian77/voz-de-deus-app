@@ -14,6 +14,7 @@ import Automations from "./studio/pages/Automations";
 import Comments from "./studio/pages/Comments";
 import Vitrine from "./studio/pages/Vitrine";
 import Competitors from "./studio/pages/Competitors";
+import Leads from "./studio/pages/Leads";
 import Accounts from "./studio/pages/Accounts";
 import ClaudeApi from "./studio/pages/ClaudeApi";
 import Messages from "./studio/pages/Messages";
@@ -51,6 +52,7 @@ const App = () => (
             <Route path="estrategia" element={<StrategyPage />} />
             <Route path="vitrine" element={<Vitrine />} />
             <Route path="concorrentes" element={<Competitors />} />
+            <Route path="leads" element={<Leads />} />
             <Route path="contas" element={<Accounts />} />
             <Route path="claude" element={<ClaudeApi />} />
           </Route>

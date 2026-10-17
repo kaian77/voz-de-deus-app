@@ -6,7 +6,7 @@ import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
 import { readWebPage, runTool } from "../_shared/agent-tools.ts";
 import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
-import { postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
+import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
@@ -77,6 +77,16 @@ Deno.serve(async (req) => {
       const store = await storeFor(db, userId);
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
       return json(await nsOrders(store.token, store.storeId, { status: input.status, q: input.q, limit: input.limit ?? 50 }));
+    }
+    if (action === "leads_search") {
+      // Prospecção: entra na fila do workflow "Leads do Google Maps" (empresas sem site e com WhatsApp)
+      const query = String(input.query ?? "").trim().slice(0, 80);
+      const place = String(input.place ?? "").trim().slice(0, 120);
+      if (!query || !place) throw new HttpError(400, "Diga o que procurar e onde (ex.: nutricionista, Sobradinho DF)");
+      const wanted = Math.min(200, Math.max(1, Math.round(Number(input.wanted) || 30)));
+      const { data, error } = await db.from("lead_searches").insert({ user_id: userId, query, place, wanted }).select().single();
+      if (error) throw new HttpError(500, error.message);
+      return json({ ...data, started: await dispatchRender("leads.yml") });
     }
     if (action === "store_products") {
       // Busca de produtos da loja para vincular a um post

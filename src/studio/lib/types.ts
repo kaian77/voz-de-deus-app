@@ -296,6 +296,48 @@ export interface ProductVideo {
 
 export type AiVideoProvider = "kling" | "higgsfield";
 
+/** Busca de empresas no Google Maps (Renda Extra → Leads). */
+export interface LeadSearch {
+  id: string;
+  query: string;
+  place: string;
+  wanted: number;
+  status: "queued" | "running" | "done" | "failed";
+  found: number;
+  lat: number | null;
+  lng: number | null;
+  /** [sul, norte, oeste, leste] */
+  bbox: [number, number, number, number] | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type LeadStatus = "new" | "contacted" | "replied" | "won" | "lost";
+
+/** Empresa sem site e com WhatsApp encontrada numa busca. */
+export interface Lead {
+  id: string;
+  search_id: string | null;
+  place_id: string;
+  name: string;
+  category: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  social: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  rating: number | null;
+  reviews: number | null;
+  maps_url: string | null;
+  status: LeadStatus;
+  notes: string | null;
+  contacted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Vídeo gerado por IA (Kling / Higgsfield) na seção Vídeos IA. */
 export interface AiVideo {
   id: string;
@@ -363,6 +405,8 @@ export interface TableMap {
   product_drafts: ProductDraft;
   product_videos: ProductVideo;
   ai_videos: AiVideo;
+  lead_searches: LeadSearch;
+  leads: Lead;
   strategies: Strategy;
 }
 export type TableName = keyof TableMap;
