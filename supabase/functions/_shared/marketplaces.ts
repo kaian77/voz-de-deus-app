@@ -462,7 +462,8 @@ async function findMlListing(token: string, sellerId: string, name: string, sku?
 /** Descrição em texto puro como o ML exige: sem HTML, sem emoji e com marcadores simples. */
 export function mlPlainText(text: string) {
   return text.replace(/<[^>]+>/g, "\n")
-    .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, "")
+    // Emojis e o que os compõe: tom de pele, bandeiras (🇧🇷), tecla (1️⃣), seletores e junções
+    .replace(/[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{1F1E6}-\u{1F1FF}\u{E0020}-\u{E007F}\u{20E3}\u{FE00}-\u{FE0F}\u{200B}-\u{200D}]/gu, "")
     .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, "")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/^[ \t]*[•●▪◦]\s*/gm, "- ")
