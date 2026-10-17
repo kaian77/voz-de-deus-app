@@ -167,10 +167,15 @@ export default function YouTubePage() {
   const { data: channels = [], isLoading } = useTable("yt_channels", { order: "created_at", ascending: true });
   const { data: videos = [] } = useTable("yt_videos", { order: "publish_at", limit: 60 }, { refetchInterval: 15000 });
   const [connecting, setConnecting] = useState(false);
+  // Erro da conexão fica na tela (o toast some rápido e no celular passa despercebido)
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   useEffect(() => {
     const err = params.get("error");
-    if (err) toast.error(err);
+    if (err) {
+      toast.error(err);
+      setConnectError(err);
+    }
     if (params.get("connected")) toast.success("Canal conectado! Escolha o idioma e ligue o piloto automático.");
     if (err || params.get("connected")) setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,6 +201,13 @@ export default function YouTubePage() {
         description="Curiosidades da Bíblia em animação: a IA pesquisa o que dá audiência, escreve, narra, anima, legenda, faz a capa e posta. Um canal por idioma."
         actions={<Button onClick={connect} disabled={connecting}>{connecting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Youtube className="mr-1.5 h-4 w-4" />}{channels.length ? "Conectar outro canal" : "Conectar canal"}</Button>}
       />
+
+      {connectError && (
+        <div className="mb-4 rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-[13px]">
+          <p className="font-medium text-danger">Não conectou: {connectError}</p>
+          <button type="button" className="mt-1 text-xs text-muted-foreground hover:underline" onClick={() => setConnectError(null)}>Fechar</button>
+        </div>
+      )}
 
       {!isLoading && channels.length === 0 ? (
         <EmptyState icon={<Youtube className="h-5 w-5" />} title="Nenhum canal conectado">
