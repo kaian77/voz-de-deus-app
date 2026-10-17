@@ -186,7 +186,7 @@ def run(search):
     wanted = max(1, min(int(search["wanted"]), 200))
     base = 2.5 if wanted <= 30 else 4
     places, phones = known(search["user_id"])
-    found, errors, i = 0, [], 0
+    found, errors, i = int(search.get("found") or 0), [], 0  # tentar de novo continua de onde parou
     # 1ª rodada: o miolo do lugar. Se vier pouco (nichos pequenos, poucas empresas sem site), a 2ª rodada
     # amplia a área (até ~2,4x) e varre em 4 pedaços buscando só o tema, para o Maps mostrar o que está perto de cada um.
     rounds = [(base, 1 if wanted <= 15 else 2, f"{search['query']} em {search['place']}"), (base * 2.4, 2, search["query"])]
