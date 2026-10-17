@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ExternalLink, Loader2, Plus, Search, Sparkles, TrendingUp, Youtube } from "lucide-react";
+import { ExternalLink, Loader2, Play, Plus, Search, Sparkles, TrendingUp, Youtube } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -167,6 +168,7 @@ export default function YouTubePage() {
   const { data: channels = [], isLoading } = useTable("yt_channels", { order: "created_at", ascending: true });
   const { data: videos = [] } = useTable("yt_videos", { order: "publish_at", limit: 60 }, { refetchInterval: 15000 });
   const [connecting, setConnecting] = useState(false);
+  const [watching, setWatching] = useState<YtVideo | null>(null);
   // Erro da conexão fica na tela (o toast some rápido e no celular passa despercebido)
   const [connectError, setConnectError] = useState<string | null>(null);
 
@@ -227,7 +229,12 @@ export default function YouTubePage() {
               const ch = byId.get(v.channel_ref);
               return (
                 <div key={v.id} className="flex gap-3 px-4 py-3">
-                  {v.thumbnail_url ? (
+                  {v.preview_url ? (
+                    <button type="button" onClick={() => setWatching(v)} className="group relative w-28 shrink-0" aria-label="Assistir">
+                      <img src={v.thumbnail_url ?? ""} alt="" className="aspect-video w-full rounded bg-secondary object-cover" />
+                      <span className="absolute inset-0 grid place-items-center rounded bg-black/30 text-white group-hover:bg-black/45"><Play className="h-6 w-6 fill-white" /></span>
+                    </button>
+                  ) : v.thumbnail_url ? (
                     <img src={v.thumbnail_url} alt="" className="aspect-video w-28 shrink-0 rounded object-cover" />
                   ) : (
                     <div className="grid aspect-video w-28 shrink-0 place-items-center rounded bg-secondary text-[10px] text-muted-foreground">{v.kind === "short" ? "Short" : "Longo"}</div>
@@ -242,9 +249,14 @@ export default function YouTubePage() {
                     <p className={cn("mt-0.5 flex items-center gap-1 text-xs font-medium", STATUS[v.status].tone)}>
                       {["scripting", "queued", "rendering"].includes(v.status) && <Loader2 className="h-3 w-3 animate-spin" />}
                       {STATUS[v.status].label}
+                      {v.preview_url && (
+                        <button type="button" onClick={() => setWatching(v)} className="ml-2 inline-flex items-center gap-0.5 font-normal text-foreground hover:underline">
+                          assistir <Play className="h-3 w-3" />
+                        </button>
+                      )}
                       {v.youtube_id && (
                         <a href={`https://studio.youtube.com/video/${v.youtube_id}/edit`} target="_blank" rel="noreferrer" className="ml-2 inline-flex items-center gap-0.5 font-normal text-foreground hover:underline">
-                          abrir <ExternalLink className="h-3 w-3" />
+                          no YouTube <ExternalLink className="h-3 w-3" />
                         </a>
                       )}
                     </p>
@@ -256,6 +268,22 @@ export default function YouTubePage() {
           </div>
         </div>
       )}
+      <Dialog open={!!watching} onOpenChange={(o) => !o && setWatching(null)}>
+        <DialogContent className="max-w-3xl p-3">
+          <DialogTitle className="pr-6 text-sm">{watching?.title ?? watching?.topic}</DialogTitle>
+          {watching?.preview_url && (
+            <video
+              key={watching.id}
+              src={watching.preview_url}
+              controls
+              autoPlay
+              playsInline
+              className={cn("mx-auto w-full rounded bg-black", watching.kind === "short" ? "max-h-[75vh] max-w-[360px]" : "aspect-video")}
+            />
+          )}
+          <p className="text-xs text-muted-foreground">Prévia em qualidade menor; no YouTube o vídeo está em alta qualidade. Para publicar, abra no YouTube Studio (no canal certo) e mude para Público.</p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

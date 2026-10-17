@@ -58,6 +58,8 @@ create table if not exists public.yt_videos (
   updated_at timestamptz not null default now()
 );
 create index if not exists yt_videos_status on public.yt_videos (status);
+-- Cópia leve do vídeo para assistir no Studio antes de publicar (apagada em 7 dias pela limpeza do storage)
+alter table public.yt_videos add column if not exists preview_url text;
 
 alter table public.yt_videos drop constraint if exists yt_videos_status_check;
 alter table public.yt_videos add constraint yt_videos_status_check check (status in ('draft', 'scripting', 'queued', 'rendering', 'uploaded', 'failed'));

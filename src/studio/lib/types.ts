@@ -415,6 +415,7 @@ export interface YtVideo {
   publish_at: string | null;
   youtube_id: string | null;
   thumbnail_url: string | null;
+  preview_url: string | null;
   duration_s: number | null;
   error: string | null;
   created_at: string;

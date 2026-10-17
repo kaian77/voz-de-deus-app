@@ -3,7 +3,8 @@
 // - vídeo de post: apagado 1 dia depois de publicado (o Instagram e o TikTok já guardam a cópia deles;
 //   no TikTok o vídeo vai para a caixa de entrada do app na hora de publicar);
 // - vídeo pronto que não virou post (post descartado): apagado depois de 30 dias;
-// - vídeo IA (Kling/Higgsfield): apagado 30 dias depois de criado.
+// - vídeo IA (Kling/Higgsfield): apagado 30 dias depois de criado;
+// - prévia dos vídeos do YouTube (cópia leve para assistir no Studio): apagada 7 dias depois do envio.
 // Posts agendados ou esperando aprovação nunca perdem o vídeo.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
@@ -63,6 +64,19 @@ export async function cleanupStorage(db: SupabaseClient) {
       removed.push(path);
     }
     await db.from("ai_videos").update({ video_url: null, file_deleted_at: new Date().toISOString() }).eq("id", v.id);
+  }
+
+  // 1c) Prévias dos vídeos do YouTube (o vídeo de verdade fica no YouTube)
+  const { data: ytPreviews } = await db.from("yt_videos").select("id,preview_url").not("preview_url", "is", null)
+    .lt("updated_at", ago(7)).order("updated_at").limit(BATCH);
+  for (const v of ytPreviews ?? []) {
+    const path = storagePath(v.preview_url!);
+    if (path) {
+      const { error } = await db.storage.from("media").remove([path]);
+      if (error) continue;
+      removed.push(path);
+    }
+    await db.from("yt_videos").update({ preview_url: null }).eq("id", v.id);
   }
 
   // 2) Vídeos enviados para posts já publicados
