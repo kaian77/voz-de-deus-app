@@ -24,7 +24,7 @@ export type Analysis = {
   errors: string[];
 };
 
-const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ")
+export const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ")
   .split(/\s+/).filter((w) => w.length > 2 && !["pin", "pins", "broche", "botton", "metal", "esmaltado", "com", "para", "brax", "multicolorido"].includes(w));
 const median = (a: number[]) => {
   const s = [...a].sort((x, y) => x - y);
@@ -264,6 +264,8 @@ export async function publishToMercadoLivre(
     stock?: number | null;
     /** Fotos já tratadas para o ML (tabela ml_photos): substituem as do anúncio mesmo ativo */
     ml_ready_pictures?: boolean;
+    /** Anúncios que já são de outro produto da loja: nunca são atualizados com este */
+    exclude_ids?: string[];
   },
   /** Anúncios do vendedor já carregados (a sincronização em lote busca uma vez só) */
   sellerItems?: MlItem[],
@@ -284,7 +286,7 @@ export async function publishToMercadoLivre(
   };
 
   // Produto já anunciado (em qualquer status, pelo SKU ou pelo nome): atualiza em vez de duplicar
-  const existing = await findMlListing(token, acc.external_id, product.name, product.sku, sellerItems);
+  const existing = await findMlListing(token, acc.external_id, product.name, product.sku, sellerItems, new Set(product.exclude_ids ?? []));
   if (existing) {
     const id = existing.id;
     await setDescription(id, true);
@@ -417,15 +419,15 @@ const DEFAULT_ML_STOCK = 200;
  * Anúncio do vendedor para o produto, em qualquer status menos encerrado: primeiro pelo SKU, depois pelo nome.
  * Com mais de um, prefere o ativo.
  */
-async function findMlListing(token: string, sellerId: string, name: string, sku?: string, sellerItems?: MlItem[]): Promise<MlItem | null> {
-  const pick = (items: MlItem[]) => items.find((i) => i.status === "active") ?? items[0] ?? null;
+async function findMlListing(token: string, sellerId: string, name: string, sku?: string, sellerItems?: MlItem[], exclude = new Set<string>()): Promise<MlItem | null> {
+  const pick = (items: MlItem[]) => (items = items.filter((i) => !exclude.has(i.id))).find((i) => i.status === "active") ?? items[0] ?? null;
   if (sku) {
     const found = await ml<{ results: string[] }>(token, `/users/${sellerId}/items/search?seller_sku=${encodeURIComponent(sku)}`)
       .catch(() => ({ results: [] as string[] }));
     if (found.results.length) {
       const batch = await ml<{ code: number; body: MlItem }[]>(token, `/items?ids=${found.results.slice(0, 20).join(",")}`);
       const items = batch.filter((r) => r.code === 200 && r.body.status !== "closed").map((r) => r.body);
-      if (items.length) return pick(items);
+      if (pick(items)) return pick(items);
     }
   }
   const words = norm(name);
