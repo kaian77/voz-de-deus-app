@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -59,6 +60,15 @@ def geocode(place):
     return float(h["lat"]), float(h["lon"]), [float(x) for x in h["boundingbox"]]
 
 
+def around(lat, lng, bbox, km):
+    """Área da busca: quadrado de lado 2*km em volta do centro, sem passar do limite do lugar no OpenStreetMap.
+    (Regiões administrativas como "Sobradinho" são enormes; o que interessa é o miolo, onde ficam as empresas.)"""
+    dlat = km / 111.0
+    dlng = km / (111.0 * math.cos(math.radians(lat)))
+    s, n, w, e = bbox
+    return [max(s, lat - dlat), min(n, lat + dlat), max(w, lng - dlng), min(e, lng + dlng)]
+
+
 def cells(bbox, n):
     """Divide a área em n x n pedaços -> [{lat, lon, radius, zoom}] (uma busca no Maps por pedaço)."""
     s, nn, w, e = bbox
@@ -81,8 +91,11 @@ def cells(bbox, n):
 def scraper(method, path, body=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(SCRAPER + path, data=data, method=method, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return r.read()
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.read()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"robô respondeu {e.code}: {e.read()[:200].decode(errors='replace')}") from None
 
 
 def wait_scraper():
@@ -97,7 +110,7 @@ def wait_scraper():
 
 def scrape(keyword, cell, depth):
     """Uma busca no robô -> linhas do CSV dele (title, phone, website, category, address, latitude, longitude...)."""
-    body = {"name": "studio", "keywords": [keyword], "lang": "pt-BR", "fast_mode": False, "depth": depth,
+    body = {"name": "studio", "keywords": [keyword], "lang": "pt", "fast_mode": False, "depth": depth,
             "email": False, "max_time": 600, **cell}
     job = json.loads(scraper("POST", "/api/v1/jobs", body)).get("id")
     if not job:
@@ -170,9 +183,10 @@ def run(search):
     if not area:
         raise RuntimeError(f"não achei \"{search['place']}\" no mapa; escreva bairro e cidade (ex.: Sobradinho DF)")
     lat, lng, bbox = area
+    wanted = max(1, min(int(search["wanted"]), 200))
+    bbox = around(lat, lng, bbox, 2.5 if wanted <= 30 else 4)
     rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"lat": lat, "lng": lng, "bbox": bbox, "updated_at": now()})
 
-    wanted = max(1, min(int(search["wanted"]), 200))
     # Só uns 30-50% das empresas não têm site e têm celular: pede bem mais do que o necessário
     n = 1 if wanted <= 15 else 2 if wanted <= 60 else 3
     depth = 5 if wanted <= 30 else 10
@@ -208,6 +222,8 @@ def run(search):
 
 def main():
     if "--check" in sys.argv:
+        if "--retry-failed" in sys.argv:  # rodada manual: buscas que falharam voltam para a fila
+            rest("PATCH", "lead_searches?status=eq.failed", {"status": "queued", "error": None})
         requeue_stuck()
         print("queued" if queued() else "empty")
         return

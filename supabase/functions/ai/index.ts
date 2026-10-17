@@ -99,6 +99,12 @@ Deno.serve(async (req) => {
     }
     if (action === "leads_search") {
       // Prospecção: entra na fila do workflow "Leads do Google Maps" (empresas sem site e com WhatsApp)
+      if (input.retry_id) {
+        const { data, error } = await db.from("lead_searches").update({ status: "queued", error: null, updated_at: new Date().toISOString() })
+          .eq("id", String(input.retry_id)).eq("user_id", userId).eq("status", "failed").select().single();
+        if (error || !data) throw new HttpError(404, "Busca não encontrada");
+        return json({ ...data, started: await dispatchRender("leads.yml") });
+      }
       const query = String(input.query ?? "").trim().slice(0, 80);
       const place = String(input.place ?? "").trim().slice(0, 120);
       if (!query || !place) throw new HttpError(400, "Diga o que procurar e onde (ex.: nutricionista, Sobradinho DF)");
