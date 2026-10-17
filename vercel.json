@@ -5,6 +5,10 @@
       "destination": "https://rrlxhnmfsmknzhqpfrhr.supabase.co/storage/v1/object/public/media/:path*"
     },
     {
+      "source": "/p/:slug",
+      "destination": "/api/landing?slug=:slug"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

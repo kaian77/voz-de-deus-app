@@ -97,6 +97,7 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
     ai_videos: [],
     lead_searches: [],
     leads: [],
+    landing_pages: [],
     strategies: [],
     site_reviews: [],
     brand_settings: [
