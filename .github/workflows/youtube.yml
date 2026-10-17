@@ -53,9 +53,16 @@ jobs:
         if: steps.queue.outputs.status == 'queued'
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0"
+          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0" "rembg[cpu]>=2.0.50"
           # Fonte das legendas visível para o libass
           mkdir -p ~/.fonts && cp video/engine/assets/fonts/*.ttf ~/.fonts/ && fc-cache -f >/dev/null
+
+      - name: Modelo de recorte (cache)
+        if: steps.queue.outputs.status == 'queued'
+        uses: actions/cache@v4
+        with:
+          path: ~/.u2net
+          key: u2net-v1
 
       - name: Fazer e enviar os vídeos
         if: steps.queue.outputs.status == 'queued'

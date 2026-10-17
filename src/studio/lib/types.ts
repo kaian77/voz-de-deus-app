@@ -390,6 +390,7 @@ export interface YtChannel {
   thumbnail: string | null;
   enabled: boolean;
   language: "pt" | "en";
+  style: "parallax" | "whiteboard" | "classic";
   niche: string;
   shorts_per_day: number;
   long_per_week: number;

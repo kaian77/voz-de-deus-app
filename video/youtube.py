@@ -30,6 +30,7 @@ import urllib.parse
 import urllib.request
 
 from worker import KEY, URL, http, rest
+import yt_styles
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FONTS = os.path.join(HERE, "engine", "assets", "fonts")
@@ -269,11 +270,11 @@ def _fetch(url, headers=None, data=None, timeout=180):
         return r.read(), r.headers.get("Content-Type", "")
 
 
-def image(prompt, w, h, path, seed):
+def image(prompt, w, h, path, seed, style=None):
     """Imagem da cena: Cloudflare Workers AI (grátis, quando configurado) -> Pollinations -> imagem anterior/fundo liso."""
     from PIL import Image
 
-    full = f"{prompt.strip().rstrip('.')}. {STYLE}"
+    full = f"{prompt.strip().rstrip('.')}. {STYLE if style is None else style}"
     tries = []
     acc, cft = os.environ.get("CF_ACCOUNT_ID"), os.environ.get("CF_API_TOKEN")
     if acc and cft:
@@ -477,7 +478,8 @@ def render(video, work):
     script = video["script"]
     short = video["kind"] == "short"
     w, h = (1080, 1920) if short else (1920, 1080)
-    channel = (rest("GET", f"yt_channels?id=eq.{video['channel_ref']}&select=voice,language") or [{}])[0]
+    channel = (rest("GET", f"yt_channels?id=eq.{video['channel_ref']}&select=voice,language,style") or [{}])[0]
+    style = channel.get("style") or "parallax"
     en = channel.get("language") == "en"
     voice = channel.get("voice") or ("en-US-AndrewNeural" if en else "pt-BR-AntonioNeural")
     if not voice.startswith("en-" if en else "pt-"):  # voz de outro idioma: usa a padrão do idioma do canal
@@ -499,9 +501,7 @@ def render(video, work):
         if not image(sc["image"], w, h, img, base_seed + i):
             fallback_image(img, w, h, prev_img)
         prev_img = img
-        out = os.path.join(work, f"c{i}.mp4")
-        clip(img, length, sc.get("motion") or "zoom_in", w, h, out)
-        clips.append(out)
+        clips.append({"img": img, "length": length, "advance": length - XF, "motion": sc.get("motion") or "zoom_in"})
         lens.append(length)
         voices.append((t + lead, audio))
         words += [{**x, "t": x["t"] + t + lead} for x in ws]
@@ -512,7 +512,24 @@ def render(video, work):
     total = t + XF
 
     silent = os.path.join(work, "video.mp4")
-    join(clips, lens, silent)
+    log(f"  montando ({style})…")
+    if style == "whiteboard":
+        yt_styles.whiteboard_video(clips, w, h, silent, hand=hand_asset(work))
+    else:
+        files = []
+        for i, c in enumerate(clips):
+            out = os.path.join(work, f"c{i}.mp4")
+            fg = None
+            if style == "parallax":
+                try:
+                    fg = yt_styles.cutout(c["img"], os.path.join(work, f"fg{i}.png"))
+                except Exception as e:  # sem recorte: a cena sai só com o fundo em movimento
+                    log(f"    recorte: {e}")
+                yt_styles.parallax_clip(c["img"], fg, c["length"], c["motion"], w, h, out)
+            else:
+                clip(c["img"], c["length"], c["motion"], w, h, out)
+            files.append(out)
+        join(files, lens, silent)
 
     # Áudio: narração + trilha baixinha (abaixa mais quando tem voz)
     mixl = np.zeros(int((total + 1) * SR), dtype=np.float32)
@@ -527,11 +544,25 @@ def render(video, work):
     # Efeitos: batida no gancho e whoosh em cada troca de cena
     imp = sfx_impact()
     mixl[: len(imp)] += imp[: len(mixl)] * 0.45
-    wh = sfx_whoosh()
-    for st in starts[1:]:
-        i0 = max(0, int((st - XF * 0.6) * SR))
-        seg = wh[: max(0, len(mixl) - i0)]
-        mixl[i0:i0 + len(seg)] += seg * (0.22 if short else 0.12)
+    if style == "whiteboard":
+        # Lápis raspando enquanto desenha + papel amassando na troca de cena
+        for st, c in zip(starts, clips):
+            dt = min(c["advance"] * 0.55, 3.2 if short else 4.5)
+            pen = yt_styles.sfx_pencil(dt)
+            i0 = int(st * SR)
+            seg = pen[: max(0, len(mixl) - i0)]
+            mixl[i0:i0 + len(seg)] += seg * 0.05
+        pap = yt_styles.sfx_paper()
+        for st in starts[1:]:
+            i0 = max(0, int((st - 0.45) * SR))
+            seg = pap[: max(0, len(mixl) - i0)]
+            mixl[i0:i0 + len(seg)] += seg * 0.3
+    else:
+        wh = sfx_whoosh()
+        for st in starts[1:]:
+            i0 = max(0, int((st - XF * 0.6) * SR))
+            seg = wh[: max(0, len(mixl) - i0)]
+            mixl[i0:i0 + len(seg)] += seg * (0.22 if short else 0.12)
     mixl = np.clip(mixl / max(1e-6, np.abs(mixl).max()) * 0.95, -1, 1)
     wav = os.path.join(work, "audio.wav")
     import wave
@@ -544,20 +575,25 @@ def render(video, work):
 
     ass = os.path.join(work, "cap.ass")
     captions(words, short, w, h, ass, hook=script.get("thumbnail_text"))
-    pt = os.path.join(work, "particles.mov")
-    particles(w, h, pt)
     final = os.path.join(work, "final.mp4")
-    # Cor mais viva + vinheta + partículas de luz + grão de filme + legendas; no Short, barra de progresso embaixo
-    fc = (f"[0:v]eq=saturation=1.12:contrast=1.05,vignette=PI/5[b];"
-          f"[2:v]scale={w}:{h},format=rgba,colorchannelmixer=aa=0.75[p];"
-          f"[b][p]overlay=shortest=1,noise=alls=5:allf=t,subtitles={ass}:fontsdir={FONTS}[s]")
-    if short:
-        fc += f";[3:v]format=rgba[bar];[s][bar]overlay=x='-w+w*t/{total:.2f}':y='H-h':shortest=1[v]"
+    args = ["ffmpeg", "-v", "error", "-y", "-i", silent, "-i", wav]
+    if style == "whiteboard":  # papel limpo: sem vinheta, grão nem partículas
+        fc = f"[0:v]subtitles={ass}:fontsdir={FONTS}[s]"
+        bar = 2
+    else:
+        # Cor mais viva + vinheta + partículas de luz + grão de filme + legendas
+        pt = os.path.join(work, "particles.mov")
+        particles(w, h, pt)
+        args += ["-stream_loop", "-1", "-i", pt]
+        fc = (f"[0:v]eq=saturation=1.12:contrast=1.05,vignette=PI/5[b];"
+              f"[2:v]scale={w}:{h},format=rgba,colorchannelmixer=aa=0.75[p];"
+              f"[b][p]overlay=shortest=1,noise=alls=5:allf=t,subtitles={ass}:fontsdir={FONTS}[s]")
+        bar = 3
+    if short:  # barra de progresso embaixo
+        args += ["-f", "lavfi", "-i", f"color=c=0xFFD700:s={w}x12:r={FPS}:d={total + 1:.2f}"]
+        fc += f";[{bar}:v]format=rgba[bar];[s][bar]overlay=x='-w+w*t/{total:.2f}':y='H-h':shortest=1[v]"
     else:
         fc += ";[s]null[v]"
-    args = ["ffmpeg", "-v", "error", "-y", "-i", silent, "-i", wav, "-stream_loop", "-1", "-i", pt]
-    if short:
-        args += ["-f", "lavfi", "-i", f"color=c=0xFFD700:s={w}x12:r={FPS}:d={total + 1:.2f}"]
     args += ["-filter_complex", fc, "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium" if short else "faster",
              "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", final]
     subprocess.run(args, check=True)
@@ -569,6 +605,38 @@ def render(video, work):
     thumb = os.path.join(work, "thumb.jpg")
     thumbnail(thumb_src, script["thumbnail_text"], thumb)
     return final, thumb, total, chapters, en
+
+
+def hand_asset(work):
+    """Mão segurando a caneta para o estilo desenho à mão: gerada uma vez e guardada no storage."""
+    path = os.path.join(work, "hand.png")
+    url = f"{URL}/storage/v1/object/public/media/youtube-assets/hand-v1.png"
+    try:
+        raw, _ = _fetch(url, timeout=60)
+        with open(path, "wb") as f:
+            f.write(raw)
+        return yt_styles.load_hand(path)
+    except Exception:
+        pass
+    src = os.path.join(work, "hand_src.jpg")
+    ok = image("a realistic right human hand holding a black marker pen, the pen tip pointing to the top-left corner, "
+               "seen from above, hand coming from the bottom-right corner", 1024, 1024, src, 4242,
+               style="photorealistic, studio light, isolated on a plain pure white background, no shadow, no text")
+    if not ok:
+        return None
+    try:
+        if not yt_styles.cutout(src, path):
+            return None
+        from PIL import Image
+
+        im = Image.open(path)
+        im = im.crop(im.getbbox()).resize((int(im.width * 0.55), int(im.height * 0.55)))
+        im.save(path)
+        storage_upload(path, "youtube-assets/hand-v1.png", "image/png")
+        return yt_styles.load_hand(path)
+    except Exception as e:
+        log(f"  mão: {e}")
+        return None
 
 
 def description(script, chapters, short, en=False):

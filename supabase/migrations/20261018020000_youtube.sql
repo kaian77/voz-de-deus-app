@@ -26,6 +26,10 @@ create unique index if not exists yt_channels_channel on public.yt_channels (cha
 alter table public.yt_channels add column if not exists language text not null default 'pt';
 alter table public.yt_channels drop constraint if exists yt_channels_language_check;
 alter table public.yt_channels add constraint yt_channels_language_check check (language in ('pt', 'en'));
+-- Estilo da animação: parallax (2.5D, personagem recortado sobre o fundo), whiteboard (desenho à mão), classic (zoom)
+alter table public.yt_channels add column if not exists style text not null default 'parallax';
+alter table public.yt_channels drop constraint if exists yt_channels_style_check;
+alter table public.yt_channels add constraint yt_channels_style_check check (style in ('parallax', 'whiteboard', 'classic'));
 
 -- Tokens ficam numa tabela à parte, só para o servidor
 create table if not exists public.yt_tokens (
