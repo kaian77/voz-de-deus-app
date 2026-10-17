@@ -1,0 +1,70 @@
+# Cortes (Renda extra): processa as fontes de clipping (tabela clip_sources) com video/clips.py — baixa do Drive,
+# transcreve, a IA escolhe os momentos, corta na vertical e envia ao canal. O Studio dispara ao cadastrar uma fonte;
+# o horário abaixo revisita as fontes a cada 6 h para pegar episódios novos.
+name: Cortes
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+concurrency:
+  group: clips
+  cancel-in-progress: false
+
+jobs:
+  clips:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL }}
+    steps:
+      - name: Chaves do Supabase
+        run: |
+          set -euo pipefail
+          api() { curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1$1"; }
+          REF=$(api /projects | jq -r --arg n "$SUPABASE_PROJECT_NAME" '.[] | select(.name == $n) | .id' | head -1)
+          [[ -n $REF ]] || { echo "::error::Projeto $SUPABASE_PROJECT_NAME não encontrado"; exit 1; }
+          KEY=$(api "/projects/$REF/api-keys?reveal=true" | jq -r '[.[] | select(.name == "service_role" or .type == "secret") | .api_key][0] // empty')
+          [[ -n $KEY ]] || { echo "::error::Não consegui ler a chave de serviço do projeto"; exit 1; }
+          echo "::add-mask::$KEY"
+          echo "SUPABASE_URL=https://$REF.supabase.co" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_KEY=$KEY" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - name: Tem fonte na fila?
+        id: queue
+        run: echo "status=$(cd video && python3 clips.py --check)" >> "$GITHUB_OUTPUT"
+
+      - name: Espaço em disco (vídeos grandes)
+        if: steps.queue.outputs.status == 'queued'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
+
+      - uses: actions/setup-python@v5
+        if: steps.queue.outputs.status == 'queued'
+        with:
+          python-version: "3.12"
+
+      - name: Dependências
+        if: steps.queue.outputs.status == 'queued'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0" "faster-whisper>=1.0" "opencv-python-headless>=4.9" "gdown>=5.2"
+          mkdir -p ~/.fonts && cp video/engine/assets/fonts/*.ttf ~/.fonts/ && fc-cache -f >/dev/null
+
+      - name: Modelo de transcrição (cache)
+        if: steps.queue.outputs.status == 'queued'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: whisper-small-v1
+
+      - name: Fazer e enviar os cortes
+        if: steps.queue.outputs.status == 'queued'
+        run: cd video && python3 clips.py

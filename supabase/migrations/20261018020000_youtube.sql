@@ -25,7 +25,7 @@ create unique index if not exists yt_channels_channel on public.yt_channels (cha
 -- Idioma do canal (um canal por idioma: o YouTube recomenda melhor canal de uma língua só)
 alter table public.yt_channels add column if not exists language text not null default 'pt';
 alter table public.yt_channels drop constraint if exists yt_channels_language_check;
-alter table public.yt_channels add constraint yt_channels_language_check check (language in ('pt', 'en'));
+alter table public.yt_channels add constraint yt_channels_language_check check (language in ('pt', 'en', 'es'));
 -- Estilo da animação: parallax (2.5D, personagem recortado sobre o fundo), whiteboard (desenho à mão), classic (zoom)
 alter table public.yt_channels add column if not exists style text not null default 'parallax';
 alter table public.yt_channels drop constraint if exists yt_channels_style_check;
@@ -68,7 +68,7 @@ alter table public.yt_videos add column if not exists preview_url text;
 alter table public.yt_videos drop constraint if exists yt_videos_status_check;
 alter table public.yt_videos add constraint yt_videos_status_check check (status in ('draft', 'scripting', 'queued', 'rendering', 'uploaded', 'failed'));
 alter table public.yt_videos drop constraint if exists yt_videos_kind_check;
-alter table public.yt_videos add constraint yt_videos_kind_check check (kind in ('short', 'long'));
+alter table public.yt_videos add constraint yt_videos_kind_check check (kind in ('short', 'long', 'clip'));
 
 alter table public.yt_channels enable row level security;
 alter table public.yt_tokens enable row level security;

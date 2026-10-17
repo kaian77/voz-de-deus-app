@@ -1,0 +1,413 @@
+#!/usr/bin/env python3
+"""Cortes para canais de clipping (Renda extra) — roda no GitHub Actions (workflow "Cortes").
+
+Só para conteúdo LIBERADO: campanhas de clipping (Whop Content Rewards etc.), Creative Commons ou criadores que
+autorizaram. Fila: tabela clip_sources (status "queued"; as "done" são revistas a cada 12 h para pegar episódios
+novos na mesma pasta). Para cada vídeo da fonte:
+1. baixa do Google Drive (pasta ou arquivo compartilhado com "qualquer pessoa com o link") ou de um link direto;
+2. transcreve com faster-whisper (tempo de cada palavra);
+3. a IA (Claude) escolhe os melhores momentos de 20 a 58 s, com título curto para a tela e título do YouTube;
+4. corta na vertical 1080x1920 seguindo o rosto de quem fala (OpenCV); sem rosto claro, usa o vídeo inteiro
+   centralizado sobre um fundo desfocado;
+5. título na tela, logo da campanha, legendas palavra a palavra e áudio normalizado;
+6. envia ao canal (agendado em horários do público dos EUA) e grava um yt_videos kind = 'clip' com o link,
+   para a pessoa enviar no painel da campanha.
+
+Variáveis: SUPABASE_URL, SUPABASE_SERVICE_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ANTHROPIC_API_KEY
+(opcional CLAUDE_MODEL). Uso: python3 video/clips.py [--check]
+"""
+import datetime as dt
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import urllib.parse
+import urllib.request
+
+from worker import URL, rest
+import youtube as yt
+
+VIDEO_EXT = (".mp4", ".mov", ".mkv", ".m4v", ".webm")
+SKIP_NAMES = re.compile(r"trailer|teaser|coming soon|promo", re.I)
+W, H, FPS = 1080, 1920, 30
+SLOTS = ["14:00", "19:00", "23:00", "11:00", "16:30", "21:00"]  # horário de Brasília (tarde/noite nos EUA)
+
+
+def log(*a):
+    print(*a, flush=True)
+
+
+def now():
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def patch_source(sid, **f):
+    f["updated_at"] = now().isoformat()
+    rest("PATCH", f"clip_sources?id=eq.{sid}", f)
+
+
+def pending():
+    """Fontes novas + fontes já feitas há mais de 12 h (para pegar episódios novos na pasta)."""
+    q = rest("GET", "clip_sources?status=eq.queued&order=created_at&limit=3&select=*") or []
+    limit = (now() - dt.timedelta(hours=12)).isoformat()
+    again = rest("GET", f"clip_sources?status=eq.done&updated_at=lt.{urllib.parse.quote(limit)}&order=updated_at&limit=3&select=*") or []
+    return q + again
+
+
+# ------------------------------------------------------------------------------------------------ download
+
+def drive_files(url, folder):
+    """Lista (id, nome) dos vídeos de uma pasta do Drive, ou do arquivo único."""
+    import gdown
+
+    if "/folders/" in url:
+        files = gdown.download_folder(url, output=folder, skip_download=True, quiet=True, use_cookies=False) or []
+        vids = [(f.id, os.path.basename(f.path)) for f in files if f.path.lower().endswith(VIDEO_EXT)]
+    else:
+        m = re.search(r"/d/([\w-]+)|id=([\w-]+)", url)
+        vids = [(m.group(1) or m.group(2), "video.mp4")] if m else []
+    main = [v for v in vids if not SKIP_NAMES.search(v[1])]
+    return main or vids
+
+
+def download(file_id, name, folder):
+    import gdown
+
+    out = os.path.join(folder, re.sub(r"[^\w.-]", "_", name) or "video.mp4")
+    if not out.lower().endswith(VIDEO_EXT):
+        out += ".mp4"
+    got = gdown.download(id=file_id, output=out, quiet=True, use_cookies=False)
+    if not got or not os.path.exists(out) or os.path.getsize(out) < 100_000:
+        raise RuntimeError(f"não consegui baixar {name} do Drive (confira se está como 'qualquer pessoa com o link')")
+    return out
+
+
+def download_direct(url, folder):
+    out = os.path.join(folder, "video.mp4")
+    req = urllib.request.Request(url, headers={"User-Agent": "BraxStudio/1.0"})
+    with urllib.request.urlopen(req, timeout=600) as r, open(out, "wb") as f:
+        shutil.copyfileobj(r, f)
+    return out
+
+
+# ------------------------------------------------------------------------------------------------ transcrição
+
+def transcribe(video, work):
+    from faster_whisper import WhisperModel
+
+    audio = os.path.join(work, "audio.wav")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", video, "-vn", "-ac", "1", "-ar", "16000", audio], check=True)
+    model = WhisperModel("small", device="cpu", compute_type="int8")
+    segs, info = model.transcribe(audio, word_timestamps=True, vad_filter=True, beam_size=1)
+    words, lines = [], []
+    for s in segs:
+        lines.append((s.start, s.end, s.text.strip()))
+        for wd in s.words or []:
+            words.append({"t": wd.start, "d": max(0.05, wd.end - wd.start), "w": wd.word.strip()})
+    log(f"  transcrição: {len(lines)} trechos, idioma {info.language}")
+    return words, lines, info.language
+
+
+# ------------------------------------------------------------------------------------------------ IA
+
+def pick_moments(lines, n, campaign, rules, language):
+    """Claude escolhe os melhores momentos (ferramenta forçada = JSON garantido)."""
+    key = os.environ["ANTHROPIC_API_KEY"]
+    model = os.environ.get("CLAUDE_MODEL") or "claude-opus-5-5"
+    fmt = lambda s: f"{int(s // 60)}:{int(s % 60):02d}"  # noqa: E731
+    transcript = "\n".join(f"[{fmt(a)}-{fmt(b)}] {t}" for a, b, t in lines)[:180000]
+    lang = {"es": "Spanish", "pt": "Brazilian Portuguese"}.get(language, "English")
+    tool = {
+        "name": "save_clips",
+        "description": "Save the selected clips",
+        "input_schema": {
+            "type": "object",
+            "properties": {"clips": {"type": "array", "items": {"type": "object", "properties": {
+                "start": {"type": "number", "description": "start in seconds"},
+                "end": {"type": "number", "description": "end in seconds"},
+                "screen_title": {"type": "string", "description": f"on-screen title, max 7 words, in {lang}, hooky"},
+                "youtube_title": {"type": "string", "description": f"YouTube title, max 80 chars, in {lang}, no hashtags"},
+                "why": {"type": "string"},
+            }, "required": ["start", "end", "screen_title", "youtube_title", "why"]}}},
+            "required": ["clips"],
+        },
+    }
+    prompt = (
+        f"You are an expert short-form video editor who finds viral moments in long videos (campaign: {campaign}).\n"
+        f"Pick the {n} best moments for YouTube Shorts from the transcript below. Each clip must:\n"
+        "- be 20 to 58 seconds long and NOT overlap other clips;\n"
+        "- start right at a strong hook (a surprising line, a question, conflict, a laugh) — no warm-up;\n"
+        "- end on a payoff (punchline, reveal, strong reaction) and make sense on its own;\n"
+        "- favor funny, dramatic, relatable or conversation-worthy moments, as the campaign asks;\n"
+        "- avoid hate, sexual content, slurs or anything against YouTube policies.\n"
+        f"Campaign rules from the brand:\n{rules or '(none)'}\n\nTranscript with timestamps:\n{transcript}"
+    )
+    body = json.dumps({"model": model, "max_tokens": 4000, "tools": [tool], "tool_choice": {"type": "tool", "name": "save_clips"},
+                       "messages": [{"role": "user", "content": prompt}]}).encode()
+    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
+        "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    with urllib.request.urlopen(req, timeout=600) as r:
+        data = json.loads(r.read())
+    for block in data.get("content", []):
+        if block.get("type") == "tool_use":
+            return block["input"]["clips"]
+    raise RuntimeError("a IA não escolheu os momentos")
+
+
+def snap(clips, words, total):
+    """Ajusta início/fim aos limites das palavras, garante 15-59 s e tira sobreposições."""
+    out, used = [], []
+    for c in sorted(clips, key=lambda c: c["start"]):
+        a, b = max(0.0, float(c["start"])), min(total, float(c["end"]))
+        before = [w for w in words if w["t"] <= a + 0.3]
+        if before:
+            a = max(0.0, before[-1]["t"] - 0.15)
+        after = [w for w in words if w["t"] + w["d"] >= b - 0.3]
+        if after:
+            b = min(total, after[0]["t"] + after[0]["d"] + 0.35)
+        if b - a > 59:
+            b = a + 59
+        if b - a < 15 or any(not (b <= u0 or a >= u1) for u0, u1 in used):
+            continue
+        used.append((a, b))
+        out.append({**c, "start": a, "end": b})
+    return out
+
+
+# ------------------------------------------------------------------------------------------------ vídeo
+
+def probe_size(path):
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                          "-of", "csv=p=0", path], stdout=subprocess.PIPE, text=True, check=True).stdout.strip()
+    w, h = (int(x) for x in out.split(",")[:2])
+    return w, h
+
+
+def face_track(src, a, dur):
+    """Centro horizontal (0-1) do rosto principal ao longo do corte, 5 amostras/s. None se quase não há rosto."""
+    import cv2
+    import numpy as np
+
+    sw, sh = probe_size(src)
+    lw = 640
+    lh = int(round(sh * lw / sw / 2) * 2)
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{a:.2f}", "-i", src, "-t", f"{dur:.2f}", "-vf", f"fps=5,scale={lw}:{lh}",
+                          "-an", "-f", "rawvideo", "-pix_fmt", "gray", "-"], stdout=subprocess.PIPE, check=True).stdout
+    frames = np.frombuffer(raw, dtype=np.uint8).reshape(-1, lh, lw)
+    det = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    xs, hits = [], 0
+    for f in frames:
+        faces = det.detectMultiScale(f, scaleFactor=1.15, minNeighbors=5, minSize=(lh // 10, lh // 10))
+        if len(faces):
+            x, y, fw, fh = max(faces, key=lambda r: r[2] * r[3])
+            xs.append((x + fw / 2) / lw)
+            hits += 1
+        else:
+            xs.append(None)
+    if not frames.shape[0] or hits / frames.shape[0] < 0.4:
+        return None
+    # Preenche os buracos com o último rosto visto e suaviza (câmera calma, sem tremer)
+    last = next(x for x in xs if x is not None)
+    filled = []
+    for x in xs:
+        last = x if x is not None else last
+        filled.append(last)
+    k = 7
+    pad = np.pad(np.array(filled), (k // 2, k // 2), mode="edge")
+    smooth = np.convolve(pad, np.ones(k) / k, mode="valid")
+    return smooth
+
+
+def render_vertical(src, a, dur, out):
+    """Corte vertical 1080x1920: segue o rosto; sem rosto, vídeo inteiro sobre fundo desfocado."""
+    import numpy as np
+
+    track = face_track(src, a, dur)
+    if track is None:
+        vf = (f"[0:v]split[a][b];[a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},gblur=sigma=30,"
+              f"eq=brightness=-0.12[bg];[b]scale={W}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,fps={FPS},format=yuv420p[v]")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.2f}", "-i", src, "-t", f"{dur:.2f}", "-filter_complex", vf,
+                        "-map", "[v]", "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", out], check=True)
+        return "blur"
+    sw, sh = probe_size(src)
+    bw = int(round(sw * H / sh / 2) * 2)  # largura com altura 1920
+    dec = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", f"{a:.2f}", "-i", src, "-t", f"{dur:.2f}", "-vf", f"fps={FPS},scale={bw}:{H}",
+                            "-an", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
+    enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS),
+                            "-i", "-", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", out],
+                           stdin=subprocess.PIPE)
+    size = bw * H * 3
+    i = 0
+    while True:
+        buf = dec.stdout.read(size)
+        if len(buf) < size:
+            break
+        frame = np.frombuffer(buf, dtype=np.uint8).reshape(H, bw, 3)
+        cx = track[min(len(track) - 1, int(i / FPS * 5))] * bw
+        x0 = int(min(max(0, cx - W / 2), bw - W)) if bw > W else 0
+        enc.stdin.write(np.ascontiguousarray(frame[:, x0:x0 + W]).tobytes() if bw >= W else frame.tobytes())
+        i += 1
+    enc.stdin.close()
+    dec.wait()
+    if enc.wait() != 0 or i == 0:
+        raise RuntimeError("falha ao montar o corte vertical")
+    return "face"
+
+
+def finish(video_only, src, a, dur, words, title, logo, work, out):
+    """Título na tela, legendas, logo e áudio normalizado."""
+    ass = os.path.join(work, "cap.ass")
+    clip_words = [{**w, "t": w["t"] - a} for w in words if a <= w["t"] <= a + dur]
+    yt.captions(clip_words, True, W, H, ass)
+    with open(ass, encoding="utf-8") as f:
+        text = f.read()
+    style = (f"Style: Title,Poppins,62,&H00111111,&H00111111,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,16,0,8,90,90,0,1\n")
+    text = text.replace("\n\n[Events]", "\n" + style + "\n[Events]", 1)
+    safe = title.replace("{", "").replace("}", "").strip()
+    text += f"Dialogue: 2,{yt.ass_time(0)},{yt.ass_time(dur)},Title,,0,0,0,,{{\\pos({W // 2},{int(H * 0.12)})}}{safe}\n"
+    with open(ass, "w", encoding="utf-8") as f:
+        f.write(text)
+    args = ["ffmpeg", "-v", "error", "-y", "-i", video_only, "-ss", f"{a:.2f}", "-t", f"{dur:.2f}", "-i", src]
+    fc = f"[0:v]subtitles={ass}:fontsdir={yt.FONTS}[s]"
+    if logo:
+        args += ["-i", logo]
+        fc += f";[2:v]scale=200:-1[lg];[s][lg]overlay=W-w-40:{int(H * 0.2)}[v]"
+    else:
+        fc += ";[s]null[v]"
+    args += ["-filter_complex", fc, "-map", "[v]", "-map", "1:a:0?", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+             "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k",
+             "-shortest", "-movflags", "+faststart", out]
+    subprocess.run(args, check=True)
+
+
+# ------------------------------------------------------------------------------------------------ agenda e envio
+
+def next_slots(channel_ref, per_day, count):
+    """Próximos horários livres do canal (per_day por dia), a partir de daqui a 30 min."""
+    taken = {r["publish_at"][:16] for r in (rest("GET", f"yt_videos?channel_ref=eq.{channel_ref}&kind=eq.clip&publish_at=gt.{urllib.parse.quote(now().isoformat())}&select=publish_at") or []) if r.get("publish_at")}
+    out, day = [], (now() - dt.timedelta(hours=3)).date()
+    while len(out) < count:
+        for hhmm in SLOTS[:per_day]:
+            t = dt.datetime.fromisoformat(f"{day}T{hhmm}:00-03:00").astimezone(dt.timezone.utc)
+            if t > now() + dt.timedelta(minutes=30) and t.isoformat()[:16] not in taken:
+                out.append(t)
+                if len(out) == count:
+                    break
+        day += dt.timedelta(days=1)
+    return out
+
+
+def upload_clip(source, channel, clip, path, thumb, preview, when, work):
+    token = yt.google_token(channel["id"])
+    tags = [h.lstrip("#") for h in (source.get("hashtags") or "").split() if h.startswith("#")]
+    hashtags = " ".join("#" + t for t in tags)
+    lang = channel.get("language") or "en"
+    credit = source.get("credit") or source["campaign"]
+    desc = (f"{clip['youtube_title']}\n\n"
+            f"{'Credit' if lang == 'en' else 'Crédito'}: {credit}\n\n{hashtags} #shorts").strip()
+    title = f"{clip['youtube_title']} {('#' + tags[0]) if tags else ''}".strip()[:100]
+    future = when > now() + dt.timedelta(minutes=20)
+    meta = {
+        "snippet": {"title": title, "description": desc[:4900], "tags": tags[:15] + ["shorts", "clips"], "categoryId": "24",
+                    "defaultLanguage": lang, "defaultAudioLanguage": lang},
+        "status": {"privacyStatus": "private" if future else "public", **({"publishAt": when.isoformat()} if future else {}),
+                   "selfDeclaredMadeForKids": False},
+    }
+    up = yt.upload_video(token, path, meta)
+    rest("POST", "yt_videos", {
+        "user_id": source["user_id"], "channel_ref": channel["id"], "kind": "clip", "status": "uploaded",
+        "topic": source["campaign"], "angle": clip.get("why"), "title": title, "youtube_id": up["id"],
+        "publish_at": when.isoformat(), "thumbnail_url": thumb, "preview_url": preview,
+        "duration_s": round(clip["end"] - clip["start"], 1),
+        "script": {"source_id": source["id"], "file": clip.get("file"), "start": clip["start"], "end": clip["end"],
+                   "screen_title": clip["screen_title"]},
+    })
+    return up["id"]
+
+
+def logo_for(source, folder):
+    """Logo da campanha: Logo.png da mesma pasta do Drive, se existir."""
+    import gdown
+
+    if "/folders/" not in source["url"]:
+        return None
+    try:
+        files = gdown.download_folder(source["url"], output=folder, skip_download=True, quiet=True, use_cookies=False) or []
+        for f in files:
+            if re.search(r"logo", os.path.basename(f.path), re.I) and f.path.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                out = os.path.join(folder, "logo" + os.path.splitext(f.path)[1].lower())
+                return gdown.download(id=f.id, output=out, quiet=True, use_cookies=False)
+    except Exception as e:
+        log(f"  logo: {e}")
+    return None
+
+
+def process(source):
+    sid = source["id"]
+    channel = (rest("GET", f"yt_channels?id=eq.{source['channel_ref']}&select=id,language") or [None])[0]
+    if not channel:
+        raise RuntimeError("canal não encontrado")
+    prev = rest("GET", f"yt_videos?kind=eq.clip&channel_ref=eq.{channel['id']}&select=script") or []
+    done_files = {(p.get("script") or {}).get("file") for p in prev if (p.get("script") or {}).get("source_id") == sid}
+    done_ids = {f for f in done_files if f}  # vídeos dessa fonte que já viraram cortes
+    patch_source(sid, status="processing", error=None)
+    made = 0
+    with tempfile.TemporaryDirectory() as work:
+        if "drive.google.com" in source["url"]:
+            files = [f for f in drive_files(source["url"], work) if f[0] not in done_ids]
+        else:
+            files = [("direct", "video.mp4")] if "direct" not in done_ids else []
+        if not files:
+            log("  nada novo nessa fonte")
+        logo = logo_for(source, work)
+        for fid, name in files[:2]:  # até 2 vídeos novos por rodada (tempo do workflow)
+            log(f"  baixando {name}…")
+            video = download(fid, name, work) if fid != "direct" else download_direct(source["url"], work)
+            words, lines, language = transcribe(video, work)
+            total = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", video],
+                                         stdout=subprocess.PIPE, text=True, check=True).stdout.strip() or 0)
+            moments = snap(pick_moments(lines, source.get("clips_wanted") or 6, source["campaign"], source.get("rules"),
+                                        channel.get("language") or language), words, total)
+            slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
+            for i, (clip, when) in enumerate(zip(moments, slots)):
+                clip["file"] = fid
+                a, dur = clip["start"], clip["end"] - clip["start"]
+                log(f"  corte {i + 1}/{len(moments)}: {clip['screen_title']} ({dur:.0f}s)")
+                vo = os.path.join(work, f"v{i}.mp4")
+                mode = render_vertical(video, a, dur, vo)
+                final = os.path.join(work, f"clip{i}.mp4")
+                finish(vo, video, a, dur, words, clip["screen_title"], logo, work, final)
+                thumb_path = os.path.join(work, f"t{i}.jpg")
+                subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{dur * 0.3:.2f}", "-i", final, "-frames:v", "1", "-vf", "scale=540:-2", thumb_path], check=True)
+                small = os.path.join(work, f"p{i}.mp4")
+                subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", final, "-vf", "scale=360:-2", "-c:v", "libx264", "-preset", "veryfast",
+                                "-crf", "30", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", small], check=True)
+                key = f"{source['user_id']}/clips/{sid}-{fid}-{i}"
+                thumb = yt.storage_upload(thumb_path, key + ".jpg", "image/jpeg")
+                preview = yt.storage_upload(small, key + ".mp4", "video/mp4")
+                vid = upload_clip(source, channel, clip, final, thumb, preview, when, work)
+                made += 1
+                log(f"    ✓ https://youtu.be/{vid} ({mode}) → publica {when.isoformat()}")
+            os.remove(video)
+    patch_source(sid, status="done", clips_made=(source.get("clips_made") or 0) + made)
+
+
+def main():
+    if "--check" in sys.argv:
+        print("queued" if pending() else "empty")
+        return
+    for source in pending():
+        log(f"▶ {source['campaign']}")
+        try:
+            process(source)
+        except Exception as e:
+            log(f"  ✗ {e}")
+            patch_source(source["id"], status="failed", error=str(e)[:500])
+
+
+if __name__ == "__main__":
+    main()
