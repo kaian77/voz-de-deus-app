@@ -285,20 +285,21 @@ def finish(video_only, src, a, dur, words, title, logo, work, out):
     """Título na tela, legendas, logo e áudio normalizado."""
     ass = os.path.join(work, "cap.ass")
     clip_words = [{**w, "t": w["t"] - a} for w in words if a <= w["t"] <= a + dur]
-    yt.captions(clip_words, True, W, H, ass)
+    # Primeiros 2 s: o título gigante em amarelo (é o que aparece de capa no feed de Shorts); depois vira a faixa branca
+    yt.captions(clip_words, True, W, H, ass, hook=title)
     with open(ass, encoding="utf-8") as f:
         text = f.read()
-    style = (f"Style: Title,Poppins,62,&H00111111,&H00111111,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,16,0,8,90,90,0,1\n")
+    style = (f"Style: Title,Poppins,74,&H00111111,&H00111111,&H00FFFFFF,&H00FFFFFF,-1,0,0,0,100,100,0,0,3,18,0,8,80,80,0,1\n")
     text = text.replace("\n\n[Events]", "\n" + style + "\n[Events]", 1)
     safe = title.replace("{", "").replace("}", "").strip()
-    text += f"Dialogue: 2,{yt.ass_time(0)},{yt.ass_time(dur)},Title,,0,0,0,,{{\\pos({W // 2},{int(H * 0.12)})}}{safe}\n"
+    text += f"Dialogue: 2,{yt.ass_time(2.3)},{yt.ass_time(dur)},Title,,0,0,0,,{{\\pos({W // 2},{int(H * 0.12)})\\fad(200,0)}}{safe.upper()}\n"
     with open(ass, "w", encoding="utf-8") as f:
         f.write(text)
     args = ["ffmpeg", "-v", "error", "-y", "-i", video_only, "-ss", f"{a:.2f}", "-t", f"{dur:.2f}", "-i", src]
     fc = f"[0:v]subtitles={ass}:fontsdir={yt.FONTS}[s]"
     if logo:
         args += ["-i", logo]
-        fc += f";[2:v]scale=200:-1[lg];[s][lg]overlay=W-w-40:{int(H * 0.2)}[v]"
+        fc += ";[2:v]scale=190:-1[lg];[s][lg]overlay=40:70[v]"  # canto de cima à esquerda: fora do título e dos botões do Shorts
     else:
         fc += ";[s]null[v]"
     args += ["-filter_complex", fc, "-map", "[v]", "-map", "1:a:0?", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
