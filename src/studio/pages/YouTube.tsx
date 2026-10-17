@@ -42,8 +42,8 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
   const [busy, setBusy] = useState<string | null>(null);
   const [showTrends, setShowTrends] = useState(false);
   useEffect(() => setForm(ch), [ch]);
-  const dirty = JSON.stringify([form.enabled, form.language, form.niche, form.shorts_per_day, form.long_per_week, form.voice]) !==
-    JSON.stringify([ch.enabled, ch.language, ch.niche, ch.shorts_per_day, ch.long_per_week, ch.voice]);
+  const dirty = JSON.stringify([form.enabled, form.language, form.style, form.niche, form.shorts_per_day, form.long_per_week, form.voice]) !==
+    JSON.stringify([ch.enabled, ch.language, ch.style, ch.niche, ch.shorts_per_day, ch.long_per_week, ch.voice]);
 
   const run = async (key: string, fn: () => Promise<unknown>, ok: string) => {
     setBusy(key);
@@ -60,7 +60,7 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
 
   const save = () =>
     run("save", () => api.update("yt_channels", ch.id, {
-      enabled: form.enabled, language: form.language, niche: form.niche.trim() || NICHE[form.language],
+      enabled: form.enabled, language: form.language, style: form.style, niche: form.niche.trim() || NICHE[form.language],
       shorts_per_day: form.shorts_per_day, long_per_week: form.long_per_week, voice: form.voice,
     }), form.enabled ? "Salvo. O piloto planeja os vídeos de amanhã depois das 15h." : "Salvo");
 
@@ -116,6 +116,17 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
           <Select value={String(form.long_per_week)} onValueChange={(v) => setForm({ ...form, long_per_week: Number(v) })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{[0, 1, 2, 3, 4, 5, 7].map((n) => <SelectItem key={n} value={String(n)}>{n === 7 ? "Todo dia" : n}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label className="text-xs text-muted-foreground">Estilo da animação</Label>
+          <Select value={form.style ?? "parallax"} onValueChange={(v) => setForm({ ...form, style: v as YtChannel["style"] })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="parallax">Animação 2.5D (personagem se mexe sobre o fundo)</SelectItem>
+              <SelectItem value="whiteboard">Desenho à mão (mão desenha, papel amassa)</SelectItem>
+              <SelectItem value="classic">Clássico (zoom nas imagens)</SelectItem>
+            </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
