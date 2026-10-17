@@ -463,6 +463,8 @@ async function findMlListing(token: string, sellerId: string, name: string, sku?
 export function mlPlainText(text: string) {
   return text.replace(/<[^>]+>/g, "\n")
     .replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu, "")
+    .replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
     .replace(/^[ \t]*[•●▪◦]\s*/gm, "- ")
     .replace(/^[ \t]+|[ \t]+$/gm, "")
     .replace(/\n{3,}/g, "\n\n")

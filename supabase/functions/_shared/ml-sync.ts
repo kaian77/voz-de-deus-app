@@ -38,7 +38,9 @@ for (const [v, marks] of Object.entries({ a: "acute grave circ tilde uml", e: "a
 function plain(html: string) {
   return html.replace(/<[^>]+>/g, " ")
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&([a-zA-Z]+);/g, (m, n) => ENTITIES[n] ?? m)
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    // Entidade desconhecida (ex.: &zwj; dos emojis compostos) sai: o ML recusa a descrição com "&...;"
+    .replace(/&([a-zA-Z]+);/g, (_, n) => ENTITIES[n] ?? "")
     .replace(/\s+/g, " ").trim();
 }
 
