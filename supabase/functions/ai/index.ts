@@ -8,6 +8,7 @@ import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStor
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
+import { uniqueSlug, writeLanding } from "../_shared/landing.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
@@ -77,6 +78,24 @@ Deno.serve(async (req) => {
       const store = await storeFor(db, userId);
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
       return json(await nsOrders(store.token, store.storeId, { status: input.status, q: input.q, limit: input.limit ?? 50 }));
+    }
+    if (action === "landing_generate" || action === "landing_publish") {
+      // Landing page de cliente (Renda extra): a IA escreve o conteúdo; publicar dá o endereço /p/<slug>
+      const { data: page } = await db.from("landing_pages").select("*").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
+      if (!page) throw new HttpError(404, "Página não encontrada");
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (action === "landing_generate") {
+        if (!page.photos?.length) throw new HttpError(400, "Envie pelo menos uma foto");
+        patch.content = await writeLanding(input.fresh ? { ...page, content: null } : page, input.instructions ? String(input.instructions).slice(0, 1500) : undefined);
+      } else {
+        if (!page.content) throw new HttpError(400, "Gere a página antes de publicar");
+        patch.status = input.unpublish ? "draft" : "published";
+        // Rascunho nasce com endereço provisório; na primeira publicação ganha o nome do cliente (e não muda mais)
+        if (!input.unpublish && page.slug.startsWith("rascunho-")) patch.slug = await uniqueSlug(db, page.name, page.id);
+      }
+      const { data, error } = await db.from("landing_pages").update(patch).eq("id", page.id).select().single();
+      if (error) throw new HttpError(500, error.message);
+      return json(data);
     }
     if (action === "leads_search") {
       // Prospecção: entra na fila do workflow "Leads do Google Maps" (empresas sem site e com WhatsApp)
