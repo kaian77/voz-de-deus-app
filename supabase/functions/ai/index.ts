@@ -9,6 +9,7 @@ import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } f
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
 import { uniqueSlug, writeLanding } from "../_shared/landing.ts";
+import { planDay, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
@@ -78,6 +79,20 @@ Deno.serve(async (req) => {
       const store = await storeFor(db, userId);
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
       return json(await nsOrders(store.token, store.storeId, { status: input.status, q: input.q, limit: input.limit ?? 50 }));
+    }
+    if (action === "yt_generate_now") {
+      // Canal do YouTube: um vídeo extra agora (o roteiro sai na próxima rodada do cron e o vídeo em seguida)
+      const { data: channel } = await db.from("yt_channels").select("*").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();
+      if (!channel) throw new HttpError(400, "Conecte o canal do YouTube primeiro");
+      const kind = input.kind === "long" ? "long" : "short";
+      return json({ created: await planDay(db, channel, new Date().toISOString().slice(0, 10), kind) });
+    }
+    if (action === "yt_research") {
+      const { data: channel } = await db.from("yt_channels").select("*").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();
+      if (!channel) throw new HttpError(400, "Conecte o canal do YouTube primeiro");
+      const trends = await ytResearch(await ytToken(db, channel.id), channel.niche, channel.language);
+      await db.from("yt_channels").update({ trends, trends_at: new Date().toISOString(), error: null }).eq("id", channel.id);
+      return json({ trends });
     }
     if (action === "landing_generate" || action === "landing_publish") {
       // Landing page de cliente (Renda extra): a IA escreve o conteúdo; publicar dá o endereço /p/<slug>

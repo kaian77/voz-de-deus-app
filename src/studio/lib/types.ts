@@ -382,6 +382,45 @@ export interface LandingPage {
   updated_at: string;
 }
 
+/** Canal do YouTube conectado (Renda extra → YouTube). Um canal por idioma. */
+export interface YtChannel {
+  id: string;
+  channel_id: string;
+  title: string | null;
+  thumbnail: string | null;
+  enabled: boolean;
+  language: "pt" | "en";
+  niche: string;
+  shorts_per_day: number;
+  long_per_week: number;
+  voice: string;
+  trends: { id: string; title: string; channel: string; views: number; per_day: number; kind: "short" | "long" }[] | null;
+  trends_at: string | null;
+  planned_on: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface YtVideo {
+  id: string;
+  channel_ref: string;
+  kind: "short" | "long";
+  status: "draft" | "scripting" | "queued" | "rendering" | "uploaded" | "failed";
+  topic: string | null;
+  angle: string | null;
+  inspiration: { id: string; title: string; views: number }[] | null;
+  script: { title: string; scenes: { narration: string }[]; thumbnail_text: string } | null;
+  title: string | null;
+  publish_at: string | null;
+  youtube_id: string | null;
+  thumbnail_url: string | null;
+  duration_s: number | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Vídeo gerado por IA (Kling / Higgsfield) na seção Vídeos IA. */
 export interface AiVideo {
   id: string;
@@ -452,6 +491,8 @@ export interface TableMap {
   lead_searches: LeadSearch;
   leads: Lead;
   landing_pages: LandingPage;
+  yt_channels: YtChannel;
+  yt_videos: YtVideo;
   strategies: Strategy;
   site_reviews: SiteReview;
 }

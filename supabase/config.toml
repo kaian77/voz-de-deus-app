@@ -39,3 +39,6 @@ verify_jwt = false
 # Formulário público de avaliação (valida o pedido + e-mail na Nuvemshop)
 [functions.reviews]
 verify_jwt = false
+
+[functions.oauth-youtube]
+verify_jwt = false
