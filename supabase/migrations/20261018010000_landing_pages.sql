@@ -29,7 +29,7 @@ create table if not exists public.landing_pages (
 create unique index if not exists landing_pages_slug on public.landing_pages (slug);
 
 alter table public.landing_pages drop constraint if exists landing_pages_status_check;
-alter table public.landing_pages add constraint landing_pages_status_check check (status in ('draft', 'published'));
+alter table public.landing_pages add constraint landing_pages_status_check check (status in ('draft', 'preview', 'published'));
 
 alter table public.landing_pages enable row level security;
 drop policy if exists "own all" on public.landing_pages;
@@ -43,3 +43,11 @@ language sql security definer set search_path = public as $$
   update public.landing_pages set views = views + 1 where slug = p_slug and status = 'published';
 $$;
 grant execute on function public.landing_view(text) to anon;
+
+-- Prévia: link que a cliente abre para ver e testar antes de publicar de vez (sem indexar no Google)
+drop policy if exists "public read published" on public.landing_pages;
+create policy "public read published" on public.landing_pages for select to anon using (status in ('preview', 'published'));
+create or replace function public.landing_view(p_slug text) returns void
+language sql security definer set search_path = public as $$
+  update public.landing_pages set views = views + 1 where slug = p_slug and status in ('preview', 'published');
+$$;

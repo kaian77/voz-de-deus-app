@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Copy, Download, ExternalLink, Globe, ImagePlus, Loader2, Monitor, Plus, Smartphone, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeft, Copy, Download, ExternalLink, Globe, ImagePlus, Link2, Loader2, Monitor, Plus, Send, Smartphone, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,22 +88,33 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
     }
   };
 
-  const publish = async (unpublish = false) => {
+  const publish = async (mode: "preview" | "published" | "draft" = "published") => {
     setBusy("publish");
     try {
       await save();
-      const r = await api.invoke<LandingPage>("ai", { action: "landing_publish", id: current.id, unpublish });
+      const r = await api.invoke<LandingPage>("ai", { action: "landing_publish", id: current.id, mode, unpublish: mode === "draft" });
       setCurrent(r);
       invalidate("landing_pages");
-      if (!unpublish) {
+      if (mode !== "draft") {
         await navigator.clipboard?.writeText(publicUrl(r)).catch(() => {});
-        toast.success("Publicada! Link copiado.");
+        toast.success(mode === "preview" ? "Link de prévia pronto e copiado" : "Publicada! Link copiado.");
       } else toast.success("Página tirada do ar");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setBusy(null);
     }
+  };
+
+  /** Abre o WhatsApp da cliente com o link (prévia ou site no ar) já na mensagem. */
+  const sendToClient = () => {
+    const n = String(form.whatsapp ?? "").replace(/\D/g, "");
+    const first = form.name.split(/[\s·|-]+/)[0];
+    const text =
+      current.status === "preview"
+        ? `Oi${first ? `, ${first}` : ""}! Preparei uma prévia do site de vocês: ${publicUrl(current)}\n\nDá uma olhada com calma, pode testar os botões. Se quiser mudar qualquer coisa (texto, cor, foto), é só me falar que eu ajusto.`
+        : `Oi${first ? `, ${first}` : ""}! O site de vocês está no ar: ${publicUrl(current)}`;
+    window.open(`https://wa.me/${n.length <= 11 && n ? `55${n}` : n}?text=${encodeURIComponent(text)}`, "_blank");
   };
 
   const setColor = (key: "primary" | "ink" | "soft", value: string) =>
@@ -125,20 +136,31 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
       </button>
       <PageHeader
         title={form.name || "Nova landing page"}
-        description={current.status === "published" ? `No ar em ${publicUrl(current)} · ${current.views} visitas` : "Rascunho: só você vê."}
+        description={
+          current.status === "published"
+            ? `No ar em ${publicUrl(current)} · ${current.views} visitas`
+            : current.status === "preview"
+              ? `Prévia para a cliente: ${publicUrl(current)} · ${current.views} visitas (não aparece no Google)`
+              : "Rascunho: só você vê."
+        }
         actions={
           current.content && (
             <>
               <Button variant="outline" size="sm" onClick={() => download({ ...current, ...form })}><Download className="mr-1.5 h-4 w-4" />HTML</Button>
-              {current.status === "published" && (
+              {current.status === "draft" ? (
+                <Button variant="outline" size="sm" onClick={() => publish("preview")} disabled={busy !== null}>
+                  {busy === "publish" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Link2 className="mr-1.5 h-4 w-4" />}Link de prévia
+                </Button>
+              ) : (
                 <>
                   <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(publicUrl(current)).then(() => toast.success("Link copiado"))}><Copy className="mr-1.5 h-4 w-4" />Link</Button>
                   <Button variant="outline" size="sm" asChild><a href={publicUrl(current)} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Abrir</a></Button>
+                  {form.whatsapp && <Button variant="outline" size="sm" onClick={sendToClient}><Send className="mr-1.5 h-4 w-4" />Mandar para a cliente</Button>}
                 </>
               )}
-              <Button size="sm" onClick={() => publish()} disabled={busy !== null}>
+              <Button size="sm" onClick={() => publish("published")} disabled={busy !== null}>
                 {busy === "publish" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Globe className="mr-1.5 h-4 w-4" />}
-                {current.status === "published" ? "Atualizar no ar" : "Publicar"}
+                {current.status === "published" ? "Atualizar no ar" : "Publicar de vez"}
               </Button>
             </>
           )
@@ -200,9 +222,9 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
           {busy === "generate" && <p className="text-center text-xs text-muted-foreground">A IA está olhando as fotos e escrevendo… leva cerca de 1 minuto.</p>}
 
           {current.content && (
-            <Panel title="Ajustes">
-              <Textarea rows={3} value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Ex.: deixe o título mais direto, troque o serviço 3 por consulta online, use um tom mais sério." />
-              <Button className="mt-2 w-full" variant="outline" onClick={() => generate(ask)} disabled={busy !== null || !ask.trim()}>Pedir ajuste à IA</Button>
+            <Panel title="Pedir mudança à IA" description="Escreva o que você quer mudar ou cole aqui o que a cliente pediu no WhatsApp. O link continua o mesmo.">
+              <Textarea rows={4} value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Ex.: a cliente quer o título mais direto, tirar o serviço de gestantes, cor mais clara e tom mais acolhedor." />
+              <Button className="mt-2 w-full" variant="outline" onClick={() => generate(ask)} disabled={busy !== null || !ask.trim()}>{busy === "generate" ? "Ajustando…" : "Fazer a mudança"}</Button>
               <div className="mt-4 flex items-center gap-4">
                 {(["primary", "ink", "soft"] as const).map((k) => (
                   <label key={k} className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -214,8 +236,8 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
               </div>
             </Panel>
           )}
-          {current.status === "published" && (
-            <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => publish(true)}>Tirar do ar</button>
+          {current.status !== "draft" && (
+            <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => publish("draft")}>Tirar do ar</button>
           )}
         </div>
 
@@ -239,7 +261,7 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
               <iframe
                 title="Prévia da landing page"
                 srcDoc={html}
-                sandbox="allow-scripts allow-popups"
+                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
                 className={cn("h-[78vh] rounded-md border bg-white shadow-sm transition-all", device === "mobile" ? "w-[390px] max-w-full" : "w-full")}
               />
             </div>
@@ -319,12 +341,12 @@ export default function Landings() {
                 <div className="p-4">
                   <p className="truncate text-[13px] font-semibold">{p.name || "Sem nome"}</p>
                   <p className="text-xs text-muted-foreground">
-                    {p.niche || "—"} · {p.status === "published" ? `no ar · ${p.views} visitas` : "rascunho"} · {relativeTime(p.updated_at)}
+                    {p.niche || "—"} · {p.status === "published" ? `no ar · ${p.views} visitas` : p.status === "preview" ? `prévia · ${p.views} visitas` : "rascunho"} · {relativeTime(p.updated_at)}
                   </p>
                 </div>
               </button>
               <div className="flex justify-end gap-1 border-t px-2 py-1.5">
-                {p.status === "published" && (
+                {p.status !== "draft" && (
                   <Button size="sm" variant="ghost" asChild><a href={publicUrl(p)} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /></a></Button>
                 )}
                 <Button size="sm" variant="ghost" aria-label="Apagar" onClick={() => confirm(`Apagar a página de ${p.name || "sem nome"}?`) && remove.mutate(p.id)}>

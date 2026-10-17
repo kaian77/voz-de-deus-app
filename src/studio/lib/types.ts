@@ -376,7 +376,7 @@ export interface LandingPage {
   rating: number | null;
   reviews: number | null;
   content: LandingContent | null;
-  status: "draft" | "published";
+  status: "draft" | "preview" | "published";
   views: number;
   created_at: string;
   updated_at: string;

@@ -1,5 +1,5 @@
 // Landing page publicada de cliente (Renda extra): /p/<slug> (rewrite no vercel.json) -> HTML completo, com
-// título e foto para a prévia do link no WhatsApp. Lê com a chave pública; a RLS só libera páginas publicadas.
+// título e foto para a prévia do link no WhatsApp. Lê com a chave pública; a RLS só libera prévias e publicadas.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { renderLanding, type LandingData } from "../src/landing/render.js";
 
@@ -22,12 +22,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const slug = (url.searchParams.get("slug") ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 80);
   if (!slug || !KEY) return send(res, 404, NOT_FOUND, "no-store");
   const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
-  const r = await fetch(`${URL_}/rest/v1/landing_pages?slug=eq.${slug}&status=eq.published&select=*&limit=1`, { headers });
-  const rows = r.ok ? ((await r.json()) as (LandingData & { content: LandingData["content"] | null })[]) : [];
+  const r = await fetch(`${URL_}/rest/v1/landing_pages?slug=eq.${slug}&status=in.(preview,published)&select=*&limit=1`, { headers });
+  const rows = r.ok ? ((await r.json()) as (LandingData & { content: LandingData["content"] | null; status: string })[]) : [];
   const page = rows[0];
   if (!page?.content) return send(res, 404, NOT_FOUND, "no-store");
   // Visita contada sem travar a resposta
   fetch(`${URL_}/rest/v1/rpc/landing_view`, { method: "POST", headers, body: JSON.stringify({ p_slug: slug }) }).catch(() => {});
   const host = req.headers["x-forwarded-host"] ?? req.headers.host ?? "voz-de-deus-app.vercel.app";
-  send(res, 200, renderLanding(page, { url: `https://${host}/p/${slug}` }), "public, s-maxage=60, stale-while-revalidate=600");
+  send(res, 200, renderLanding(page, { url: `https://${host}/p/${slug}`, preview: page.status === "preview" }), "public, s-maxage=60, stale-while-revalidate=600");
 }
