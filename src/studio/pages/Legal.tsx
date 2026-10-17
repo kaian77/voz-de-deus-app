@@ -4,7 +4,7 @@ import { useStudioTheme } from "../components/bits";
 // Páginas públicas exigidas pela Meta e pelo TikTok para publicar o app:
 // política de privacidade, termos de uso e instruções de exclusão de dados.
 
-const UPDATED = "11 de outubro de 2026";
+const UPDATED = "17 de outubro de 2026";
 
 type Doc = { title: string; sections: { heading: string; body: string[] }[] };
 
@@ -15,7 +15,7 @@ const DOCS: Record<"privacidade" | "termos" | "exclusao-de-dados", Doc> = {
       {
         heading: "O que é o Social Studio",
         body: [
-          "O Social Studio é uma ferramenta de gestão de redes sociais. Com ela, o titular de uma conta profissional do Instagram, do TikTok ou do WhatsApp agenda publicações, responde comentários e mensagens e acompanha o desempenho do próprio perfil.",
+          "O Social Studio é uma ferramenta de gestão de redes sociais. Com ela, o titular de uma conta profissional do Instagram, do TikTok, do WhatsApp ou de um canal do YouTube agenda publicações, responde comentários e mensagens e acompanha o desempenho do próprio perfil.",
         ],
       },
       {
@@ -34,6 +34,15 @@ const DOCS: Record<"privacidade" | "termos" | "exclusao-de-dados", Doc> = {
           "Somente para fazer o que o titular da conta pede: publicar conteúdo, responder comentários e mensagens conforme as automações configuradas, mostrar métricas e gerar sugestões de conteúdo.",
           "Textos de comentários, mensagens e do perfil podem ser enviados a um provedor de inteligência artificial (Anthropic) apenas para redigir respostas e análises solicitadas pelo titular. Esses dados não são usados para treinar modelos.",
           "Não vendemos, alugamos nem compartilhamos dados com anunciantes.",
+        ],
+      },
+      {
+        heading: "YouTube (Serviços de API do YouTube)",
+        body: [
+          "O Studio usa os Serviços de API do YouTube para que o titular publique vídeos no próprio canal. Ao conectar um canal, autorizamos apenas o envio de vídeos e capas (youtube.upload) e a leitura de dados do canal e de vídeos públicos (youtube.readonly).",
+          "Dados do YouTube que guardamos: identificador, nome e foto do canal conectado; os vídeos que o próprio Studio enviou (identificador, título, capa e data de publicação); e títulos e números públicos de visualizações de vídeos do nicho, usados só para sugerir temas ao titular. Não acessamos inscritos, comentários, mensagens nem dados privados de outras pessoas.",
+          "Os dados do YouTube não são vendidos nem compartilhados com terceiros. A Política de Privacidade do Google também se aplica: https://policies.google.com/privacy",
+          "Você pode revogar o acesso do Studio ao seu canal a qualquer momento em https://myaccount.google.com/permissions. Ao revogar ou desconectar, apagamos o token e os dados do canal guardados no Studio em até 7 dias.",
         ],
       },
       {
@@ -73,9 +82,16 @@ const DOCS: Record<"privacidade" | "termos" | "exclusao-de-dados", Doc> = {
         ],
       },
       {
+        heading: "YouTube",
+        body: [
+          "A integração com o YouTube usa os Serviços de API do YouTube. Ao conectar um canal, você concorda com os Termos de Serviço do YouTube: https://www.youtube.com/t/terms",
+          "Os vídeos são enviados apenas para o canal que você conectou e escolheu, com conteúdo original gerado no Studio, e devem seguir as Diretrizes da Comunidade do YouTube.",
+        ],
+      },
+      {
         heading: "Disponibilidade",
         body: [
-          "As integrações dependem das APIs de terceiros (Meta, TikTok, provedores de WhatsApp), que podem mudar ou ficar indisponíveis sem aviso.",
+          "As integrações dependem das APIs de terceiros (Meta, TikTok, Google/YouTube, provedores de WhatsApp), que podem mudar ou ficar indisponíveis sem aviso.",
         ],
       },
     ],
@@ -93,6 +109,12 @@ const DOCS: Record<"privacidade" | "termos" | "exclusao-de-dados", Doc> = {
         heading: "Remover o acesso pelo Instagram ou Facebook",
         body: [
           "No Instagram: Configurações → Aplicativos e sites → remova o Social Studio. No Facebook: Configurações → Aplicativos e sites. Depois disso, o Studio perde o acesso e deixa de receber novos dados.",
+        ],
+      },
+      {
+        heading: "Remover o acesso ao YouTube",
+        body: [
+          "Em https://myaccount.google.com/permissions, remova o app do Studio. O Studio perde o acesso ao canal na hora e o token e os dados do canal guardados são apagados em até 7 dias.",
         ],
       },
       {
@@ -124,7 +146,13 @@ export default function Legal({ doc }: { doc: keyof typeof DOCS }) {
             <section key={s.heading}>
               <h2 className="text-base font-semibold">{s.heading}</h2>
               <div className="mt-2 space-y-2 text-[15px] leading-relaxed text-foreground/85">
-                {s.body.map((p, i) => <p key={i}>{p}</p>)}
+                {s.body.map((p, i) => (
+                  <p key={i}>
+                    {p.split(/(https:\/\/\S+)/).map((part, j) =>
+                      part.startsWith("https://") ? <a key={j} href={part} target="_blank" rel="noreferrer" className="underline">{part}</a> : part,
+                    )}
+                  </p>
+                ))}
               </div>
             </section>
           ))}

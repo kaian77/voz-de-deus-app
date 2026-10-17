@@ -62,7 +62,14 @@ export async function ytToken(db: SupabaseClient, channelRef: string): Promise<s
   const { data } = await db.from("yt_tokens").select("*").eq("channel_ref", channelRef).maybeSingle();
   if (!data) throw new Error("Canal do YouTube sem token — conecte de novo");
   if (data.access_token && new Date(data.expires_at ?? 0).getTime() - Date.now() > 5 * 60 * 1000) return data.access_token;
-  const fresh = await tokenRequest({ grant_type: "refresh_token", refresh_token: data.refresh_token });
+  const fresh = await tokenRequest({ grant_type: "refresh_token", refresh_token: data.refresh_token }).catch(async (e) => {
+    // Acesso revogado pelo dono (myaccount.google.com/permissions): apaga o token e os dados do YouTube guardados
+    if (/invalid_grant|revoked|expired/i.test((e as Error).message)) {
+      await db.from("yt_tokens").delete().eq("channel_ref", channelRef);
+      await db.from("yt_channels").update({ enabled: false, trends: null, trends_at: null, error: "Acesso ao canal revogado — conecte de novo" }).eq("id", channelRef);
+    }
+    throw e;
+  });
   await db.from("yt_tokens").update({
     access_token: fresh.access_token, expires_at: new Date(Date.now() + fresh.expires_in * 1000).toISOString(), updated_at: new Date().toISOString(),
   }).eq("channel_ref", channelRef);
