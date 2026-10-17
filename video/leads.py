@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -59,6 +60,15 @@ def geocode(place):
     return float(h["lat"]), float(h["lon"]), [float(x) for x in h["boundingbox"]]
 
 
+def around(lat, lng, bbox, km):
+    """Área da busca: quadrado de lado 2*km em volta do centro, sem passar do limite do lugar no OpenStreetMap.
+    (Regiões administrativas como "Sobradinho" são enormes; o que interessa é o miolo, onde ficam as empresas.)"""
+    dlat = km / 111.0
+    dlng = km / (111.0 * math.cos(math.radians(lat)))
+    s, n, w, e = bbox
+    return [max(s, lat - dlat), min(n, lat + dlat), max(w, lng - dlng), min(e, lng + dlng)]
+
+
 def cells(bbox, n):
     """Divide a área em n x n pedaços -> [{lat, lon, radius, zoom}] (uma busca no Maps por pedaço)."""
     s, nn, w, e = bbox
@@ -81,8 +91,11 @@ def cells(bbox, n):
 def scraper(method, path, body=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(SCRAPER + path, data=data, method=method, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return r.read()
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.read()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"robô respondeu {e.code}: {e.read()[:200].decode(errors='replace')}") from None
 
 
 def wait_scraper():
@@ -97,7 +110,7 @@ def wait_scraper():
 
 def scrape(keyword, cell, depth):
     """Uma busca no robô -> linhas do CSV dele (title, phone, website, category, address, latitude, longitude...)."""
-    body = {"name": "studio", "keywords": [keyword], "lang": "pt-BR", "fast_mode": False, "depth": depth,
+    body = {"name": "studio", "keywords": [keyword], "lang": "pt", "fast_mode": False, "depth": depth,
             "email": False, "max_time": 600, **cell}
     job = json.loads(scraper("POST", "/api/v1/jobs", body)).get("id")
     if not job:
@@ -169,38 +182,43 @@ def run(search):
     area = geocode(search["place"])
     if not area:
         raise RuntimeError(f"não achei \"{search['place']}\" no mapa; escreva bairro e cidade (ex.: Sobradinho DF)")
-    lat, lng, bbox = area
-    rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"lat": lat, "lng": lng, "bbox": bbox, "updated_at": now()})
-
+    lat, lng, region = area
     wanted = max(1, min(int(search["wanted"]), 200))
-    # Só uns 30-50% das empresas não têm site e têm celular: pede bem mais do que o necessário
-    n = 1 if wanted <= 15 else 2 if wanted <= 60 else 3
-    depth = 5 if wanted <= 30 else 10
-    keyword = f"{search['query']} em {search['place']}"
+    base = 2.5 if wanted <= 30 else 4
     places, phones = known(search["user_id"])
-    found, errors = 0, []
-    for i, cell in enumerate(cells(bbox, n), 1):
-        try:
-            rows = scrape(keyword, cell, depth)
-        except Exception as e:  # um pedaço que falha não perde os outros
-            errors.append(str(e))
-            print(f"  pedaço {i}: {e}")
-            continue
-        fresh = []
-        for row in rows:
-            lead = to_lead(row, search)
-            if lead and inside(lead, bbox) and lead["place_id"] not in places and lead["whatsapp"] not in phones:
-                places.add(lead["place_id"])
-                phones.add(lead["whatsapp"])
-                fresh.append(lead)
-        fresh = fresh[: wanted - found]
-        if fresh:
-            http("POST", f"{URL}/rest/v1/leads?on_conflict=user_id,place_id", fresh, {"Prefer": "resolution=ignore-duplicates,return=minimal"})
-            found += len(fresh)
-        print(f"  pedaço {i}: {len(rows)} lugares, {len(fresh)} leads novos ({found}/{wanted})")
-        rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"found": found, "updated_at": now()})
+    found, errors, i = int(search.get("found") or 0), [], 0  # tentar de novo continua de onde parou
+    # 1ª rodada: o miolo do lugar. Se vier pouco (nichos pequenos, poucas empresas sem site), a 2ª rodada
+    # amplia a área (até ~2,4x) e varre em 4 pedaços buscando só o tema, para o Maps mostrar o que está perto de cada um.
+    rounds = [(base, 1 if wanted <= 15 else 2, f"{search['query']} em {search['place']}"), (base * 2.4, 2, search["query"])]
+    for km, n, keyword in rounds:
         if found >= wanted:
             break
+        bbox = around(lat, lng, region, km)
+        rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"lat": lat, "lng": lng, "bbox": bbox, "updated_at": now()})
+        depth = 5 if wanted <= 30 and km == base else 10
+        for cell in cells(bbox, n):
+            i += 1
+            try:
+                rows = scrape(keyword, cell, depth)
+            except Exception as e:  # um pedaço que falha não perde os outros
+                errors.append(str(e))
+                print(f"  pedaço {i}: {e}")
+                continue
+            fresh = []
+            for row in rows:
+                lead = to_lead(row, search)
+                if lead and inside(lead, bbox) and lead["place_id"] not in places and lead["whatsapp"] not in phones:
+                    places.add(lead["place_id"])
+                    phones.add(lead["whatsapp"])
+                    fresh.append(lead)
+            fresh = fresh[: wanted - found]
+            if fresh:
+                http("POST", f"{URL}/rest/v1/leads?on_conflict=user_id,place_id", fresh, {"Prefer": "resolution=ignore-duplicates,return=minimal"})
+                found += len(fresh)
+            print(f"  pedaço {i} ({km:g} km): {len(rows)} lugares, {len(fresh)} leads novos ({found}/{wanted})")
+            rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"found": found, "updated_at": now()})
+            if found >= wanted:
+                break
     if not found and errors:
         raise RuntimeError(errors[-1])
     rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"status": "done", "found": found, "updated_at": now()})
@@ -208,6 +226,11 @@ def run(search):
 
 def main():
     if "--check" in sys.argv:
+        if "--retry-failed" in sys.argv:  # rodada manual: buscas que falharam ou vieram incompletas voltam para a fila
+            rest("PATCH", "lead_searches?status=eq.failed", {"status": "queued", "error": None})
+            for r in rest("GET", "lead_searches?status=eq.done&select=id,found,wanted") or []:
+                if r["found"] < r["wanted"]:
+                    rest("PATCH", f"lead_searches?id=eq.{r['id']}", {"status": "queued"})
         requeue_stuck()
         print("queued" if queued() else "empty")
         return

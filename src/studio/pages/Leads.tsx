@@ -11,7 +11,7 @@ import { api } from "../lib/api";
 import { useInvalidate, useSaveRow, useTable } from "../lib/hooks";
 import type { Lead, LeadSearch, LeadStatus } from "../lib/types";
 import { EmptyState, PageHeader, Panel, relativeTime, SectionLabel, WhatsAppIcon } from "../components/bits";
-import LeadsMap, { LEAD_STATUS, themeColor } from "../components/LeadsMap";
+import LeadsMap, { areaColor, LEAD_STATUS } from "../components/LeadsMap";
 
 const MSG_KEY = "studio-leads-msg";
 const DEFAULT_MSG =
@@ -99,6 +99,16 @@ export default function Leads() {
     }
   };
 
+  const retry = async (s: LeadSearch) => {
+    try {
+      await api.invoke("ai", { action: "leads_search", retry_id: s.id });
+      toast.success("Buscando de novo");
+      invalidate("lead_searches");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
   const setStatus = (l: Lead, status: LeadStatus) =>
     save.mutate({ id: l.id, status, ...(status === "contacted" && !l.contacted_at ? { contacted_at: new Date().toISOString() } : {}) });
 
@@ -137,6 +147,7 @@ export default function Leads() {
           <Panel bodyClassName="p-2">
             <LeadsMap searches={searches} leads={leads} />
             <div className="flex flex-wrap gap-x-4 gap-y-1 px-2 pt-2 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-3.5 rounded-sm border border-[#E3262E] bg-[#E3262E]/25" />Área já prospectada</span>
               {Object.entries(LEAD_STATUS).map(([k, s]) => (
                 <span key={k} className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />{s.label}</span>
               ))}
@@ -162,7 +173,7 @@ export default function Leads() {
                       onClick={() => setSearchFilter(searchFilter === s.id ? "all" : s.id)}
                       className={cn("flex w-full items-start gap-2.5 px-4 py-2.5 text-left hover:bg-secondary", searchFilter === s.id && "bg-secondary")}
                     >
-                      <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: themeColor(s.query) }} />
+                      <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: areaColor(s.status) }} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-medium">{s.query} · {s.place}</span>
                         <span className={cn("block text-xs", s.status === "failed" ? "text-danger" : "text-muted-foreground")}>
@@ -171,6 +182,9 @@ export default function Leads() {
                       </span>
                       {(s.status === "queued" || s.status === "running") && <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-muted-foreground" />}
                     </button>
+                    {s.status === "failed" && (
+                      <button type="button" onClick={() => retry(s)} className="mb-2 ml-9 text-xs font-medium hover:underline">Tentar de novo</button>
+                    )}
                   </li>
                 ))}
               </ul>
