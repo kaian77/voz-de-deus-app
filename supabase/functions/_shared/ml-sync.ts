@@ -4,7 +4,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ns, storeFor, txt } from "./nuvemshop.ts";
 import { ML_LOOKUP_FIELDS, mlSellerItems, mlTokenFor } from "./mercadolivre.ts";
-import { publishToMercadoLivre } from "./marketplaces.ts";
+import { norm, publishToMercadoLivre } from "./marketplaces.ts";
 import { dispatchRender } from "./product-video.ts";
 
 /** Produtos por rodada do cron (cada um faz várias chamadas ao ML). */
@@ -153,6 +153,58 @@ export async function startMlSync(db: SupabaseClient, userId: string) {
   return { total: ids.length, photos, minutes: Math.ceil(ids.length / PER_RUN) };
 }
 
+/** Mesmo pin (ex.: produto cadastrado duas vezes na loja) tem a mesma chave e pode dividir o anúncio. */
+const pinKey = (name: string) => [...new Set(norm(name))].sort().join(" ");
+
+/** Dono de cada anúncio: o produto mais antigo da loja gravado nele (o anúncio veio antes dos pins novos). */
+function listingOwners(sync: MlSync) {
+  const owners = new Map<string, SyncResult>();
+  for (const d of sync.done) {
+    const cur = d.ml_id ? owners.get(d.ml_id) : undefined;
+    if (d.ml_id && (!cur || d.id < cur.id)) owners.set(d.ml_id, d);
+  }
+  return owners;
+}
+
+/** Anúncios que são de outro pin: o produto não pode ser gravado neles (SKU ou nome parecido levariam para lá). */
+function foreignListings(sync: MlSync, id: number, name: string) {
+  const key = pinKey(name);
+  return [...listingOwners(sync)].filter(([, o]) => o.id !== id && pinKey(o.name) !== key).map(([mlId]) => mlId);
+}
+
+/** Pins diferentes que caíram no mesmo anúncio. */
+function sharedListings(sync: MlSync) {
+  const groups = new Map<string, SyncResult[]>();
+  for (const d of sync.done) {
+    if (!d.ml_id) continue;
+    const g = groups.get(d.ml_id) ?? [];
+    if (!g.some((x) => x.id === d.id)) g.push(d);
+    groups.set(d.ml_id, g);
+  }
+  return [...groups].filter(([, g]) => new Set(g.map((d) => pinKey(d.name))).size > 1)
+    .map(([ml_id, g]) => ({ ml_id, products: g.sort((a, b) => a.id - b.id) })); // o dono primeiro
+}
+
+/**
+ * Corrige os anúncios que ficaram com dois pins: o dono volta a ter o anúncio com os dados dele
+ * e cada outro pin ganha um anúncio próprio.
+ */
+export async function fixSharedListings(db: SupabaseClient, userId: string) {
+  const acc = await mlAccount(db, userId);
+  const sync = acc?.meta?.ml_sync as MlSync | undefined;
+  if (!acc || !sync) throw new Error("Nenhuma sincronização feita ainda");
+  const shared = sharedListings(sync);
+  const ids = [...new Set(shared.flatMap((s) => s.products.map((p) => p.id)))]; // o dono vem primeiro em cada grupo
+  // O anúncio fica só com o dono; os outros pins saem dele e ganham um próprio na próxima rodada
+  const owners = listingOwners(sync);
+  sync.done = sync.done.filter((d) => !d.ml_id || !shared.some((s) => s.ml_id === d.ml_id) || pinKey(d.name) === pinKey(owners.get(d.ml_id)!.name));
+  sync.queue = [...ids, ...sync.queue.filter((id) => !ids.includes(id))];
+  sync.finished_at = null;
+  sync.total += ids.length;
+  await saveSync(db, acc.id, sync);
+  return { queued: ids.length, listings: shared.map((s) => ({ ml_id: s.ml_id, keeps: s.products[0].name, new_listing: s.products.slice(1).map((p) => p.name) })) };
+}
+
 /** Estado da sincronização (para o app e o Claude). */
 export async function mlSyncStatus(db: SupabaseClient, userId: string) {
   const acc = await mlAccount(db, userId);
@@ -171,8 +223,7 @@ export async function mlSyncStatus(db: SupabaseClient, userId: string) {
     updated: sync.done.filter((d) => d.updated).length,
     created: sync.done.filter((d) => !d.updated).length,
     // Produtos da loja que caíram no mesmo anúncio (nome quase igual ou SKU repetido): só um deles fica no ML
-    shared: [...sync.done.reduce((m, d) => d.ml_id ? m.set(d.ml_id, [...(m.get(d.ml_id) ?? []), d.name]) : m, new Map<string, string[]>())]
-      .filter(([, names]) => names.length > 1).map(([ml_id, products]) => ({ ml_id, products })),
+    shared: sharedListings(sync).map((s) => ({ ml_id: s.ml_id, products: s.products.map((p) => p.name) })),
     skipped: sync.skipped,
     errors: sync.errors,
     started_at: sync.started_at,
@@ -256,6 +307,7 @@ export async function runMlSync(db: SupabaseClient) {
             price,
             sku: String(v.sku ?? "").trim() || pinSku(name),
             stock: 200,
+            exclude_ids: foreignListings(sync, id, name),
           }, sellerItems);
           remaining = await record(db, acc.id, id, {
             done: { id, name, ml_id: r.id, status: r.status, updated: "updated" in r ? r.updated : false, ...(r.warnings.length ? { error: r.warnings.join("; ") } : {}) },
