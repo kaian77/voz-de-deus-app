@@ -6,7 +6,8 @@ create table if not exists public.ml_photos (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
   source_url text not null,
-  -- cover: recorta o fundo e põe o produto grande no branco; extra: só deixa quadrada no fundo branco
+  -- cover: recorta o fundo e põe o produto grande no branco; extra: só deixa quadrada no fundo branco;
+  -- detail/angle: geradas da capa (close e de lado). A lista de tipos é a mesma da migration 20261017120000 (o deploy roda as duas).
   kind text not null default 'cover',
   status text not null default 'queued',
   result_url text,
