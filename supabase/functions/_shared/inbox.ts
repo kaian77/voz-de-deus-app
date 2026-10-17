@@ -119,6 +119,7 @@ export async function sendMessage(db: SupabaseClient, conversationId: string, te
 
 const AgentReply = z.object({
   reply: z.string().describe("Mensagem a enviar ao contato (vazia se handoff sem mensagem)"),
+  ignore: z.boolean().optional().describe("true para não responder nada"),
   handoff: z.boolean().describe("true se um humano precisa assumir"),
   handoff_reason: z.string().describe("Motivo curto do handoff, ou vazio"),
 });
@@ -240,7 +241,8 @@ const FINAL_TOOL: AgentTool = {
   input_schema: {
     type: "object",
     properties: {
-      reply: { type: "string", description: "Mensagem a enviar ao contato (vazia se handoff sem mensagem)" },
+      reply: { type: "string", description: "Mensagem a enviar ao contato (vazia se ignorar ou handoff sem mensagem)" },
+      ignore: { type: "boolean", description: "true para NÃO responder nada (mensagem fora de produtos/compras/pedidos)" },
       handoff: { type: "boolean", description: "true se um humano precisa assumir" },
       handoff_reason: { type: "string", description: "Motivo curto do handoff, ou vazio" },
     },
@@ -276,7 +278,13 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
   const system =
     `Você é o atendente virtual da marca no ${conversation.channel === "whatsapp" ? "WhatsApp" : "direct do Instagram"}. ` +
     `Responda em português do Brasil, de forma calorosa, curta (até 3 frases), natural, sem parecer robô, no máximo 1 emoji.\n\n` +
-    `Como atender:\n` +
+    (conversation.channel === "instagram" ? `O QUE RESPONDER: só dúvidas sobre produtos e compras — produto que a pessoa quer (pelo nome ou tema), se tem, link para comprar, ` +
+    `como comprar, frete, entrega, trocas, cupom, pagamento e pedido/rastreio. Todo o resto você NÃO responde (ignore=true, reply vazio): ` +
+    `menção ou resposta a story, post/reel compartilhado, foto/áudio sem pergunta, só cumprimento ("oi", "bom dia"), só emoji, elogio, agradecimento, ` +
+    `"ok"/"obrigado" de fim de conversa, papo, piada, spam, divulgação, proposta de parceria e qualquer assunto que não seja comprar. ` +
+    `Se for sobre produto/compra mas você não tiver certeza da resposta (nem as ferramentas nem a base resolvem), não chute: handoff=true com reply vazio, ` +
+    `que a equipe responde.\n\n` : "") +
+    `Como atender (quando for responder):\n` +
     `- Leia a conversa inteira e responda ao que a pessoa quer AGORA, considerando tudo o que já foi dito. Se ela mandou várias mensagens seguidas, responda tudo numa mensagem só.\n` +
     `- Não repita cumprimentos, perguntas ou links que a MARCA já mandou na conversa. Não faça a mesma pergunta duas vezes. ` +
     `Se a pessoa só cumprimentar de novo, responda curto e pergunte como pode ajudar, sem link.\n` +
@@ -296,16 +304,19 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
         `Coloque-se à disposição. Não prometa reenvio nem reembolso; se a pessoa voltar dizendo que a transportadora não resolveu, faça handoff.\n`
       : "") +
     `- Nunca invente produtos, preços, números, prazos, cupons, links ou promessas.\n` +
-    `Peça handoff (handoff=true) só quando: a pessoa pedir para falar com humano; reclamação séria; pagamento/reembolso/troca com problema; ` +
+    `Peça handoff (handoff=true; reply vazio, a não ser que a pessoa tenha pedido um humano ou feito reclamação — aí um aviso curto de que a equipe vai responder) só quando: a pessoa pedir para falar com humano; reclamação séria; pagamento/reembolso/troca com problema; ` +
     `assunto delicado (luto, crise, saúde mental grave — nesse caso responda com acolhimento e indique o CVV 188 se houver risco); ` +
     `ou quando nem as ferramentas nem a base resolverem.\n\n` +
     `${brandContext(settings)}\n\nInstruções de atendimento do dono (têm prioridade):\n${settings?.agent_instructions ?? "Seja prestativo e acolhedor."}\n\n` +
     `Base de conhecimento:\n${settings?.agent_knowledge ?? "(vazia)"}`;
   const result = await runAgent<z.infer<typeof AgentReply>>(system,
     `Contato: ${conversation.contact_name ?? conversation.contact_username ?? "sem nome"}\n\nConversa até agora:\n${lines}\n\n` +
-      `Escreva a próxima mensagem da MARCA (termine com a ferramenta responder).`,
+      `Decida se a última mensagem do CONTATO é dúvida de produto/compra. Se for, escreva a próxima mensagem da MARCA; se não, ignore=true. Termine com a ferramenta responder.`,
     [...tools, FINAL_TOOL], "medium");
-  return { reply: String(result.reply ?? ""), handoff: Boolean(result.handoff), handoff_reason: String(result.handoff_reason ?? ""), settings, personal: false };
+  return {
+    reply: result.ignore ? "" : String(result.reply ?? ""), ignore: Boolean(result.ignore) && !result.handoff,
+    handoff: Boolean(result.handoff), handoff_reason: String(result.handoff_reason ?? ""), settings, personal: false,
+  };
 }
 
 /** Responde automaticamente se o agente estiver ligado para a marca e para a conversa. */
@@ -323,13 +334,20 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
   await sleep(6000);
   if (!(await isLatest())) return;
 
+  // Sem palavra nenhuma (menção em story, post compartilhado, foto, áudio, só emoji): não é dúvida, não responde
+  const { data: last } = await db.from("messages").select("text").eq("id", inboundMessageId).maybeSingle();
+  const said = String(last?.text ?? "").replace(/^\[[^\]]*enviado\]$/, "");
+  if (!/\p{L}/u.test(said)) return;
+
   const draft = await draftReply(db, conversation);
   // Chegou outra mensagem enquanto a IA pensava: descarta esta resposta (a da mensagem nova já vê tudo)
   if (!(await isLatest())) return;
+  if ("ignore" in draft && draft.ignore) return;
   if (draft.handoff) {
     await db.from("conversations").update({ status: "needs_human", handoff_reason: draft.handoff_reason || "Pedido de atendimento humano" }).eq("id", conversation.id);
     // No modo pessoal não manda o aviso da loja ("vou chamar alguém da equipe")
-    const text = draft.reply?.trim() || (draft.personal ? "" : draft.settings?.agent_handoff_message);
+    // No Instagram a IA não avisa nada no handoff, a não ser que tenha escrito um aviso (pedido de humano/reclamação)
+    const text = draft.reply?.trim() || (draft.personal || conversation.channel === "instagram" ? "" : draft.settings?.agent_handoff_message);
     if (text) await sendMessage(db, conversation.id, text, "ai");
     return;
   }
