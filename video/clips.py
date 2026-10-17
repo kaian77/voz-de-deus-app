@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -32,7 +33,8 @@ from worker import URL, rest
 import youtube as yt
 
 VIDEO_EXT = (".mp4", ".mov", ".mkv", ".m4v", ".webm")
-SKIP_NAMES = re.compile(r"trailer|teaser|coming soon|promo", re.I)
+SKIP_NAMES = re.compile(r"trailer|teaser|coming[\s_-]*soon|promo|sneak[\s_-]*peek", re.I)
+NOT_VIDEO = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".pdf", ".txt", ".doc", ".docx", ".srt", ".vtt", ".zip", ".psd", ".ai", ".mp3", ".wav")
 W, H, FPS = 1080, 1920, 30
 SLOTS = ["14:00", "19:00", "23:00", "11:00", "16:30", "21:00"]  # horário de Brasília (tarde/noite nos EUA)
 
@@ -66,7 +68,9 @@ def drive_files(url, folder):
 
     if "/folders/" in url:
         files = gdown.download_folder(url, output=folder, skip_download=True, quiet=True, use_cookies=False) or []
-        vids = [(f.id, os.path.basename(f.path)) for f in files if f.path.lower().endswith(VIDEO_EXT)]
+        # No Drive o nome às vezes vem sem extensão ("EP1"): vale tudo que não é imagem/documento/áudio
+        vids = [(f.id, os.path.basename(f.path)) for f in files if not f.path.lower().endswith(NOT_VIDEO)]
+        log(f"  pasta: {', '.join(os.path.basename(f.path) for f in files) or '(vazia)'}")
     else:
         m = re.search(r"/d/([\w-]+)|id=([\w-]+)", url)
         vids = [(m.group(1) or m.group(2), "video.mp4")] if m else []
@@ -84,6 +88,16 @@ def download(file_id, name, folder):
     if not got or not os.path.exists(out) or os.path.getsize(out) < 100_000:
         raise RuntimeError(f"não consegui baixar {name} do Drive (confira se está como 'qualquer pessoa com o link')")
     return out
+
+
+def duration(video):
+    """Duração em segundos (0 se não for vídeo)."""
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "format=duration", "-of", "csv=p=0", video],
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout.strip()
+    try:
+        return float(out.splitlines()[0]) if out else 0.0
+    except ValueError:
+        return 0.0
 
 
 def download_direct(url, folder):
@@ -155,8 +169,12 @@ def pick_moments(lines, n, campaign, rules, language, extra=""):
                        "messages": [{"role": "user", "content": prompt}]}).encode()
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-    with urllib.request.urlopen(req, timeout=600) as r:
-        data = json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=600) as r:
+            data = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode(errors="replace")[:300]
+        raise RuntimeError(f"IA (Anthropic) {e.code}: {detail}") from None
     for block in data.get("content", []):
         if block.get("type") == "tool_use":
             return block["input"]["clips"]
@@ -393,13 +411,19 @@ def process(source):
         if not files:
             log("  nada novo nessa fonte")
         logo = logo_for(source, work)
+        files.sort(key=lambda f: bool(SKIP_NAMES.search(f[1])))  # episódios antes de teaser/trailer
         for fid, name in files[:2]:  # até 2 vídeos novos por rodada (tempo do workflow)
             log(f"  baixando {name}…")
             video = download(fid, name, work) if fid != "direct" else download_direct(source["url"], work)
+            total = duration(video)
+            if total < 180 and len(files) > 1:  # vinheta/teaser curto: não vale cortar se tem episódio
+                log(f"  {name} tem só {total:.0f}s, pulando")
+                os.remove(video)
+                continue
+            if total < 25:
+                raise RuntimeError(f"{name} não é um vídeo que dá para cortar ({total:.0f}s)")
             words, lines, language = transcribe(video, work)
-            total = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", video],
-                                         stdout=subprocess.PIPE, text=True, check=True).stdout.strip() or 0)
-            moments = snap(pick_moments(lines, source.get("clips_wanted") or 6, source["campaign"], source.get("rules"),
+            moments = snap(pick_moments(lines, min(source.get("clips_wanted") or 6, max(1, int(total // 60))), source["campaign"], source.get("rules"),
                                         channel.get("language") or language), words, total)
             slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
             for i, (clip, when) in enumerate(zip(moments, slots)):
@@ -445,8 +469,7 @@ def process_redos():
             with tempfile.TemporaryDirectory() as work:
                 video = download_direct(source["url"], work) if fid == "direct" else download(fid, "video.mp4", work)
                 words, lines, language = transcribe(video, work)
-                total = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", video],
-                                             stdout=subprocess.PIPE, text=True, check=True).stdout.strip() or 0)
+                total = duration(video)
                 logo = logo_for(source, work)
                 moments = snap(pick_moments(lines, len(rows), source["campaign"], source.get("rules"),
                                             channel.get("language") or language, extra), words, total)
