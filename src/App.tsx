@@ -23,6 +23,8 @@ import Products from "./studio/pages/Products";
 import Legal from "./studio/pages/Legal";
 import StrategyPage from "./studio/pages/Strategy";
 import Videos from "./studio/pages/Videos";
+import Review from "./studio/pages/Review";
+import Reviews from "./studio/pages/Reviews";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +50,7 @@ const App = () => (
             <Route path="comentarios" element={<Comments />} />
             <Route path="mensagens" element={<Messages />} />
             <Route path="pedidos" element={<Orders />} />
+            <Route path="avaliacoes" element={<Reviews />} />
             <Route path="produtos" element={<Products />} />
             <Route path="estrategia" element={<StrategyPage />} />
             <Route path="vitrine" element={<Vitrine />} />
@@ -56,6 +59,7 @@ const App = () => (
             <Route path="contas" element={<Accounts />} />
             <Route path="claude" element={<ClaudeApi />} />
           </Route>
+          <Route path="/avaliar" element={<Review />} />
           <Route path="/privacidade" element={<Legal doc="privacidade" />} />
           <Route path="/termos" element={<Legal doc="termos" />} />
           <Route path="/exclusao-de-dados" element={<Legal doc="exclusao-de-dados" />} />

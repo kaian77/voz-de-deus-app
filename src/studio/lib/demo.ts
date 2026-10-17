@@ -98,6 +98,7 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
     lead_searches: [],
     leads: [],
     strategies: [],
+    site_reviews: [],
     brand_settings: [
       { brand_name: "Minha Marca", niche: "Conteúdo cristão / devocional", audience: "Cristãos 25–55 anos, maioria mulheres, Brasil", tone: "Acolhedor, esperançoso, simples", default_hashtags: "fé palavradedeus deus jesus oração", default_cta: "Comente AMÉM para receber uma oração no direct", approval_required: true, timezone: "America/Sao_Paulo",
         agent_enabled: true, agent_instructions: "Atenda com carinho, ofereça oração, convide para o grupo de quarta 20h.", agent_knowledge: "Grupo de oração: quartas 20h, live no Instagram.\nApp: https://minhamarca.com", agent_handoff_message: "Vou chamar alguém da equipe para te responder, só um instante 🙏" },
