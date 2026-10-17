@@ -170,6 +170,9 @@ export async function mlSyncStatus(db: SupabaseClient, userId: string) {
     remaining: sync.queue.length,
     updated: sync.done.filter((d) => d.updated).length,
     created: sync.done.filter((d) => !d.updated).length,
+    // Produtos da loja que caíram no mesmo anúncio (nome quase igual ou SKU repetido): só um deles fica no ML
+    shared: [...sync.done.reduce((m, d) => d.ml_id ? m.set(d.ml_id, [...(m.get(d.ml_id) ?? []), d.name]) : m, new Map<string, string[]>())]
+      .filter(([, names]) => names.length > 1).map(([ml_id, products]) => ({ ml_id, products })),
     skipped: sync.skipped,
     errors: sync.errors,
     started_at: sync.started_at,
