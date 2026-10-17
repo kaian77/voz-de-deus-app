@@ -80,6 +80,25 @@ Deno.serve(async (req) => {
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
       return json(await nsOrders(store.token, store.storeId, { status: input.status, q: input.q, limit: input.limit ?? 50 }));
     }
+    if (action === "clips_add_source") {
+      // Cortes: nova fonte (pasta/arquivo do Drive de uma campanha) entra na fila do workflow "Cortes"
+      const { data: channel } = await db.from("yt_channels").select("id").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();
+      if (!channel) throw new HttpError(400, "Escolha o canal de cortes");
+      const url = String(input.url ?? "").trim();
+      if (!/^https?:\/\//.test(url)) throw new HttpError(400, "Cole o link da pasta ou do vídeo");
+      const { data, error } = await db.from("clip_sources").insert({
+        user_id: userId, channel_ref: channel.id, url,
+        campaign: String(input.campaign ?? "").trim().slice(0, 120) || "Campanha",
+        hashtags: String(input.hashtags ?? "").trim().slice(0, 300) || null,
+        credit: String(input.credit ?? "").trim().slice(0, 200) || null,
+        rules: String(input.rules ?? "").trim().slice(0, 3000) || null,
+        clips_wanted: Math.min(12, Math.max(1, Number(input.clips_wanted) || 6)),
+        per_day: Math.min(6, Math.max(1, Number(input.per_day) || 3)),
+      }).select().single();
+      if (error) throw new HttpError(500, error.message);
+      await db.from("yt_channels").update({ mode: "clips", enabled: false }).eq("id", channel.id);
+      return json({ ...data, started: await dispatchRender("clips.yml") });
+    }
     if (action === "yt_generate_now") {
       // Canal do YouTube: um vídeo extra agora (o roteiro sai na próxima rodada do cron e o vídeo em seguida)
       const { data: channel } = await db.from("yt_channels").select("*").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ExternalLink, Loader2, Play, Plus, Search, Sparkles, TrendingUp, Youtube } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -25,8 +25,14 @@ const VOICES: Record<YtChannel["language"], { id: string; label: string }[]> = {
     { id: "en-US-ChristopherNeural", label: "Christopher (male, deep)" },
     { id: "en-US-AvaNeural", label: "Ava (female, soft)" },
   ],
+  es: [
+    { id: "es-MX-JorgeNeural", label: "Jorge (masculina, México)" },
+    { id: "es-ES-AlvaroNeural", label: "Álvaro (masculina, España)" },
+    { id: "es-MX-DaliaNeural", label: "Dalia (femenina, México)" },
+  ],
 };
-const NICHE = { pt: "Curiosidades da Bíblia", en: "Bible curiosities" };
+const NICHE = { pt: "Curiosidades da Bíblia", en: "Bible curiosities", es: "Curiosidades de la Biblia" };
+const LANG_LABEL = { pt: "Português", en: "English", es: "Español" };
 
 const STATUS: Record<YtVideo["status"], { label: string; tone: string }> = {
   draft: { label: "Tema escolhido", tone: "text-muted-foreground" },
@@ -70,13 +76,28 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
       niche: f.niche === NICHE[f.language] ? NICHE[language] : f.niche,
     }));
 
+  if (ch.mode === "clips") {
+    return (
+      <Panel title={<span className="flex items-center gap-2"><Avatar name={ch.title ?? "Canal"} src={ch.thumbnail} className="h-6 w-6" />{ch.title ?? ch.channel_id}<span className="rounded border px-1.5 text-[10px] font-medium uppercase text-muted-foreground">Cortes</span></span>}>
+        <p className="text-[13px] text-muted-foreground">Canal de cortes: as campanhas e os cortes ficam em <Link to="/studio/cortes" className="font-medium text-foreground underline">Renda extra → Cortes</Link>.</p>
+        <div className="mt-3 flex items-center gap-3">
+          <Label className="text-xs text-muted-foreground">Idioma dos títulos</Label>
+          <Select value={form.language} onValueChange={(v) => run("lang", () => api.update("yt_channels", ch.id, { language: v as YtChannel["language"] }), "Salvo")}>
+            <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="en">English</SelectItem><SelectItem value="es">Español</SelectItem><SelectItem value="pt">Português</SelectItem></SelectContent>
+          </Select>
+        </div>
+      </Panel>
+    );
+  }
+
   return (
     <Panel
       title={
         <span className="flex items-center gap-2">
           <Avatar name={ch.title ?? "Canal"} src={ch.thumbnail} className="h-6 w-6" />
           {ch.title ?? ch.channel_id}
-          <span className="rounded border px-1.5 text-[10px] font-medium uppercase text-muted-foreground">{form.language === "en" ? "English" : "Português"}</span>
+          <span className="rounded border px-1.5 text-[10px] font-medium uppercase text-muted-foreground">{LANG_LABEL[form.language] ?? "Português"}</span>
         </span>
       }
       action={
@@ -97,7 +118,7 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
           <Label className="text-xs text-muted-foreground">Idioma do canal</Label>
           <Select value={form.language} onValueChange={(v) => setLanguage(v as YtChannel["language"])}>
             <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="pt">Português (Brasil)</SelectItem><SelectItem value="en">English (EUA)</SelectItem></SelectContent>
+            <SelectContent><SelectItem value="pt">Português (Brasil)</SelectItem><SelectItem value="en">English (EUA)</SelectItem><SelectItem value="es">Español</SelectItem></SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
@@ -177,7 +198,8 @@ export default function YouTubePage() {
   const [params, setParams] = useSearchParams();
   const invalidate = useInvalidate();
   const { data: channels = [], isLoading } = useTable("yt_channels", { order: "created_at", ascending: true });
-  const { data: videos = [] } = useTable("yt_videos", { order: "publish_at", limit: 60 }, { refetchInterval: 15000 });
+  const { data: allVideos = [] } = useTable("yt_videos", { order: "publish_at", limit: 80 }, { refetchInterval: 15000 });
+  const videos = allVideos.filter((v) => v.kind !== "clip");
   const [connecting, setConnecting] = useState(false);
   const [watching, setWatching] = useState<YtVideo | null>(null);
   // Erro da conexão fica na tela (o toast some rápido e no celular passa despercebido)

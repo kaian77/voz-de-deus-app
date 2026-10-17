@@ -389,7 +389,8 @@ export interface YtChannel {
   title: string | null;
   thumbnail: string | null;
   enabled: boolean;
-  language: "pt" | "en";
+  language: "pt" | "en" | "es";
+  mode: "bible" | "clips";
   style: "parallax" | "whiteboard" | "classic";
   niche: string;
   shorts_per_day: number;
@@ -406,7 +407,7 @@ export interface YtChannel {
 export interface YtVideo {
   id: string;
   channel_ref: string;
-  kind: "short" | "long";
+  kind: "short" | "long" | "clip";
   status: "draft" | "scripting" | "queued" | "rendering" | "uploaded" | "failed";
   topic: string | null;
   angle: string | null;
@@ -418,6 +419,24 @@ export interface YtVideo {
   thumbnail_url: string | null;
   preview_url: string | null;
   duration_s: number | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Fonte de cortes (pasta/arquivo do Drive de uma campanha de clipping) — Renda extra → Cortes. */
+export interface ClipSource {
+  id: string;
+  channel_ref: string;
+  campaign: string;
+  url: string;
+  hashtags: string | null;
+  credit: string | null;
+  rules: string | null;
+  clips_wanted: number;
+  per_day: number;
+  status: "queued" | "processing" | "done" | "failed";
+  clips_made: number;
   error: string | null;
   created_at: string;
   updated_at: string;
@@ -495,6 +514,7 @@ export interface TableMap {
   landing_pages: LandingPage;
   yt_channels: YtChannel;
   yt_videos: YtVideo;
+  clip_sources: ClipSource;
   strategies: Strategy;
   site_reviews: SiteReview;
 }

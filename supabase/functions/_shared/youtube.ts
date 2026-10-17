@@ -254,7 +254,7 @@ export async function ytAutopilot(db: SupabaseClient) {
   const result: Record<string, unknown> = {};
 
   if (now.getUTCHours() >= 15) {
-    const { data: channels } = await db.from("yt_channels").select("*").eq("enabled", true)
+    const { data: channels } = await db.from("yt_channels").select("*").eq("enabled", true).eq("mode", "bible")
       .or(`planned_on.is.null,planned_on.lt.${tomorrow}`).limit(1); // um canal por rodada (cada um no seu minuto)
     for (const ch of channels ?? []) {
       // Marca antes (a próxima rodada do cron não planeja de novo enquanto esta trabalha)
