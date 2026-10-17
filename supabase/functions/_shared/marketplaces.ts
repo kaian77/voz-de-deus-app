@@ -283,8 +283,12 @@ export async function publishToMercadoLivre(
     if (!description) return;
     const path = `/items/${id}/description`;
     const send = (method: string) => ml(token, path, { method, body: { plain_text: description } });
-    await (update ? send("PUT").catch(() => send("POST")) : send("POST"))
-      .catch((e) => warnings.push(`descrição: ${e instanceof Error ? e.message : e}`));
+    const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+    // Atualiza com PUT; POST só quando o anúncio ainda não tem descrição (se o POST diz que já tem, o erro que vale é o do PUT)
+    await (update
+      ? send("PUT").catch((put) => send("POST").catch((post) => { throw new Error(/already has a description/i.test(msg(post)) ? msg(put) : msg(post)); }))
+      : send("POST"))
+      .catch((e) => warnings.push(`descrição: ${msg(e)}`));
   };
 
   // Produto já anunciado (em qualquer status, pelo SKU ou pelo nome): atualiza em vez de duplicar
