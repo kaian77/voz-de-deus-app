@@ -408,7 +408,8 @@ export interface YtVideo {
   id: string;
   channel_ref: string;
   kind: "short" | "long" | "clip";
-  status: "draft" | "scripting" | "queued" | "rendering" | "uploaded" | "failed";
+  status: "draft" | "scripting" | "queued" | "rendering" | "uploaded" | "failed" | "redo" | "deleted";
+  redo_note?: string | null;
   topic: string | null;
   angle: string | null;
   inspiration: { id: string; title: string; views: number }[] | null;

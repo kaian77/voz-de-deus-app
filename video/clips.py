@@ -119,7 +119,7 @@ def transcribe(video, work):
 
 # ------------------------------------------------------------------------------------------------ IA
 
-def pick_moments(lines, n, campaign, rules, language):
+def pick_moments(lines, n, campaign, rules, language, extra=""):
     """Claude escolhe os melhores momentos (ferramenta forçada = JSON garantido)."""
     key = os.environ["ANTHROPIC_API_KEY"]
     model = os.environ.get("CLAUDE_MODEL") or "claude-opus-5-5"
@@ -149,7 +149,7 @@ def pick_moments(lines, n, campaign, rules, language):
         "- end on a payoff (punchline, reveal, strong reaction) and make sense on its own;\n"
         "- favor funny, dramatic, relatable or conversation-worthy moments, as the campaign asks;\n"
         "- avoid hate, sexual content, slurs or anything against YouTube policies.\n"
-        f"Campaign rules from the brand:\n{rules or '(none)'}\n\nTranscript with timestamps:\n{transcript}"
+        f"Campaign rules from the brand:\n{rules or '(none)'}\n{extra}\nTranscript with timestamps:\n{transcript}"
     )
     body = json.dumps({"model": model, "max_tokens": 4000, "tools": [tool], "tool_choice": {"type": "tool", "name": "save_clips"},
                        "messages": [{"role": "user", "content": prompt}]}).encode()
@@ -293,7 +293,7 @@ def finish(video_only, src, a, dur, words, title, logo, work, out):
 
 def next_slots(channel_ref, per_day, count):
     """Próximos horários livres do canal (per_day por dia), a partir de daqui a 30 min."""
-    taken = {r["publish_at"][:16] for r in (rest("GET", f"yt_videos?channel_ref=eq.{channel_ref}&kind=eq.clip&publish_at=gt.{urllib.parse.quote(now().isoformat())}&select=publish_at") or []) if r.get("publish_at")}
+    taken = {r["publish_at"][:16] for r in (rest("GET", f"yt_videos?channel_ref=eq.{channel_ref}&kind=eq.clip&status=in.(uploaded,rendering)&publish_at=gt.{urllib.parse.quote(now().isoformat())}&select=publish_at") or []) if r.get("publish_at")}
     out, day = [], (now() - dt.timedelta(hours=3)).date()
     while len(out) < count:
         for hhmm in SLOTS[:per_day]:
@@ -306,7 +306,7 @@ def next_slots(channel_ref, per_day, count):
     return out
 
 
-def upload_clip(source, channel, clip, path, thumb, preview, when, work):
+def upload_clip(source, channel, clip, path, thumb, preview, when, work, row_id=None):
     token = yt.google_token(channel["id"])
     tags = [h.lstrip("#") for h in (source.get("hashtags") or "").split() if h.startswith("#")]
     hashtags = " ".join("#" + t for t in tags)
@@ -323,14 +323,18 @@ def upload_clip(source, channel, clip, path, thumb, preview, when, work):
                    "selfDeclaredMadeForKids": False},
     }
     up = yt.upload_video(token, path, meta)
-    rest("POST", "yt_videos", {
-        "user_id": source["user_id"], "channel_ref": channel["id"], "kind": "clip", "status": "uploaded",
+    row = {
+        "user_id": source["user_id"], "channel_ref": channel["id"], "kind": "clip", "status": "uploaded", "error": None,
         "topic": source["campaign"], "angle": clip.get("why"), "title": title, "youtube_id": up["id"],
         "publish_at": when.isoformat(), "thumbnail_url": thumb, "preview_url": preview,
         "duration_s": round(clip["end"] - clip["start"], 1),
         "script": {"source_id": source["id"], "file": clip.get("file"), "start": clip["start"], "end": clip["end"],
                    "screen_title": clip["screen_title"]},
-    })
+    }
+    if row_id:  # "Refazer": o mesmo registro ganha o corte novo
+        rest("PATCH", f"yt_videos?id=eq.{row_id}", {**row, "updated_at": now().isoformat()})
+    else:
+        rest("POST", "yt_videos", row)
     return up["id"]
 
 
@@ -349,6 +353,26 @@ def logo_for(source, folder):
     except Exception as e:
         log(f"  logo: {e}")
     return None
+
+
+def make_clip(source, channel, clip, video, words, logo, work, when, name, row_id=None):
+    """Renderiza um corte (vertical, título, logo, legendas), sobe prévia/capa e envia ao canal."""
+    a, dur = clip["start"], clip["end"] - clip["start"]
+    vo = os.path.join(work, "v.mp4")
+    mode = render_vertical(video, a, dur, vo)
+    final = os.path.join(work, "clip.mp4")
+    finish(vo, video, a, dur, words, clip["screen_title"], logo, work, final)
+    thumb_path = os.path.join(work, "t.jpg")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{dur * 0.3:.2f}", "-i", final, "-frames:v", "1", "-vf", "scale=540:-2", thumb_path], check=True)
+    small = os.path.join(work, "p.mp4")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", final, "-vf", "scale=360:-2", "-c:v", "libx264", "-preset", "veryfast",
+                    "-crf", "30", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", small], check=True)
+    key = f"{source['user_id']}/clips/{name}"
+    thumb = yt.storage_upload(thumb_path, key + ".jpg", "image/jpeg")
+    preview = yt.storage_upload(small, key + ".mp4", "video/mp4")
+    vid = upload_clip(source, channel, clip, final, thumb, preview, when, work, row_id)
+    log(f"    ✓ https://youtu.be/{vid} ({mode}) → publica {when.isoformat()}")
+    return vid
 
 
 def process(source):
@@ -380,31 +404,69 @@ def process(source):
             slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
             for i, (clip, when) in enumerate(zip(moments, slots)):
                 clip["file"] = fid
-                a, dur = clip["start"], clip["end"] - clip["start"]
-                log(f"  corte {i + 1}/{len(moments)}: {clip['screen_title']} ({dur:.0f}s)")
-                vo = os.path.join(work, f"v{i}.mp4")
-                mode = render_vertical(video, a, dur, vo)
-                final = os.path.join(work, f"clip{i}.mp4")
-                finish(vo, video, a, dur, words, clip["screen_title"], logo, work, final)
-                thumb_path = os.path.join(work, f"t{i}.jpg")
-                subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{dur * 0.3:.2f}", "-i", final, "-frames:v", "1", "-vf", "scale=540:-2", thumb_path], check=True)
-                small = os.path.join(work, f"p{i}.mp4")
-                subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", final, "-vf", "scale=360:-2", "-c:v", "libx264", "-preset", "veryfast",
-                                "-crf", "30", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", small], check=True)
-                key = f"{source['user_id']}/clips/{sid}-{fid}-{i}"
-                thumb = yt.storage_upload(thumb_path, key + ".jpg", "image/jpeg")
-                preview = yt.storage_upload(small, key + ".mp4", "video/mp4")
-                vid = upload_clip(source, channel, clip, final, thumb, preview, when, work)
+                log(f"  corte {i + 1}/{len(moments)}: {clip['screen_title']} ({clip['end'] - clip['start']:.0f}s)")
+                make_clip(source, channel, clip, video, words, logo, work, when, f"{sid}-{fid}-{i}")
                 made += 1
-                log(f"    ✓ https://youtu.be/{vid} ({mode}) → publica {when.isoformat()}")
             os.remove(video)
     patch_source(sid, status="done", clips_made=(source.get("clips_made") or 0) + made)
 
 
+def redo_rows():
+    stuck = (now() - dt.timedelta(hours=4)).isoformat()  # workflow que caiu no meio de um "Refazer"
+    rest("PATCH", f"yt_videos?kind=eq.clip&status=eq.rendering&updated_at=lt.{urllib.parse.quote(stuck)}", {"status": "redo"})
+    return rest("GET", "yt_videos?kind=eq.clip&status=eq.redo&order=updated_at&limit=12&select=*") or []
+
+
+def process_redos():
+    """Botão "Refazer" no Studio: novo corte do mesmo episódio, num momento diferente (e com o pedido do dono)."""
+    groups = {}
+    for row in redo_rows():
+        sc = row.get("script") or {}
+        groups.setdefault((sc.get("source_id"), sc.get("file")), []).append(row)
+    for (sid, fid), rows in groups.items():
+        ids = ",".join(r["id"] for r in rows)
+        try:
+            source = (rest("GET", f"clip_sources?id=eq.{sid}&select=*") or [None])[0]
+            if not source or not fid:
+                raise RuntimeError("campanha do corte não encontrada")
+            channel = (rest("GET", f"yt_channels?id=eq.{source['channel_ref']}&select=id,language") or [None])[0]
+            if not channel:
+                raise RuntimeError("canal não encontrado")
+            log(f"▶ refazer {len(rows)} corte(s) de {source['campaign']}")
+            rest("PATCH", f"yt_videos?id=in.({ids})", {"status": "rendering", "updated_at": now().isoformat()})
+            same = rest("GET", f"yt_videos?kind=eq.clip&channel_ref=eq.{channel['id']}&status=neq.deleted&select=script") or []
+            used = [(p.get("script") or {}) for p in same]
+            used = [u for u in used if u.get("source_id") == sid and u.get("file") == fid and "start" in u]
+            used += [r["script"] for r in rows if (r.get("script") or {}).get("start") is not None]
+            avoid = "; ".join(f"{u['start']:.0f}-{u['end']:.0f}s" for u in used)
+            notes = "\n".join(f"- {r['redo_note']}" for r in rows if r.get("redo_note"))
+            extra = (f"Do NOT reuse these time ranges (already used or rejected): {avoid}\n" if avoid else "") + \
+                    (f"The channel owner asked for these changes:\n{notes}\n" if notes else "")
+            with tempfile.TemporaryDirectory() as work:
+                video = download_direct(source["url"], work) if fid == "direct" else download(fid, "video.mp4", work)
+                words, lines, language = transcribe(video, work)
+                total = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", video],
+                                             stdout=subprocess.PIPE, text=True, check=True).stdout.strip() or 0)
+                logo = logo_for(source, work)
+                moments = snap(pick_moments(lines, len(rows), source["campaign"], source.get("rules"),
+                                            channel.get("language") or language, extra), words, total)
+                slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
+                for row, clip, when in zip(rows, moments, slots):
+                    clip["file"] = fid
+                    log(f"  novo corte: {clip['screen_title']}")
+                    make_clip(source, channel, clip, video, words, logo, work, when, f"{sid}-{fid}-r{row['id'][:8]}", row["id"])
+                for row in rows[len(moments):]:
+                    rest("PATCH", f"yt_videos?id=eq.{row['id']}", {"status": "failed", "error": "a IA não achou outro momento bom"})
+        except Exception as e:
+            log(f"  ✗ {e}")
+            rest("PATCH", f"yt_videos?id=in.({ids})&status=in.(redo,rendering)", {"status": "failed", "error": f"Refazer: {e}"[:500]})
+
+
 def main():
     if "--check" in sys.argv:
-        print("queued" if pending() else "empty")
+        print("queued" if pending() or redo_rows() else "empty")
         return
+    process_redos()
     for source in pending():
         log(f"▶ {source['campaign']}")
         try:

@@ -66,7 +66,7 @@ create index if not exists yt_videos_status on public.yt_videos (status);
 alter table public.yt_videos add column if not exists preview_url text;
 
 alter table public.yt_videos drop constraint if exists yt_videos_status_check;
-alter table public.yt_videos add constraint yt_videos_status_check check (status in ('draft', 'scripting', 'queued', 'rendering', 'uploaded', 'failed'));
+alter table public.yt_videos add constraint yt_videos_status_check check (status in ('draft', 'scripting', 'queued', 'rendering', 'uploaded', 'failed', 'redo', 'deleted'));
 alter table public.yt_videos drop constraint if exists yt_videos_kind_check;
 alter table public.yt_videos add constraint yt_videos_kind_check check (kind in ('short', 'long', 'clip'));
 

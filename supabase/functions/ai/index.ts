@@ -9,7 +9,7 @@ import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } f
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
 import { uniqueSlug, writeLanding } from "../_shared/landing.ts";
-import { planDay, ytResearch, ytToken } from "../_shared/youtube.ts";
+import { planDay, ytDeleteVideo, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
@@ -147,6 +147,34 @@ Deno.serve(async (req) => {
       if (error) throw new HttpError(500, error.message);
       await db.from("yt_channels").update({ mode: "clips", enabled: false }).eq("id", channel.id);
       return json({ ...data, started: await dispatchRender("clips.yml") });
+    }
+    if (action === "yt_video_delete" || action === "yt_video_redo") {
+      // Vídeo do YouTube (piloto bíblico ou corte): apagar = some do canal e do Studio; refazer = apaga e faz outro no lugar
+      const { data: v } = await db.from("yt_videos").select("*").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
+      if (!v || v.status === "deleted") throw new HttpError(404, "Vídeo não encontrado");
+      if (["rendering", "scripting", "redo"].includes(v.status)) throw new HttpError(409, "Esse vídeo está sendo feito agora. Espere terminar.");
+      if (v.youtube_id) {
+        try {
+          await ytDeleteVideo(await ytToken(db, v.channel_ref), v.youtube_id);
+        } catch (e) {
+          throw new HttpError(409, (e as Error).message);
+        }
+      }
+      const now = new Date().toISOString();
+      if (action === "yt_video_delete") {
+        await db.from("yt_videos").update({ status: "deleted", youtube_id: null, updated_at: now }).eq("id", v.id);
+        return json({ deleted: true });
+      }
+      const note = String(input.note ?? "").trim().slice(0, 600) || null;
+      // Data que já passou (ou muito em cima) vira daqui a 3 h para dar tempo de fazer o vídeo novo
+      const soon = new Date(Date.now() + 3 * 3600000).toISOString();
+      const publish_at = v.publish_at && v.publish_at > soon ? v.publish_at : soon;
+      const patch = v.kind === "clip"
+        ? { status: "redo", youtube_id: null, redo_note: note, error: null, updated_at: now }
+        : { status: "draft", youtube_id: null, script: null, attempts: 0, redo_note: note, error: null, publish_at, updated_at: now };
+      const { data, error } = await db.from("yt_videos").update(patch).eq("id", v.id).select().single();
+      if (error) throw new HttpError(500, error.message);
+      return json({ ...data, started: v.kind === "clip" ? await dispatchRender("clips.yml") : true });
     }
     if (action === "yt_generate_now") {
       // Canal do YouTube: um vídeo extra agora (o roteiro sai na próxima rodada do cron e o vídeo em seguida)

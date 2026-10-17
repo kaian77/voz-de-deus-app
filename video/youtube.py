@@ -62,7 +62,7 @@ def queued(limit=4):
 
 def requeue_stuck():
     limit = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=2)).isoformat()
-    rest("PATCH", f"yt_videos?status=eq.rendering&updated_at=lt.{urllib.parse.quote(limit)}", {"status": "queued"})
+    rest("PATCH", f"yt_videos?status=eq.rendering&kind=neq.clip&updated_at=lt.{urllib.parse.quote(limit)}", {"status": "queued"})
 
 
 def patch(vid, **fields):

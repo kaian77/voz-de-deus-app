@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
 import { useInvalidate, useTable } from "../lib/hooks";
 import type { YtChannel, YtVideo } from "../lib/types";
+import { YtVideoActions } from "../components/YtVideoActions";
 import { Avatar, EmptyState, formatDateTime, PageHeader, Panel, relativeTime } from "../components/bits";
 
 const VOICES: Record<YtChannel["language"], { id: string; label: string }[]> = {
@@ -41,6 +42,8 @@ const STATUS: Record<YtVideo["status"], { label: string; tone: string }> = {
   rendering: { label: "Montando o vídeo…", tone: "text-amber-600" },
   uploaded: { label: "Enviado ao YouTube", tone: "text-emerald-600" },
   failed: { label: "Falhou", tone: "text-danger" },
+  redo: { label: "Refazendo…", tone: "text-amber-600" },
+  deleted: { label: "Apagado", tone: "text-muted-foreground" },
 };
 
 function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }) {
@@ -199,7 +202,7 @@ export default function YouTubePage() {
   const invalidate = useInvalidate();
   const { data: channels = [], isLoading } = useTable("yt_channels", { order: "created_at", ascending: true });
   const { data: allVideos = [] } = useTable("yt_videos", { order: "publish_at", limit: 80 }, { refetchInterval: 15000 });
-  const videos = allVideos.filter((v) => v.kind !== "clip");
+  const videos = allVideos.filter((v) => v.kind !== "clip" && v.status !== "deleted");
   const [connecting, setConnecting] = useState(false);
   const [watching, setWatching] = useState<YtVideo | null>(null);
   // Erro da conexão fica na tela (o toast some rápido e no celular passa despercebido)
@@ -280,7 +283,7 @@ export default function YouTubePage() {
                       {v.duration_s ? ` · ${Math.round(v.duration_s)}s` : ""}
                     </p>
                     <p className={cn("mt-0.5 flex items-center gap-1 text-xs font-medium", STATUS[v.status].tone)}>
-                      {["scripting", "queued", "rendering"].includes(v.status) && <Loader2 className="h-3 w-3 animate-spin" />}
+                      {["scripting", "queued", "rendering", "redo"].includes(v.status) && <Loader2 className="h-3 w-3 animate-spin" />}
                       {STATUS[v.status].label}
                       {v.preview_url && (
                         <button type="button" onClick={() => setWatching(v)} className="ml-2 inline-flex items-center gap-0.5 font-normal text-foreground hover:underline">
@@ -294,6 +297,7 @@ export default function YouTubePage() {
                       )}
                     </p>
                     {v.error && <p className="mt-0.5 text-xs text-muted-foreground">{v.error}</p>}
+                    <div className="mt-1 flex flex-wrap gap-1"><YtVideoActions video={v} /></div>
                   </div>
                 </div>
               );

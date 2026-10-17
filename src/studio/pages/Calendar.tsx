@@ -51,12 +51,17 @@ function PostActions({ post }: { post: Post }) {
             <a href={r!.permalink} target="_blank" rel="noreferrer">Abrir no {p === "instagram" ? "Instagram" : "TikTok"} <ExternalLink className="ml-auto h-3 w-3" /></a>
           </DropdownMenuItem>
         ))}
-        {post.status !== "published" && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => remove.mutate(post.id)}>Excluir post</DropdownMenuItem>
-          </>
-        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-danger focus:text-danger"
+          onSelect={() => {
+            // Publicado: o Instagram/TikTok não deixam o Studio apagar o post lá; sai só daqui
+            if (post.status === "published" && !confirm("Tirar este post do Studio?\n\nNo Instagram e no TikTok ele continua: o Studio não consegue apagar lá. Para apagar, abra o post (Abrir no Instagram/TikTok) e apague pelo app.")) return;
+            remove.mutate(post.id);
+          }}
+        >
+          {post.status === "published" ? "Tirar do Studio" : "Excluir post"}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

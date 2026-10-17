@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
 import { useInvalidate, useTable } from "../lib/hooks";
 import type { ClipSource, YtVideo } from "../lib/types";
+import { YtVideoActions } from "../components/YtVideoActions";
 import { EmptyState, formatDateTime, PageHeader, Panel, relativeTime } from "../components/bits";
 
 const SOURCE_STATUS: Record<ClipSource["status"], { label: string; tone: string }> = {
@@ -28,7 +29,8 @@ export default function Clips() {
   const invalidate = useInvalidate();
   const { data: channels = [] } = useTable("yt_channels", { order: "created_at", ascending: true });
   const { data: sources = [] } = useTable("clip_sources", { order: "created_at" }, { refetchInterval: 20000 });
-  const { data: videos = [] } = useTable("yt_videos", { order: "publish_at", limit: 100, eq: { kind: "clip" } }, { refetchInterval: 20000 });
+  const { data: allClips = [] } = useTable("yt_videos", { order: "publish_at", limit: 100, eq: { kind: "clip" } }, { refetchInterval: 20000 });
+  const videos = allClips.filter((v) => v.status !== "deleted");
   const [channelId, setChannelId] = useState("");
   const [form, setForm] = useState(EMPTY);
   const [sending, setSending] = useState(false);
@@ -225,14 +227,20 @@ export default function Clips() {
                         {byId.get(v.channel_ref)?.title} · {v.topic} · {v.duration_s ? `${Math.round(v.duration_s)}s` : ""}
                         {v.publish_at && ` · publica ${formatDateTime(v.publish_at)}`}
                       </p>
+                      {v.status === "redo" || v.status === "rendering" ? (
+                        <p className="flex items-center gap-1 text-xs text-amber-600"><Loader2 className="h-3 w-3 animate-spin" />Refazendo o corte…</p>
+                      ) : v.status === "failed" && v.error ? <p className="text-xs text-danger">{v.error}</p> : null}
+                      <div className="mt-1.5 flex flex-wrap gap-2">
                       {v.youtube_id && (
-                        <div className="mt-1.5 flex flex-wrap gap-2">
+                        <>
                           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => copy(v)}><Copy className="mr-1 h-3.5 w-3.5" />Copiar link</Button>
                           <Button size="sm" variant="ghost" className="h-7 text-xs" asChild>
                             <a href={`https://studio.youtube.com/video/${v.youtube_id}/edit`} target="_blank" rel="noreferrer">YouTube Studio <ExternalLink className="ml-1 h-3 w-3" /></a>
                           </Button>
-                        </div>
+                        </>
                       )}
+                        <YtVideoActions video={v} />
+                      </div>
                     </div>
                   </div>
                 ))}
