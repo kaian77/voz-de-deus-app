@@ -141,7 +141,7 @@ export async function mercadoLivreListings(db: SupabaseClient, userId: string) {
   }
   const probe = async (path: string) => {
     try {
-      return JSON.stringify(await ml(token, path)).slice(0, 2500);
+      return JSON.stringify(await ml(token, path)).slice(0, 6000);
     } catch (e) {
       return `erro: ${e instanceof Error ? e.message : e}`;
     }
@@ -155,8 +155,16 @@ export async function mercadoLivreListings(db: SupabaseClient, userId: string) {
     samples.push({
       id: p.id, title: p.title, status: p.status, sub_status: p.sub_status, tags: p.tags,
       infractions: await probe(`/moderations/infractions/${acc.external_id}?related_item_id=${p.id}`),
-      health: await probe(`/items/${p.id}/health`),
-      actions: await probe(`/items/${p.id}/health/actions`),
+      performance: await probe(`/item/${p.id}/performance`),
+    });
+  }
+  // Qualidade (performance) e experiência de compra de alguns anúncios ativos
+  const quality = [];
+  for (const l of listings.filter((x) => x.status === "active").slice(0, 2)) {
+    quality.push({
+      id: l.id, title: l.title,
+      performance: await probe(`/item/${l.id}/performance`),
+      experience: await probe(`/reputation/items/${l.id}/purchase_experience/integrators?locale=pt_BR`),
     });
   }
   // Anúncio modelo: atributos (de onde vem o título montado pelo ML) e dados fiscais, para copiar o formato
@@ -174,6 +182,7 @@ export async function mercadoLivreListings(db: SupabaseClient, userId: string) {
   return {
     reference,
     search_filters,
+    quality,
     store_products: store.length,
     active: listings.length - problems.length,
     not_active: problems.length,
