@@ -268,6 +268,14 @@ export default function YouTubePage() {
           </div>
         </div>
       )}
+      <p className="mt-8 text-xs text-muted-foreground">
+        Usa os Serviços de API do YouTube. Ao conectar um canal você concorda com os{" "}
+        <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer" className="underline">Termos de Serviço do YouTube</a> e com a{" "}
+        <a href="/privacidade" className="underline">nossa Política de Privacidade</a> (que segue a{" "}
+        <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer" className="underline">Política de Privacidade do Google</a>). Revogue o acesso quando quiser em{" "}
+        <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer" className="underline">myaccount.google.com/permissions</a>.
+      </p>
+
       <Dialog open={!!watching} onOpenChange={(o) => !o && setWatching(null)}>
         <DialogContent className="max-w-3xl p-3">
           <DialogTitle className="pr-6 text-sm">{watching?.title ?? watching?.topic}</DialogTitle>
