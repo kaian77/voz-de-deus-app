@@ -490,6 +490,12 @@ def process(video):
         final, thumb, total, chapters, en = render(video, work)
         short = video["kind"] == "short"
         thumb_url = storage_upload(thumb, f"{video['user_id']}/youtube/{vid}.jpg", "image/jpeg")
+        # Prévia leve (até ~15 MB) para assistir no Studio sem precisar abrir o YouTube
+        small = os.path.join(work, "preview.mp4")
+        scale = "360:-2" if short else "-2:360"
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", final, "-vf", f"scale={scale}", "-c:v", "libx264", "-preset", "veryfast",
+                        "-crf", "30", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", small], check=True)
+        preview_url = storage_upload(small, f"{video['user_id']}/youtube/{vid}.mp4", "video/mp4")
         token = google_token(video["channel_ref"])
         script = video["script"]
         publish_at = video.get("publish_at")
@@ -509,6 +515,10 @@ def process(video):
         up = upload_video(token, final, meta)
         warn = set_thumbnail(token, up["id"], thumb)
         patch(vid, status="uploaded", youtube_id=up["id"], thumbnail_url=thumb_url, duration_s=round(total, 1), error=warn)
+        try:  # à parte: se a coluna ainda não existir, o vídeo já enviado não volta para a fila
+            patch(vid, preview_url=preview_url)
+        except Exception as e:
+            log(f"  prévia: {e}")
         log(f"  ✓ https://youtu.be/{up['id']} ({total:.0f}s)")
 
 
