@@ -5,6 +5,11 @@ name: Leads do Google Maps
 
 on:
   workflow_dispatch:
+    inputs:
+      retry_failed:
+        description: "Tentar de novo as buscas que falharam"
+        type: boolean
+        default: false
   schedule:
     - cron: "23 */4 * * *"
 
@@ -37,7 +42,7 @@ jobs:
 
       - name: Tem busca na fila?
         id: queue
-        run: echo "status=$(cd video && python3 leads.py --check)" >> "$GITHUB_OUTPUT"
+        run: echo "status=$(cd video && python3 leads.py --check ${{ inputs.retry_failed && '--retry-failed' || '' }})" >> "$GITHUB_OUTPUT"
 
       - name: Robô do Google Maps
         if: steps.queue.outputs.status == 'queued'

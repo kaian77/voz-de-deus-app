@@ -11,12 +11,9 @@ export const LEAD_STATUS: Record<LeadStatus, { label: string; color: string }> =
   lost: { label: "Descartado", color: "#9ca3af" },
 };
 
-const PALETTE = ["#E3262E", "#0ea5e9", "#f59e0b", "#10b981", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
-/** Mesma cor para o mesmo tema (ex.: todas as buscas de "nutricionista"). */
-export function themeColor(query: string) {
-  let h = 0;
-  for (const ch of query.trim().toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return PALETTE[h % PALETTE.length];
+/** Cor da área no mapa: vermelho = já prospectado; laranja = buscando agora; cinza = falhou (não conta). */
+export function areaColor(status: LeadSearch["status"]) {
+  return status === "done" ? "#E3262E" : status === "failed" ? "#9ca3af" : "#f59e0b";
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -56,8 +53,10 @@ export default function LeadsMap({ searches, leads }: { searches: LeadSearch[]; 
     for (const s of searches) {
       if (!s.bbox) continue;
       const [south, north, west, east] = s.bbox;
-      const color = themeColor(s.query);
-      L.rectangle([[south, west], [north, east]], { color, weight: 1.5, fillColor: color, fillOpacity: 0.12 })
+      const color = areaColor(s.status);
+      L.rectangle([[south, west], [north, east]], {
+        color, weight: 2, fillColor: color, fillOpacity: s.status === "done" ? 0.22 : 0.1, dashArray: s.status === "done" ? undefined : "6 6",
+      })
         .bindTooltip(`${esc(s.query)} · ${esc(s.place)} (${s.found} leads)`)
         .addTo(layer.current);
       bounds.extend([[south, west], [north, east]]);
