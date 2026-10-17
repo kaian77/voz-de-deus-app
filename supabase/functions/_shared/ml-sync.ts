@@ -68,13 +68,25 @@ function firstSentences(text: string, max = 700) {
 
 export const isKit = (name: string) => /^\s*(kit|combo)\b/i.test(name);
 
-/** Quantos pins vêm no kit: "Kit 10 Pins", "7 Membros" ou "com 3 pins" no nome ou na descrição. */
-export function kitUnits(name: string, about: string) {
+const NUMBERS: Record<string, number> = {
+  dois: 2, duas: 2, "três": 3, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+  onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20,
+};
+
+/**
+ * Quantos pins vêm no kit: "Kit 10 Pins", "7 Membros", "reúne três modelos" no nome ou na descrição.
+ * Sem isso, estima pelo preço cheio dividido pelo preço de um pin avulso.
+ */
+export function kitUnits(name: string, about: string, fullPrice = 0, pinPrice = 17.99) {
+  const n = "(\\d{1,2}|" + Object.keys(NUMBERS).join("|") + ")";
   for (const t of [name, about]) {
-    const m = t.match(/\b(\d{1,2})\s+(pins|broches|membros|unidades|peças)\b/i) ?? t.match(/\bkit\s+(\d{1,2})\b/i);
-    if (m && Number(m[1]) > 1) return Number(m[1]);
+    const m = t.match(new RegExp(`(?:^|[^\\p{L}\\d])${n}\\s+(?:\\p{L}+\\s+)?(?:pins|broches|membros|unidades|peças|modelos)(?![\\p{L}])`, "iu"))
+      ?? t.match(/\bkit\s+(\d{1,2})\b/i);
+    const v = m ? NUMBERS[m[1].toLowerCase()] ?? Number(m[1]) : 0;
+    if (v > 1) return v;
   }
-  return null;
+  const est = Math.round(fullPrice / pinPrice);
+  return est > 1 ? est : null;
 }
 
 /** Descrição do anúncio no padrão da Brax Pins Mania para o Mercado Livre. */
@@ -347,7 +359,7 @@ export async function runMlSync(db: SupabaseClient) {
             remaining = await defer(db, acc.id, id);
             continue;
           }
-          const units = kit ? kitUnits(name, plain(txt(p.description))) : null;
+          const units = kit ? kitUnits(name, plain(txt(p.description)), Number(v.price || 0)) : null;
           // deno-lint-ignore no-explicit-any
           const theme = (p.categories ?? []).map((c: any) => txt(c.name)).filter(Boolean).slice(0, 2).join(", ") || undefined;
           const r = await publishToMercadoLivre(db, acc.user_id, {
