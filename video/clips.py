@@ -131,6 +131,27 @@ def transcribe(video, work):
     return words, lines, info.language
 
 
+def transcript_for(source, fid, video, work):
+    """Transcrição do episódio, guardada no storage na 1ª vez: o "Refazer" não precisa transcrever de novo (economiza ~1 h)."""
+    key = f"{source['user_id']}/clips/transcripts/{source['id']}-{fid}.json"
+    try:
+        with urllib.request.urlopen(f"{yt.URL}/storage/v1/object/public/media/{key}", timeout=60) as r:
+            data = json.loads(r.read())
+        log("  transcrição guardada (pulei a transcrição)")
+        return data["words"], [tuple(x) for x in data["lines"]], data["language"]
+    except Exception:
+        pass
+    words, lines, language = transcribe(video, work)
+    path = os.path.join(work, "transcript.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"words": words, "lines": lines, "language": language}, f)
+    try:
+        yt.storage_upload(path, key, "application/json")
+    except Exception as e:
+        log(f"  não guardei a transcrição: {e}")
+    return words, lines, language
+
+
 # ------------------------------------------------------------------------------------------------ IA
 
 def pick_moments(lines, n, campaign, rules, language, extra=""):
@@ -423,7 +444,7 @@ def process(source):
                 continue
             if total < 25:
                 raise RuntimeError(f"{name} não é um vídeo que dá para cortar ({total:.0f}s)")
-            words, lines, language = transcribe(video, work)
+            words, lines, language = transcript_for(source, fid, video, work)
             moments = snap(pick_moments(lines, min(source.get("clips_wanted") or 6, max(1, int(total // 60))), source["campaign"], source.get("rules"),
                                         channel.get("language") or language), words, total)
             slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
@@ -469,7 +490,7 @@ def process_redos():
                     (f"The channel owner asked for these changes:\n{notes}\n" if notes else "")
             with tempfile.TemporaryDirectory() as work:
                 video = download_direct(source["url"], work) if fid == "direct" else download(fid, "video.mp4", work)
-                words, lines, language = transcribe(video, work)
+                words, lines, language = transcript_for(source, fid, video, work)
                 total = duration(video)
                 logo = logo_for(source, work)
                 moments = snap(pick_moments(lines, len(rows), source["campaign"], source.get("rules"),
