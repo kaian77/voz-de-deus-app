@@ -133,10 +133,15 @@ Deno.serve(async (req) => {
         per_day: Math.min(6, Math.max(1, Number(input.per_day) || 3)),
       };
       if (input.id) {
-        const { data, error } = await db.from("clip_sources").update({ ...fields, updated_at: new Date().toISOString() })
+        const { data: old } = await db.from("clip_sources").select("status").eq("id", String(input.id)).eq("user_id", userId).maybeSingle();
+        if (!old) throw new HttpError(404, "Campanha não encontrada");
+        // Campanha que falhou volta para a fila ao salvar (botão "Tentar de novo")
+        const retry = old.status === "failed";
+        const { data, error } = await db.from("clip_sources")
+          .update({ ...fields, ...(retry ? { status: "queued", error: null } : {}), updated_at: new Date().toISOString() })
           .eq("id", String(input.id)).eq("user_id", userId).select().single();
-        if (error || !data) throw new HttpError(404, "Campanha não encontrada");
-        return json({ ...data, started: false, updated: true });
+        if (error || !data) throw new HttpError(500, error?.message ?? "Não salvou");
+        return json({ ...data, started: retry ? await dispatchRender("clips.yml") : false, updated: true });
       }
       const { data, error } = await db.from("clip_sources").insert({ user_id: userId, ...fields }).select().single();
       if (error) throw new HttpError(500, error.message);

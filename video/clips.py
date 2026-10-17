@@ -99,8 +99,13 @@ def download_direct(url, folder):
 def transcribe(video, work):
     from faster_whisper import WhisperModel
 
-    audio = os.path.join(work, "audio.wav")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", video, "-vn", "-ac", "1", "-ar", "16000", audio], check=True)
+    import numpy as np
+
+    # Áudio cru (16 kHz mono float32) direto do ffmpeg: não depende do PyAV (versões novas quebram o faster-whisper)
+    raw = os.path.join(work, "audio.f32")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", video, "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", raw], check=True)
+    audio = np.fromfile(raw, dtype=np.float32)
+    os.remove(raw)
     model = WhisperModel("small", device="cpu", compute_type="int8")
     segs, info = model.transcribe(audio, word_timestamps=True, vad_filter=True, beam_size=1)
     words, lines = [], []

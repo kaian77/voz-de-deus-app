@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Loader2, Pencil, Play, Plus, Scissors, Sparkles } from "lucide-react";
+import { Copy, ExternalLink, Loader2, Pencil, Play, Plus, RotateCcw, Scissors, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -69,6 +69,19 @@ export default function Clips() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const retry = async (s: ClipSource) => {
+    try {
+      await api.invoke("ai", {
+        action: "clips_add_source", id: s.id, channel_id: s.channel_ref, campaign: s.campaign, url: s.url, credit: s.credit ?? "",
+        hashtags: s.hashtags ?? "", rules: s.rules ?? "", clips_wanted: s.clips_wanted, per_day: s.per_day,
+      });
+      toast.success("Recomeçou! Baixar e transcrever o episódio leva de 30 min a 2 h.");
+      invalidate("clip_sources");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
   const add = async () => {
     if (!chosen) return toast.error("Escolha o canal de cortes");
     if (!form.url.trim()) return toast.error("Cole o link da pasta do Drive da campanha");
@@ -77,7 +90,7 @@ export default function Clips() {
       const r = await api.invoke<{ started: boolean }>("ai", {
         action: "clips_add_source", id: editing ?? undefined, channel_id: chosen, ...form, clips_wanted: Number(form.clips_wanted), per_day: Number(form.per_day),
       });
-      toast.success(editing ? "Campanha salva: os próximos cortes já seguem os dados novos." : r.started ? "Começou! Baixar e transcrever o episódio leva de 30 min a 2 h." : "Na fila: roda em até 6 h.");
+      toast.success(editing ? (r.started ? "Salvo e recomeçou!" : "Campanha salva: os próximos cortes já seguem os dados novos.") : r.started ? "Começou! Baixar e transcrever o episódio leva de 30 min a 2 h." : "Na fila: roda em até 6 h.");
       setForm(EMPTY);
       setPaste("");
       setEditing(null);
@@ -185,7 +198,10 @@ export default function Clips() {
                       {s.status === "failed" ? s.error ?? "Falhou" : SOURCE_STATUS[s.status].label} · {s.clips_made} cortes · {relativeTime(s.updated_at)}
                     </p>
                     </div>
-                    <Button size="sm" variant="ghost" className="h-7 shrink-0 text-xs" onClick={() => edit(s)}><Pencil className="mr-1 h-3.5 w-3.5" />Editar</Button>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      {s.status === "failed" && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => retry(s)}><RotateCcw className="mr-1 h-3.5 w-3.5" />Tentar de novo</Button>}
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => edit(s)}><Pencil className="mr-1 h-3.5 w-3.5" />Editar</Button>
+                    </div>
                   </li>
                 ))}
               </ul>
