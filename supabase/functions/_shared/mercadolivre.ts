@@ -63,11 +63,19 @@ export async function mlTokenFor(db: SupabaseClient, accountId: string): Promise
 
 // deno-lint-ignore no-explicit-any
 export async function ml<T = any>(token: string, path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
+  const send = () => fetch(`${API}${path}`, {
     method: init.method ?? "GET",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
+  let res = await send();
+  // 409 "Conflict": outra alteração no mesmo anúncio ainda está sendo gravada no ML. Espera e manda de novo.
+  for (const wait of [2000, 4000, 8000]) {
+    if (res.status !== 409) break;
+    await res.body?.cancel();
+    await new Promise((r) => setTimeout(r, wait));
+    res = await send();
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const causes = Array.isArray(data.cause)
