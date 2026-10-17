@@ -12,6 +12,7 @@ import { announceProduct, buildProduct, createFromDraft, templateFor } from "./p
 import { queueProductVideo, videoOptions } from "./product-video.ts";
 import { analyzeMarketplace, mercadoLivreListings, publishToMercadoLivre } from "./marketplaces.ts";
 import { fixSharedListings, mlSyncStatus, queueKits, retryMlProblems, startMlSync } from "./ml-sync.ts";
+import { improveMlShowcase, setMlPremium } from "./ml-quality.ts";
 import { generateIdeas } from "./content-ideas.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
@@ -786,6 +787,13 @@ const tools = {
     description: "Anúncios do Mercado Livre (todos menos os encerrados) com o produto da loja correspondente, e a lista `missing` dos produtos da loja Nuvemshop que ainda não têm anúncio no Mercado Livre.",
     input: z.object({}),
     run: async (ctx: Ctx) => mercadoLivreListings(ctx.db, ctx.userId),
+  },
+
+  improve_mercadolivre: {
+    description: "Melhora a vitrine do Mercado Livre: lê a Qualidade e a Experiência de compra de todos os anúncios ativos, corrige sozinho o que dá (fotos — gera close e foto de lado até ter 3 —, título, ficha técnica, descrição, estoque) e diz o que depende do lojista (Premium/parcelamento sem juros, Envios Flex, vídeo curto). action \"fix\" (padrão) analisa e corrige; \"analyze\" só analisa; \"premium\" passa todos os anúncios para Premium (tarifa maior) — só use se o lojista pedir explicitamente.",
+    input: z.object({ action: z.enum(["fix", "analyze", "premium"]).optional() }),
+    run: async (ctx: Ctx, input: { action?: "fix" | "analyze" | "premium" }) =>
+      input.action === "premium" ? setMlPremium(ctx.db, ctx.userId) : improveMlShowcase(ctx.db, ctx.userId, { fix: input.action !== "analyze" }),
   },
 
   sync_mercadolivre: {

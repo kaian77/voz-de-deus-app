@@ -446,10 +446,22 @@ async function storeProducts(token: string, storeId: string) {
 const ML_PICTURES = 6;
 
 /** Põe as fotos na fila do workflow que as deixa no padrão do ML (a 1ª vira capa com fundo branco). */
+/** O ML quer pelo menos 3 fotos (regra de qualidade UP_PICTURES_QUANTITY_MIN). */
+const ML_MIN_PICTURES = 3;
+
+/**
+ * Fotos que o anúncio vai ter: capa, as outras da loja e, se a loja tiver menos de 3, fotos geradas
+ * da capa (detail = close no pin, angle = pin de lado) até chegar em 3.
+ */
+function photoPlan(images: string[]) {
+  const list = images.slice(0, ML_PICTURES);
+  const plan = list.map((src, i) => ({ src, kind: i === 0 ? "cover" : "extra" }));
+  for (const kind of ["detail", "angle"]) if (list.length && plan.length < ML_MIN_PICTURES) plan.push({ src: list[0], kind });
+  return plan;
+}
+
 async function queuePhotos(db: SupabaseClient, userId: string, products: { images: string[] }[]) {
-  const rows = products.flatMap((p) =>
-    p.images.slice(0, ML_PICTURES).map((src, i) => ({ user_id: userId, source_url: src, kind: i === 0 ? "cover" : "extra" }))
-  );
+  const rows = products.flatMap((p) => photoPlan(p.images).map(({ src, kind }) => ({ user_id: userId, source_url: src, kind })));
   if (!rows.length) return 0;
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await db.from("ml_photos").upsert(rows.slice(i, i + 500), { onConflict: "source_url,kind", ignoreDuplicates: true });
@@ -469,19 +481,40 @@ const PHOTO_WAIT_MS = 2 * 3600_000;
 async function mlReadyImages(db: SupabaseClient, userId: string, images: string[]) {
   const list = images.slice(0, ML_PICTURES);
   if (!list.length) return { images: list, ready: false, wait: false };
+  const plan = photoPlan(list);
   const { data } = await db.from("ml_photos").select("source_url,kind,status,result_url,created_at").in("source_url", list);
   const rows = data ?? [];
-  const row = (src: string, i: number) => rows.find((r) => r.source_url === src && r.kind === (i === 0 ? "cover" : "extra"));
-  if (list.some((src, i) => !row(src, i))) {
-    await queuePhotos(db, userId, [{ images: list }]); // foto nova na loja desde que a sincronização começou
+  const row = (p: { src: string; kind: string }) => rows.find((r) => r.source_url === p.src && r.kind === p.kind);
+  if (plan.some((p) => !row(p))) {
+    await queuePhotos(db, userId, [{ images: list }]); // foto nova na loja (ou foto gerada nova) desde a última vez
     return { images: list, ready: false, wait: true };
   }
-  const wait = list.some((src, i) => {
-    const r = row(src, i)!;
+  const wait = plan.some((p) => {
+    const r = row(p)!;
     return r.status === "queued" && Date.now() - new Date(r.created_at).getTime() < PHOTO_WAIT_MS;
   });
-  const out = list.map((src, i) => row(src, i)?.result_url || src);
-  return { images: out, ready: out.some((u, i) => u !== list[i]), wait };
+  // Foto da loja sem tratamento vai como está; foto gerada só entra quando pronta
+  const out = plan.map((p) => row(p)?.result_url || (p.kind === "cover" || p.kind === "extra" ? p.src : "")).filter(Boolean);
+  return { images: out, ready: plan.some((p) => !!row(p)?.result_url), wait };
+}
+
+/** Põe produtos da loja de volta na fila da sincronização (na frente). */
+export async function requeueProducts(db: SupabaseClient, accountId: string, ids: number[]) {
+  const { data } = await db.from("social_accounts").select("meta").eq("id", accountId).single();
+  const sync = data?.meta?.ml_sync as MlSync | undefined;
+  if (!sync || !ids.length) return 0;
+  sync.queue = [...ids, ...sync.queue.filter((id) => !ids.includes(id))];
+  sync.finished_at = null;
+  sync.total += ids.length;
+  await saveSync(db, accountId, sync);
+  return ids.length;
+}
+
+/** Anúncio do ML → produto da loja (último resultado da sincronização). */
+export function storeIdsByListing(sync: MlSync | undefined) {
+  const map = new Map<string, number>();
+  for (const d of sync?.done ?? []) if (d.ml_id) map.set(d.ml_id, d.id);
+  return map;
 }
 
 /** Devolve o produto para o fim da fila (esperando as fotos tratadas). */
