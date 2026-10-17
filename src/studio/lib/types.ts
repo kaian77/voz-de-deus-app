@@ -254,6 +254,24 @@ export interface MlSyncState {
 }
 
 /** "Melhorar vitrine do ML": qualidade dos anúncios e o que foi/precisa ser feito */
+/** Avaliação do formulário "Avalie e ganhe 10%" */
+export interface SiteReview {
+  id: string;
+  user_id: string;
+  order_id: string;
+  order_number: string | null;
+  name: string;
+  email: string;
+  rating: number;
+  comment: string | null;
+  products: string | null;
+  status: "pending" | "approved" | "hidden";
+  coupon: string | null;
+  emailed_at: string | null;
+  email_error: string | null;
+  created_at: string;
+}
+
 export interface MlQualityReport {
   at: string;
   listings: number;
@@ -435,6 +453,7 @@ export interface TableMap {
   leads: Lead;
   landing_pages: LandingPage;
   strategies: Strategy;
+  site_reviews: SiteReview;
 }
 export type TableName = keyof TableMap;
 

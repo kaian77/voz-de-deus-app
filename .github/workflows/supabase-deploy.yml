@@ -53,6 +53,8 @@ jobs:
       KLING_API_BASE: ${{ vars.KLING_API_BASE }}
       HIGGSFIELD_API_KEY: ${{ secrets.HIGGSFIELD_API_KEY }}
       HIGGSFIELD_API_SECRET: ${{ secrets.HIGGSFIELD_API_SECRET }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      REVIEW_EMAIL_FROM: ${{ vars.REVIEW_EMAIL_FROM }}
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1

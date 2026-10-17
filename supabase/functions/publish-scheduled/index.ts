@@ -13,6 +13,7 @@ import { wahaKeepAlive } from "../_shared/whatsapp.ts";
 import { runSaleAlerts } from "../_shared/sale-alerts.ts";
 import { runDailyDigest } from "../_shared/daily.ts";
 import { runDailyVideos } from "../_shared/video-autopilot.ts";
+import { sendPendingReviewEmails } from "../_shared/reviews.ts";
 import { runMlSync, watchNewProducts } from "../_shared/ml-sync.ts";
 
 Deno.serve(async (req) => {
@@ -64,6 +65,10 @@ Deno.serve(async (req) => {
     const mlnew = new Date().getUTCMinutes() % 10 === 3
       ? await watchNewProducts(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
       : undefined;
+    // A cada 10 minutos: cupom de quem avaliou e o e-mail ainda não saiu
+    const reviews = new Date().getUTCMinutes() % 10 === 5
+      ? await sendPendingReviewEmails(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
+      : undefined;
     // A cada 2 minutos: aviso de venda no WhatsApp (Mercado Livre, Shopee, site)
     const sales = new Date().getUTCMinutes() % 2 === 1
       ? await runSaleAlerts(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
@@ -72,7 +77,7 @@ Deno.serve(async (req) => {
     const digest = await runDailyDigest(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Vídeos diários do TikTok (às 9h de Brasília, sem repetir produto no ciclo)
     const daily = await runDailyVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
-    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, cleanup, waha, mlsync, mlnew, sales });
+    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, cleanup, waha, mlsync, mlnew, sales, reviews });
   } catch (err) {
     return handleError(err);
   }
