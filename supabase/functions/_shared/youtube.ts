@@ -122,7 +122,10 @@ const Plan = z.object({
 
 const Scene = z.object({
   narration: z.string().describe("O que a voz fala nesta cena: 1 ou 2 frases curtas, faladas, em português"),
-  image: z.string().describe("Descrição da imagem da cena EM INGLÊS: personagens, ação, cenário, enquadramento (sem pedir texto na imagem)"),
+  image: z.string().describe(
+    "Descrição da imagem da cena EM INGLÊS: personagens em AÇÃO (expressão forte, movimento, emoção), cenário, enquadramento cinematográfico " +
+      "(close dramático, plano aberto épico, de cima, contra-luz). Cenas vizinhas bem diferentes entre si. Sem pedir texto na imagem",
+  ),
   motion: z.enum(["zoom_in", "zoom_out", "pan_left", "pan_right"]),
   chapter: z.string().nullable().describe("Só em vídeo longo: título do capítulo quando um novo capítulo começa nesta cena; senão null"),
 });
@@ -176,11 +179,12 @@ export async function writeScript(niche: string, video: { kind: string; topic: s
   const short = video.kind === "short";
   const en = language === "en";
   const shape = short
-    ? `Formato: YouTube Shorts vertical de 45 a 55 segundos (130 a 150 palavras faladas no total), 8 a 10 cenas. ` +
+    ? `Formato: YouTube Shorts vertical de 45 a 55 segundos (130 a 150 palavras faladas no total), 14 a 18 cenas de UMA frase curta cada ` +
+      `(no máximo 12 palavras; a imagem troca a cada 2 a 4 segundos, ritmo rápido de vídeo viral). ` +
       `A primeira frase é o gancho (pergunta ou fato chocante) e prende nos 2 primeiros segundos. ` +
       `Termine com uma pergunta para comentarem e ${en ? `"subscribe for more Bible secrets"` : `"se inscreve para mais curiosidades da Bíblia"`}. Sem capítulos (chapter = null). ` +
       `Inclua #shorts nas hashtags.`
-    : `Formato: vídeo horizontal de 6 a 8 minutos (900 a 1150 palavras faladas), 32 a 45 cenas de 1 ou 2 frases. ` +
+    : `Formato: vídeo horizontal de 6 a 8 minutos (900 a 1150 palavras faladas), 55 a 75 cenas de UMA frase cada (a imagem troca a cada 5 a 8 segundos). ` +
       `Abertura com gancho forte nos primeiros 15 segundos e a promessa do vídeo; depois 5 a 7 capítulos (curiosidades), ` +
       `cada um começando numa cena com chapter preenchido (a primeira cena tem chapter "${en ? "Introduction" : "Introdução"}"); ` +
       `fechamento com uma lição e chamada para se inscrever e comentar.`;
