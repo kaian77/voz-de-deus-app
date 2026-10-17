@@ -155,26 +155,24 @@ def transcript_for(source, fid, video, work):
 # ------------------------------------------------------------------------------------------------ IA
 
 def pick_moments(lines, n, campaign, rules, language, extra=""):
-    """Claude escolhe os melhores momentos (ferramenta forçada = JSON garantido)."""
+    """Claude escolhe os melhores momentos (saída estruturada = JSON garantido)."""
     key = os.environ["ANTHROPIC_API_KEY"]
     model = os.environ.get("CLAUDE_MODEL") or "claude-opus-5-5"
     fmt = lambda s: f"{int(s // 60)}:{int(s % 60):02d}"  # noqa: E731
     transcript = "\n".join(f"[{fmt(a)}-{fmt(b)}] {t}" for a, b, t in lines)[:180000]
     lang = {"es": "Spanish", "pt": "Brazilian Portuguese"}.get(language, "English")
-    tool = {
-        "name": "save_clips",
-        "description": "Save the selected clips",
-        "input_schema": {
-            "type": "object",
-            "properties": {"clips": {"type": "array", "items": {"type": "object", "properties": {
+    schema = {
+        "type": "object", "additionalProperties": False, "required": ["clips"],
+        "properties": {"clips": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "required": ["start", "end", "screen_title", "youtube_title", "why"],
+            "properties": {
                 "start": {"type": "number", "description": "start in seconds"},
                 "end": {"type": "number", "description": "end in seconds"},
                 "screen_title": {"type": "string", "description": f"on-screen title, max 7 words, in {lang}, hooky"},
                 "youtube_title": {"type": "string", "description": f"YouTube title, max 80 chars, in {lang}, no hashtags"},
                 "why": {"type": "string"},
-            }, "required": ["start", "end", "screen_title", "youtube_title", "why"]}}},
-            "required": ["clips"],
-        },
+            }}}},
     }
     prompt = (
         f"You are an expert short-form video editor who finds viral moments in long videos (campaign: {campaign}).\n"
@@ -186,7 +184,7 @@ def pick_moments(lines, n, campaign, rules, language, extra=""):
         "- avoid hate, sexual content, slurs or anything against YouTube policies.\n"
         f"Campaign rules from the brand:\n{rules or '(none)'}\n{extra}\nTranscript with timestamps:\n{transcript}"
     )
-    body = json.dumps({"model": model, "max_tokens": 4000, "tools": [tool], "tool_choice": {"type": "tool", "name": "save_clips"},
+    body = json.dumps({"model": model, "max_tokens": 8000, "output_config": {"format": {"type": "json_schema", "schema": schema}},
                        "messages": [{"role": "user", "content": prompt}]}).encode()
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
@@ -197,8 +195,8 @@ def pick_moments(lines, n, campaign, rules, language, extra=""):
         detail = e.read().decode(errors="replace")[:300]
         raise RuntimeError(f"IA (Anthropic) {e.code}: {detail}") from None
     for block in data.get("content", []):
-        if block.get("type") == "tool_use":
-            return block["input"]["clips"]
+        if block.get("type") == "text" and block.get("text", "").strip():
+            return json.loads(block["text"])["clips"]
     raise RuntimeError("a IA não escolheu os momentos")
 
 
