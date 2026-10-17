@@ -9,6 +9,16 @@
       "destination": "/api/landing?slug=:slug"
     },
     {
+      "source": "/((?!p/|api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "paginaspro.vercel.app"
+        }
+      ],
+      "destination": "/api/landing"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
