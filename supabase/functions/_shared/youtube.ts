@@ -11,7 +11,8 @@ import { dispatchRender } from "./product-video.ts";
 import { HttpError } from "./util.ts";
 
 const API = "https://www.googleapis.com/youtube/v3";
-const SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly"];
+// force-ssl: apagar vídeo pelo Studio (botões "Apagar" e "Refazer")
+const SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly", "https://www.googleapis.com/auth/youtube.force-ssl"];
 
 function creds() {
   const id = Deno.env.get("GOOGLE_CLIENT_ID"), secret = Deno.env.get("GOOGLE_CLIENT_SECRET");
@@ -48,6 +49,17 @@ async function yt<T = any>(token: string, path: string, params: Record<string, s
   const data = await res.json();
   if (!res.ok) throw new Error(`YouTube: ${data.error?.message ?? res.status}`);
   return data;
+}
+
+/** Apaga o vídeo no YouTube (já apagado lá = ok). Canal conectado antes da permissão de apagar → pede reconexão. */
+export async function ytDeleteVideo(token: string, id: string) {
+  const res = await fetch(`${API}/videos?${new URLSearchParams({ id })}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+  if (res.ok || res.status === 404) return;
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 403 && /insufficient|scope|permission/i.test(JSON.stringify(data))) {
+    throw new Error("Para apagar pelo Studio, conecte o canal de novo (YouTube → Conectar canal, mesma conta). É uma vez só.");
+  }
+  throw new Error(`YouTube: ${data.error?.message ?? res.status}`);
 }
 
 export async function ytMyChannel(token: string) {
@@ -175,7 +187,7 @@ export async function planTopics(niche: string, trends: Trend[], recent: string[
   return out.items.slice(0, kinds.length).map((it, i) => ({ ...it, kind: kinds[i] }));
 }
 
-export async function writeScript(niche: string, video: { kind: string; topic: string; angle?: string | null }, language = "pt"): Promise<YtScript> {
+export async function writeScript(niche: string, video: { kind: string; topic: string; angle?: string | null; redo_note?: string | null }, language = "pt"): Promise<YtScript> {
   const short = video.kind === "short";
   const en = language === "en";
   const shape = short
@@ -190,7 +202,8 @@ export async function writeScript(niche: string, video: { kind: string; topic: s
       `fechamento com uma lição e chamada para se inscrever e comentar.`;
   return await generateJSON(Script,
     rules(niche, language),
-    `${shape}\n\nTema: ${video.topic}\nGancho: ${video.angle ?? "(escolha o melhor)"}`,
+    `${shape}\n\nTema: ${video.topic}\nGancho: ${video.angle ?? "(escolha o melhor)"}` +
+      (video.redo_note ? `\n\nO dono pediu para refazer este vídeo assim: ${video.redo_note}` : ""),
     "medium");
 }
 

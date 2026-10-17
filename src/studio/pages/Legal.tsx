@@ -39,7 +39,7 @@ const DOCS: Record<"privacidade" | "termos" | "exclusao-de-dados", Doc> = {
       {
         heading: "YouTube (Serviços de API do YouTube)",
         body: [
-          "O Studio usa os Serviços de API do YouTube para que o titular publique vídeos no próprio canal. Ao conectar um canal, autorizamos apenas o envio de vídeos e capas (youtube.upload) e a leitura de dados do canal e de vídeos públicos (youtube.readonly).",
+          "O Studio usa os Serviços de API do YouTube para que o titular publique vídeos no próprio canal. Ao conectar um canal, autorizamos apenas o envio de vídeos e capas (youtube.upload), a leitura de dados do canal e de vídeos públicos (youtube.readonly) e a exclusão, a pedido do titular, de vídeos que o próprio Studio enviou (youtube.force-ssl).",
           "Dados do YouTube que guardamos: identificador, nome e foto do canal conectado; os vídeos que o próprio Studio enviou (identificador, título, capa e data de publicação); e títulos e números públicos de visualizações de vídeos do nicho, usados só para sugerir temas ao titular. Não acessamos inscritos, comentários, mensagens nem dados privados de outras pessoas.",
           "Os dados do YouTube não são vendidos nem compartilhados com terceiros. A Política de Privacidade do Google também se aplica: https://policies.google.com/privacy",
           "Você pode revogar o acesso do Studio ao seu canal a qualquer momento em https://myaccount.google.com/permissions. Ao revogar ou desconectar, apagamos o token e os dados do canal guardados no Studio em até 7 dias.",

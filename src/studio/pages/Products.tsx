@@ -590,6 +590,15 @@ function VideosPanel() {
   const { data: videos = [] } = useTable("product_videos", { limit: 12 }, { refetchInterval: 20000 });
   const [working, setWorking] = useState<string | null>(null);
   const [redo, setRedo] = useState<ProductVideo | null>(null);
+  const removeVideo = async (v: ProductVideo) => {
+    if (!confirm(v.post_id ? "Apagar este vídeo do Studio? O post que já saiu no Instagram/TikTok continua lá (apague pelo app)." : "Apagar este vídeo?")) return;
+    try {
+      await api.remove("product_videos", v.id);
+      qc.invalidateQueries({ queryKey: ["table", "product_videos"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
 
   const run = async (v: ProductVideo, action: "product_video" | "video_post", brief?: VideoBrief) => {
     setWorking(v.id + action);
@@ -665,6 +674,9 @@ function VideosPanel() {
                   <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setRedo(v)} disabled={working === v.id + "product_video"}>
                     {working === v.id + "product_video" ? <Loader2 className="animate-spin" /> : <Clapperboard />}Refazer
                   </Button>
+                )}
+                {v.status !== "rendering" && v.status !== "queued" && (
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-danger" onClick={() => removeVideo(v)} aria-label="Apagar"><Trash2 /></Button>
                 )}
               </div>
             </div>
