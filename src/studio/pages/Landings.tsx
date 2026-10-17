@@ -15,7 +15,9 @@ import { EmptyState, PageHeader, Panel, relativeTime } from "../components/bits"
 
 const NICHES = ["Nutrição", "Medicina", "Odontologia", "Psicologia", "Fisioterapia", "Estética", "Dermatologia", "Pediatria", "Advocacia", "Contabilidade", "Personal trainer", "Salão de beleza"];
 
-const publicUrl = (p: LandingPage) => `${window.location.origin}/p/${p.slug}`;
+// Endereço neutro só das landing pages (o mesmo projeto da Vercel; o Studio continua no endereço dele)
+const LANDING_HOST = "https://paginaspro.vercel.app";
+const publicUrl = (p: LandingPage) => `${LANDING_HOST}/p/${p.slug}`;
 
 type Form = Pick<LandingPage, "name" | "niche" | "city" | "whatsapp" | "instagram" | "address" | "hours" | "registry" | "notes" | "photos" | "logo">;
 const EMPTY: Form = { name: "", niche: "", city: "", whatsapp: "", instagram: "", address: "", hours: "", registry: "", notes: "", photos: [], logo: null };
