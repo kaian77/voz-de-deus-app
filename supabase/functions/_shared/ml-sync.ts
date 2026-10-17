@@ -262,6 +262,32 @@ export async function fixSharedListings(db: SupabaseClient, userId: string) {
   return { queued: ids.length, listings: shared.map((s) => ({ ml_id: s.ml_id, keeps: s.products[0].name, new_listing: s.products.slice(1).map((p) => p.name) })) };
 }
 
+/** Último resultado de cada produto (um produto refeito aparece várias vezes em done). */
+function latestDone(sync: MlSync) {
+  return [...new Map(sync.done.map((d) => [d.id, d])).values()];
+}
+
+/**
+ * Refaz os produtos cujo anúncio não ficou certo: o ML devolveu aviso ao atualizar
+ * (ex.: 409 em foto/atributos) ou o anúncio continua parado esperando correção.
+ */
+export async function retryMlProblems(db: SupabaseClient, userId: string) {
+  const acc = await mlAccount(db, userId);
+  const sync = acc?.meta?.ml_sync as MlSync | undefined;
+  if (!acc || !sync) throw new Error("Nenhuma sincronização feita ainda");
+  const token = await mlTokenFor(db, acc.id);
+  const items = await mlSellerItems(token, acc.external_id, 1000, "", ML_LOOKUP_FIELDS);
+  const stuck = new Set(items.filter((i) => i.status !== "closed" && i.sub_status?.includes("waiting_for_patch")).map((i) => i.id));
+  const latest = latestDone(sync);
+  const ids = latest.filter((d) => (d.error && !/caixa misteriosa/i.test(d.name)) || (d.ml_id && stuck.has(d.ml_id))).map((d) => d.id);
+  sync.queue = [...ids, ...sync.queue.filter((id) => !ids.includes(id))];
+  sync.finished_at = null;
+  sync.total += ids.length;
+  sync.errors = sync.errors.filter((e) => e.id === 0 ? false : !latest.some((d) => d.id === e.id)); // erros já resolvidos saem
+  await saveSync(db, acc.id, sync);
+  return { queued: ids.length, minutes: Math.ceil(ids.length / PER_RUN) };
+}
+
 /** Estado da sincronização (para o app e o Claude). */
 export async function mlSyncStatus(db: SupabaseClient, userId: string) {
   const acc = await mlAccount(db, userId);
@@ -282,7 +308,7 @@ export async function mlSyncStatus(db: SupabaseClient, userId: string) {
     // Produtos da loja que caíram no mesmo anúncio (nome quase igual ou SKU repetido): só um deles fica no ML
     shared: sharedListings(sync).map((s) => ({ ml_id: s.ml_id, products: s.products.map((p) => p.name) })),
     // Avisos do ML ao atualizar (foto, atributos, reativar recusados): o anúncio pode ter ficado como estava
-    warnings: sync.done.filter((d) => d.error).map((d) => ({ name: d.name, ml_id: d.ml_id, status: d.status, warning: d.error })),
+    warnings: latestDone(sync).filter((d) => d.error).map((d) => ({ name: d.name, ml_id: d.ml_id, status: d.status, warning: d.error })),
     skipped: sync.skipped,
     errors: sync.errors,
     started_at: sync.started_at,
