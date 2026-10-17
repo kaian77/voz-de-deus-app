@@ -89,9 +89,11 @@ Deno.serve(async (req) => {
         patch.content = await writeLanding(input.fresh ? { ...page, content: null } : page, input.instructions ? String(input.instructions).slice(0, 1500) : undefined);
       } else {
         if (!page.content) throw new HttpError(400, "Gere a página antes de publicar");
-        patch.status = input.unpublish ? "draft" : "published";
+        // mode: preview = link para a cliente ver (sem indexar, com faixa "Prévia"); published = no ar; draft = tira do ar
+        const mode = input.unpublish ? "draft" : input.mode === "preview" ? "preview" : "published";
+        patch.status = mode;
         // Rascunho nasce com endereço provisório; na primeira publicação ganha o nome do cliente (e não muda mais)
-        if (!input.unpublish && page.slug.startsWith("rascunho-")) patch.slug = await uniqueSlug(db, page.name, page.id);
+        if (mode !== "draft" && page.slug.startsWith("rascunho-")) patch.slug = await uniqueSlug(db, page.name, page.id);
       }
       const { data, error } = await db.from("landing_pages").update(patch).eq("id", page.id).select().single();
       if (error) throw new HttpError(500, error.message);

@@ -87,7 +87,7 @@ export function whatsappLink(d: LandingData) {
   return `https://wa.me/${full}?text=${encodeURIComponent(d.content.whatsapp_message || "Olá! Vim pelo site e gostaria de mais informações.")}`;
 }
 
-export function renderLanding(d: LandingData, opts: { url?: string } = {}): string {
+export function renderLanding(d: LandingData, opts: { url?: string; preview?: boolean } = {}): string {
   const c = d.content;
   const f = FONTS[c.fonts] ?? FONTS.fraunces;
   const primary = hex(c.colors?.primary, "#2f5d50");
@@ -244,11 +244,12 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 <meta name="description" content="${esc(c.seo_description)}">
 <meta property="og:title" content="${esc(c.seo_title || d.name)}"><meta property="og:description" content="${esc(c.seo_description)}">
 ${hero ? `<meta property="og:image" content="${esc(hero)}">` : ""}${opts.url ? `<meta property="og:url" content="${esc(opts.url)}"><link rel="canonical" href="${esc(opts.url)}">` : ""}
-<meta name="theme-color" content="${primary}">
+<meta name="theme-color" content="${primary}">${opts.preview ? '<meta name="robots" content="noindex">' : ""}
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?${f.url}&display=swap" rel="stylesheet">
 <style>${css}</style></head>
 <body>
+${opts.preview ? `<div style="background:${ink};color:#fff;text-align:center;font-size:13px;padding:8px 16px">Prévia do site · ainda não publicado</div>` : ""}
 <header class="nav"><div class="wrap">${brand}
 <nav class="links"><a href="#sobre">Sobre</a><a href="#servicos">Serviços</a><a href="#como-funciona">Como funciona</a><a href="#duvidas">Dúvidas</a><a href="#contato">Contato</a></nav>
 ${cta("btn small")}</div></header>
