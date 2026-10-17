@@ -9,6 +9,7 @@ import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } f
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
 import { uniqueSlug, writeLanding } from "../_shared/landing.ts";
+import { removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, ytDeleteVideo, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
@@ -161,8 +162,10 @@ Deno.serve(async (req) => {
         }
       }
       const now = new Date().toISOString();
+      // Prévia e capa do vídeo antigo saem do storage na hora (o refeito ganha arquivos novos)
+      await removeStudioFiles(db, [v.preview_url, v.thumbnail_url]);
       if (action === "yt_video_delete") {
-        await db.from("yt_videos").update({ status: "deleted", youtube_id: null, updated_at: now }).eq("id", v.id);
+        await db.from("yt_videos").update({ status: "deleted", youtube_id: null, preview_url: null, thumbnail_url: null, updated_at: now }).eq("id", v.id);
         return json({ deleted: true });
       }
       const note = String(input.note ?? "").trim().slice(0, 600) || null;
@@ -170,8 +173,8 @@ Deno.serve(async (req) => {
       const soon = new Date(Date.now() + 3 * 3600000).toISOString();
       const publish_at = v.publish_at && v.publish_at > soon ? v.publish_at : soon;
       const patch = v.kind === "clip"
-        ? { status: "redo", youtube_id: null, redo_note: note, error: null, updated_at: now }
-        : { status: "draft", youtube_id: null, script: null, attempts: 0, redo_note: note, error: null, publish_at, updated_at: now };
+        ? { status: "redo", youtube_id: null, preview_url: null, thumbnail_url: null, redo_note: note, error: null, updated_at: now }
+        : { status: "draft", youtube_id: null, preview_url: null, thumbnail_url: null, script: null, attempts: 0, redo_note: note, error: null, publish_at, updated_at: now };
       const { data, error } = await db.from("yt_videos").update(patch).eq("id", v.id).select().single();
       if (error) throw new HttpError(500, error.message);
       return json({ ...data, started: v.kind === "clip" ? await dispatchRender("clips.yml") : true });
@@ -366,6 +369,13 @@ Deno.serve(async (req) => {
       return json(await pollAiVideos(db, userId));
     }
     if (action === "ai_video_post") return json({ post: await aiVideoPost(db, userId, String(input.id), input.caption ? String(input.caption) : undefined) });
+    if (action === "product_video_delete") {
+      const { data: v } = await db.from("product_videos").select("id,video_url,status").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
+      if (!v) throw new HttpError(404, "Vídeo não encontrado");
+      await removeStudioFiles(db, [v.video_url]);
+      await db.from("product_videos").delete().eq("id", v.id);
+      return json({ ok: true });
+    }
     if (action === "ai_video_delete") {
       const { data: v } = await db.from("ai_videos").select("id,video_url").eq("id", input.id).eq("user_id", userId).maybeSingle();
       if (!v) throw new HttpError(404, "Vídeo não encontrado");

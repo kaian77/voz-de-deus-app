@@ -1,18 +1,20 @@
 // Limpeza do storage (o plano grátis do Supabase guarda 1 GB). Só vídeos, que são os arquivos grandes:
 // - vídeo avulso (só para baixar): apagado 30 dias depois de criado;
-// - vídeo de post: apagado 1 dia depois de publicado (o Instagram e o TikTok já guardam a cópia deles;
-//   no TikTok o vídeo vai para a caixa de entrada do app na hora de publicar);
+// - vídeo de post (de produto, IA ou enviado): apagado 1 h depois de publicado (o Instagram e o TikTok já guardam
+//   a cópia deles; no TikTok o vídeo vai para a caixa de entrada do app na hora de publicar);
 // - vídeo pronto que não virou post (post descartado): apagado depois de 30 dias;
-// - vídeo IA (Kling/Higgsfield): apagado 30 dias depois de criado;
-// - prévia dos vídeos do YouTube (cópia leve para assistir no Studio): apagada 7 dias depois do envio.
+// - vídeo IA (Kling/Higgsfield) que não virou post: apagado 30 dias depois de criado;
+// - prévia dos vídeos do YouTube (cópia leve para assistir no Studio): apagada quando o vídeo vai ao ar no canal
+//   (até lá dá para assistir e refazer); vídeo apagado/refeito perde prévia e capa na hora.
 // Posts agendados ou esperando aprovação nunca perdem o vídeo.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 const DAY = 86400_000;
+const HOUR = 3600_000;
 const BATCH = 50;
 
 /** Caminho dentro do bucket "media" a partir da URL pública (null se o arquivo não é do Studio). */
-function storagePath(url: string) {
+export function storagePath(url: string) {
   const marker = "/storage/v1/object/public/media/";
   const i = url.indexOf(marker);
   return i < 0 ? null : decodeURIComponent(url.slice(i + marker.length).split("?")[0]);
@@ -20,11 +22,12 @@ function storagePath(url: string) {
 
 export async function cleanupStorage(db: SupabaseClient) {
   const ago = (days: number) => new Date(Date.now() - days * DAY).toISOString();
+  const hoursAgo = (h: number) => new Date(Date.now() - h * HOUR).toISOString();
   const removed: string[] = [];
 
   // 1) Vídeos animados dos produtos
   const { data: videos } = await db.from("product_videos").select("id,user_id,video_url,autopost,post_id,status,created_at,updated_at")
-    .not("video_url", "is", null).is("file_deleted_at", null).in("status", ["ready", "failed"]).lt("created_at", ago(1)).order("created_at").limit(BATCH * 6);
+    .not("video_url", "is", null).is("file_deleted_at", null).in("status", ["ready", "failed"]).lt("created_at", hoursAgo(1)).order("created_at").limit(BATCH * 6);
   const postIds = (videos ?? []).map((v) => v.post_id).filter(Boolean);
   const { data: linked } = postIds.length
     ? await db.from("posts").select("id,status,published_at").in("id", postIds)
@@ -35,7 +38,7 @@ export async function cleanupStorage(db: SupabaseClient) {
     const expired = v.autopost === false
       ? v.created_at < ago(30)
       : post
-      ? post.status === "published" && !!post.published_at && post.published_at < ago(1)
+      ? post.status === "published" && !!post.published_at && post.published_at < hoursAgo(1)
       : v.updated_at < ago(30);
     if (!expired) continue;
     const path = storagePath(v.video_url!);
@@ -47,15 +50,18 @@ export async function cleanupStorage(db: SupabaseClient) {
     await db.from("product_videos").update({ video_url: null, file_deleted_at: new Date().toISOString() }).eq("id", v.id);
   }
 
-  // 1b) Vídeos IA com mais de 30 dias (menos os que estão num post ainda por publicar)
-  const { data: aiVideos } = await db.from("ai_videos").select("id,video_url,post_id").eq("status", "done")
+  // 1b) Vídeos IA com mais de 30 dias (menos os que estão num post ainda por publicar) ou que já saíram num post
+  const { data: oldAi } = await db.from("ai_videos").select("id,video_url,post_id").eq("status", "done")
     .not("video_url", "is", null).is("file_deleted_at", null).lt("created_at", ago(30)).order("created_at").limit(BATCH);
-  const aiPostIds = (aiVideos ?? []).map((v) => v.post_id).filter(Boolean);
+  const { data: postedAi } = await db.from("ai_videos").select("id,video_url,post_id,posts!inner(status,published_at)").eq("status", "done")
+    .not("video_url", "is", null).is("file_deleted_at", null).eq("posts.status", "published").lt("posts.published_at", hoursAgo(1)).limit(BATCH);
+  const aiVideos = [...(oldAi ?? []), ...(postedAi ?? []).map(({ posts: _p, ...v }) => v)];
+  const aiPostIds = (oldAi ?? []).map((v) => v.post_id).filter(Boolean);
   const { data: aiPosts } = aiPostIds.length
     ? await db.from("posts").select("id,status").in("id", aiPostIds).in("status", ["pending_approval", "scheduled", "publishing"])
     : { data: [] as { id: string }[] };
   const waiting = new Set((aiPosts ?? []).map((p) => p.id));
-  for (const v of aiVideos ?? []) {
+  for (const v of aiVideos) {
     if (v.post_id && waiting.has(v.post_id)) continue;
     const path = storagePath(v.video_url!);
     if (path) {
@@ -66,10 +72,10 @@ export async function cleanupStorage(db: SupabaseClient) {
     await db.from("ai_videos").update({ video_url: null, file_deleted_at: new Date().toISOString() }).eq("id", v.id);
   }
 
-  // 1c) Prévias dos vídeos do YouTube (o vídeo de verdade fica no YouTube)
-  const { data: ytPreviews } = await db.from("yt_videos").select("id,preview_url").not("preview_url", "is", null)
-    .lt("updated_at", ago(7)).order("updated_at").limit(BATCH);
-  for (const v of ytPreviews ?? []) {
+  // 1c) Prévias dos vídeos do YouTube (o vídeo de verdade fica no YouTube): somem quando o vídeo vai ao ar
+  const { data: ytLive } = await db.from("yt_videos").select("id,preview_url").not("preview_url", "is", null)
+    .eq("status", "uploaded").lt("publish_at", hoursAgo(1)).order("publish_at").limit(BATCH);
+  for (const v of ytLive ?? []) {
     const path = storagePath(v.preview_url!);
     if (path) {
       const { error } = await db.storage.from("media").remove([path]);
@@ -80,7 +86,7 @@ export async function cleanupStorage(db: SupabaseClient) {
   }
 
   // 2) Vídeos enviados para posts já publicados
-  const { data: published } = await db.from("posts").select("id,media").eq("status", "published").lt("published_at", ago(1))
+  const { data: published } = await db.from("posts").select("id,media").eq("status", "published").lt("published_at", hoursAgo(1))
     .contains("media", [{ type: "video" }]).limit(BATCH);
   for (const p of published ?? []) {
     let changed = false;
@@ -101,4 +107,10 @@ export async function cleanupStorage(db: SupabaseClient) {
     if (changed) await db.from("posts").update({ media }).eq("id", p.id);
   }
   return removed.length ? { removed: removed.length } : undefined;
+}
+
+/** Apaga do storage os arquivos do Studio nessas URLs (botões "Apagar"/"Refazer"). */
+export async function removeStudioFiles(db: SupabaseClient, urls: (string | null | undefined)[]) {
+  const paths = urls.map((u) => (u ? storagePath(u) : null)).filter((p): p is string => !!p);
+  if (paths.length) await db.storage.from("media").remove(paths);
 }
