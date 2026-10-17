@@ -5,8 +5,8 @@ import { Loader2, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "../lib/api";
 import { useRemoveRow, useTable } from "../lib/hooks";
-import type { Platform, SocialAccount } from "../lib/types";
-import { Avatar, PageHeader, PlatformIcon, StatusDot } from "../components/bits";
+import type { MlQualityReport, Platform, SocialAccount } from "../lib/types";
+import { Avatar, formatDateTime, PageHeader, PlatformIcon, StatusDot } from "../components/bits";
 import WhatsAppConnect from "../components/WhatsAppConnect";
 import SaleAlerts from "../components/SaleAlerts";
 
@@ -102,6 +102,7 @@ function Analysis({ account }: { account: SocialAccount }) {
         {busy && <Loader2 className="animate-spin" />}Analisar de novo
       </Button>
       {account.platform === "mercadolivre" && <MlSync account={account} />}
+      {account.platform === "mercadolivre" && <MlQuality account={account} />}
     </div>
   );
 }
@@ -151,6 +152,67 @@ function MlSync({ account }: { account: SocialAccount }) {
         {(busy || running) && <Loader2 className="animate-spin" />}
         {running ? "Sincronizando…" : "Sincronizar com a loja"}
       </Button>
+    </div>
+  );
+}
+
+/** Melhorar vitrine do ML: analisa Qualidade e Experiência de compra e corrige o que o Studio consegue. */
+function MlQuality({ account }: { account: SocialAccount }) {
+  const [busy, setBusy] = useState<"fix" | "premium" | null>(null);
+  const { refetch } = useTable("social_accounts");
+  const q = account.meta.ml_quality;
+  const run = async () => {
+    setBusy("fix");
+    try {
+      const r = await api.invoke<MlQualityReport>("ai", { action: "ml_quality", fix: true });
+      await refetch();
+      toast.success(r.queued ? `${r.queued} anúncios sendo corrigidos (uns ${r.minutes} min)` : "Vitrine analisada");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const premium = async () => {
+    if (!confirm("Passar todos os anúncios para Premium? O comprador ganha parcelamento sem juros, mas a tarifa do Mercado Livre por venda é maior.")) return;
+    setBusy("premium");
+    try {
+      const r = await api.invoke<{ changed: number; total: number; errors: string[] }>("ai", { action: "ml_premium" });
+      if (r.errors.length) toast.error(`${r.changed} de ${r.total} viraram Premium. ${r.errors[0]}`);
+      else toast.success(`${r.changed} anúncios agora são Premium`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="mt-2 border-t pt-2">
+      <p className="font-medium">Vitrine (Qualidade e Experiência)</p>
+      {q ? (
+        <>
+          <p className="text-muted-foreground">
+            Nota média {q.score ?? "—"}/100 · {Object.entries(q.levels).map(([l, n]) => `${n} ${l}`).join(" · ")} · {formatDateTime(q.at)}
+          </p>
+          {q.auto.length > 0 && <p className="mt-1 font-medium">O Studio corrige</p>}
+          {q.auto.map((r) => <p key={r.title} className="text-muted-foreground">✓ {r.fix} ({r.count})</p>)}
+          {q.owner.length > 0 && <p className="mt-1 font-medium">Depende de você</p>}
+          {q.owner.map((r) => <p key={r.title} className="text-muted-foreground">• {r.title} ({r.count}): {r.todo}</p>)}
+          {q.experience.map((e) => <p key={e.id} className="truncate text-danger" title={e.text}>Experiência {e.color}: {e.title}</p>)}
+        </>
+      ) : (
+        <p className="text-muted-foreground">Analisa a nota de qualidade de cada anúncio e corrige fotos, título, ficha e descrição.</p>
+      )}
+      <div className="mt-1 flex flex-wrap gap-1">
+        <Button size="sm" className="h-7 px-2 text-xs" onClick={run} disabled={!!busy}>
+          {busy === "fix" && <Loader2 className="animate-spin" />}Melhorar vitrine do ML
+        </Button>
+        {q && q.owner.some((r) => /parcelamento|premium/i.test(r.title + r.todo)) && (
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={premium} disabled={!!busy}>
+            {busy === "premium" && <Loader2 className="animate-spin" />}Ativar Premium
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

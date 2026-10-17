@@ -10,6 +10,7 @@ import { postVideo, queueProductVideo, videoOptions } from "../_shared/product-v
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
+import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
 import { finishStrategy, researchStrategy, startStrategy } from "../_shared/strategy.ts";
 import { brasiliaNow, digestMessage, salesSummary } from "../_shared/daily.ts";
@@ -138,6 +139,8 @@ Deno.serve(async (req) => {
     }
     if (action === "ml_sync_start") return json(await startMlSync(db, userId));
     if (action === "ml_sync_status") return json(await mlSyncStatus(db, userId));
+    if (action === "ml_quality") return json(await improveMlShowcase(db, userId, { fix: input.fix !== false }));
+    if (action === "ml_premium") return json(await setMlPremium(db, userId));
     if (action === "marketplace_analyze") return json(await analyzeMarketplace(db, userId, input.platform === "shopee" ? "shopee" : "mercadolivre"));
     if (action === "marketplace_publish") {
       // Publica no Mercado Livre um produto já cadastrado na loja pelo Studio

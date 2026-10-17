@@ -64,7 +64,7 @@ export interface SocialAccount {
   display_name: string | null;
   avatar_url: string | null;
   followers_count: number | null;
-  meta: { biography?: string; website?: string; media_count?: number; provider?: "meta" | "waha"; label?: string | null; agent?: boolean; agent_numbers?: string[]; agent_prompt?: string; status?: string; url?: string; analysis?: MarketplaceAnalysis; ml_sync?: MlSyncState };
+  meta: { biography?: string; website?: string; media_count?: number; provider?: "meta" | "waha"; label?: string | null; agent?: boolean; agent_numbers?: string[]; agent_prompt?: string; status?: string; url?: string; analysis?: MarketplaceAnalysis; ml_sync?: MlSyncState; ml_quality?: MlQualityReport };
   connected_at: string;
 }
 
@@ -250,6 +250,21 @@ export interface MlSyncState {
   errors: { id: number; name: string; error?: string }[];
   skipped: { id: number; name: string; reason?: string }[];
   inflight?: { ids: number[]; at: string } | null;
+}
+
+/** "Melhorar vitrine do ML": qualidade dos anúncios e o que foi/precisa ser feito */
+export interface MlQualityReport {
+  at: string;
+  listings: number;
+  score: number | null;
+  levels: Record<string, number>;
+  auto: { title: string; count: number; fix: string }[];
+  owner: { title: string; count: number; todo: string }[];
+  experience: { id: string; title: string; color: string; text: string }[];
+  worst: { id: string; title: string; score: number | null; level: string | null }[];
+  queued: number;
+  minutes: number;
+  premium: number;
 }
 
 export interface MarketplaceAnalysis {

@@ -6,7 +6,9 @@ O ML pausa anúncios cuja foto de capa "descumpre o tamanho mínimo, posição e
 
 Fila: tabela ml_photos (status "queued"). Para cada foto:
 - cover: recorta o fundo (rembg) e põe o pin grande e centralizado num quadrado branco de 1200x1200;
-- extra: só deixa a foto quadrada (completa com branco) em 1200x1200.
+- extra: só deixa a foto quadrada (completa com branco) em 1200x1200;
+- detail / angle: fotos geradas da capa quando a loja tem menos de 3 (o ML pede no mínimo 3):
+  detail = close no centro do pin; angle = pin girado de lado, com sombra suave.
 O resultado vai para o storage público do Studio (media/<user>/ml/...) e a linha fica "done" com result_url.
 
 Variáveis: SUPABASE_URL, SUPABASE_SERVICE_KEY. Uso: python3 video/ml_photos.py [--check]
@@ -84,9 +86,53 @@ def cover(im):
     return on_white(cut, FILL)
 
 
+def detail(im):
+    """Close no pin: corta o miolo do recorte (75% do lado) e amplia no branco."""
+    cut = cutout(im)
+    w, h = cut.size
+    k = 0.75
+    box = (round(w * (1 - k) / 2), round(h * (1 - k) / 2), round(w * (1 + k) / 2), round(h * (1 + k) / 2))
+    return on_white(cut.crop(box), 0.96)
+
+
+def angle(im):
+    """Pin visto de lado: perspectiva de uns 25 graus e uma sombra suave embaixo."""
+    from PIL import Image, ImageFilter
+
+    cut = cutout(im)
+    w, h = cut.size
+    squeeze = 0.28  # quanto o lado de trás encolhe
+    # Coeficientes da perspectiva: o lado direito fica mais baixo e estreito
+    src = [(0, 0), (w, 0), (w, h), (0, h)]
+    dst = [(0, 0), (w * 0.75, h * squeeze / 2), (w * 0.75, h * (1 - squeeze / 2)), (0, h)]
+    coeffs = _perspective(dst, src)
+    tilted = cut.transform((round(w * 0.75), h), Image.PERSPECTIVE, coeffs, Image.BICUBIC)
+    shadow = Image.new("RGBA", (tilted.width, tilted.height + 60), (0, 0, 0, 0))
+    alpha = tilted.getchannel("A").point(lambda a: int(a * 0.22))
+    shadow.paste((0, 0, 0, 255), (18, 40), alpha)
+    shadow = shadow.filter(ImageFilter.GaussianBlur(18))
+    shadow.alpha_composite(tilted, (0, 0))
+    return on_white(shadow, 0.86)
+
+
+def _perspective(pa, pb):
+    import numpy as np
+
+    m = []
+    for (x, y), (u, v) in zip(pa, pb):
+        m.append([x, y, 1, 0, 0, 0, -u * x, -u * y])
+        m.append([0, 0, 0, x, y, 1, -v * x, -v * y])
+    a = np.array(m, dtype=float)
+    b = np.array(pb, dtype=float).reshape(8)
+    return np.linalg.solve(a, b).tolist()
+
+
+KINDS = {"cover": cover, "detail": detail, "angle": angle}
+
+
 def process(row):
     im = download(row["source_url"])
-    out = cover(im) if row["kind"] == "cover" else on_white(im, 1.0)
+    out = KINDS.get(row["kind"], lambda i: on_white(i, 1.0))(im)
     buf = io.BytesIO()
     out.save(buf, "JPEG", quality=92)
     name = hashlib.sha1(f"{row['source_url']}|{row['kind']}".encode()).hexdigest()[:20]
