@@ -80,21 +80,59 @@ Deno.serve(async (req) => {
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
       return json(await nsOrders(store.token, store.storeId, { status: input.status, q: input.q, limit: input.limit ?? 50 }));
     }
+    if (action === "clips_parse_campaign") {
+      // Cortes: lê o que o dono colou (texto da campanha e/ou links do Whop, briefing no Google Docs) e preenche o formulário
+      const pasted = String(input.text ?? "").slice(0, 20000);
+      const urls = [...new Set(pasted.match(/https?:\/\/[^\s)"'<>]+/g) ?? [])];
+      if (!pasted.trim()) throw new HttpError(400, "Cole o texto ou o link da campanha");
+      const pages: string[] = [];
+      for (const u of urls.slice(0, 4)) {
+        if (/drive\.google\.com/.test(u)) continue; // pasta dos vídeos: só o link interessa
+        const doc = u.match(/docs\.google\.com\/document\/d\/([\w-]+)/)?.[1];
+        try {
+          const page = await readWebPage(doc ? `https://docs.google.com/document/d/${doc}/export?format=txt` : u, 15000);
+          pages.push(`### ${u}\n${page.text}`);
+        } catch (e) {
+          pages.push(`### ${u}\n(não abriu: ${(e as Error).message})`);
+        }
+      }
+      const found = [pasted, ...pages].join("\n\n");
+      const drive = found.match(/https:\/\/drive\.google\.com\/(?:drive\/(?:u\/\d+\/)?folders|file\/d)\/[\w-]+/)?.[0] ?? "";
+      const parsed = await generateJSON(
+        z.object({
+          campaign: z.string().describe("Nome curto da campanha (ex.: Stream House LA)"),
+          credit: z.string().describe("Crédito para a descrição: nome do programa/marca — canal/rede (ex.: Stream House LA — CWETV)"),
+          hashtags: z.string().describe("Hashtags obrigatórias separadas por espaço, com #, ou vazio"),
+          rules: z.string().describe("Regras e briefing em tópicos curtos, no idioma original: que momentos cortar, estilo, título/logo/CTA obrigatórios, proibições, público"),
+        }),
+        "Você organiza campanhas de clipping (Whop Content Rewards e parecidas) para um editor de cortes. Use só o que está nas fontes; não invente regras nem hashtags.",
+        `Fontes da campanha:\n\n${found}`,
+        "low",
+      );
+      return json({ ...parsed, url: drive });
+    }
     if (action === "clips_add_source") {
-      // Cortes: nova fonte (pasta/arquivo do Drive de uma campanha) entra na fila do workflow "Cortes"
+      // Cortes: nova fonte (pasta/arquivo do Drive de uma campanha) entra na fila do workflow "Cortes"; com id, só atualiza os dados salvos
       const { data: channel } = await db.from("yt_channels").select("id").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();
       if (!channel) throw new HttpError(400, "Escolha o canal de cortes");
       const url = String(input.url ?? "").trim();
       if (!/^https?:\/\//.test(url)) throw new HttpError(400, "Cole o link da pasta ou do vídeo");
-      const { data, error } = await db.from("clip_sources").insert({
-        user_id: userId, channel_ref: channel.id, url,
+      const fields = {
+        channel_ref: channel.id, url,
         campaign: String(input.campaign ?? "").trim().slice(0, 120) || "Campanha",
         hashtags: String(input.hashtags ?? "").trim().slice(0, 300) || null,
         credit: String(input.credit ?? "").trim().slice(0, 200) || null,
         rules: String(input.rules ?? "").trim().slice(0, 3000) || null,
         clips_wanted: Math.min(12, Math.max(1, Number(input.clips_wanted) || 6)),
         per_day: Math.min(6, Math.max(1, Number(input.per_day) || 3)),
-      }).select().single();
+      };
+      if (input.id) {
+        const { data, error } = await db.from("clip_sources").update({ ...fields, updated_at: new Date().toISOString() })
+          .eq("id", String(input.id)).eq("user_id", userId).select().single();
+        if (error || !data) throw new HttpError(404, "Campanha não encontrada");
+        return json({ ...data, started: false, updated: true });
+      }
+      const { data, error } = await db.from("clip_sources").insert({ user_id: userId, ...fields }).select().single();
       if (error) throw new HttpError(500, error.message);
       await db.from("yt_channels").update({ mode: "clips", enabled: false }).eq("id", channel.id);
       return json({ ...data, started: await dispatchRender("clips.yml") });

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Loader2, Play, Plus, Scissors } from "lucide-react";
+import { Copy, ExternalLink, Loader2, Pencil, Play, Plus, Scissors, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -32,11 +32,41 @@ export default function Clips() {
   const [channelId, setChannelId] = useState("");
   const [form, setForm] = useState(EMPTY);
   const [sending, setSending] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [reading, setReading] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const [watching, setWatching] = useState<YtVideo | null>(null);
   const byId = new Map(channels.map((c) => [c.id, c]));
   const clipChannels = channels.filter((c) => c.mode === "clips");
   const chosen = channelId || clipChannels[0]?.id || "";
   const set = (k: keyof typeof EMPTY, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const fill = async () => {
+    if (!paste.trim()) return toast.error("Cole o texto da campanha, o link do briefing ou da pasta");
+    setReading(true);
+    try {
+      const r = await api.invoke<{ campaign: string; credit: string; hashtags: string; rules: string; url: string }>("ai", { action: "clips_parse_campaign", text: paste });
+      setForm((f) => ({
+        ...f, campaign: r.campaign || f.campaign, credit: r.credit || f.credit, hashtags: r.hashtags || f.hashtags,
+        rules: r.rules || f.rules, url: r.url || f.url,
+      }));
+      toast.success(r.url ? "Preenchido! Confira e clique em Começar." : "Preenchido! Falta o link da pasta do Drive.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setReading(false);
+    }
+  };
+
+  const edit = (s: ClipSource) => {
+    setEditing(s.id);
+    setChannelId(s.channel_ref);
+    setForm({
+      campaign: s.campaign, url: s.url, credit: s.credit ?? "", hashtags: s.hashtags ?? "", rules: s.rules ?? "",
+      clips_wanted: String(s.clips_wanted), per_day: String(s.per_day),
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const add = async () => {
     if (!chosen) return toast.error("Escolha o canal de cortes");
@@ -44,10 +74,12 @@ export default function Clips() {
     setSending(true);
     try {
       const r = await api.invoke<{ started: boolean }>("ai", {
-        action: "clips_add_source", channel_id: chosen, ...form, clips_wanted: Number(form.clips_wanted), per_day: Number(form.per_day),
+        action: "clips_add_source", id: editing ?? undefined, channel_id: chosen, ...form, clips_wanted: Number(form.clips_wanted), per_day: Number(form.per_day),
       });
-      toast.success(r.started ? "Começou! Baixar e transcrever o episódio leva de 30 min a 2 h." : "Na fila: roda em até 6 h.");
+      toast.success(editing ? "Campanha salva: os próximos cortes já seguem os dados novos." : r.started ? "Começou! Baixar e transcrever o episódio leva de 30 min a 2 h." : "Na fila: roda em até 6 h.");
       setForm(EMPTY);
+      setPaste("");
+      setEditing(null);
       invalidate("clip_sources");
       invalidate("yt_channels");
     } catch (e) {
@@ -67,8 +99,17 @@ export default function Clips() {
       />
 
       <div className="grid gap-4 lg:grid-cols-[420px_minmax(0,1fr)]">
-        <Panel title="Nova campanha" description="Cole a pasta do Google Drive com os vídeos da campanha (o logo da pasta entra em todo corte).">
+        <Panel title={editing ? "Editar campanha" : "Nova campanha"} description="Cole a pasta do Google Drive com os vídeos da campanha (o logo da pasta entra em todo corte). Tudo fica salvo na campanha.">
           <div className="space-y-3">
+            {!editing && (
+              <div className="space-y-1.5 rounded-md border border-dashed p-3">
+                <Label className="text-xs text-muted-foreground">Atalho: cole aqui o que a campanha mostra (texto da página no Whop, link do briefing no Google Docs, link da pasta)</Label>
+                <Textarea rows={3} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="Cole tudo de uma vez: regras, hashtags, links…" />
+                <Button variant="outline" className="w-full" onClick={fill} disabled={reading}>
+                  {reading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />}Preencher com IA
+                </Button>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Canal</Label>
               <Select value={chosen} onValueChange={setChannelId}>
@@ -120,8 +161,9 @@ export default function Clips() {
               </div>
             </div>
             <Button className="w-full" onClick={add} disabled={sending}>
-              {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}Começar os cortes
+              {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}{editing ? "Salvar campanha" : "Começar os cortes"}
             </Button>
+            {editing && <Button variant="ghost" className="w-full" onClick={() => { setEditing(null); setForm(EMPTY); }}>Cancelar</Button>}
             <p className="text-xs text-muted-foreground">Só use conteúdo que você tem permissão para cortar. A pasta precisa estar como "qualquer pessoa com o link".</p>
           </div>
         </Panel>
@@ -133,12 +175,16 @@ export default function Clips() {
             ) : (
               <ul className="divide-y">
                 {sources.map((s) => (
-                  <li key={s.id} className="px-4 py-3">
+                  <li key={s.id} className="flex items-start gap-2 px-4 py-3">
+                    <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-medium">{s.campaign} <span className="font-normal text-muted-foreground">· {byId.get(s.channel_ref)?.title ?? "canal"}</span></p>
+                    {s.hashtags && <p className="truncate text-xs text-muted-foreground">{s.hashtags}</p>}
                     <p className={cn("flex items-center gap-1 text-xs", SOURCE_STATUS[s.status].tone)}>
                       {(s.status === "queued" || s.status === "processing") && <Loader2 className="h-3 w-3 animate-spin" />}
                       {s.status === "failed" ? s.error ?? "Falhou" : SOURCE_STATUS[s.status].label} · {s.clips_made} cortes · {relativeTime(s.updated_at)}
                     </p>
+                    </div>
+                    <Button size="sm" variant="ghost" className="h-7 shrink-0 text-xs" onClick={() => edit(s)}><Pencil className="mr-1 h-3.5 w-3.5" />Editar</Button>
                   </li>
                 ))}
               </ul>
