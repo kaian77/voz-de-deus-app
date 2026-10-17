@@ -66,14 +66,28 @@ function firstSentences(text: string, max = 700) {
   return end > 200 ? cut.slice(0, end + 1) : cut.trimEnd() + "…";
 }
 
+export const isKit = (name: string) => /^\s*(kit|combo)\b/i.test(name);
+
+/** Quantos pins vêm no kit: "Kit 10 Pins", "7 Membros" ou "com 3 pins" no nome ou na descrição. */
+export function kitUnits(name: string, about: string) {
+  for (const t of [name, about]) {
+    const m = t.match(/\b(\d{1,2})\s+(pins|broches|membros|unidades|peças)\b/i) ?? t.match(/\bkit\s+(\d{1,2})\b/i);
+    if (m && Number(m[1]) > 1) return Number(m[1]);
+  }
+  return null;
+}
+
 /** Descrição do anúncio no padrão da Brax Pins Mania para o Mercado Livre. */
-export function mlListingDescription(p: { name: string; about: string; theme?: string }) {
+export function mlListingDescription(p: { name: string; about: string; theme?: string; units?: number | null }) {
   const short = p.name.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
   const about = firstSentences(noContacts(p.about));
+  const kit = isKit(p.name);
   return [
     `${short.toUpperCase()} – BRAX PINS MANIA`,
     "",
-    "Leve sua profissão, causa, paixão ou identidade para o dia a dia com um pin exclusivo da Brax Pins Mania.",
+    kit
+      ? "Leve sua profissão, causa, paixão ou identidade para o dia a dia com um kit de pins exclusivos da Brax Pins Mania."
+      : "Leve sua profissão, causa, paixão ou identidade para o dia a dia com um pin exclusivo da Brax Pins Mania.",
     "",
     about || `O ${short} é uma peça marcante, colecionável e cheia de significado.`,
     "",
@@ -93,17 +107,17 @@ export function mlListingDescription(p: { name: string; about: string; theme?: s
     ...["Jalecos", "Uniformes", "Crachás", "Cordões", "Mochilas", "Bolsas", "Bonés", "Jaquetas", "Coleções de pins"].map((w) => `- ${w}`),
     "",
     "ESPECIFICAÇÕES",
-    "Produto: Pin / Broche",
+    kit ? "Produto: Kit de pins / broches" : "Produto: Pin / Broche",
     "Material: Metal esmaltado",
     "Marca: Brax Pins Mania",
     ...(p.theme ? [`Tema: ${p.theme}`] : []),
     "Cor predominante: Multicolorido",
-    "Quantidade: 1 unidade",
+    kit ? (p.units ? `Quantidade: kit com ${p.units} pins` : "Quantidade: 1 kit") : "Quantidade: 1 unidade",
     "Condição: Novo",
     "Origem: Nacional",
     "",
     "CONTEÚDO DA EMBALAGEM",
-    `- 1 ${short}`,
+    kit ? (p.units ? `- ${p.units} pins (${short})` : `- 1 ${short} (pins conforme as fotos)`) : `- 1 ${short}`,
     "",
     "IMPORTANTE",
     "As cores podem apresentar pequenas variações dependendo da configuração da tela utilizada.",
@@ -151,6 +165,37 @@ export async function startMlSync(db: SupabaseClient, userId: string) {
   const sync: MlSync = { started_at: new Date().toISOString(), finished_at: null, total: ids.length, queue: ids, done: [], errors: [], skipped: [] };
   await saveSync(db, acc.id, sync);
   return { total: ids.length, photos, minutes: Math.ceil(ids.length / PER_RUN) };
+}
+
+/** Anúncio bloqueado pelo ML (forbidden) com nome parecido: criar outro daria nova infração de duplicado. */
+function blockedTwin(items: { id: string; title: string; family_name?: string | null; status?: string; sub_status?: string[] }[], name: string) {
+  const words = new Set(norm(name));
+  const hit = items.find((i) => {
+    if (i.status === "closed" || !i.sub_status?.includes("forbidden")) return false;
+    const w = new Set(norm(i.family_name ?? i.title));
+    const common = [...w].filter((x) => words.has(x)).length;
+    return common / Math.min(w.size, words.size || 1) >= 0.8;
+  });
+  return hit?.id ?? null;
+}
+
+/** Põe os kits e combos da loja na fila (eles ficavam de fora da sincronização). */
+export async function queueKits(db: SupabaseClient, userId: string) {
+  const acc = await mlAccount(db, userId);
+  if (!acc) throw new Error("Conecte o Mercado Livre em Contas");
+  const store = await storeFor(db, userId);
+  if (!store) throw new Error("Conecte a Nuvemshop em Contas");
+  const kits = (await storeProducts(store.token, store.storeId)).filter((p) => isKit(p.name));
+  await queuePhotos(db, userId, kits);
+  const sync = (acc.meta?.ml_sync as MlSync | undefined) ??
+    { started_at: new Date().toISOString(), finished_at: null, total: 0, queue: [], done: [], errors: [], skipped: [] };
+  const ids = kits.map((p) => p.id);
+  sync.queue = [...sync.queue.filter((id) => !ids.includes(id)), ...ids];
+  sync.skipped = sync.skipped.filter((s) => !ids.includes(s.id));
+  sync.finished_at = null;
+  sync.total += ids.length;
+  await saveSync(db, acc.id, sync);
+  return { queued: ids.length, kits: kits.map((p) => p.name) };
 }
 
 /** Mesmo pin (ex.: produto cadastrado duas vezes na loja) tem a mesma chave e pode dividir o anúncio. */
@@ -280,10 +325,15 @@ export async function runMlSync(db: SupabaseClient) {
           name = txt(p.name);
           // deno-lint-ignore no-explicit-any
           const v: any = p.variants?.[0] ?? {};
-          const price = Number(v.price || 0); // preço cheio: é com ele que a regra de preço foi descoberta
+          const kit = isKit(name);
+          // Preço cheio: é com ele que a regra de preço foi descoberta. Kit usa o preço que o cliente paga no site
+          // (os kits vivem em promoção; com o preço cheio sairiam bem mais caros no ML do que no site).
+          const price = Number((kit && Number(v.promotional_price) > 0 ? v.promotional_price : v.price) || 0);
           // deno-lint-ignore no-explicit-any
           const images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
-          const skip = /^\s*(kit|combo)\b/i.test(name) ? "kit (preço e descrição são diferentes)"
+          const blocked = blockedTwin(sellerItems, name);
+          const skip = /\b(caixa misteriosa|surpresa)\b/i.test(name) ? "caixa surpresa é proibida no Mercado Livre"
+            : blocked ? `o ML bloqueou um anúncio parecido como duplicado (${blocked}): exclua ele antes`
             : /\bteste\b/i.test(name) ? "produto de teste"
             : !price ? "sem preço"
             : !images.length ? "sem foto"
@@ -297,11 +347,13 @@ export async function runMlSync(db: SupabaseClient) {
             remaining = await defer(db, acc.id, id);
             continue;
           }
+          const units = kit ? kitUnits(name, plain(txt(p.description))) : null;
           // deno-lint-ignore no-explicit-any
           const theme = (p.categories ?? []).map((c: any) => txt(c.name)).filter(Boolean).slice(0, 2).join(", ") || undefined;
           const r = await publishToMercadoLivre(db, acc.user_id, {
             name,
-            description: mlListingDescription({ name, about: plain(txt(p.description)), theme }),
+            description: mlListingDescription({ name, about: plain(txt(p.description)), theme, units }),
+            kit_units: kit ? units ?? 0 : undefined,
             images: photos.images,
             ml_ready_pictures: photos.ready,
             price,
@@ -336,13 +388,13 @@ export async function runMlSync(db: SupabaseClient) {
 
 /** Produtos publicados da loja (até 2.000), com as fotos. */
 async function storeProducts(token: string, storeId: string) {
-  const out: { id: number; images: string[] }[] = [];
+  const out: { id: number; name: string; images: string[] }[] = [];
   for (let page = 1; page <= 10; page++) {
     // deno-lint-ignore no-explicit-any
-    const list = await ns<any[]>(token, storeId, `products?per_page=200&page=${page}&fields=id,published,images`);
+    const list = await ns<any[]>(token, storeId, `products?per_page=200&page=${page}&fields=id,name,published,images`);
     if (!Array.isArray(list) || !list.length) break;
     // deno-lint-ignore no-explicit-any
-    for (const p of list.filter((p) => p.published !== false)) out.push({ id: Number(p.id), images: (p.images ?? []).map((i: any) => i.src).filter(Boolean) });
+    for (const p of list.filter((p) => p.published !== false)) out.push({ id: Number(p.id), name: txt(p.name), images: (p.images ?? []).map((i: any) => i.src).filter(Boolean) });
     if (list.length < 200) break;
   }
   return out;

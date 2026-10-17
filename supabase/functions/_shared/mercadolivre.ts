@@ -91,6 +91,7 @@ export type MlItem = {
   available_quantity?: number;
   sold_quantity?: number;
   status?: string;
+  sub_status?: string[];
   seller_custom_field?: string | null;
   catalog_listing?: boolean;
   // deno-lint-ignore no-explicit-any
@@ -126,7 +127,7 @@ export async function mlSellerItems(token: string, sellerId: string, max = 200, 
 }
 
 /** Campos que bastam para achar um anúncio pelo nome ou SKU. */
-export const ML_LOOKUP_FIELDS = ["id", "title", "family_name", "status", "seller_custom_field"];
+export const ML_LOOKUP_FIELDS = ["id", "title", "family_name", "status", "sub_status", "seller_custom_field"];
 
 /** SKU do anúncio: atributo SELLER_SKU ou o campo antigo seller_custom_field. */
 export function mlSku(item: MlItem) {

@@ -266,6 +266,8 @@ export async function publishToMercadoLivre(
     ml_ready_pictures?: boolean;
     /** Anúncios que já são de outro produto da loja: nunca são atualizados com este */
     exclude_ids?: string[];
+    /** Kit: quantos pins vêm (0 = não sei) — o anúncio sai como "Kit" e não como unidade */
+    kit_units?: number;
   },
   /** Anúncios do vendedor já carregados (a sincronização em lote busca uma vez só) */
   sellerItems?: MlItem[],
@@ -305,6 +307,7 @@ export async function publishToMercadoLivre(
       { id: "COLOR", value_name: "Multicolorido" },
       { id: "PATTERN_NAME", value_name: model },
       { id: "MODEL", value_name: model },
+      ...kitAttrs(product.kit_units),
     ];
     await ml(token, `/items/${id}`, { method: "PUT", body: { attributes: attrs } })
       .catch((e) => warnings.push(`atributos: ${e instanceof Error ? e.message : e}`));
@@ -325,6 +328,10 @@ export async function publishToMercadoLivre(
     // O value_id de valores próprios do vendedor (ex.: a marca) não existe no catálogo do ML; pelo nome ele resolve
     .map((a) => (a.value_name ? { id: a.id, value_name: a.value_name } : { id: a.id, value_id: a.value_id }));
   // O ML monta o título com nome + cor + modelo ("Pin Snoopy (metal Esmaltado) Multicolorido Snoopy"): o modelo é só o nome do pin
+  if (product.kit_units !== undefined) {
+    const own = kitAttrs(product.kit_units);
+    attributes.splice(0, attributes.length, ...attributes.filter((a) => !["SALE_FORMAT", "UNITS_PER_PACK"].includes(a.id)), ...own);
+  }
   attributes.push({ id: "MODEL", value_name: pinModelName(product.name) });
   attributes.push({ id: "COLOR", value_name: "Multicolorido" });
   if (product.sku) attributes.push({ id: "SELLER_SKU", value_name: product.sku });
@@ -358,6 +365,12 @@ export async function publishToMercadoLivre(
   // deno-lint-ignore no-explicit-any
   const sub_status: string[] = (created as any).sub_status ?? [];
   return { id: created.id, permalink: created.permalink, price: body.price, status: created.status, sub_status, warnings };
+}
+
+/** Formato de venda do kit (o anúncio modelo é de pin avulso: "Unidade", 1 por pacote). */
+function kitAttrs(units?: number) {
+  if (units === undefined) return [];
+  return [{ id: "SALE_FORMAT", value_name: "Kit" }, ...(units > 1 ? [{ id: "UNITS_PER_PACK", value_name: String(units) }] : [])];
 }
 
 /** Nome do pin sem "Pin", sem "(Metal Esmaltado)" e sem o subtítulo: "Zé Bioquímico" (modelo/estampa no ML). */
