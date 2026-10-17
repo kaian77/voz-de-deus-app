@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Download, ExternalLink, Loader2, MapPin, Search, Star } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Download, ExternalLink, Globe, Loader2, MapPin, Search, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -52,6 +53,7 @@ function exportCsv(leads: Lead[]) {
 
 export default function Leads() {
   const invalidate = useInvalidate();
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [place, setPlace] = useState("");
   const [wanted, setWanted] = useState("30");
@@ -223,6 +225,9 @@ export default function Leads() {
                       {Object.entries(LEAD_STATUS).map(([k, s]) => <SelectItem key={k} value={k}>{s.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  <Button size="sm" variant="outline" className="h-8" onClick={() => navigate(`/studio/landing?lead=${l.id}`)}>
+                    <Globe className="mr-1.5 h-4 w-4" />Landing
+                  </Button>
                   <Button size="sm" variant="outline" className="h-8" disabled={!l.whatsapp} onClick={() => openWhatsApp(l)}>
                     <WhatsAppIcon className="mr-1.5 h-4 w-4" />Chamar
                   </Button>

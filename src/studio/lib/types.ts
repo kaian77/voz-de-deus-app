@@ -1,3 +1,4 @@
+import type { LandingContent } from "@/landing/render";
 export type Platform = "instagram" | "tiktok";
 export type PostKind = "image" | "carousel" | "reel" | "story" | "video" | "photos";
 export type PostStatus = "draft" | "pending_approval" | "scheduled" | "publishing" | "published" | "failed";
@@ -338,6 +339,31 @@ export interface Lead {
   updated_at: string;
 }
 
+/** Landing page de cliente (Renda extra → Landing pages). O HTML sai de src/landing/render.ts. */
+export interface LandingPage {
+  id: string;
+  lead_id: string | null;
+  slug: string;
+  name: string;
+  niche: string;
+  city: string | null;
+  whatsapp: string | null;
+  instagram: string | null;
+  address: string | null;
+  registry: string | null;
+  hours: string | null;
+  notes: string | null;
+  photos: string[];
+  logo: string | null;
+  rating: number | null;
+  reviews: number | null;
+  content: LandingContent | null;
+  status: "draft" | "published";
+  views: number;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Vídeo gerado por IA (Kling / Higgsfield) na seção Vídeos IA. */
 export interface AiVideo {
   id: string;
@@ -407,6 +433,7 @@ export interface TableMap {
   ai_videos: AiVideo;
   lead_searches: LeadSearch;
   leads: Lead;
+  landing_pages: LandingPage;
   strategies: Strategy;
 }
 export type TableName = keyof TableMap;
