@@ -16,6 +16,7 @@ import Vitrine from "./studio/pages/Vitrine";
 import Competitors from "./studio/pages/Competitors";
 import Leads from "./studio/pages/Leads";
 import Landings from "./studio/pages/Landings";
+import YouTube from "./studio/pages/YouTube";
 import Accounts from "./studio/pages/Accounts";
 import ClaudeApi from "./studio/pages/ClaudeApi";
 import Messages from "./studio/pages/Messages";
@@ -58,6 +59,7 @@ const App = () => (
             <Route path="concorrentes" element={<Competitors />} />
             <Route path="leads" element={<Leads />} />
             <Route path="landing" element={<Landings />} />
+            <Route path="youtube" element={<YouTube />} />
             <Route path="contas" element={<Accounts />} />
             <Route path="claude" element={<ClaudeApi />} />
           </Route>

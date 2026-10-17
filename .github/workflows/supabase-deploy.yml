@@ -54,6 +54,8 @@ jobs:
       HIGGSFIELD_API_KEY: ${{ secrets.HIGGSFIELD_API_KEY }}
       HIGGSFIELD_API_SECRET: ${{ secrets.HIGGSFIELD_API_SECRET }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       REVIEW_EMAIL_FROM: ${{ vars.REVIEW_EMAIL_FROM }}
     steps:
       - uses: actions/checkout@v4

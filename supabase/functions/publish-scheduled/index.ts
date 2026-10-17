@@ -15,6 +15,9 @@ import { runDailyDigest } from "../_shared/daily.ts";
 import { runDailyVideos } from "../_shared/video-autopilot.ts";
 import { sendPendingReviewEmails } from "../_shared/reviews.ts";
 import { runMlSync, watchNewProducts } from "../_shared/ml-sync.ts";
+import { ytAutopilot } from "../_shared/youtube.ts";
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -77,6 +80,9 @@ Deno.serve(async (req) => {
     const digest = await runDailyDigest(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Vídeos diários do TikTok (às 9h de Brasília, sem repetir produto no ciclo)
     const daily = await runDailyVideos(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
+    // Canal do YouTube: planeja o dia seguinte (depois das 15h) e escreve um roteiro por rodada, em segundo plano
+    const youtube = ytAutopilot(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(youtube);
     return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, cleanup, waha, mlsync, mlnew, sales, reviews });
   } catch (err) {
     return handleError(err);
