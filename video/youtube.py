@@ -39,8 +39,8 @@ XF = 0.45  # transição entre cenas (s)
 PAUSE = 0.30  # respiro depois de cada fala (s)
 SR = 24000
 STYLE = (
-    "3D animated movie still, Pixar and Disney style, cute stylized biblical characters with expressive faces, "
-    "ancient Middle East, warm cinematic lighting, rich vibrant colors, soft depth of field, highly detailed, "
+    "3D animated movie still, Pixar and Disney style, stylized biblical characters with very expressive faces, dynamic pose, "
+    "epic cinematic composition, dramatic warm lighting with god rays, rich vibrant colors, depth of field, highly detailed, "
     "no text, no letters, no watermark"
 )
 
@@ -194,7 +194,71 @@ def music_bed(seconds):
         env = np.minimum(1, tt / 1.2) * np.minimum(1, np.maximum(0, (bar + 1.5 - tt) / 1.5))
         for f in chords[i % 4]:
             out[a:b] += (np.sin(2 * np.pi * f / 2 * tt) + 0.35 * np.sin(2 * np.pi * f * tt * 1.003)) * env * 0.08
+    # Pulsação grave suave (80 bpm) para dar ritmo sem brigar com a voz
+    beat = 60 / 80
+    kick_t = np.arange(int(0.5 * SR)) / SR
+    kick = np.sin(2 * np.pi * (55 + 40 * np.exp(-kick_t * 18)) * kick_t) * np.exp(-kick_t * 7) * 0.35
+    for k in range(int(seconds / beat) + 1):
+        a = int(k * beat * SR)
+        if a >= n:
+            break
+        seg = kick[: n - a]
+        out[a:a + len(seg)] += seg * (1.0 if k % 4 == 0 else 0.55)
     return out[: int(seconds * SR)] / (np.abs(out).max() + 1e-9) * 0.5
+
+
+def sfx_whoosh(seconds=0.45):
+    """Whoosh de transição: ruído filtrado com envelope (síntese, livre de direitos)."""
+    import numpy as np
+
+    n = int(seconds * SR)
+    noise = np.random.default_rng(7).standard_normal(n).astype(np.float32)
+    k = 24
+    low = np.convolve(noise, np.ones(k) / k, mode="same")
+    env = np.sin(np.linspace(0, np.pi, n)) ** 2
+    return (low * env / (np.abs(low).max() + 1e-9)).astype(np.float32)
+
+
+def sfx_impact():
+    """Batida grave para o gancho do começo."""
+    import numpy as np
+
+    t = np.arange(int(1.0 * SR)) / SR
+    boom = np.sin(2 * np.pi * (45 + 60 * np.exp(-t * 10)) * t) * np.exp(-t * 4)
+    hit = np.random.default_rng(3).standard_normal(len(t)) * np.exp(-t * 30) * 0.3
+    return ((boom + hit) / 1.3).astype(np.float32)
+
+
+def particles(w, h, out, seconds=4.0, fps=15):
+    """Camada de partículas de luz/poeira subindo (loop de 4 s, com transparência) para dar vida às cenas."""
+    import numpy as np
+    from PIL import Image, ImageDraw, ImageFilter
+
+    sw, sh = w // 3, h // 3
+    rng = np.random.default_rng(11)
+    count = 45
+    xs, ys = rng.uniform(0, sw, count), rng.uniform(0, sh, count)
+    rs = rng.uniform(0.8, 2.6, count)
+    vy = rng.uniform(sh * 0.04, sh * 0.12, count)  # px por segundo
+    phase = rng.uniform(0, 2 * np.pi, count)
+    frames = int(seconds * fps)
+    folder = os.path.join(os.path.dirname(out), "pt")
+    os.makedirs(folder, exist_ok=True)
+    for f in range(frames):
+        t = f / fps
+        im = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        for i in range(count):
+            # Volta ao mesmo ponto em `seconds` (loop sem emenda)
+            y = (ys[i] - vy[i] * t) % sh
+            x = xs[i] + 6 * math.sin(2 * math.pi * t / seconds + phase[i])
+            a = int(140 + 90 * math.sin(2 * math.pi * t / seconds * 2 + phase[i]))
+            r = rs[i]
+            d.ellipse([x - r, y - r, x + r, y + r], fill=(255, 236, 190, max(0, min(255, a))))
+        im = im.filter(ImageFilter.GaussianBlur(0.8))
+        im.save(os.path.join(folder, f"p{f:03d}.png"))
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", str(fps), "-i", os.path.join(folder, "p%03d.png"),
+                    "-c:v", "qtrle", "-pix_fmt", "argb", out], check=True)
 
 
 # ------------------------------------------------------------------------------------------------ imagens
@@ -206,16 +270,11 @@ def _fetch(url, headers=None, data=None, timeout=180):
 
 
 def image(prompt, w, h, path, seed):
-    """Imagem da cena: Pollinations (grátis) -> Cloudflare Workers AI (grátis) -> fundo liso."""
+    """Imagem da cena: Cloudflare Workers AI (grátis, quando configurado) -> Pollinations -> imagem anterior/fundo liso."""
     from PIL import Image
 
     full = f"{prompt.strip().rstrip('.')}. {STYLE}"
     tries = []
-    q = urllib.parse.urlencode({"width": w, "height": h, "model": "flux", "seed": seed, "nologo": "true", "enhance": "false"})
-    tok = os.environ.get("POLLINATIONS_TOKEN")
-    tries.append(("pollinations", lambda: _fetch(
-        f"https://image.pollinations.ai/prompt/{urllib.parse.quote(full)}?{q}",
-        {"Authorization": f"Bearer {tok}"} if tok else None)))
     acc, cft = os.environ.get("CF_ACCOUNT_ID"), os.environ.get("CF_API_TOKEN")
     if acc and cft:
         def cloudflare():
@@ -226,6 +285,11 @@ def image(prompt, w, h, path, seed):
             import base64
             return base64.b64decode(json.loads(raw)["result"]["image"]), "image/jpeg"
         tries.append(("cloudflare", cloudflare))
+    q = urllib.parse.urlencode({"width": w, "height": h, "model": "flux", "seed": seed, "nologo": "true", "enhance": "false"})
+    tok = os.environ.get("POLLINATIONS_TOKEN")
+    tries.append(("pollinations", lambda: _fetch(
+        f"https://image.pollinations.ai/prompt/{urllib.parse.quote(full)}?{q}",
+        {"Authorization": f"Bearer {tok}"} if tok else None)))
     for name, fn in tries:
         for attempt in range(3):
             try:
@@ -238,7 +302,10 @@ def image(prompt, w, h, path, seed):
                     return name
             except Exception as e:
                 log(f"    imagem ({name}): {str(e)[:120]}")
-            time.sleep(6 + attempt * 8)
+                # Sem crédito/limite do dia: não adianta insistir neste serviço
+                if isinstance(e, urllib.error.HTTPError) and e.code in (401, 402, 403):
+                    break
+            time.sleep(4 + attempt * 6)
     return None
 
 
@@ -269,17 +336,20 @@ def fallback_image(path, w, h, prev=None):
 # ------------------------------------------------------------------------------------------------ montagem
 
 def clip(img, seconds, motion, w, h, out):
-    """Imagem parada -> clipe com movimento suave (zoom ou pan)."""
+    """Imagem parada -> clipe com movimento de câmera (zoom/pan com aceleração suave, como em animação)."""
     frames = max(2, round(seconds * FPS))
-    big_w, big_h = w * 2, h * 2
-    z = {"zoom_in": f"1+0.12*on/{frames}", "zoom_out": f"1.12-0.12*on/{frames}"}.get(motion, "1.10")
+    k = 2 if w < h else 1.5  # vertical: mais resolução para o zoom; horizontal (longo): mais rápido
+    big_w, big_h = int(w * k) // 2 * 2, int(h * k) // 2 * 2
+    e = f"(3*pow(on/{frames},2)-2*pow(on/{frames},3))"  # easing in-out
+    z = {"zoom_in": f"1.03+0.22*{e}", "zoom_out": f"1.25-0.22*{e}"}.get(motion, "1.20")
     if motion == "pan_left":
-        x = f"(iw-iw/zoom)*(1-on/{frames})"
+        x = f"(iw-iw/zoom)*(1-{e})"
     elif motion == "pan_right":
-        x = f"(iw-iw/zoom)*on/{frames}"
+        x = f"(iw-iw/zoom)*{e}"
     else:
         x = "(iw-iw/zoom)/2"
-    vf = (f"scale={big_w}:{big_h},zoompan=z='{z}':x='{x}':y='(ih-ih/zoom)/2':d={frames}:s={w}x{h}:fps={FPS},"
+    y = f"(ih-ih/zoom)*(0.5+0.12*({e}-0.5))"  # leve subida/descida junto
+    vf = (f"scale={big_w}:{big_h},zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={w}x{h}:fps={FPS},"
           f"format=yuv420p")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", img, "-vf", vf, "-frames:v", str(frames),
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", out], check=True)
@@ -309,7 +379,7 @@ def ass_time(s):
     return f"{int(s // 3600)}:{int(s % 3600 // 60):02d}:{s % 60:05.2f}"
 
 
-def captions(words, short, w, h, path):
+def captions(words, short, w, h, path, hook=None):
     """Legendas .ass: blocos curtos com a palavra falada destacada em amarelo."""
     # Short: um pouco abaixo do meio (fora da área dos botões do app); longo: embaixo
     size, per, align, margin = (92, 3, 2, int(h * 0.30)) if short else (54, 6, 2, 70)
@@ -319,7 +389,8 @@ def captions(words, short, w, h, path):
         "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Cap,Poppins,{size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,{7 if short else 4},"
-        f"{2 if short else 1},{align},60,60,{margin},1\n\n"
+        f"{2 if short else 1},{align},60,60,{margin},1\n"
+        f"Style: Hook,Poppins,{150 if short else 110},&H0000D7FF,&H0000D7FF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,{11 if short else 8},4,8,60,60,0,1\n\n"
         "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
     # Agrupa as palavras: no máximo `per` por bloco, quebrando em pontuação
@@ -344,6 +415,12 @@ def captions(words, short, w, h, path):
                 txt.append(f"{{\\c&H00D7FF&}}{t}{{\\c&HFFFFFF&}}" if j == i else t)
             pop = "{\\fscx108\\fscy108\\t(0,90,\\fscx100\\fscy100)}" if short and i == 0 else ""
             lines.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Cap,,0,0,0,,{pop}{' '.join(txt)}")
+    if hook:
+        # Texto do gancho (o mesmo da capa) entra com impacto nos primeiros segundos
+        txt = hook.upper().replace("{", "").replace("}", "")
+        pos = f"\\pos({w // 2},{int(h * (0.16 if short else 0.10))})"
+        lines.insert(0, f"Dialogue: 1,{ass_time(0.05)},{ass_time(2.4 if short else 3.2)},Hook,,0,0,0,,"
+                        f"{{{pos}\\fad(0,300)\\fscx140\\fscy140\\t(0,220,\\fscx100\\fscy100)}}{txt}")
     with open(path, "w", encoding="utf-8") as f:
         f.write(head + "\n".join(lines) + "\n")
 
@@ -408,7 +485,7 @@ def render(video, work):
     scenes = script["scenes"]
     base_seed = random.randint(1, 10_000_000)
 
-    clips, lens, voices, words, chapters, t = [], [], [], [], [], 0.0
+    clips, lens, voices, words, chapters, starts, t = [], [], [], [], [], [], 0.0
     prev_img = None
     for i, sc in enumerate(scenes):
         log(f"  cena {i + 1}/{len(scenes)}")
@@ -428,6 +505,7 @@ def render(video, work):
         lens.append(length)
         voices.append((t + lead, audio))
         words += [{**x, "t": x["t"] + t + lead} for x in ws]
+        starts.append(t)
         if sc.get("chapter"):
             chapters.append((t, sc["chapter"]))
         t += length - XF
@@ -445,7 +523,15 @@ def render(video, work):
         talk[i0:i0 + len(a)] = 1
     bed = music_bed(len(mixl) / SR)[: len(mixl)]
     duck = np.convolve(talk, np.ones(SR // 4) / (SR // 4), mode="same")
-    mixl += bed * (0.16 - 0.09 * duck)
+    mixl += bed * (0.26 - 0.13 * duck)
+    # Efeitos: batida no gancho e whoosh em cada troca de cena
+    imp = sfx_impact()
+    mixl[: len(imp)] += imp[: len(mixl)] * 0.45
+    wh = sfx_whoosh()
+    for st in starts[1:]:
+        i0 = max(0, int((st - XF * 0.6) * SR))
+        seg = wh[: max(0, len(mixl) - i0)]
+        mixl[i0:i0 + len(seg)] += seg * (0.22 if short else 0.12)
     mixl = np.clip(mixl / max(1e-6, np.abs(mixl).max()) * 0.95, -1, 1)
     wav = os.path.join(work, "audio.wav")
     import wave
@@ -457,11 +543,24 @@ def render(video, work):
         f.writeframes((mixl * 32767).astype(np.int16).tobytes())
 
     ass = os.path.join(work, "cap.ass")
-    captions(words, short, w, h, ass)
+    captions(words, short, w, h, ass, hook=script.get("thumbnail_text"))
+    pt = os.path.join(work, "particles.mov")
+    particles(w, h, pt)
     final = os.path.join(work, "final.mp4")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", silent, "-i", wav,
-                    "-vf", f"subtitles={ass}:fontsdir={FONTS}", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-                    "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", final], check=True)
+    # Cor mais viva + vinheta + partículas de luz + grão de filme + legendas; no Short, barra de progresso embaixo
+    fc = (f"[0:v]eq=saturation=1.12:contrast=1.05,vignette=PI/5[b];"
+          f"[2:v]scale={w}:{h},format=rgba,colorchannelmixer=aa=0.75[p];"
+          f"[b][p]overlay=shortest=1,noise=alls=5:allf=t,subtitles={ass}:fontsdir={FONTS}[s]")
+    if short:
+        fc += f";[3:v]format=rgba[bar];[s][bar]overlay=x='-w+w*t/{total:.2f}':y='H-h':shortest=1[v]"
+    else:
+        fc += ";[s]null[v]"
+    args = ["ffmpeg", "-v", "error", "-y", "-i", silent, "-i", wav, "-stream_loop", "-1", "-i", pt]
+    if short:
+        args += ["-f", "lavfi", "-i", f"color=c=0xFFD700:s={w}x12:r={FPS}:d={total + 1:.2f}"]
+    args += ["-filter_complex", fc, "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium" if short else "faster",
+             "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", final]
+    subprocess.run(args, check=True)
 
     # Capa
     thumb_src = os.path.join(work, "thumb_src.jpg")
