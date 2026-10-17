@@ -1,0 +1,96 @@
+<!--
+  Rodapé da braxpinsmania.com.br — colar no lugar do bloco atual do rodapé
+  (Nuvemshop: Minha Nuvemshop → Layout → Editar layout → Rodapé → bloco de HTML/código, onde está o rodapé de hoje).
+  Tudo fica dentro de .bx-footer, então não mexe no resto do tema.
+-->
+<style>
+  .bx-footer { --bx-red:#E3262E; --bx-gold:#FFC72C; --bx-bg:#111111; --bx-line:rgba(255,255,255,.10); --bx-muted:rgba(255,255,255,.62);
+    background:var(--bx-bg); color:#fff; border-top:3px solid var(--bx-red); font-size:14px; line-height:1.55; }
+  .bx-footer *{ box-sizing:border-box; }
+  .bx-footer a{ color:#fff; text-decoration:none; }
+  .bx-footer a:hover{ color:var(--bx-gold); }
+  .bx-wrap{ max-width:1180px; margin:0 auto; padding:40px 20px 0; }
+  .bx-grid{ display:grid; grid-template-columns:1.4fr 1fr 1fr 1.1fr; gap:32px; }
+  .bx-brand{ font-family:Anton, Impact, "Arial Narrow", sans-serif; font-size:26px; letter-spacing:.5px; text-transform:uppercase; margin:0 0 10px; }
+  .bx-brand span{ color:var(--bx-red); }
+  .bx-text{ color:var(--bx-muted); margin:0 0 16px; max-width:34ch; }
+  .bx-h{ font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--bx-gold); margin:4px 0 14px; }
+  .bx-list{ list-style:none; margin:0; padding:0; display:grid; gap:9px; }
+  .bx-list a, .bx-list span{ color:rgba(255,255,255,.86); }
+  .bx-cta{ display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:6px; font-weight:700; font-size:13px; }
+  .bx-cta--wpp{ background:#1fa855; color:#fff !important; }
+  .bx-cta--wpp:hover{ background:#178a45; }
+  .bx-social{ display:flex; gap:10px; margin-top:4px; }
+  .bx-social a{ width:38px; height:38px; border:1px solid var(--bx-line); border-radius:50%; display:flex; align-items:center; justify-content:center; }
+  .bx-social a:hover{ border-color:var(--bx-gold); }
+  .bx-social svg{ width:18px; height:18px; fill:currentColor; }
+  .bx-trust{ display:flex; flex-wrap:wrap; gap:10px 28px; margin-top:34px; padding:18px 0; border-top:1px solid var(--bx-line); border-bottom:1px solid var(--bx-line); color:rgba(255,255,255,.80); font-size:13px; }
+  .bx-trust b{ color:#fff; font-weight:700; }
+  .bx-trust svg{ width:16px; height:16px; vertical-align:-3px; margin-right:6px; fill:none; stroke:var(--bx-gold); stroke-width:2; }
+  .bx-legal{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; padding:16px 0 22px; color:rgba(255,255,255,.5); font-size:12px; }
+  @media (max-width:900px){ .bx-grid{ grid-template-columns:1fr 1fr; } }
+  @media (max-width:560px){ .bx-grid{ grid-template-columns:1fr; gap:26px; } .bx-wrap{ padding-top:32px; } .bx-legal{ flex-direction:column; } }
+</style>
+
+<footer class="bx-footer">
+  <div class="bx-wrap">
+    <div class="bx-grid">
+      <div>
+        <p class="bx-brand">Brax <span>Pins</span> Mania</p>
+        <p class="bx-text">Pins de metal esmaltado que contam a sua história: profissões, saúde, causas, times e cultura brasileira. Feitos para usar no jaleco, no crachá e na mochila.</p>
+        <div class="bx-social">
+          <a href="https://www.instagram.com/braxpinsmania/" target="_blank" rel="noopener" aria-label="Instagram da Brax Pins Mania">
+            <svg viewBox="0 0 24 24"><path d="M12 2.2c3.2 0 3.6 0 4.8.1 3.3.1 4.8 1.7 4.9 4.9.1 1.3.1 1.6.1 4.8s0 3.6-.1 4.8c-.1 3.2-1.7 4.8-4.9 4.9-1.3.1-1.6.1-4.8.1s-3.6 0-4.8-.1c-3.3-.1-4.8-1.7-4.9-4.9C2.2 15.6 2.2 15.2 2.2 12s0-3.6.1-4.8C2.4 3.9 4 2.4 7.2 2.3 8.4 2.2 8.8 2.2 12 2.2zM12 0C8.7 0 8.3 0 7.1.1 2.7.3.3 2.7.1 7.1 0 8.3 0 8.7 0 12s0 3.7.1 4.9c.2 4.4 2.6 6.8 7 7 1.2.1 1.6.1 4.9.1s3.7 0 4.9-.1c4.4-.2 6.8-2.6 7-7 .1-1.2.1-1.6.1-4.9s0-3.7-.1-4.9c-.2-4.4-2.6-6.8-7-7C15.7 0 15.3 0 12 0zm0 5.8a6.2 6.2 0 1 0 0 12.4 6.2 6.2 0 0 0 0-12.4zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.4-11.8a1.4 1.4 0 1 0 0 2.9 1.4 1.4 0 0 0 0-2.9z"/></svg>
+          </a>
+          <a href="https://wa.me/5561995175906" target="_blank" rel="noopener" aria-label="WhatsApp da Brax Pins Mania">
+            <svg viewBox="0 0 24 24"><path d="M20.5 3.5A11.8 11.8 0 0 0 1.9 17.7L.3 23.7l6.2-1.6A11.8 11.8 0 0 0 24 12a11.7 11.7 0 0 0-3.5-8.5zM12 21.6c-1.8 0-3.5-.5-5-1.4l-.4-.2-3.7 1 1-3.6-.2-.4A9.8 9.8 0 1 1 12 21.6zm5.4-7.3c-.3-.1-1.8-.9-2-1s-.5-.1-.7.1-.8 1-1 1.2-.4.2-.7.1a8 8 0 0 1-4-3.5c-.3-.5.3-.5.9-1.6.1-.2 0-.4 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6a1.2 1.2 0 0 0-.8.4 3.6 3.6 0 0 0-1.1 2.6 6.2 6.2 0 0 0 1.3 3.3 14.2 14.2 0 0 0 5.4 4.8c2 .9 2.8.9 3.8.8.6-.1 1.8-.8 2.1-1.5s.3-1.4.2-1.5-.3-.2-.6-.3z"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <div>
+        <p class="bx-h">Compre por tema</p>
+        <ul class="bx-list">
+          <li><a href="/lancamentos/">Lançamentos</a></li>
+          <li><a href="/profissoes-e-saude/">Profissões e Saúde</a></li>
+          <li><a href="/saude-e-causas-sociais/">Saúde e Causas Sociais</a></li>
+          <li><a href="/bandeira-futebol/">Futebol</a></li>
+          <li><a href="/kit-pins/">Kits com desconto</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="bx-h">Institucional</p>
+        <ul class="bx-list">
+          <li><a href="/avaliacoes/">Avaliações de clientes</a></li>
+          <li><a href="/contato/">Fale conosco</a></li>
+          <li><a href="/account/login/">Minha conta e pedidos</a></li>
+          <li><a href="https://wa.me/5561995175906?text=Ol%C3%A1!%20Quero%20saber%20sobre%20pre%C3%A7o%20para%20revenda." target="_blank" rel="noopener">Seja um revendedor</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <p class="bx-h">Atendimento</p>
+        <ul class="bx-list">
+          <li><a href="mailto:contato@braxpinsmania.com.br">contato@braxpinsmania.com.br</a></li>
+          <li><span>WhatsApp (61) 99517-5906</span></li>
+          <li><span>Brasília – DF · enviamos para todo o Brasil</span></li>
+        </ul>
+        <p style="margin:16px 0 0">
+          <a class="bx-cta bx-cta--wpp" href="https://wa.me/5561995175906?text=Ol%C3%A1!%20Vim%20pelo%20site%20e%20tenho%20uma%20d%C3%BAvida." target="_blank" rel="noopener">Tirar dúvida no WhatsApp</a>
+        </p>
+      </div>
+    </div>
+
+    <div class="bx-trust">
+      <span><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5l8-3z"/><path d="M9 12l2 2 4-4"/></svg><b>Compra segura</b> · pagamento processado pela Nuvemshop</span>
+      <span><svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg><b>Envio para todo o Brasil</b> · com código de rastreio</span>
+      <span><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/></svg><b>Troca garantida</b> · 7 dias após o recebimento (CDC)</span>
+    </div>
+
+    <div class="bx-legal">
+      <span>© 2026 Brax Pins Mania · CNPJ 45.118.948/0001-84</span>
+      <span>Brasília – DF</span>
+    </div>
+  </div>
+</footer>
