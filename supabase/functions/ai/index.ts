@@ -98,6 +98,12 @@ Deno.serve(async (req) => {
       }
       const found = [pasted, ...pages].join("\n\n");
       const drive = found.match(/https:\/\/drive\.google\.com\/(?:drive\/(?:u\/\d+\/)?folders|file\/d)\/[\w-]+/)?.[0] ?? "";
+      // Só o link da pasta: não há texto para a IA ler, só preenche o link
+      const rest = found.replace(/https?:\/\/\S+/g, "").trim();
+      if (rest.length < 20) {
+        if (!drive) throw new HttpError(400, "Não consegui ler nada nesse link. Cole o texto das regras da campanha ou o link do briefing (Google Docs).");
+        return json({ campaign: "", credit: "", hashtags: "", rules: "", url: drive, only_link: true });
+      }
       const parsed = await generateJSON(
         z.object({
           campaign: z.string().describe("Nome curto da campanha (ex.: Stream House LA)"),
@@ -105,7 +111,7 @@ Deno.serve(async (req) => {
           hashtags: z.string().describe("Hashtags obrigatórias separadas por espaço, com #, ou vazio"),
           rules: z.string().describe("Regras e briefing em tópicos curtos, no idioma original: que momentos cortar, estilo, título/logo/CTA obrigatórios, proibições, público"),
         }),
-        "Você organiza campanhas de clipping (Whop Content Rewards e parecidas) para um editor de cortes. Use só o que está nas fontes; não invente regras nem hashtags.",
+        "Você organiza campanhas de clipping (Whop Content Rewards e parecidas) para um editor de cortes. Use só o que está nas fontes; não invente regras nem hashtags. Campo sem informação nas fontes = string vazia (nunca escreva avisos ou pedidos nos campos).",
         `Fontes da campanha:\n\n${found}`,
         "low",
       );

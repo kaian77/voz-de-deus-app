@@ -45,12 +45,13 @@ export default function Clips() {
     if (!paste.trim()) return toast.error("Cole o texto da campanha, o link do briefing ou da pasta");
     setReading(true);
     try {
-      const r = await api.invoke<{ campaign: string; credit: string; hashtags: string; rules: string; url: string }>("ai", { action: "clips_parse_campaign", text: paste });
+      const r = await api.invoke<{ campaign: string; credit: string; hashtags: string; rules: string; url: string; only_link?: boolean }>("ai", { action: "clips_parse_campaign", text: paste });
       setForm((f) => ({
         ...f, campaign: r.campaign || f.campaign, credit: r.credit || f.credit, hashtags: r.hashtags || f.hashtags,
         rules: r.rules || f.rules, url: r.url || f.url,
       }));
-      toast.success(r.url ? "Preenchido! Confira e clique em Começar." : "Preenchido! Falta o link da pasta do Drive.");
+      if (r.only_link) toast.message("Peguei o link da pasta. Para o resto, cole também o texto das regras ou o link do briefing (Google Docs).");
+      else toast.success(r.url ? "Preenchido! Confira e clique em Começar." : "Preenchido! Falta o link da pasta do Drive.");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
