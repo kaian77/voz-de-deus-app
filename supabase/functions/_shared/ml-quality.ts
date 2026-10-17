@@ -46,6 +46,18 @@ function pendingRules(perf: any): Rule[] {
   return out;
 }
 
+/** Resumo da experiência de compra: o motivo mais comum e o que fazer. */
+function experienceSummary(results: ItemQuality[]) {
+  const bad = results.filter((r) => r.experience);
+  if (!bad.length) return null;
+  const delays = bad.filter((r) => /atras/i.test(r.experience!.text)).length;
+  const claims = bad.filter((r) => /reclama/i.test(r.experience!.text)).length;
+  const parts = [`${bad.length} anúncios com experiência de compra ${bad[0].experience!.color === "red" ? "ruim" : "regular"}.`];
+  if (delays) parts.push(`Motivo em ${delays}: atraso no envio acima da média. Despache no mesmo dia da venda (antes do horário de coleta/postagem) e mantenha o prazo de envio do ML.`);
+  if (claims) parts.push(`${claims} com reclamações: responda rápido e resolva pelo ML antes da mediação.`);
+  return parts.join(" ");
+}
+
 /** Roda fn em todos os itens, n de cada vez. */
 async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
@@ -121,6 +133,7 @@ export async function improveMlShowcase(db: SupabaseClient, userId: string, opts
     auto: list.filter((r) => r.auto).map((r) => ({ title: r.title, count: r.count, fix: r.auto })),
     owner: list.filter((r) => !r.auto).map((r) => ({ title: r.title, count: r.count, todo: r.owner ?? "O Mercado Livre sugere isso; o Studio ainda não faz sozinho." })),
     experience: results.filter((r) => r.experience).map((r) => ({ id: r.id, title: r.title, ...r.experience! })),
+    experience_summary: experienceSummary(results),
     worst: [...scored].sort((a, b) => (a.score ?? 0) - (b.score ?? 0)).slice(0, 10).map((r) => ({ id: r.id, title: r.title, score: r.score, level: r.level })),
     queued,
     minutes: Math.ceil(queued / 3),

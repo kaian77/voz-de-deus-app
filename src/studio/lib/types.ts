@@ -261,6 +261,7 @@ export interface MlQualityReport {
   auto: { title: string; count: number; fix: string }[];
   owner: { title: string; count: number; todo: string }[];
   experience: { id: string; title: string; color: string; text: string }[];
+  experience_summary?: string | null;
   worst: { id: string; title: string; score: number | null; level: string | null }[];
   queued: number;
   minutes: number;
