@@ -22,7 +22,7 @@ create index if not exists ml_photos_status on public.ml_photos (status);
 alter table public.ml_photos drop constraint if exists ml_photos_status_check;
 alter table public.ml_photos add constraint ml_photos_status_check check (status in ('queued', 'done', 'failed'));
 alter table public.ml_photos drop constraint if exists ml_photos_kind_check;
-alter table public.ml_photos add constraint ml_photos_kind_check check (kind in ('cover', 'extra'));
+alter table public.ml_photos add constraint ml_photos_kind_check check (kind in ('cover', 'extra', 'detail', 'angle'));
 
 -- Só o servidor (service role) usa esta tabela
 alter table public.ml_photos enable row level security;
