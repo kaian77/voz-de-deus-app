@@ -82,12 +82,28 @@ def drive_files(url, folder):
     return main or vids
 
 
-def download(file_id, name, folder):
+def download(file_id, name, folder, mirror=None):
+    """Baixa o vídeo do Drive. Drive da campanha bloqueado e há link reserva (cópia no Drive do dono): baixa da cópia."""
+    try:
+        return _download(file_id, name, folder)
+    except RuntimeError as e:
+        if DRIVE_LIMIT not in str(e) or not mirror:
+            raise
+    log("  Drive da campanha bloqueado: usando o link reserva")
+    files = drive_files(mirror, os.path.join(folder, "mirror"))
+    if not files:
+        raise RuntimeError("o link reserva não tem vídeo (confira se está como 'qualquer pessoa com o link')")
+    stem = lambda n: os.path.splitext(n)[0].strip().lower()  # noqa: E731
+    pick = next((f for f in files if stem(f[1]) == stem(name)), files[0])
+    return _download(pick[0], name, folder, keep_as=file_id)
+
+
+def _download(file_id, name, folder, keep_as=None):
     import gdown
 
     if CACHE:
         os.makedirs(CACHE, exist_ok=True)
-        kept = os.path.join(CACHE, f"{file_id}.mp4")
+        kept = os.path.join(CACHE, f"{keep_as or file_id}.mp4")
         if os.path.exists(kept) and os.path.getsize(kept) > 100_000:
             os.utime(kept)
             log(f"  {name}: já estava guardado (não baixei do Drive)")
@@ -481,7 +497,7 @@ def process(source):
         files.sort(key=lambda f: bool(SKIP_NAMES.search(f[1])))  # episódios antes de teaser/trailer
         for fid, name in files[:2]:  # até 2 vídeos novos por rodada (tempo do workflow)
             log(f"  baixando {name}…")
-            video = download(fid, name, work) if fid != "direct" else download_direct(source["url"], work)
+            video = download(fid, name, work, source.get("mirror_url")) if fid != "direct" else download_direct(source["url"], work)
             total = duration(video)
             if total < 180 and len(files) > 1:  # vinheta/teaser curto: não vale cortar se tem episódio
                 log(f"  {name} tem só {total:.0f}s, pulando")
@@ -535,7 +551,7 @@ def process_redos():
             extra = (f"Do NOT reuse these time ranges (already used or rejected): {avoid}\n" if avoid else "") + \
                     (f"The channel owner asked for these changes:\n{notes}\n" if notes else "")
             with tempfile.TemporaryDirectory() as work:
-                video = download_direct(source["url"], work) if fid == "direct" else download(fid, "video.mp4", work)
+                video = download_direct(source["url"], work) if fid == "direct" else download(fid, "video.mp4", work, source.get("mirror_url"))
                 words, lines, language = transcript_for(source, fid, video, work)
                 channel["language"] = clip_language(language, channel)
                 total = duration(video)
