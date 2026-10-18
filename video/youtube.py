@@ -44,6 +44,12 @@ STYLE = (
     "epic cinematic composition, dramatic warm lighting with god rays, rich vibrant colors, depth of field, highly detailed, "
     "no text, no letters, no watermark"
 )
+# Estilo cinemático: frame de filme bíblico realista (como os canais de "Bible stories" que viralizam)
+CINEMATIC = (
+    "cinematic film still from a biblical epic movie, photorealistic, real people, natural skin texture, shot on ARRI Alexa, "
+    "anamorphic 35mm lens, shallow depth of field, warm golden hour sunlight, dust in the air, ancient Israel, "
+    "muted earthy tones, film grain, highly detailed, no text, no letters, no watermark"
+)
 
 
 def now():
@@ -336,13 +342,21 @@ def fallback_image(path, w, h, prev=None):
 
 # ------------------------------------------------------------------------------------------------ montagem
 
-def clip(img, seconds, motion, w, h, out):
-    """Imagem parada -> clipe com movimento de câmera (zoom/pan com aceleração suave, como em animação)."""
+def hero(prompt, script):
+    """Troca HERO pela aparência fixa do protagonista (o mesmo rosto em todas as cenas)."""
+    cast = (script.get("cast") or "").strip().rstrip(".")
+    return prompt.replace("HERO", f"the main character ({cast})" if cast else "the main character")
+
+
+def clip(img, seconds, motion, w, h, out, slow=False):
+    """Imagem parada -> clipe com movimento de câmera (zoom/pan com aceleração suave, como em animação).
+    slow: movimento lento de câmera de cinema (cinemático)."""
     frames = max(2, round(seconds * FPS))
     k = 2 if w < h else 1.5  # vertical: mais resolução para o zoom; horizontal (longo): mais rápido
     big_w, big_h = int(w * k) // 2 * 2, int(h * k) // 2 * 2
     e = f"(3*pow(on/{frames},2)-2*pow(on/{frames},3))"  # easing in-out
-    z = {"zoom_in": f"1.03+0.22*{e}", "zoom_out": f"1.25-0.22*{e}"}.get(motion, "1.20")
+    amp = 0.10 if slow else 0.22
+    z = {"zoom_in": f"1.03+{amp}*{e}", "zoom_out": f"{1.03 + amp:.2f}-{amp}*{e}"}.get(motion, "1.20" if not slow else "1.10")
     if motion == "pan_left":
         x = f"(iw-iw/zoom)*(1-{e})"
     elif motion == "pan_right":
@@ -356,8 +370,9 @@ def clip(img, seconds, motion, w, h, out):
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", out], check=True)
 
 
-def join(clips, lens, out):
-    """Junta os clipes com transição (xfade); cada clipe já tem XF a mais para a sobreposição."""
+def join(clips, lens, out, soft=False):
+    """Junta os clipes com transição (xfade); cada clipe já tem XF a mais para a sobreposição.
+    soft: só fusões (cinemático, sem cortina/círculo)."""
     if len(clips) == 1:
         shutil.copy(clips[0], out)
         return
@@ -365,7 +380,7 @@ def join(clips, lens, out):
     for c in clips:
         args += ["-i", c]
     parts, prev, offset = [], "[0:v]", 0.0
-    kinds = ["fade", "smoothleft", "fadeblack", "smoothright", "dissolve", "circleopen"]
+    kinds = ["fade", "dissolve"] if soft else ["fade", "smoothleft", "fadeblack", "smoothright", "dissolve", "circleopen"]
     for i in range(1, len(clips)):
         offset += lens[i - 1] - XF
         label = f"[v{i}]"
@@ -486,6 +501,8 @@ def render(video, work):
         voice = "en-US-AndrewNeural" if en else "pt-BR-AntonioNeural"
     scenes = script["scenes"]
     base_seed = random.randint(1, 10_000_000)
+    cine = style == "cinematic"
+    look = CINEMATIC if cine else None
 
     clips, lens, voices, words, chapters, starts, t = [], [], [], [], [], [], 0.0
     prev_img = None
@@ -498,7 +515,9 @@ def render(video, work):
         lead = 0.12
         length = lead + a_len + PAUSE + XF  # XF a mais: some na transição
         img = os.path.join(work, f"i{i}.jpg")
-        if not image(sc["image"], w, h, img, base_seed + i):
+        prompt = hero(sc["image"], script) if cine else sc["image"]
+        # Cinemático: mesma semente em todas as cenas ajuda o rosto do protagonista a sair parecido
+        if not image(prompt, w, h, img, base_seed if cine else base_seed + i, style=look):
             fallback_image(img, w, h, prev_img)
         prev_img = img
         clips.append({"img": img, "length": length, "advance": length - XF, "motion": sc.get("motion") or "zoom_in"})
@@ -527,9 +546,9 @@ def render(video, work):
                     log(f"    recorte: {e}")
                 yt_styles.parallax_clip(c["img"], fg, c["length"], c["motion"], w, h, out)
             else:
-                clip(c["img"], c["length"], c["motion"], w, h, out)
+                clip(c["img"], c["length"], c["motion"], w, h, out, slow=cine)
             files.append(out)
-        join(files, lens, silent)
+        join(files, lens, silent, soft=cine)
 
     # Áudio: narração + trilha baixinha (abaixa mais quando tem voz)
     mixl = np.zeros(int((total + 1) * SR), dtype=np.float32)
@@ -585,8 +604,10 @@ def render(video, work):
         pt = os.path.join(work, "particles.mov")
         particles(w, h, pt)
         args += ["-stream_loop", "-1", "-i", pt]
-        fc = (f"[0:v]eq=saturation=1.12:contrast=1.05,vignette=PI/5[b];"
-              f"[2:v]scale={w}:{h},format=rgba,colorchannelmixer=aa=0.75[p];"
+        grade = ("eq=saturation=0.95:contrast=1.08,colorbalance=rs=0.04:bs=-0.05:rh=0.03:bh=-0.04,vignette=PI/4.5" if cine
+                 else "eq=saturation=1.12:contrast=1.05,vignette=PI/5")
+        fc = (f"[0:v]{grade}[b];"
+              f"[2:v]scale={w}:{h},format=rgba,colorchannelmixer=aa={0.45 if cine else 0.75}[p];"
               f"[b][p]overlay=shortest=1,noise=alls=5:allf=t,subtitles={ass}:fontsdir={FONTS}[s]")
         bar = 3
     if short:  # barra de progresso embaixo
@@ -600,7 +621,8 @@ def render(video, work):
 
     # Capa
     thumb_src = os.path.join(work, "thumb_src.jpg")
-    if not image(script["thumbnail_image"], 1280, 720, thumb_src, base_seed + 999):
+    thumb_prompt = hero(script["thumbnail_image"], script) if cine else script["thumbnail_image"]
+    if not image(thumb_prompt, 1280, 720, thumb_src, base_seed if cine else base_seed + 999, style=look):
         shutil.copy(os.path.join(work, "i0.jpg"), thumb_src)
     thumb = os.path.join(work, "thumb.jpg")
     thumbnail(thumb_src, script["thumbnail_text"], thumb)

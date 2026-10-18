@@ -148,6 +148,10 @@ const Script = z.object({
   tags: z.array(z.string()).describe("8 a 15 tags de busca em português"),
   thumbnail_text: z.string().describe("2 a 4 palavras em MAIÚSCULAS para a capa, que geram curiosidade"),
   thumbnail_image: z.string().describe("Descrição EM INGLÊS da imagem da capa: personagem expressivo em close, cena dramática, espaço livre à esquerda para o texto"),
+  cast: z.string().describe(
+    "Só no estilo cinemático (senão string vazia): aparência fixa EM INGLÊS do personagem principal (idade, rosto, cabelo, barba, roupa e cores), " +
+      "1 frase. Nas imagens, escreva HERO onde ele aparece para o rosto sair igual em todas as cenas",
+  ),
   scenes: z.array(Scene),
   references: z.array(z.string()).describe("Referências bíblicas usadas (ex.: Números 20:12)"),
 });
@@ -172,7 +176,17 @@ const RULES_EN =
   `em inglês americano natural (cite os versículos no formato inglês, ex.: Numbers 20:12; use a NIV/KJV como referência). ` +
   `Os campos topic e angle também em inglês.`;
 
-const rules = (niche: string, language: string) => (language === "en" ? RULES_EN : RULES_PT).replace("{niche}", niche);
+/** Estilo cinemático (filme bíblico realista): troca o 3D Pixar por cena de cinema e o roteiro vira uma história com virada. */
+const CINEMATIC =
+  `\n\nESTILO DESTE CANAL: cinemático realista, como cena de filme bíblico (não é animação 3D). Nas imagens, descreva como um frame de filme: ` +
+  `pessoas reais, pele com textura, luz natural dourada, poeira no ar, closes no rosto com emoção forte (lágrimas, espanto, olhar para o céu), ` +
+  `planos abertos de paisagem do antigo Israel. Preencha cast com a aparência fixa do protagonista e use a palavra HERO nas imagens em que ele aparece ` +
+  `(ex.: "extreme close-up of HERO looking up, oil running down his forehead"). Outros personagens: descreva sempre do mesmo jeito.\n` +
+  `Roteiro como HISTÓRIA contada (não lista de fatos): gancho com virada ("...e aí tudo piorou"), tensão crescente, momento emocional e a lição no fim, ` +
+  `sempre fiel ao texto bíblico.`;
+
+const rules = (niche: string, language: string, style = "") =>
+  (language === "en" ? RULES_EN : RULES_PT).replace("{niche}", niche) + (style === "cinematic" ? CINEMATIC : "");
 
 export async function planTopics(niche: string, trends: Trend[], recent: string[], kinds: ("short" | "long")[], language = "pt") {
   const out = await generateJSON(Plan,
@@ -187,7 +201,7 @@ export async function planTopics(niche: string, trends: Trend[], recent: string[
   return out.items.slice(0, kinds.length).map((it, i) => ({ ...it, kind: kinds[i] }));
 }
 
-export async function writeScript(niche: string, video: { kind: string; topic: string; angle?: string | null; redo_note?: string | null }, language = "pt"): Promise<YtScript> {
+export async function writeScript(niche: string, video: { kind: string; topic: string; angle?: string | null; redo_note?: string | null }, language = "pt", style = ""): Promise<YtScript> {
   const short = video.kind === "short";
   const en = language === "en";
   const shape = short
@@ -201,7 +215,7 @@ export async function writeScript(niche: string, video: { kind: string; topic: s
       `cada um começando numa cena com chapter preenchido (a primeira cena tem chapter "${en ? "Introduction" : "Introdução"}"); ` +
       `fechamento com uma lição e chamada para se inscrever e comentar.`;
   return await generateJSON(Script,
-    rules(niche, language),
+    rules(niche, language, style),
     `${shape}\n\nTema: ${video.topic}\nGancho: ${video.angle ?? "(escolha o melhor)"}` +
       (video.redo_note ? `\n\nO dono pediu para refazer este vídeo assim: ${video.redo_note}` : ""),
     "medium");
@@ -281,13 +295,13 @@ export async function ytAutopilot(db: SupabaseClient) {
 
   // Roteiro travado (função caiu no meio) volta para a fila depois de 10 min
   await db.from("yt_videos").update({ status: "draft" }).eq("status", "scripting").lt("updated_at", new Date(Date.now() - 10 * 60000).toISOString());
-  const { data: next } = await db.from("yt_videos").select("*, yt_channels(niche, language)").eq("status", "draft").order("publish_at").limit(1).maybeSingle();
+  const { data: next } = await db.from("yt_videos").select("*, yt_channels(niche, language, style)").eq("status", "draft").order("publish_at").limit(1).maybeSingle();
   if (next) {
     const { data: claimed } = await db.from("yt_videos").update({ status: "scripting", updated_at: new Date().toISOString() })
       .eq("id", next.id).eq("status", "draft").select("id").maybeSingle();
     if (claimed) {
       try {
-        const script = await writeScript(next.yt_channels?.niche ?? "Curiosidades da Bíblia", next, next.yt_channels?.language ?? "pt");
+        const script = await writeScript(next.yt_channels?.niche ?? "Curiosidades da Bíblia", next, next.yt_channels?.language ?? "pt", next.yt_channels?.style ?? "");
         await db.from("yt_videos").update({ status: "queued", script, title: script.title, error: null, updated_at: new Date().toISOString() }).eq("id", next.id);
         result.scripted = next.id;
         result.dispatched = await dispatchRender("youtube.yml");
