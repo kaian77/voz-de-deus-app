@@ -154,6 +154,11 @@ def transcript_for(source, fid, video, work):
 
 # ------------------------------------------------------------------------------------------------ IA
 
+def clip_language(spoken, channel):
+    """Título, capa e descrição no idioma falado no vídeo (as legendas já saem nele), não no padrão do canal."""
+    return spoken if spoken in ("pt", "en", "es") else (channel.get("language") or "en")
+
+
 def pick_moments(lines, n, campaign, rules, language, extra=""):
     """Claude escolhe os melhores momentos (saída estruturada = JSON garantido)."""
     key = os.environ["ANTHROPIC_API_KEY"]
@@ -443,8 +448,9 @@ def process(source):
             if total < 25:
                 raise RuntimeError(f"{name} não é um vídeo que dá para cortar ({total:.0f}s)")
             words, lines, language = transcript_for(source, fid, video, work)
+            channel["language"] = clip_language(language, channel)
             moments = snap(pick_moments(lines, min(source.get("clips_wanted") or 6, max(1, int(total // 60))), source["campaign"], source.get("rules"),
-                                        channel.get("language") or language), words, total)
+                                        channel["language"]), words, total)
             slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
             for i, (clip, when) in enumerate(zip(moments, slots)):
                 clip["file"] = fid
@@ -489,10 +495,11 @@ def process_redos():
             with tempfile.TemporaryDirectory() as work:
                 video = download_direct(source["url"], work) if fid == "direct" else download(fid, "video.mp4", work)
                 words, lines, language = transcript_for(source, fid, video, work)
+                channel["language"] = clip_language(language, channel)
                 total = duration(video)
                 logo = logo_for(source, work)
                 moments = snap(pick_moments(lines, len(rows), source["campaign"], source.get("rules"),
-                                            channel.get("language") or language, extra), words, total)
+                                            channel["language"], extra), words, total)
                 slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
                 for row, clip, when in zip(rows, moments, slots):
                     clip["file"] = fid
