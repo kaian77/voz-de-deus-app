@@ -1,0 +1,31 @@
+# Achadinhos (Renda extra): teste que mostra o formato dos feeds de produtos da Shopee Afiliados
+# (colunas e 3 linhas) antes de montar o robô. Os links dos feeds ficam nos secrets SHOPEE_FEED_OFICIAL / SHOPEE_FEED_BR.
+name: Achadinhos - conferir feed
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SHOPEE_FEED_OFICIAL: ${{ secrets.SHOPEE_FEED_OFICIAL }}
+      SHOPEE_FEED_BR: ${{ secrets.SHOPEE_FEED_BR }}
+    steps:
+      - name: Começo de cada feed
+        run: |
+          for name in SHOPEE_FEED_OFICIAL SHOPEE_FEED_BR; do
+            url="${!name}"
+            echo "::group::$name"
+            if [[ -z $url ]]; then echo "secret $name não cadastrado"; echo "::endgroup::"; continue; fi
+            curl -sSL -r 0-400000 -D headers.txt "$url" -o part.bin || true
+            grep -iE '^(HTTP|content-type|content-length|content-disposition|content-encoding)' headers.txt || true
+            file part.bin
+            # Comprimido (gzip/zip): abre o pedaço; texto: mostra direto
+            if file part.bin | grep -qi gzip; then (zcat part.bin 2>/dev/null || true) | head -c 6000 > sample.txt
+            elif file part.bin | grep -qi zip; then (funzip part.bin 2>/dev/null || true) | head -c 6000 > sample.txt
+            else head -c 6000 part.bin > sample.txt; fi
+            head -n 4 sample.txt | cut -c1-2500
+            echo "::endgroup::"
+          done
