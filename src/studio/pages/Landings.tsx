@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Copy, Download, ExternalLink, Globe, ImagePlus, Link2, Loader2, Monitor, Plus, Send, Smartphone, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeft, Copy, Download, ExternalLink, Globe, ImagePlus, Link2, Loader2, Monitor, Plus, RefreshCw, Send, Smartphone, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +21,15 @@ const publicUrl = (p: LandingPage) => `${LANDING_HOST}/p/${p.slug}`;
 
 type Form = Pick<LandingPage, "name" | "niche" | "city" | "whatsapp" | "instagram" | "address" | "hours" | "registry" | "notes" | "photos" | "logo">;
 const EMPTY: Form = { name: "", niche: "", city: "", whatsapp: "", instagram: "", address: "", hours: "", registry: "", notes: "", photos: [], logo: null };
+const toForm = (page: LandingPage): Form => ({ ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map((k) => [k, page[k as keyof Form] ?? EMPTY[k as keyof Form]])) });
+
+/** Resumo do que veio do Instagram/Google para mostrar no editor. */
+function importSummary(i: LandingPage["imported"]) {
+  if (!i?.at) return null;
+  const part = (label: string, v?: string) =>
+    !v ? null : v === "pending" ? `${label}: buscando (leva alguns minutos)` : v.startsWith("ok: ") ? `${label}: ${v.slice(4)}` : `${label}: ${v.replace(/^erro: /, "")}`;
+  return [part("Google", i.maps), part("Instagram", i.instagram)].filter(Boolean).join(" · ");
+}
 
 function download(page: LandingPage) {
   const a = document.createElement("a");
@@ -41,16 +50,16 @@ function Field({ label, children, className }: { label: string; children: React.
 
 function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
   const invalidate = useInvalidate();
-  const [form, setForm] = useState<Form>(() => ({ ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map((k) => [k, page[k as keyof Form] ?? EMPTY[k as keyof Form]])) }));
+  const [form, setForm] = useState<Form>(() => toForm(page));
   const [current, setCurrent] = useState(page);
-  const [busy, setBusy] = useState<"upload" | "generate" | "publish" | null>(null);
+  const [busy, setBusy] = useState<"upload" | "generate" | "publish" | "import" | null>(null);
   const [ask, setAsk] = useState("");
   const [device, setDevice] = useState<"mobile" | "desktop">("mobile");
   const photoInput = useRef<HTMLInputElement>(null);
   const logoInput = useRef<HTMLInputElement>(null);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  const html = useMemo(() => (current.content ? renderLanding({ ...current, ...form }) : ""), [current, form]);
+  const html = useMemo(() => (current.content ? renderLanding({ ...current, ...form }, { sample: current.status !== "published" }) : ""), [current, form]);
 
   const upload = async (files: FileList | null, logo = false) => {
     if (!files?.length) return;
@@ -73,13 +82,49 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
     return saved;
   };
 
+  /** Puxa os dados reais do cliente (fotos, bio, horário, categoria) do Instagram e do Google Maps. */
+  const importData = async (quiet = false) => {
+    setBusy("import");
+    try {
+      await api.update("landing_pages", current.id, form);
+      const r = await api.invoke<LandingPage>("ai", { action: "landing_import", id: current.id });
+      setCurrent(r);
+      setForm(toForm(r));
+      invalidate("landing_pages");
+      if (!quiet) toast.success(importSummary(r.imported) || "Nada novo para puxar");
+    } catch (e) {
+      if (!quiet) toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Lead novo: puxa os dados assim que abre. Google ainda buscando (lead antigo): confere a cada 20 s e puxa quando ficar pronto.
+  useEffect(() => {
+    if (!current.imported && (current.lead_id || current.instagram)) importData(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (current.imported?.maps !== "pending" || !current.lead_id) return;
+    const t = setInterval(async () => {
+      const [lead] = await api.list("leads", { eq: { id: current.lead_id! } }).catch(() => []);
+      if (lead && (lead.details_status === "done" || lead.details_status === "failed")) {
+        clearInterval(t);
+        importData(true);
+      }
+    }, 20_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current.imported?.maps, current.lead_id]);
+
   const generate = async (instructions?: string) => {
     setBusy("generate");
     try {
       await save();
-      if (!form.photos.length) throw new Error("Envie pelo menos uma foto");
+      if (!form.photos.length && !form.instagram && !current.lead_id) throw new Error("Envie pelo menos uma foto");
       const r = await api.invoke<LandingPage>("ai", { action: "landing_generate", id: current.id, instructions, fresh: !instructions });
       setCurrent(r);
+      setForm(toForm(r));
       setAsk("");
       invalidate("landing_pages");
       toast.success(instructions ? "Ajuste feito" : "Página criada");
@@ -171,7 +216,17 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
 
       <div className="grid gap-4 lg:grid-cols-[400px_minmax(0,1fr)]">
         <div className="space-y-4">
-          <Panel title="Dados do cliente">
+          <Panel
+            title="Dados do cliente"
+            description={importSummary(current.imported) ?? "Fotos, bio, horário e especialidades vêm do Instagram e do Google Maps."}
+            action={
+              (form.instagram || current.lead_id) && (
+                <Button variant="outline" size="sm" onClick={() => importData()} disabled={busy !== null}>
+                  {busy === "import" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}Puxar dados
+                </Button>
+              )
+            }
+          >
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Nome (como aparece no site)" className="sm:col-span-2"><Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Dra. Ana Souza · Nutricionista" /></Field>
               <Field label="Área">
@@ -182,7 +237,7 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
               <Field label="WhatsApp"><Input value={form.whatsapp ?? ""} onChange={(e) => set("whatsapp", e.target.value)} placeholder="(61) 99999-9999" inputMode="tel" /></Field>
               <Field label="Instagram"><Input value={form.instagram ?? ""} onChange={(e) => set("instagram", e.target.value)} placeholder="@perfil" /></Field>
               <Field label="Endereço (aparece com mapa)" className="sm:col-span-2"><Input value={form.address ?? ""} onChange={(e) => set("address", e.target.value)} /></Field>
-              <Field label="Horário"><Input value={form.hours ?? ""} onChange={(e) => set("hours", e.target.value)} placeholder="Seg a sex, 8h às 18h" /></Field>
+              <Field label="Horário (vazio = exemplo só na prévia)"><Input value={form.hours ?? ""} onChange={(e) => set("hours", e.target.value)} placeholder="Seg a sex: 8h às 18h" /></Field>
               <Field label="Registro (CRM, CRN...)"><Input value={form.registry ?? ""} onChange={(e) => set("registry", e.target.value)} placeholder="CRN-1 12345" /></Field>
               <Field label="Serviços, formação e diferenciais (quanto mais real, melhor)" className="sm:col-span-2">
                 <Textarea rows={5} value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} placeholder="Ex.: atende emagrecimento, gestantes e esportistas; pós em nutrição clínica; atendimento online e presencial; aceita Unimed." />

@@ -18,6 +18,8 @@ export type LandingContent = {
   about_title: string;
   about_text: string;
   credentials: string[];
+  /** Especialidades tiradas dos dados reais (Google, Instagram, informações do cliente) */
+  specialties?: string[];
   services_title: string;
   services: { title: string; text: string }[];
   steps: { title: string; text: string }[];
@@ -87,7 +89,11 @@ export function whatsappLink(d: LandingData) {
   return `https://wa.me/${full}?text=${encodeURIComponent(d.content.whatsapp_message || "Olá! Vim pelo site e gostaria de mais informações.")}`;
 }
 
-export function renderLanding(d: LandingData, opts: { url?: string; preview?: boolean } = {}): string {
+/** Horário de exemplo, só na prévia, quando o cliente não tem horário no Google nem informado (confirmar com ele). */
+const SAMPLE_HOURS = "Seg a sex: 8h às 18h (exemplo, confirmar)";
+
+/** opts.preview = link de prévia (faixa + sem indexar); opts.sample = mostra exemplo no que falta (prévia e Studio). */
+export function renderLanding(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean } = {}): string {
   const c = d.content;
   const f = FONTS[c.fonts] ?? FONTS.fraunces;
   const primary = hex(c.colors?.primary, "#2f5d50");
@@ -200,6 +206,9 @@ section{padding:clamp(72px,10vw,120px) 0}
 .contact dl{display:grid;gap:22px;margin-top:28px}
 .contact dt{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .contact dd{margin-top:4px;font-size:17px}
+.contact dd.sample{color:var(--muted);font-style:italic}
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.tags span{background:var(--soft);color:var(--ink);font-size:14px;font-weight:500;padding:7px 14px;border-radius:999px}
 .contact iframe{width:100%;height:360px;border:0;border-radius:20px;filter:grayscale(.2)}
 footer{border-top:1px solid var(--line);padding:32px 0;font-size:14px;color:var(--muted)}
 footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
@@ -233,7 +242,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 
   const contactRows = [
     d.address && `<div><dt>Endereço</dt><dd>${esc(d.address)}</dd></div>`,
-    d.hours && `<div><dt>Horário</dt><dd>${esc(d.hours)}</dd></div>`,
+    (d.hours || opts.sample) && `<div><dt>Horário</dt><dd${d.hours ? "" : ' class="sample"'}>${esc(d.hours || SAMPLE_HOURS)}</dd></div>`,
     d.whatsapp && `<div><dt>WhatsApp</dt><dd><a href="${esc(wa)}" target="_blank" rel="noopener">${esc(d.whatsapp)}</a></dd></div>`,
     ig && `<div><dt>Instagram</dt><dd><a href="https://instagram.com/${esc(ig)}" target="_blank" rel="noopener">@${esc(ig)}</a></dd></div>`,
   ].filter(Boolean);
@@ -258,6 +267,7 @@ ${heroHtml}
 <section class="about" id="sobre"><div class="wrap">
 ${about ? `<img class="reveal" src="${esc(about)}" alt="${esc(d.name)}">` : ""}
 <div class="reveal"><span class="eyebrow">Sobre</span><h2>${esc(c.about_title)}</h2><p>${esc(c.about_text)}</p>
+${c.specialties?.length ? `<div class="tags">${c.specialties.map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
 ${c.credentials?.length ? `<ul class="creds">${c.credentials.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
 ${d.registry ? `<p style="font-size:14px;margin-top:22px">${esc(d.registry)}</p>` : ""}</div></div></section>
 <section class="services" id="servicos"><div class="wrap">
