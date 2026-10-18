@@ -10,6 +10,7 @@ import { isDemo, resetDemo, supabase } from "../lib/api";
 import { useSettings, useTable } from "../lib/hooks";
 import { Avatar } from "./bits";
 import PageErrorBoundary from "./PageErrorBoundary";
+import { AppInstall } from "./AppInstall";
 
 type Item = { to: string; label: string; icon: typeof Bot; end?: boolean; count?: "approvals" | "inbox" };
 const GROUPS: { label?: string; items: Item[] }[] = [
@@ -171,6 +172,7 @@ function Footer({ onSignOut }: { onSignOut: () => void }) {
           <span className="font-medium text-foreground">Modo demonstração.</span> Dados de exemplo, salvos só neste navegador.
         </div>
       )}
+      <AppInstall />
       <button onClick={onSignOut} className="flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] text-foreground/70 hover:bg-secondary hover:text-foreground">
         <LogOut className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
         {isDemo ? "Restaurar exemplos" : "Sair"}

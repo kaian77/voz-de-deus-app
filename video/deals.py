@@ -221,12 +221,10 @@ def render(p, brief, user_id, row_id):
 # ------------------------------------------------------------------------------------------------ limpeza
 
 def cleanup():
-    """Vídeo postado/pulado sai do storage depois de 1 dia; pronto e esquecido há 10 dias também (vira 'pulado')."""
-    day = (now() - dt.timedelta(days=1)).isoformat()
-    old = (now() - dt.timedelta(days=10)).isoformat()
-    rest("PATCH", f"deals?status=eq.ready&created_at=lt.{urllib.parse.quote(old)}", {"status": "skipped"})
-    rows = rest("GET", f"deals?status=in.(posted,skipped,failed)&video_url=not.is.null&updated_at=lt.{urllib.parse.quote(day)}"
-                       f"&select=id,video_url,thumb_url&limit=200") or []
+    """Todo vídeo sai do storage 24 h depois de feito (postado ou não): o que não foi postado vira 'pulado'."""
+    day = urllib.parse.quote((now() - dt.timedelta(hours=23)).isoformat())  # 23 h: a rodada diária pega os da véspera
+    rest("PATCH", f"deals?status=in.(ready,rendering)&created_at=lt.{day}", {"status": "skipped"})
+    rows = rest("GET", f"deals?video_url=not.is.null&created_at=lt.{day}&select=id,video_url,thumb_url&limit=200") or []
     marker = "/storage/v1/object/public/media/"
     paths = [u.split(marker, 1)[1] for r in rows for u in (r.get("video_url"), r.get("thumb_url")) if u and marker in u]
     if paths:
@@ -279,6 +277,9 @@ def main():
             log(f"    ✗ {e}")
             rest("PATCH", f"deals?id=eq.{row['id']}", {"status": "failed", "error": str(e)[:500], "updated_at": now().isoformat()})
     log(f"✓ {made} achadinho(s) pronto(s)")
+    if made:
+        rest("POST", "notifications", {"user_id": user_id, "title": f"🛍️ {made} achadinho(s) pronto(s) para postar",
+                                       "body": "Os vídeos somem em 24 h. Baixe e poste no Shopee Vídeo.", "url": "/studio/achadinhos"})
 
 
 if __name__ == "__main__":
