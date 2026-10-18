@@ -101,6 +101,7 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
     yt_channels: [],
     yt_videos: [],
     clip_sources: [],
+    deals: [],
     strategies: [],
     site_reviews: [],
     brand_settings: [
