@@ -53,6 +53,16 @@ def log(*a):
     print(*a, flush=True)
 
 
+def track_ai(source, data):
+    """Consumo da IA na página Uso do Studio (nunca atrapalha o vídeo)."""
+    try:
+        u = data.get("usage") or {}
+        rest("POST", "ai_usage", {"source": source, "model": data.get("model"), "input_tokens": u.get("input_tokens") or 0,
+                                  "output_tokens": u.get("output_tokens") or 0})
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def now():
     return dt.datetime.now(dt.timezone.utc)
 
@@ -141,7 +151,7 @@ def aff_link(product_link, itemid):
 def write_brief(p):
     """Claude escreve o texto do vídeo e a legenda (saída estruturada = JSON garantido)."""
     key = os.environ["ANTHROPIC_API_KEY"]
-    model = os.environ.get("CLAUDE_MODEL") or "claude-sonnet-5-5"
+    model = os.environ.get("CLAUDE_MODEL") or "claude-opus-5-5"
     schema = {
         "type": "object", "additionalProperties": False,
         "required": ["name", "hook", "hook_sub", "features", "title", "subtitle", "cta", "caption"],
@@ -172,6 +182,7 @@ def write_brief(p):
     try:
         with urllib.request.urlopen(req, timeout=180) as r:
             data = json.loads(r.read())
+        track_ai("achadinhos", data)
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"IA (Anthropic) {e.code}: {e.read().decode(errors='replace')[:300]}") from None
     for block in data.get("content", []):

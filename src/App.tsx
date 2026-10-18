@@ -19,6 +19,7 @@ import Landings from "./studio/pages/Landings";
 import YouTube from "./studio/pages/YouTube";
 import Clips from "./studio/pages/Clips";
 import Deals from "./studio/pages/Deals";
+import Usage from "./studio/pages/Usage";
 import Accounts from "./studio/pages/Accounts";
 import ClaudeApi from "./studio/pages/ClaudeApi";
 import Messages from "./studio/pages/Messages";
@@ -64,6 +65,7 @@ const App = () => (
             <Route path="youtube" element={<YouTube />} />
             <Route path="cortes" element={<Clips />} />
             <Route path="achadinhos" element={<Deals />} />
+            <Route path="uso" element={<Usage />} />
             <Route path="contas" element={<Accounts />} />
             <Route path="claude" element={<ClaudeApi />} />
           </Route>
