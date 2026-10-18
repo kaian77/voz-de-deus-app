@@ -5,6 +5,7 @@ import { ml, mlTokenFor } from "./mercadolivre.ts";
 import { shopee, shopeeTokenFor } from "./shopee.ts";
 import { ns, orderSummary, storeFor } from "./nuvemshop.ts";
 import { waSendText, wahaChatIdFor, wahaSendText } from "./whatsapp.ts";
+import { notify } from "./push.ts";
 
 export type SaleChannel = "mercadolivre" | "shopee" | "nuvemshop";
 type Sale = { channel: SaleChannel; id: string; number: string; items: string[]; total?: string; buyer?: string };
@@ -122,6 +123,8 @@ export async function runSaleAlerts(db: SupabaseClient) {
         // Registra antes de mandar: se o cron rodar duas vezes, a segunda não repete
         const { error: dup } = await db.from("sale_alerts").insert({ user_id: u.user_id, channel, order_id: sale.id, summary: text });
         if (dup) continue;
+        await notify(db, u.user_id, `🛒 Nova venda — ${LABEL[channel]}`,
+          [sale.total, sale.items[0]].filter(Boolean).join(" · "), "/studio/pedidos").catch(() => {});
         const result = await sendWhatsAppTo(db, u.user_id, u.sale_alert_phone, text).then(() => null, (e) => (e instanceof Error ? e.message : String(e)));
         await db.from("sale_alerts").update(result ? { error: result } : { sent_at: new Date().toISOString() })
           .eq("user_id", u.user_id).eq("channel", channel).eq("order_id", sale.id);

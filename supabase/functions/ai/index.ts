@@ -20,6 +20,7 @@ import { brasiliaNow, digestMessage, salesSummary } from "../_shared/daily.ts";
 import { runVideosFor, videoAutopilotStatus } from "../_shared/video-autopilot.ts";
 import { sendWhatsAppTo } from "../_shared/sale-alerts.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
+import { notify, pushPublicKey, sendPendingPush } from "../_shared/push.ts";
 
 const SYSTEM = (brand: string) =>
   `Você é estrategista de conteúdo e social media sênior, especialista em Instagram e TikTok no Brasil. ` +
@@ -117,6 +118,23 @@ Deno.serve(async (req) => {
         "low",
       );
       return json({ ...parsed, url: drive });
+    }
+    if (action === "push_key") return json({ key: await pushPublicKey(db) });
+    if (action === "push_subscribe") {
+      // Celular/computador que ativou os avisos do Studio (Web Push)
+      const sub = input.subscription as { endpoint?: string; keys?: { p256dh?: string; auth?: string } } | undefined;
+      if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) throw new HttpError(400, "Inscrição inválida");
+      const { error } = await db.from("push_subscriptions").upsert({
+        user_id: userId, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth,
+        user_agent: String(input.user_agent ?? "").slice(0, 200) || null,
+      }, { onConflict: "endpoint" });
+      if (error) throw new HttpError(500, error.message);
+      await notify(db, userId, "🔔 Avisos ligados", "Você vai receber aqui as vendas, os clientes que pedem atendimento e os vídeos prontos.");
+      return json({ ok: true, sent: await sendPendingPush(db) });
+    }
+    if (action === "push_unsubscribe") {
+      await db.from("push_subscriptions").delete().eq("user_id", userId).eq("endpoint", String(input.endpoint ?? ""));
+      return json({ ok: true });
     }
     if (action === "deals_more") {
       // Achadinhos: mais 3 vídeos de produtos da Shopee agora (workflow "Achadinhos", video/deals.py)

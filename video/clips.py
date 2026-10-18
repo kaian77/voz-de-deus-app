@@ -517,6 +517,17 @@ def process(source):
                 made += 1
             drop(video)
     patch_source(sid, status="done", clips_made=(source.get("clips_made") or 0) + made)
+    if made:
+        notify_owner(source["user_id"], f"✂️ {made} corte(s) novo(s) — {source['campaign']}")
+
+
+def notify_owner(user_id, title):
+    """Aviso no celular (Studio instalado como app): o cron do Studio envia."""
+    try:
+        rest("POST", "notifications", {"user_id": user_id, "title": title,
+                                       "body": "Depois de publicado, copie o link e envie na campanha.", "url": "/studio/cortes"})
+    except Exception as e:  # noqa: BLE001 — aviso não derruba o corte
+        log(f"  aviso: {e}")
 
 
 def redo_rows():
@@ -563,6 +574,7 @@ def process_redos():
                     clip["file"] = fid
                     log(f"  novo corte: {clip['screen_title']}")
                     make_clip(source, channel, clip, video, words, logo, work, when, f"{sid}-{fid}-r{row['id'][:8]}", row["id"])
+                notify_owner(source["user_id"], f"✂️ {len(moments)} corte(s) refeito(s) — {source['campaign']}")
                 for row in rows[len(moments):]:
                     rest("PATCH", f"yt_videos?id=eq.{row['id']}", {"status": "failed", "error": "a IA não achou outro momento bom"})
         except Exception as e:
