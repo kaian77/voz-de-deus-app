@@ -55,7 +55,7 @@ jobs:
         if: steps.queue.outputs.status == 'queued'
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0" "faster-whisper>=1.1.1" "opencv-python-headless>=4.9" "gdown>=5.2"
+          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0" "faster-whisper>=1.1.1" "opencv-python-headless>=4.9,<5" "gdown>=5.2"
           mkdir -p ~/.fonts && cp video/engine/assets/fonts/*.ttf ~/.fonts/ && fc-cache -f >/dev/null
 
       - name: Modelo de transcrição (cache)
