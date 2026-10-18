@@ -254,6 +254,7 @@ def pick_moments(lines, n, campaign, rules, language, extra=""):
     try:
         with urllib.request.urlopen(req, timeout=600) as r:
             data = json.loads(r.read())
+        track_ai("cortes", data)
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")[:300]
         raise RuntimeError(f"IA (Anthropic) {e.code}: {detail}") from None
@@ -519,6 +520,16 @@ def process(source):
     patch_source(sid, status="done", clips_made=(source.get("clips_made") or 0) + made)
     if made:
         notify_owner(source["user_id"], f"✂️ {made} corte(s) novo(s) — {source['campaign']}")
+
+
+def track_ai(source, data):
+    """Consumo da IA na página Uso do Studio (nunca atrapalha o vídeo)."""
+    try:
+        u = data.get("usage") or {}
+        rest("POST", "ai_usage", {"source": source, "model": data.get("model"), "input_tokens": u.get("input_tokens") or 0,
+                                  "output_tokens": u.get("output_tokens") or 0})
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def notify_owner(user_id, title):
