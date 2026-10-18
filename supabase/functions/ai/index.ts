@@ -118,6 +118,10 @@ Deno.serve(async (req) => {
       );
       return json({ ...parsed, url: drive });
     }
+    if (action === "deals_more") {
+      // Achadinhos: mais 3 vídeos de produtos da Shopee agora (workflow "Achadinhos", video/deals.py)
+      return json({ started: await dispatchRender("deals.yml") });
+    }
     if (action === "clips_add_source") {
       // Cortes: nova fonte (pasta/arquivo do Drive de uma campanha) entra na fila do workflow "Cortes"; com id, só atualiza os dados salvos
       const { data: channel } = await db.from("yt_channels").select("id").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();
