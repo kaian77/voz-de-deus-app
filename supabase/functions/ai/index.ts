@@ -130,19 +130,22 @@ Deno.serve(async (req) => {
         hashtags: String(input.hashtags ?? "").trim().slice(0, 300) || null,
         credit: String(input.credit ?? "").trim().slice(0, 200) || null,
         rules: String(input.rules ?? "").trim().slice(0, 3000) || null,
+        mirror_url: /^https?:\/\//.test(String(input.mirror_url ?? "").trim()) ? String(input.mirror_url).trim() : null,
         clips_wanted: Math.min(12, Math.max(1, Number(input.clips_wanted) || 6)),
         per_day: Math.min(6, Math.max(1, Number(input.per_day) || 3)),
       };
       if (input.id) {
-        const { data: old } = await db.from("clip_sources").select("status").eq("id", String(input.id)).eq("user_id", userId).maybeSingle();
+        const { data: old } = await db.from("clip_sources").select("status, mirror_url").eq("id", String(input.id)).eq("user_id", userId).maybeSingle();
         if (!old) throw new HttpError(404, "Campanha não encontrada");
         // Campanha que falhou volta para a fila ao salvar (botão "Tentar de novo")
         const retry = old.status === "failed";
+        // Link reserva novo: roda já (cortes esperando o Drive da campanha liberar)
+        const mirrored = !!fields.mirror_url && fields.mirror_url !== old.mirror_url;
         const { data, error } = await db.from("clip_sources")
           .update({ ...fields, ...(retry ? { status: "queued", error: null } : {}), updated_at: new Date().toISOString() })
           .eq("id", String(input.id)).eq("user_id", userId).select().single();
         if (error || !data) throw new HttpError(500, error?.message ?? "Não salvou");
-        return json({ ...data, started: retry ? await dispatchRender("clips.yml") : false, updated: true });
+        return json({ ...data, started: retry || mirrored ? await dispatchRender("clips.yml") : false, updated: true });
       }
       const { data, error } = await db.from("clip_sources").insert({ user_id: userId, ...fields }).select().single();
       if (error) throw new HttpError(500, error.message);

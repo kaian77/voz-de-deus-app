@@ -434,6 +434,7 @@ export interface ClipSource {
   hashtags: string | null;
   credit: string | null;
   rules: string | null;
+  mirror_url: string | null;
   clips_wanted: number;
   per_day: number;
   status: "queued" | "processing" | "done" | "failed";
