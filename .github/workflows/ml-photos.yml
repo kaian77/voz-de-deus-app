@@ -6,7 +6,7 @@ name: Fotos do Mercado Livre
 on:
   workflow_dispatch:
   schedule:
-    - cron: "41 */3 * * *"
+    - cron: "41 9,21 * * *" # rede de segurança 2x/dia (a sincronização dispara na hora)
 
 # Uma rodada nova substitui a anterior (as fotos que ela tinha pego voltam para a fila)
 concurrency:

@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
@@ -70,6 +72,21 @@ export default function Usage() {
     queryFn: () => api.invoke<Report>("ai", { action: "usage_report" }),
   });
 
+  const [optimizing, setOptimizing] = useState(false);
+  const optimize = async () => {
+    if (!confirm("Apagar do Supabase os vídeos com mais de 3 dias que já foram usados? Posts agendados, em rascunho ou esperando aprovação ficam intactos.")) return;
+    setOptimizing(true);
+    try {
+      const r = await api.invoke<{ files: number }>("ai", { action: "usage_optimize", days: 3 });
+      toast.success(r.files ? `${r.files} arquivo(s) antigos apagados do Supabase` : "Nada antigo para apagar agora");
+      refetch();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
   const minutes = Object.values(data?.actions ?? {}).reduce((s, w) => s + w.minutes, 0);
   const storage = (data?.storage ?? []).reduce((s, f) => s + f.bytes, 0);
   const aiCost = (data?.ai ?? []).reduce((s, a) => s + cost(a.model, a.input, a.output), 0);
@@ -84,7 +101,10 @@ export default function Usage() {
       <PageHeader
         title="Uso"
         description="Quanto o Studio está gastando neste mês: tempo do GitHub Actions (onde os vídeos são feitos), espaço no Supabase e a IA."
-        actions={<Button variant="outline" onClick={() => refetch()} disabled={isFetching}>{isFetching ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}Atualizar</Button>}
+        actions={<>
+          <Button onClick={optimize} disabled={optimizing}>{optimizing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />}Otimizar agora</Button>
+          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>{isFetching ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-1.5 h-4 w-4" />}Atualizar</Button>
+        </>}
       />
       {isLoading ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Calculando…</p>

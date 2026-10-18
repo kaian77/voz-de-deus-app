@@ -9,7 +9,7 @@ import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } f
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
 import { uniqueSlug, writeLanding } from "../_shared/landing.ts";
-import { removeStudioFiles } from "../_shared/storage-cleanup.ts";
+import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, ytDeleteVideo, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
@@ -149,6 +149,11 @@ Deno.serve(async (req) => {
         if (runs.length < 100) break;
       }
       return json({ since, ...usage, actions, actions_error: actionsError });
+    }
+    if (action === "usage_optimize") {
+      // Botão "Otimizar agora" (Studio → Uso): tira do storage os vídeos antigos que já não servem
+      const days = Math.min(30, Math.max(1, Number(input.days) || 3));
+      return json(await optimizeStorage(db, days));
     }
     if (action === "push_key") return json({ key: await pushPublicKey(db) });
     if (action === "push_subscribe") {
