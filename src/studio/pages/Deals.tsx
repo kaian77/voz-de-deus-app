@@ -64,7 +64,7 @@ export default function Deals() {
           {tab === "todo" ? "Os vídeos novos saem todo dia às 7h47. Para fazer agora, clique em Gerar mais 3." : "Depois de postar, marque o vídeo como postado."}
         </EmptyState>
       ) : (
-        <Panel title="Como postar" description="1. Baixar vídeo · 2. App da Shopee → Vídeo → + → escolha o vídeo · 3. Adicionar produto (procure pelo nome) · 4. Cole a legenda e publique." bodyClassName="p-0">
+        <Panel title="Como postar" description="1. Baixar vídeo · 2. App da Shopee → Vídeo → + → escolha o vídeo · 3. Cole a legenda · 4. Adicionar produto: toque em Nome do produto aqui e cole na busca · 5. Ligue o rótulo de IA e poste." bodyClassName="p-0">
           <div className="divide-y">
             {list.map((d) => (
               <div key={d.id} className="flex gap-3 px-4 py-3">
@@ -80,7 +80,7 @@ export default function Deals() {
                     {d.discount ? <span className="line-through">{brl(d.price)}</span> : null} <span className="font-medium text-foreground">{brl(d.sale_price)}</span>
                     {d.discount ? ` · -${d.discount}%` : ""} · ⭐ {d.rating ?? "-"} · {d.likes ?? 0} curtidas · {relativeTime(d.created_at)}
                   </p>
-                  <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">Produto para marcar: {d.title}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">Produto para marcar: <span className="text-foreground">{d.title}</span>{d.shop_name ? ` · loja ${d.shop_name}` : ""}</p>
                   {d.status === "rendering" && <p className="flex items-center gap-1 text-xs text-amber-600"><Loader2 className="h-3 w-3 animate-spin" />Fazendo o vídeo…</p>}
                   <div className={cn("mt-1.5 flex flex-wrap gap-2", d.status === "rendering" && "opacity-50")}>
                     {d.video_url && (
@@ -88,6 +88,7 @@ export default function Deals() {
                         <a href={d.video_url} download={`achadinho-${d.itemid}.mp4`} target="_blank" rel="noreferrer"><Download className="mr-1 h-3.5 w-3.5" />Baixar vídeo</a>
                       </Button>
                     )}
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => copy(d.title, "Nome do produto")}><Copy className="mr-1 h-3.5 w-3.5" />Nome do produto</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => copy(d.caption, "Legenda")}><Copy className="mr-1 h-3.5 w-3.5" />Legenda</Button>
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => copy(d.aff_link, "Link de afiliado")}><Copy className="mr-1 h-3.5 w-3.5" />Link de afiliado</Button>
                     {d.product_link && (
