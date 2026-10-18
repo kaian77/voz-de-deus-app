@@ -33,6 +33,10 @@ from worker import URL, rest
 import youtube as yt
 
 VIDEO_EXT = (".mp4", ".mov", ".mkv", ".m4v", ".webm")
+# Episódios baixados ficam guardados no cache do workflow: o Drive de campanha popular bloqueia downloads
+# ("Too many users have viewed or downloaded this file") e o Refazer não precisa baixar de novo.
+CACHE = os.environ.get("CLIPS_CACHE") or ""
+DRIVE_LIMIT = "Too many users"
 SKIP_NAMES = re.compile(r"trailer|teaser|coming[\s_-]*soon|promo|sneak[\s_-]*peek", re.I)
 NOT_VIDEO = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".pdf", ".txt", ".doc", ".docx", ".srt", ".vtt", ".zip", ".psd", ".ai", ".mp3", ".wav")
 W, H, FPS = 1080, 1920, 30
@@ -81,13 +85,51 @@ def drive_files(url, folder):
 def download(file_id, name, folder):
     import gdown
 
-    out = os.path.join(folder, re.sub(r"[^\w.-]", "_", name) or "video.mp4")
-    if not out.lower().endswith(VIDEO_EXT):
-        out += ".mp4"
-    got = gdown.download(id=file_id, output=out, quiet=True, use_cookies=False)
+    if CACHE:
+        os.makedirs(CACHE, exist_ok=True)
+        kept = os.path.join(CACHE, f"{file_id}.mp4")
+        if os.path.exists(kept) and os.path.getsize(kept) > 100_000:
+            os.utime(kept)
+            log(f"  {name}: já estava guardado (não baixei do Drive)")
+            return kept
+        out = kept
+    else:
+        out = os.path.join(folder, re.sub(r"[^\w.-]", "_", name) or "video.mp4")
+        if not out.lower().endswith(VIDEO_EXT):
+            out += ".mp4"
+    try:
+        got = gdown.download(id=file_id, output=out, quiet=True, use_cookies=False)
+    except Exception as e:
+        if os.path.exists(out):
+            os.remove(out)
+        if DRIVE_LIMIT in str(e):
+            raise RuntimeError(f"{DRIVE_LIMIT}: o Drive da campanha bloqueou downloads por algumas horas "
+                               "(muita gente baixando o mesmo episódio). Tento de novo sozinho na próxima rodada.") from None
+        raise
     if not got or not os.path.exists(out) or os.path.getsize(out) < 100_000:
+        if os.path.exists(out):
+            os.remove(out)
         raise RuntimeError(f"não consegui baixar {name} do Drive (confira se está como 'qualquer pessoa com o link')")
     return out
+
+
+def drop(video):
+    """Apaga o vídeo da pasta de trabalho (o guardado no cache fica para a próxima)."""
+    if not (CACHE and os.path.abspath(video).startswith(os.path.abspath(CACHE))):
+        os.remove(video)
+
+
+def prune_cache(days=5, max_gb=6):
+    """Cache do workflow tem limite: tira episódios parados há dias e, se passar do tamanho, os mais antigos."""
+    if not CACHE or not os.path.isdir(CACHE):
+        return
+    files = sorted((os.path.join(CACHE, f) for f in os.listdir(CACHE)), key=os.path.getmtime, reverse=True)
+    old = now().timestamp() - days * 86400
+    total = 0
+    for f in files:
+        total += os.path.getsize(f)
+        if os.path.getmtime(f) < old or total > max_gb * 1024 ** 3:
+            os.remove(f)
 
 
 def duration(video):
@@ -443,7 +485,7 @@ def process(source):
             total = duration(video)
             if total < 180 and len(files) > 1:  # vinheta/teaser curto: não vale cortar se tem episódio
                 log(f"  {name} tem só {total:.0f}s, pulando")
-                os.remove(video)
+                drop(video)
                 continue
             if total < 25:
                 raise RuntimeError(f"{name} não é um vídeo que dá para cortar ({total:.0f}s)")
@@ -457,7 +499,7 @@ def process(source):
                 log(f"  corte {i + 1}/{len(moments)}: {clip['screen_title']} ({clip['end'] - clip['start']:.0f}s)")
                 make_clip(source, channel, clip, video, words, logo, work, when, f"{sid}-{fid}-{i}")
                 made += 1
-            os.remove(video)
+            drop(video)
     patch_source(sid, status="done", clips_made=(source.get("clips_made") or 0) + made)
 
 
@@ -509,7 +551,9 @@ def process_redos():
                     rest("PATCH", f"yt_videos?id=eq.{row['id']}", {"status": "failed", "error": "a IA não achou outro momento bom"})
         except Exception as e:
             log(f"  ✗ {e}")
-            rest("PATCH", f"yt_videos?id=in.({ids})&status=in.(redo,rendering)", {"status": "failed", "error": f"Refazer: {e}"[:500]})
+            # Drive bloqueado por excesso de downloads: fica na fila e a próxima rodada (até 6 h) tenta de novo
+            status = "redo" if DRIVE_LIMIT in str(e) else "failed"
+            rest("PATCH", f"yt_videos?id=in.({ids})&status=in.(redo,rendering)", {"status": status, "error": f"Refazer: {e}"[:500]})
 
 
 def main():
@@ -523,7 +567,8 @@ def main():
             process(source)
         except Exception as e:
             log(f"  ✗ {e}")
-            patch_source(source["id"], status="failed", error=str(e)[:500])
+            patch_source(source["id"], status="queued" if DRIVE_LIMIT in str(e) else "failed", error=str(e)[:500])
+    prune_cache()
 
 
 if __name__ == "__main__":

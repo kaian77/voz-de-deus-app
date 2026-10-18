@@ -144,9 +144,10 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label className="text-xs text-muted-foreground">Estilo da animação</Label>
-          <Select value={form.style ?? "parallax"} onValueChange={(v) => setForm({ ...form, style: v as YtChannel["style"] })}>
+          <Select value={form.style ?? "cinematic"} onValueChange={(v) => setForm({ ...form, style: v as YtChannel["style"] })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
+              <SelectItem value="cinematic">Cinemático (cena de filme realista, câmera lenta)</SelectItem>
               <SelectItem value="parallax">Animação 2.5D (personagem se mexe sobre o fundo)</SelectItem>
               <SelectItem value="whiteboard">Desenho à mão (mão desenha, papel amassa)</SelectItem>
               <SelectItem value="classic">Clássico (zoom nas imagens)</SelectItem>

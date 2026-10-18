@@ -391,7 +391,7 @@ export interface YtChannel {
   enabled: boolean;
   language: "pt" | "en" | "es";
   mode: "bible" | "clips";
-  style: "parallax" | "whiteboard" | "classic";
+  style: "parallax" | "whiteboard" | "classic" | "cinematic";
   niche: string;
   shorts_per_day: number;
   long_per_week: number;
