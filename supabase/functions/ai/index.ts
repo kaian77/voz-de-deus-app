@@ -8,7 +8,7 @@ import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStor
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
-import { uniqueSlug, writeLanding } from "../_shared/landing.ts";
+import { importClientData, uniqueSlug, writeLanding } from "../_shared/landing.ts";
 import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, ytDeleteVideo, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
@@ -254,13 +254,28 @@ Deno.serve(async (req) => {
       await db.from("yt_channels").update({ trends, trends_at: new Date().toISOString(), error: null }).eq("id", channel.id);
       return json({ trends });
     }
+    if (action === "landing_import") {
+      // Puxa os dados reais do cliente (Instagram + Google Maps) para a página
+      const { data: page } = await db.from("landing_pages").select("*").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
+      if (!page) throw new HttpError(404, "Página não encontrada");
+      const patch = await importClientData(db, page);
+      const { data, error } = await db.from("landing_pages").update(patch).eq("id", page.id).select().single();
+      if (error) throw new HttpError(500, error.message);
+      return json(data);
+    }
     if (action === "landing_generate" || action === "landing_publish") {
       // Landing page de cliente (Renda extra): a IA escreve o conteúdo; publicar dá o endereço /p/<slug>
       const { data: page } = await db.from("landing_pages").select("*").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
       if (!page) throw new HttpError(404, "Página não encontrada");
       const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (action === "landing_generate") {
-        if (!page.photos?.length) throw new HttpError(400, "Envie pelo menos uma foto");
+        // Primeira vez: puxa antes os dados reais do Instagram/Google (fotos, horário, bio)
+        if (!page.imported && (page.instagram || page.lead_id)) {
+          const imported = await importClientData(db, page);
+          await db.from("landing_pages").update(imported).eq("id", page.id);
+          Object.assign(page, imported);
+        }
+        if (!page.photos?.length) throw new HttpError(400, "Não achei fotos no Instagram/Google; envie pelo menos uma");
         patch.content = await writeLanding(input.fresh ? { ...page, content: null } : page, input.instructions ? String(input.instructions).slice(0, 1500) : undefined);
       } else {
         if (!page.content) throw new HttpError(400, "Gere a página antes de publicar");

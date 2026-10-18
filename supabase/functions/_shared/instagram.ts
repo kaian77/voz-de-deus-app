@@ -231,3 +231,31 @@ export async function igBusinessDiscovery(username: string) {
   const bd = data.business_discovery;
   return { ...bd, media: bd.media?.data ?? [] };
 }
+
+/** Perfil público de outra conta para a landing page de um cliente: bio e fotos dos posts.
+ *  Business Discovery quando configurado (conta profissional); senão a página pública do Instagram (pode recusar). */
+export async function igPublicProfile(username: string): Promise<{ name?: string; bio?: string; category?: string; picture?: string; photos: string[] }> {
+  if (businessDiscoveryEnabled()) {
+    const url = new URL(`https://graph.facebook.com/${version()}/${env("META_FB_IG_USER_ID")}`);
+    url.searchParams.set("fields", `business_discovery.username(${username}){name,biography,profile_picture_url,media.limit(18){media_type,media_url,thumbnail_url}}`);
+    url.searchParams.set("access_token", env("META_FB_ACCESS_TOKEN"));
+    const data = await (await fetch(url)).json().catch(() => ({}));
+    const bd = data.business_discovery;
+    if (bd) {
+      const photos = (bd.media?.data ?? []).map((m: Record<string, string>) => (m.media_type === "VIDEO" ? m.thumbnail_url : m.media_url)).filter(Boolean);
+      return { name: bd.name, bio: bd.biography, picture: bd.profile_picture_url, photos };
+    }
+  }
+  const res = await fetch(`https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`, {
+    headers: {
+      "x-ig-app-id": "936619743392459",
+      "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      Accept: "application/json",
+    },
+  });
+  const user = res.ok ? (await res.json().catch(() => null))?.data?.user : null;
+  if (!user) throw new Error(res.status === 404 ? "perfil não encontrado" : "o Instagram não liberou o perfil agora");
+  const edges = user.edge_owner_to_timeline_media?.edges ?? [];
+  const photos = edges.map((e: { node: Record<string, string> }) => e.node.display_url || e.node.thumbnail_src).filter(Boolean);
+  return { name: user.full_name, bio: user.biography, category: user.category_name ?? user.business_category_name, picture: user.profile_pic_url_hd, photos };
+}

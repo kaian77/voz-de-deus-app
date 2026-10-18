@@ -29,5 +29,5 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // Visita contada sem travar a resposta
   fetch(`${URL_}/rest/v1/rpc/landing_view`, { method: "POST", headers, body: JSON.stringify({ p_slug: slug }) }).catch(() => {});
   const host = req.headers["x-forwarded-host"] ?? req.headers.host ?? "voz-de-deus-app.vercel.app";
-  send(res, 200, renderLanding(page, { url: `https://${host}/p/${slug}`, preview: page.status === "preview" }), "public, s-maxage=60, stale-while-revalidate=600");
+  send(res, 200, renderLanding(page, { url: `https://${host}/p/${slug}`, preview: page.status === "preview", sample: page.status === "preview" }), "public, s-maxage=60, stale-while-revalidate=600");
 }

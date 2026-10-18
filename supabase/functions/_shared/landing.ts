@@ -3,6 +3,8 @@
 import { z } from "npm:zod@4";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { aiEnabled, generateJSON } from "./claude.ts";
+import { igPublicProfile } from "./instagram.ts";
+import { dispatchRender } from "./product-video.ts";
 import { HttpError } from "./util.ts";
 
 const Item = z.object({ title: z.string(), text: z.string() });
@@ -27,6 +29,9 @@ const Content = z.object({
   about_title: z.string(),
   about_text: z.string().describe("2 parágrafos curtos, em primeira pessoa se for profissional autônomo, sem exagero"),
   credentials: z.array(z.string()).describe("3 a 5 itens curtos (formação, abordagem, público) SÓ com o que foi informado; vazio se nada foi informado"),
+  specialties: z.array(z.string()).describe(
+    "Especialidades/áreas de atuação em 1 a 4 palavras cada (0 a 8), tiradas SÓ do que foi informado (categoria do Google, bio do Instagram, serviços). Nada informado = lista vazia",
+  ),
   services_title: z.string(),
   services: z.array(Item).describe("3 a 6 serviços com 1 frase cada"),
   steps: z.array(Item).describe("Exatamente 3 passos de como funciona o atendimento"),
@@ -47,12 +52,14 @@ const SYSTEM =
   `frases curtas. Pense no que um cliente dessa área realmente pergunta e quer, como as melhores landing pages do nicho fazem ` +
   `(promessa clara no topo, prova, serviços, como funciona, dúvidas, chamada para o WhatsApp).\n\n` +
   `Regras:\n` +
-  `- Nunca invente fatos: formação, anos de experiência, número de pacientes, prêmios, preços, convênios, depoimentos ou resultados garantidos. ` +
+  `- Use só dados verdadeiros da empresa (os informados, a bio do Instagram e o Google Maps). ` +
+  `Nunca invente fatos: formação, anos de experiência, número de pacientes, prêmios, preços, convênios, depoimentos ou resultados garantidos. ` +
   `Use só o que foi informado; o resto escreva de forma que seja verdade para qualquer profissional sério da área.\n` +
   `- Saúde (medicina, nutrição, psicologia, odonto, fisio): siga as regras dos conselhos — sem promessa de resultado, sem antes/depois, sem "o melhor".\n` +
   `- Cores: tire do logo ou da identidade que aparece nas fotos. Sem logo, escolha uma cor sóbria que combine com a área e com as fotos ` +
   `(nada de roxo/azul neon genérico). A primária precisa de contraste para texto branco no botão.\n` +
-  `- Olhe as fotos: escolha a melhor para o topo e outra para o "Sobre".`;
+  `- Serviços e especialidades: só os que aparecem nas informações; se houver poucos, fique nos que a área sempre oferece, sem nomes de procedimentos específicos.\n` +
+  `- Olhe as fotos: escolha a melhor para o topo e outra para o "Sobre" (evite print de texto, cardápio, arte com letras e foto ruim).`;
 
 export async function writeLanding(page: Record<string, unknown>, instructions?: string): Promise<LandingContent> {
   if (!aiEnabled()) throw new HttpError(400, "Configure a chave da Claude para gerar a página");
@@ -66,7 +73,7 @@ export async function writeLanding(page: Record<string, unknown>, instructions?:
     page.hours && `Horário: ${page.hours}`,
     page.instagram && `Instagram: ${page.instagram}`,
     page.rating && `Nota no Google: ${page.rating} (${page.reviews ?? 0} avaliações)`,
-    page.notes && `Informações do cliente (serviços, formação, diferenciais):\n${page.notes}`,
+    page.notes && `Informações do cliente (serviços, formação, diferenciais, bio do Instagram e Google Maps):\n${page.notes}`,
     page.logo && `O logo é a última imagem enviada.`,
     `Fotos enviadas: ${photos.length} (índices 0 a ${Math.max(0, photos.length - 1)}).`,
   ].filter(Boolean).join("\n");
@@ -75,7 +82,7 @@ export async function writeLanding(page: Record<string, unknown>, instructions?:
   const images = [...photos.slice(0, 6), ...(page.logo ? [String(page.logo)] : [])];
   const out = await generateJSON(Content, SYSTEM, `Crie o conteúdo da landing page.\n\n${info}${previous}${ask}`, "medium", images);
   const max = Math.max(0, photos.length - 1);
-  return { ...out, hero_photo: Math.min(Math.max(0, out.hero_photo), max), about_photo: Math.min(Math.max(0, out.about_photo), max) };
+  return { ...out, specialties: out.specialties.slice(0, 8), hero_photo: Math.min(Math.max(0, out.hero_photo), max), about_photo: Math.min(Math.max(0, out.about_photo), max) };
 }
 
 /** Endereço curto e único para a página publicada (/p/<slug>). */
@@ -87,4 +94,102 @@ export async function uniqueSlug(db: SupabaseClient, name: string, id: string) {
     if (!data || data.id === id) return slug;
   }
   return `${base}-${id.slice(0, 6)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Dados reais do cliente: Instagram (bio + fotos dos posts) e Google Maps (horário, fotos, categoria, descrição).
+// As fotos são copiadas para o storage (as do Instagram expiram). Rodar de novo não repete foto nem texto.
+// ---------------------------------------------------------------------------
+type Imported = { at?: string; sources?: string[]; instagram?: string; maps?: string };
+
+async function copyPhoto(db: SupabaseClient, userId: string, pageId: string, url: string) {
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(20_000) });
+    const type = res.headers.get("content-type") ?? "";
+    if (!res.ok || !type.startsWith("image/")) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length < 15_000) return null; // ícone/miniatura
+    const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : "jpg";
+    const path = `${userId}/landing/${pageId}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await db.storage.from("media").upload(path, bytes, { contentType: type });
+    return error ? null : db.storage.from("media").getPublicUrl(path).data.publicUrl;
+  } catch {
+    return null;
+  }
+}
+
+export function igUsername(v: unknown) {
+  const s = String(v ?? "").trim().replace(/^@/, "").replace(/^https?:\/\/(www\.)?instagram\.com\//i, "").replace(/[/?#].*$/, "");
+  return /^[\w.]{1,30}$/.test(s) ? s.toLowerCase() : "";
+}
+
+/** Puxa os dados reais do cliente para a página. Devolve o patch para landing_pages (vazio se nada mudou). */
+export async function importClientData(db: SupabaseClient, page: Record<string, any>): Promise<Record<string, unknown>> {
+  const prev: Imported = page.imported ?? {};
+  const sources = new Set(prev.sources ?? []);
+  const photos: string[] = [...(page.photos ?? [])];
+  const notes: string[] = page.notes ? [String(page.notes)] : [];
+  const addNote = (label: string, text?: string | null) => {
+    const t = String(text ?? "").trim();
+    if (t && !notes.join("\n").includes(t)) notes.push(`${label}: ${t}`);
+  };
+  const patch: Record<string, unknown> = {};
+  const status: Imported = { instagram: prev.instagram, maps: prev.maps };
+  const room = () => Math.max(0, 12 - photos.length);
+  const addPhotos = async (urls: string[], max: number) => {
+    let added = 0;
+    for (const url of urls) {
+      if (added >= max || !room()) break;
+      const key = url.split("?")[0];
+      if (sources.has(key)) continue;
+      sources.add(key);
+      const copy = await copyPhoto(db, page.user_id, page.id, url);
+      if (copy) {
+        photos.push(copy);
+        added++;
+      }
+    }
+    return added;
+  };
+
+  // Google Maps (só páginas que vieram de um lead)
+  if (page.lead_id) {
+    const { data: lead } = await db.from("leads").select("*").eq("id", page.lead_id).maybeSingle();
+    const d = lead?.details as { hours?: string; photos?: string[]; category?: string; description?: string } | null;
+    if (lead && d && lead.details_status === "done") {
+      if (d.hours && !page.hours) patch.hours = d.hours;
+      addNote("Categoria no Google", d.category);
+      addNote("Descrição no Google", d.description);
+      if (lead.rating && !page.rating) Object.assign(patch, { rating: lead.rating, reviews: lead.reviews });
+      const n = await addPhotos(d.photos ?? [], 6);
+      status.maps = `ok: ${n} foto(s)${d.hours ? ", horário" : ", sem horário no Google"}`;
+    } else if (lead) {
+      if (lead.details_status !== "queued" && lead.details_status !== "running" && lead.details_status !== "failed") {
+        await db.from("leads").update({ details_status: "queued" }).eq("id", lead.id);
+        await dispatchRender("leads.yml");
+      }
+      status.maps = lead.details_status === "failed" ? "não achei o lugar de novo no Google Maps" : "pending";
+    }
+  }
+
+  // Instagram (bio + fotos dos posts)
+  const user = igUsername(page.instagram);
+  if (user) {
+    try {
+      const ig = await igPublicProfile(user);
+      addNote("Bio do Instagram", ig.bio);
+      addNote("Categoria no Instagram", ig.category);
+      let n = await addPhotos(ig.photos, 8);
+      if (n < 2 && ig.picture) n += await addPhotos([ig.picture], 1);
+      status.instagram = `ok: ${n} foto(s)`;
+    } catch (e) {
+      status.instagram = `erro: ${(e as Error).message}`;
+    }
+  }
+
+  if (photos.length !== (page.photos ?? []).length) patch.photos = photos;
+  const joined = notes.join("\n");
+  if (joined !== (page.notes ?? "")) patch.notes = joined;
+  patch.imported = { at: new Date().toISOString(), sources: [...sources], ...status };
+  return patch;
 }

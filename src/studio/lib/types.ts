@@ -350,6 +350,9 @@ export interface Lead {
   rating: number | null;
   reviews: number | null;
   maps_url: string | null;
+  /** Extras do Google Maps (horário, fotos, categoria, descrição) para a landing page */
+  details: { hours?: string | null; photos?: string[]; category?: string | null; description?: string | null } | null;
+  details_status: "queued" | "running" | "done" | "failed" | null;
   status: LeadStatus;
   notes: string | null;
   contacted_at: string | null;
@@ -376,6 +379,8 @@ export interface LandingPage {
   rating: number | null;
   reviews: number | null;
   content: LandingContent | null;
+  /** O que foi puxado do Instagram/Google Maps (maps = "pending" enquanto o robô busca) */
+  imported: { at?: string; sources?: string[]; instagram?: string; maps?: string } | null;
   status: "draft" | "preview" | "published";
   views: number;
   created_at: string;
