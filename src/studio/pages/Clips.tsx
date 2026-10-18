@@ -21,7 +21,7 @@ const SOURCE_STATUS: Record<ClipSource["status"], { label: string; tone: string 
   failed: { label: "Falhou", tone: "text-danger" },
 };
 
-const EMPTY = { campaign: "", url: "", credit: "", hashtags: "", rules: "", clips_wanted: "6", per_day: "3" };
+const EMPTY = { campaign: "", url: "", mirror_url: "", credit: "", hashtags: "", rules: "", clips_wanted: "6", per_day: "3" };
 
 const shortUrl = (v: YtVideo) => `https://youtube.com/shorts/${v.youtube_id}`;
 
@@ -65,7 +65,7 @@ export default function Clips() {
     setEditing(s.id);
     setChannelId(s.channel_ref);
     setForm({
-      campaign: s.campaign, url: s.url, credit: s.credit ?? "", hashtags: s.hashtags ?? "", rules: s.rules ?? "",
+      campaign: s.campaign, url: s.url, mirror_url: s.mirror_url ?? "", credit: s.credit ?? "", hashtags: s.hashtags ?? "", rules: s.rules ?? "",
       clips_wanted: String(s.clips_wanted), per_day: String(s.per_day),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -74,7 +74,7 @@ export default function Clips() {
   const retry = async (s: ClipSource) => {
     try {
       await api.invoke("ai", {
-        action: "clips_add_source", id: s.id, channel_id: s.channel_ref, campaign: s.campaign, url: s.url, credit: s.credit ?? "",
+        action: "clips_add_source", id: s.id, channel_id: s.channel_ref, campaign: s.campaign, url: s.url, mirror_url: s.mirror_url ?? "", credit: s.credit ?? "",
         hashtags: s.hashtags ?? "", rules: s.rules ?? "", clips_wanted: s.clips_wanted, per_day: s.per_day,
       });
       toast.success("Recomeçou! Baixar e transcrever o episódio leva de 30 min a 2 h.");
@@ -146,6 +146,13 @@ export default function Clips() {
               <Label className="text-xs text-muted-foreground">Link da pasta (ou do vídeo) no Google Drive</Label>
               <Input value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://drive.google.com/drive/folders/…" />
             </div>
+            {editing && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Link reserva: cópia do episódio no seu Drive (se o Drive da campanha bloquear o download)</Label>
+                <Input value={form.mirror_url} onChange={(e) => set("mirror_url", e.target.value)} placeholder="https://drive.google.com/file/d/…" />
+                <p className="text-xs text-muted-foreground">No Drive da campanha: ⋮ no episódio → Fazer uma cópia. Na cópia: Compartilhar → qualquer pessoa com o link → copiar link.</p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Crédito</Label>

@@ -114,3 +114,97 @@ export async function removeStudioFiles(db: SupabaseClient, urls: (string | null
   const paths = urls.map((u) => (u ? storagePath(u) : null)).filter((p): p is string => !!p);
   if (paths.length) await db.storage.from("media").remove(paths);
 }
+
+/**
+ * Botão "Otimizar agora" (Studio → Uso): apaga já os vídeos de produto e de IA com mais de `days` dias
+ * (o Instagram/TikTok guardam a cópia deles) e os vídeos dos achadinhos e prévias de cortes/YouTube que já
+ * não servem. Nunca mexe em vídeo de post em rascunho, esperando aprovação, agendado ou publicando, nem nas fotos
+ * do Mercado Livre (a sincronização usa de novo).
+ */
+export async function optimizeStorage(db: SupabaseClient, days = 3) {
+  const before = new Date(Date.now() - days * DAY).toISOString();
+  const keep = ["draft", "pending_approval", "scheduled", "publishing"];
+  const paths: string[] = [];
+  const now = new Date().toISOString();
+
+  async function waitingPosts(ids: (string | null)[]) {
+    const list = ids.filter((x): x is string => !!x);
+    if (!list.length) return new Set<string>();
+    const { data } = await db.from("posts").select("id").in("id", list).in("status", keep);
+    return new Set((data ?? []).map((p) => p.id));
+  }
+
+  const { data: videos } = await db.from("product_videos").select("id,video_url,post_id").not("video_url", "is", null)
+    .is("file_deleted_at", null).in("status", ["ready", "rendered", "failed"]).lt("created_at", before).limit(500);
+  const busy = await waitingPosts((videos ?? []).map((v) => v.post_id));
+  const doneVideos = (videos ?? []).filter((v) => !(v.post_id && busy.has(v.post_id)));
+  for (const v of doneVideos) {
+    const p = storagePath(v.video_url!);
+    if (p) paths.push(p);
+  }
+
+  const { data: ai } = await db.from("ai_videos").select("id,video_url,post_id").eq("status", "done").not("video_url", "is", null)
+    .is("file_deleted_at", null).lt("created_at", before).limit(500);
+  const busyAi = await waitingPosts((ai ?? []).map((v) => v.post_id));
+  const doneAi = (ai ?? []).filter((v) => !(v.post_id && busyAi.has(v.post_id)));
+  for (const v of doneAi) {
+    const p = storagePath(v.video_url!);
+    if (p) paths.push(p);
+  }
+
+  // Prévias de vídeos do YouTube/cortes que falharam ou foram apagados
+  const { data: yt } = await db.from("yt_videos").select("id,preview_url,thumbnail_url").not("preview_url", "is", null)
+    .in("status", ["failed", "deleted"]).limit(500);
+  for (const v of yt ?? []) for (const u of [v.preview_url, v.thumbnail_url]) {
+    const p = u ? storagePath(u) : null;
+    if (p) paths.push(p);
+  }
+
+  // Achadinhos com mais de 24 h (postados ou não)
+  const { data: deals } = await db.from("deals").select("id,video_url,thumb_url").not("video_url", "is", null)
+    .lt("created_at", new Date(Date.now() - 23 * HOUR).toISOString()).limit(500);
+  for (const d of deals ?? []) for (const u of [d.video_url, d.thumb_url]) {
+    const p = u ? storagePath(u) : null;
+    if (p) paths.push(p);
+  }
+
+  // Vídeos de produto pelo arquivo (pasta videos/, nome = id do vídeo): pega os que ficaram sem registro,
+  // os de registro já "apagado" e os que passaram do prazo; mantém os de post ainda por publicar
+  const { data: files } = await db.rpc("studio_files", { folder: "videos" });
+  const fileIds = ((files ?? []) as { name: string; bytes: number; created_at: string }[])
+    .map((f) => ({ ...f, id: f.name.split("/").pop()!.replace(/\.mp4$/, "") }));
+  let orphanBytes = 0;
+  if (fileIds.length) {
+    const { data: rows } = await db.from("product_videos").select("id,post_id,status,video_url,created_at")
+      .in("id", fileIds.map((f) => f.id).filter((id) => /^[0-9a-f-]{36}$/.test(id)));
+    const byId = new Map((rows ?? []).map((r) => [r.id, r]));
+    const busyFiles = await waitingPosts((rows ?? []).map((r) => r.post_id));
+    for (const f of fileIds) {
+      if (paths.includes(f.name)) continue;
+      const row = byId.get(f.id);
+      const young = f.created_at > before;
+      const inUse = row && (["queued", "rendering", "pending_brief"].includes(row.status) || (row.post_id && busyFiles.has(row.post_id)));
+      if (inUse || (young && row?.video_url)) continue;
+      paths.push(f.name);
+      orphanBytes += f.bytes;
+    }
+  }
+
+  for (let i = 0; i < paths.length; i += 100) {
+    const { error } = await db.storage.from("media").remove(paths.slice(i, i + 100));
+    if (error) throw new Error(`Não consegui apagar os arquivos: ${error.message}`);
+  }
+  const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
+  if (doneVideos.length) await db.from("product_videos").update({ video_url: null, file_deleted_at: now }).in("id", ids(doneVideos));
+  if (doneAi.length) await db.from("ai_videos").update({ video_url: null, file_deleted_at: now }).in("id", ids(doneAi));
+  if (yt?.length) await db.from("yt_videos").update({ preview_url: null, thumbnail_url: null }).in("id", ids(yt));
+  if (deals?.length) {
+    await db.from("deals").update({ status: "skipped" }).in("id", ids(deals)).in("status", ["ready", "rendering"]);
+    await db.from("deals").update({ video_url: null, thumb_url: null }).in("id", ids(deals));
+  }
+  // Registro que apontava para arquivo apagado agora fica sem link (o Studio não mostra vídeo quebrado)
+  const gone = fileIds.filter((f) => paths.includes(f.name)).map((f) => f.id);
+  if (gone.length) await db.from("product_videos").update({ video_url: null, file_deleted_at: now }).in("id", gone).not("video_url", "is", null);
+  return { files: paths.length, videos: doneVideos.length + doneAi.length, previews: yt?.length ?? 0, deals: deals?.length ?? 0,
+    freed_mb: Math.round(orphanBytes / 1024 ** 2) };
+}

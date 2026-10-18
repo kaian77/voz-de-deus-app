@@ -33,6 +33,10 @@ from worker import URL, rest
 import youtube as yt
 
 VIDEO_EXT = (".mp4", ".mov", ".mkv", ".m4v", ".webm")
+# Episódios baixados ficam guardados no cache do workflow: o Drive de campanha popular bloqueia downloads
+# ("Too many users have viewed or downloaded this file") e o Refazer não precisa baixar de novo.
+CACHE = os.environ.get("CLIPS_CACHE") or ""
+DRIVE_LIMIT = "Too many users"
 SKIP_NAMES = re.compile(r"trailer|teaser|coming[\s_-]*soon|promo|sneak[\s_-]*peek", re.I)
 NOT_VIDEO = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".pdf", ".txt", ".doc", ".docx", ".srt", ".vtt", ".zip", ".psd", ".ai", ".mp3", ".wav")
 W, H, FPS = 1080, 1920, 30
@@ -78,16 +82,70 @@ def drive_files(url, folder):
     return main or vids
 
 
-def download(file_id, name, folder):
+def download(file_id, name, folder, mirror=None):
+    """Baixa o vídeo do Drive. Drive da campanha bloqueado e há link reserva (cópia no Drive do dono): baixa da cópia."""
+    try:
+        return _download(file_id, name, folder)
+    except RuntimeError as e:
+        if DRIVE_LIMIT not in str(e) or not mirror:
+            raise
+    log("  Drive da campanha bloqueado: usando o link reserva")
+    files = drive_files(mirror, os.path.join(folder, "mirror"))
+    if not files:
+        raise RuntimeError("o link reserva não tem vídeo (confira se está como 'qualquer pessoa com o link')")
+    stem = lambda n: os.path.splitext(n)[0].strip().lower()  # noqa: E731
+    pick = next((f for f in files if stem(f[1]) == stem(name)), files[0])
+    return _download(pick[0], name, folder, keep_as=file_id)
+
+
+def _download(file_id, name, folder, keep_as=None):
     import gdown
 
-    out = os.path.join(folder, re.sub(r"[^\w.-]", "_", name) or "video.mp4")
-    if not out.lower().endswith(VIDEO_EXT):
-        out += ".mp4"
-    got = gdown.download(id=file_id, output=out, quiet=True, use_cookies=False)
+    if CACHE:
+        os.makedirs(CACHE, exist_ok=True)
+        kept = os.path.join(CACHE, f"{keep_as or file_id}.mp4")
+        if os.path.exists(kept) and os.path.getsize(kept) > 100_000:
+            os.utime(kept)
+            log(f"  {name}: já estava guardado (não baixei do Drive)")
+            return kept
+        out = kept
+    else:
+        out = os.path.join(folder, re.sub(r"[^\w.-]", "_", name) or "video.mp4")
+        if not out.lower().endswith(VIDEO_EXT):
+            out += ".mp4"
+    try:
+        got = gdown.download(id=file_id, output=out, quiet=True, use_cookies=False)
+    except Exception as e:
+        if os.path.exists(out):
+            os.remove(out)
+        if DRIVE_LIMIT in str(e):
+            raise RuntimeError(f"{DRIVE_LIMIT}: o Drive da campanha bloqueou downloads por algumas horas "
+                               "(muita gente baixando o mesmo episódio). Tento de novo sozinho na próxima rodada.") from None
+        raise
     if not got or not os.path.exists(out) or os.path.getsize(out) < 100_000:
+        if os.path.exists(out):
+            os.remove(out)
         raise RuntimeError(f"não consegui baixar {name} do Drive (confira se está como 'qualquer pessoa com o link')")
     return out
+
+
+def drop(video):
+    """Apaga o vídeo da pasta de trabalho (o guardado no cache fica para a próxima)."""
+    if not (CACHE and os.path.abspath(video).startswith(os.path.abspath(CACHE))):
+        os.remove(video)
+
+
+def prune_cache(days=5, max_gb=6):
+    """Cache do workflow tem limite: tira episódios parados há dias e, se passar do tamanho, os mais antigos."""
+    if not CACHE or not os.path.isdir(CACHE):
+        return
+    files = sorted((os.path.join(CACHE, f) for f in os.listdir(CACHE)), key=os.path.getmtime, reverse=True)
+    old = now().timestamp() - days * 86400
+    total = 0
+    for f in files:
+        total += os.path.getsize(f)
+        if os.path.getmtime(f) < old or total > max_gb * 1024 ** 3:
+            os.remove(f)
 
 
 def duration(video):
@@ -154,6 +212,11 @@ def transcript_for(source, fid, video, work):
 
 # ------------------------------------------------------------------------------------------------ IA
 
+def clip_language(spoken, channel):
+    """Título, capa e descrição no idioma falado no vídeo (as legendas já saem nele), não no padrão do canal."""
+    return spoken if spoken in ("pt", "en", "es") else (channel.get("language") or "en")
+
+
 def pick_moments(lines, n, campaign, rules, language, extra=""):
     """Claude escolhe os melhores momentos (saída estruturada = JSON garantido)."""
     key = os.environ["ANTHROPIC_API_KEY"]
@@ -191,6 +254,7 @@ def pick_moments(lines, n, campaign, rules, language, extra=""):
     try:
         with urllib.request.urlopen(req, timeout=600) as r:
             data = json.loads(r.read())
+        track_ai("cortes", data)
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")[:300]
         raise RuntimeError(f"IA (Anthropic) {e.code}: {detail}") from None
@@ -434,25 +498,47 @@ def process(source):
         files.sort(key=lambda f: bool(SKIP_NAMES.search(f[1])))  # episódios antes de teaser/trailer
         for fid, name in files[:2]:  # até 2 vídeos novos por rodada (tempo do workflow)
             log(f"  baixando {name}…")
-            video = download(fid, name, work) if fid != "direct" else download_direct(source["url"], work)
+            video = download(fid, name, work, source.get("mirror_url")) if fid != "direct" else download_direct(source["url"], work)
             total = duration(video)
             if total < 180 and len(files) > 1:  # vinheta/teaser curto: não vale cortar se tem episódio
                 log(f"  {name} tem só {total:.0f}s, pulando")
-                os.remove(video)
+                drop(video)
                 continue
             if total < 25:
                 raise RuntimeError(f"{name} não é um vídeo que dá para cortar ({total:.0f}s)")
             words, lines, language = transcript_for(source, fid, video, work)
+            channel["language"] = clip_language(language, channel)
             moments = snap(pick_moments(lines, min(source.get("clips_wanted") or 6, max(1, int(total // 60))), source["campaign"], source.get("rules"),
-                                        channel.get("language") or language), words, total)
+                                        channel["language"]), words, total)
             slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
             for i, (clip, when) in enumerate(zip(moments, slots)):
                 clip["file"] = fid
                 log(f"  corte {i + 1}/{len(moments)}: {clip['screen_title']} ({clip['end'] - clip['start']:.0f}s)")
                 make_clip(source, channel, clip, video, words, logo, work, when, f"{sid}-{fid}-{i}")
                 made += 1
-            os.remove(video)
+            drop(video)
     patch_source(sid, status="done", clips_made=(source.get("clips_made") or 0) + made)
+    if made:
+        notify_owner(source["user_id"], f"✂️ {made} corte(s) novo(s) — {source['campaign']}")
+
+
+def track_ai(source, data):
+    """Consumo da IA na página Uso do Studio (nunca atrapalha o vídeo)."""
+    try:
+        u = data.get("usage") or {}
+        rest("POST", "ai_usage", {"source": source, "model": data.get("model"), "input_tokens": u.get("input_tokens") or 0,
+                                  "output_tokens": u.get("output_tokens") or 0})
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def notify_owner(user_id, title):
+    """Aviso no celular (Studio instalado como app): o cron do Studio envia."""
+    try:
+        rest("POST", "notifications", {"user_id": user_id, "title": title,
+                                       "body": "Depois de publicado, copie o link e envie na campanha.", "url": "/studio/cortes"})
+    except Exception as e:  # noqa: BLE001 — aviso não derruba o corte
+        log(f"  aviso: {e}")
 
 
 def redo_rows():
@@ -487,22 +573,26 @@ def process_redos():
             extra = (f"Do NOT reuse these time ranges (already used or rejected): {avoid}\n" if avoid else "") + \
                     (f"The channel owner asked for these changes:\n{notes}\n" if notes else "")
             with tempfile.TemporaryDirectory() as work:
-                video = download_direct(source["url"], work) if fid == "direct" else download(fid, "video.mp4", work)
+                video = download_direct(source["url"], work) if fid == "direct" else download(fid, "video.mp4", work, source.get("mirror_url"))
                 words, lines, language = transcript_for(source, fid, video, work)
+                channel["language"] = clip_language(language, channel)
                 total = duration(video)
                 logo = logo_for(source, work)
                 moments = snap(pick_moments(lines, len(rows), source["campaign"], source.get("rules"),
-                                            channel.get("language") or language, extra), words, total)
+                                            channel["language"], extra), words, total)
                 slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
                 for row, clip, when in zip(rows, moments, slots):
                     clip["file"] = fid
                     log(f"  novo corte: {clip['screen_title']}")
                     make_clip(source, channel, clip, video, words, logo, work, when, f"{sid}-{fid}-r{row['id'][:8]}", row["id"])
+                notify_owner(source["user_id"], f"✂️ {len(moments)} corte(s) refeito(s) — {source['campaign']}")
                 for row in rows[len(moments):]:
                     rest("PATCH", f"yt_videos?id=eq.{row['id']}", {"status": "failed", "error": "a IA não achou outro momento bom"})
         except Exception as e:
             log(f"  ✗ {e}")
-            rest("PATCH", f"yt_videos?id=in.({ids})&status=in.(redo,rendering)", {"status": "failed", "error": f"Refazer: {e}"[:500]})
+            # Drive bloqueado por excesso de downloads: fica na fila e a próxima rodada (até 6 h) tenta de novo
+            status = "redo" if DRIVE_LIMIT in str(e) else "failed"
+            rest("PATCH", f"yt_videos?id=in.({ids})&status=in.(redo,rendering)", {"status": status, "error": f"Refazer: {e}"[:500]})
 
 
 def main():
@@ -516,7 +606,8 @@ def main():
             process(source)
         except Exception as e:
             log(f"  ✗ {e}")
-            patch_source(source["id"], status="failed", error=str(e)[:500])
+            patch_source(source["id"], status="queued" if DRIVE_LIMIT in str(e) else "failed", error=str(e)[:500])
+    prune_cache()
 
 
 if __name__ == "__main__":

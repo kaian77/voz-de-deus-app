@@ -55,7 +55,7 @@ jobs:
         if: steps.queue.outputs.status == 'queued'
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0" "faster-whisper>=1.1.1" "opencv-python-headless>=4.9" "gdown>=5.2"
+          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0" "faster-whisper>=1.1.1" "opencv-python-headless>=4.9,<5" "gdown>=5.2"
           mkdir -p ~/.fonts && cp video/engine/assets/fonts/*.ttf ~/.fonts/ && fc-cache -f >/dev/null
 
       - name: Modelo de transcrição (cache)
@@ -65,6 +65,22 @@ jobs:
           path: ~/.cache/huggingface
           key: whisper-small-v1
 
+      - name: Episódios já baixados (cache)
+        if: steps.queue.outputs.status == 'queued'
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/clips-cache
+          key: clips-videos-${{ github.run_id }}
+          restore-keys: clips-videos-
+
       - name: Fazer e enviar os cortes
         if: steps.queue.outputs.status == 'queued'
-        run: cd video && python3 clips.py
+        run: mkdir -p ~/clips-cache && cd video && CLIPS_CACHE=~/clips-cache python3 clips.py
+
+      - name: Guardar episódios baixados
+        if: always() && steps.queue.outputs.status == 'queued'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ~/clips-cache
+          key: clips-videos-${{ github.run_id }}

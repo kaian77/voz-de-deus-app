@@ -6,7 +6,7 @@ name: Vídeos do YouTube
 on:
   workflow_dispatch:
   schedule:
-    - cron: "37 */2 * * *"
+    - cron: "37 */6 * * *" # rede de segurança a cada 6 h (o roteiro pronto dispara na hora)
 
 # Um de cada vez (o vídeo em andamento não é cancelado)
 concurrency:

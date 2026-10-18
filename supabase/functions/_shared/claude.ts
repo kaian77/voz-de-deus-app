@@ -2,7 +2,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.133";
 import { zodOutputFormat } from "npm:@anthropic-ai/sdk@0.133/helpers/zod";
 import type { z } from "npm:zod@4";
-import { env } from "./util.ts";
+import { adminClient, env } from "./util.ts";
 
 const MODEL = () => env("CLAUDE_MODEL", "claude-opus-5-5");
 
@@ -10,6 +10,13 @@ let client: Anthropic | null = null;
 function anthropic() {
   client ??= new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
   return client;
+}
+
+/** Registra o consumo de cada chamada (página Uso do Studio). Nunca atrapalha a chamada. */
+function track(source: string, response: { model: string; usage: { input_tokens: number; output_tokens: number } }) {
+  adminClient().from("ai_usage").insert({
+    source, model: response.model, input_tokens: response.usage.input_tokens, output_tokens: response.usage.output_tokens,
+  }).then(() => {}, () => {});
 }
 
 export function aiEnabled() {
@@ -42,6 +49,7 @@ export async function generateJSON<T extends z.ZodTypeAny>(
     messages: [{ role: "user", content }],
     output_config: { effort, format: zodOutputFormat(schema) },
   });
+  track("textos", response);
   if (response.stop_reason === "refusal") throw new Error("A IA recusou este pedido. Reformule e tente de novo.");
   if (!response.parsed_output) throw new Error("A IA não retornou um resultado válido.");
   return response.parsed_output;
@@ -55,6 +63,7 @@ export async function generateText(system: string, prompt: string, effort: Effor
     messages: [{ role: "user", content: wellFormed(prompt) }],
     output_config: { effort },
   });
+  track("textos", response);
   if (response.stop_reason === "refusal") throw new Error("A IA recusou este pedido.");
   return response.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
 }
@@ -85,10 +94,12 @@ export async function researchWeb(system: string, prompt: string, maxUses = 5): 
     : { type: "web_search_20260209" as const, name: "web_search" as const, max_uses: maxUses };
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
   let response = await anthropic().messages.create({ model, max_tokens: 16000, system, messages, tools: [tool] });
+  track("pesquisa", response);
   // pause_turn: o loop de busca do servidor parou no limite; reenviar o turno retoma de onde parou
   for (let i = 0; i < 4 && response.stop_reason === "pause_turn"; i++) {
     messages.push({ role: "assistant", content: response.content });
     response = await anthropic().messages.create({ model, max_tokens: 16000, system, messages, tools: [tool] });
+    track("pesquisa", response);
     messages.pop();
   }
   if (response.stop_reason === "refusal") throw new Error("A IA recusou esta pesquisa.");
@@ -130,6 +141,7 @@ export async function runAgent<T>(system: string, prompt: string, tools: AgentTo
       tool_choice: last ? { type: "tool", name: final.name } : { type: "any" },
       output_config: { effort },
     });
+    track("atendimento", response);
     if (response.stop_reason === "refusal") throw new Error("A IA recusou este pedido.");
     const calls = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
     const done = calls.find((c) => c.name === final.name);

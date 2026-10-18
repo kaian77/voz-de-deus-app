@@ -6,6 +6,7 @@ import { agentAllowed, waSendText, wahaSendText } from "./whatsapp.ts";
 import { type AgentTool, aiEnabled, brandContext, generateJSON, runAgent } from "./claude.ts";
 import { sleep } from "./util.ts";
 import { nsCoupons, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "./nuvemshop.ts";
+import { notify } from "./push.ts";
 
 export type Channel = "instagram" | "whatsapp";
 type Sender = "contact" | "ai" | "human" | "agent";
@@ -345,6 +346,8 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
   if ("ignore" in draft && draft.ignore) return;
   if (draft.handoff) {
     await db.from("conversations").update({ status: "needs_human", handoff_reason: draft.handoff_reason || "Pedido de atendimento humano" }).eq("id", conversation.id);
+    await notify(db, conversation.user_id, `💬 ${conversation.contact_name ?? conversation.contact_username ?? "Cliente"} precisa de você`,
+      draft.handoff_reason || "Pedido de atendimento humano", "/studio/mensagens").catch(() => {});
     // No modo pessoal não manda o aviso da loja ("vou chamar alguém da equipe")
     // No Instagram a IA não avisa nada no handoff, a não ser que tenha escrito um aviso (pedido de humano/reclamação)
     const text = draft.reply?.trim() || (draft.personal || conversation.channel === "instagram" ? "" : draft.settings?.agent_handoff_message);

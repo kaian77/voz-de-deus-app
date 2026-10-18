@@ -9,7 +9,7 @@ import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } f
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
 import { importClientData, uniqueSlug, writeLanding } from "../_shared/landing.ts";
-import { removeStudioFiles } from "../_shared/storage-cleanup.ts";
+import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, ytDeleteVideo, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
@@ -20,6 +20,7 @@ import { brasiliaNow, digestMessage, salesSummary } from "../_shared/daily.ts";
 import { runVideosFor, videoAutopilotStatus } from "../_shared/video-autopilot.ts";
 import { sendWhatsAppTo } from "../_shared/sale-alerts.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
+import { notify, pushPublicKey, sendPendingPush } from "../_shared/push.ts";
 
 const SYSTEM = (brand: string) =>
   `Você é estrategista de conteúdo e social media sênior, especialista em Instagram e TikTok no Brasil. ` +
@@ -118,6 +119,63 @@ Deno.serve(async (req) => {
       );
       return json({ ...parsed, url: drive });
     }
+    if (action === "usage_report") {
+      // Página Uso: storage/banco/IA (função studio_usage) + minutos do GitHub Actions no mês (estimativa pelas execuções)
+      const now = new Date();
+      const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+      const { data: usage, error } = await db.rpc("studio_usage", { since });
+      if (error) throw new HttpError(500, error.message);
+      const token = Deno.env.get("VIDEO_DISPATCH_TOKEN");
+      const repo = Deno.env.get("VIDEO_REPO") || "kaian77/voz-de-deus-app";
+      const actions: Record<string, { runs: number; minutes: number }> = {};
+      let actionsError: string | null = token ? null : "Sem o token do GitHub (VIDEO_DISPATCH_TOKEN)";
+      for (let page = 1; token && page <= 10; page++) {
+        const res = await fetch(`https://api.github.com/repos/${repo}/actions/runs?per_page=100&page=${page}&created=%3E%3D${since.slice(0, 10)}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "BraxStudio", "X-GitHub-Api-Version": "2022-11-28" },
+        });
+        if (!res.ok) {
+          actionsError = `GitHub ${res.status}`;
+          break;
+        }
+        const { workflow_runs: runs = [] } = await res.json();
+        for (const r of runs) {
+          if (r.status !== "completed" || !r.run_started_at) continue;
+          // O GitHub cobra cada job arredondado para cima (mínimo 1 min); os nossos workflows têm 1 job
+          const minutes = Math.max(1, Math.ceil((new Date(r.updated_at).getTime() - new Date(r.run_started_at).getTime()) / 60000));
+          const w = (actions[r.name] ??= { runs: 0, minutes: 0 });
+          w.runs++;
+          w.minutes += minutes;
+        }
+        if (runs.length < 100) break;
+      }
+      return json({ since, ...usage, actions, actions_error: actionsError });
+    }
+    if (action === "usage_optimize") {
+      // Botão "Otimizar agora" (Studio → Uso): tira do storage os vídeos antigos que já não servem
+      const days = Math.min(30, Math.max(1, Number(input.days) || 3));
+      return json(await optimizeStorage(db, days));
+    }
+    if (action === "push_key") return json({ key: await pushPublicKey(db) });
+    if (action === "push_subscribe") {
+      // Celular/computador que ativou os avisos do Studio (Web Push)
+      const sub = input.subscription as { endpoint?: string; keys?: { p256dh?: string; auth?: string } } | undefined;
+      if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) throw new HttpError(400, "Inscrição inválida");
+      const { error } = await db.from("push_subscriptions").upsert({
+        user_id: userId, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth,
+        user_agent: String(input.user_agent ?? "").slice(0, 200) || null,
+      }, { onConflict: "endpoint" });
+      if (error) throw new HttpError(500, error.message);
+      await notify(db, userId, "🔔 Avisos ligados", "Você vai receber aqui as vendas, os clientes que pedem atendimento e os vídeos prontos.");
+      return json({ ok: true, sent: await sendPendingPush(db) });
+    }
+    if (action === "push_unsubscribe") {
+      await db.from("push_subscriptions").delete().eq("user_id", userId).eq("endpoint", String(input.endpoint ?? ""));
+      return json({ ok: true });
+    }
+    if (action === "deals_more") {
+      // Achadinhos: mais 3 vídeos de produtos da Shopee agora (workflow "Achadinhos", video/deals.py)
+      return json({ started: await dispatchRender("deals.yml") });
+    }
     if (action === "clips_add_source") {
       // Cortes: nova fonte (pasta/arquivo do Drive de uma campanha) entra na fila do workflow "Cortes"; com id, só atualiza os dados salvos
       const { data: channel } = await db.from("yt_channels").select("id").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();
@@ -130,19 +188,22 @@ Deno.serve(async (req) => {
         hashtags: String(input.hashtags ?? "").trim().slice(0, 300) || null,
         credit: String(input.credit ?? "").trim().slice(0, 200) || null,
         rules: String(input.rules ?? "").trim().slice(0, 3000) || null,
+        mirror_url: /^https?:\/\//.test(String(input.mirror_url ?? "").trim()) ? String(input.mirror_url).trim() : null,
         clips_wanted: Math.min(12, Math.max(1, Number(input.clips_wanted) || 6)),
         per_day: Math.min(6, Math.max(1, Number(input.per_day) || 3)),
       };
       if (input.id) {
-        const { data: old } = await db.from("clip_sources").select("status").eq("id", String(input.id)).eq("user_id", userId).maybeSingle();
+        const { data: old } = await db.from("clip_sources").select("status, mirror_url").eq("id", String(input.id)).eq("user_id", userId).maybeSingle();
         if (!old) throw new HttpError(404, "Campanha não encontrada");
         // Campanha que falhou volta para a fila ao salvar (botão "Tentar de novo")
         const retry = old.status === "failed";
+        // Link reserva novo: roda já (cortes esperando o Drive da campanha liberar)
+        const mirrored = !!fields.mirror_url && fields.mirror_url !== old.mirror_url;
         const { data, error } = await db.from("clip_sources")
           .update({ ...fields, ...(retry ? { status: "queued", error: null } : {}), updated_at: new Date().toISOString() })
           .eq("id", String(input.id)).eq("user_id", userId).select().single();
         if (error || !data) throw new HttpError(500, error?.message ?? "Não salvou");
-        return json({ ...data, started: retry ? await dispatchRender("clips.yml") : false, updated: true });
+        return json({ ...data, started: retry || mirrored ? await dispatchRender("clips.yml") : false, updated: true });
       }
       const { data, error } = await db.from("clip_sources").insert({ user_id: userId, ...fields }).select().single();
       if (error) throw new HttpError(500, error.message);

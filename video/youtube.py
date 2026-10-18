@@ -44,6 +44,12 @@ STYLE = (
     "epic cinematic composition, dramatic warm lighting with god rays, rich vibrant colors, depth of field, highly detailed, "
     "no text, no letters, no watermark"
 )
+# Estilo cinemático: frame de filme bíblico realista (como os canais de "Bible stories" que viralizam)
+CINEMATIC = (
+    "cinematic film still from a biblical epic movie, photorealistic, real people, natural skin texture, shot on ARRI Alexa, "
+    "anamorphic 35mm lens, shallow depth of field, warm golden hour sunlight, dust in the air, ancient Israel, "
+    "muted earthy tones, film grain, highly detailed, no text, no letters, no watermark"
+)
 
 
 def now():
@@ -270,24 +276,40 @@ def _fetch(url, headers=None, data=None, timeout=180):
         return r.read(), r.headers.get("Content-Type", "")
 
 
+def _http_detail(e):
+    """Motivo do erro HTTP (o corpo da resposta diz por que o serviço recusou)."""
+    try:
+        return f"{e} {e.read().decode(errors='replace')[:200]}" if isinstance(e, urllib.error.HTTPError) else str(e)
+    except Exception:
+        return str(e)
+
+
 def image(prompt, w, h, path, seed, style=None):
-    """Imagem da cena: Cloudflare Workers AI (grátis, quando configurado) -> Pollinations -> imagem anterior/fundo liso."""
+    """Imagem da cena: Cloudflare Workers AI (grátis, quando configurado) -> Pollinations. None se nenhum conseguiu."""
     from PIL import Image
 
-    full = f"{prompt.strip().rstrip('.')}. {STYLE if style is None else style}"
+    full = f"{prompt.strip().rstrip('.')}. {STYLE if style is None else style}"[:2000]
     tries = []
     acc, cft = os.environ.get("CF_ACCOUNT_ID"), os.environ.get("CF_API_TOKEN")
     if acc and cft:
-        def cloudflare():
-            raw, _ = _fetch(
-                f"https://api.cloudflare.com/client/v4/accounts/{acc}/ai/run/@cf/black-forest-labs/flux-1-schnell",
-                {"Authorization": f"Bearer {cft}", "Content-Type": "application/json"},
-                json.dumps({"prompt": full, "steps": 6, "seed": seed}).encode())
-            import base64
-            return base64.b64decode(json.loads(raw)["result"]["image"]), "image/jpeg"
-        tries.append(("cloudflare", cloudflare))
-    q = urllib.parse.urlencode({"width": w, "height": h, "model": "flux", "seed": seed, "nologo": "true", "enhance": "false"})
+        import base64
+
+        def cf(model, body):
+            def run():
+                raw, ctype = _fetch(f"https://api.cloudflare.com/client/v4/accounts/{acc}/ai/run/{model}",
+                                    {"Authorization": f"Bearer {cft}", "Content-Type": "application/json"}, json.dumps(body).encode())
+                if ctype.startswith("image/"):
+                    return raw, ctype
+                return base64.b64decode(json.loads(raw)["result"]["image"]), "image/jpeg"
+            return run
+        tries.append(("cloudflare flux", cf("@cf/black-forest-labs/flux-1-schnell", {"prompt": full, "steps": 8, "seed": seed % 2_000_000})))
+        # Reserva no mesmo Cloudflare (outro modelo, devolve PNG)
+        tries.append(("cloudflare sdxl", cf("@cf/bytedance/stable-diffusion-xl-lightning",
+                                            {"prompt": full, "width": 768 if w < h else 1024, "height": 1024 if w < h else 768, "seed": seed % 2_000_000})))
     tok = os.environ.get("POLLINATIONS_TOKEN")
+    # Pollinations põe a marca no canto de baixo sem token: pede 10% mais alto e corta essa faixa
+    ph = h if tok else int(h * 1.1)
+    q = urllib.parse.urlencode({"width": w, "height": ph, "model": "flux", "seed": seed, "nologo": "true", "enhance": "false"})
     tries.append(("pollinations", lambda: _fetch(
         f"https://image.pollinations.ai/prompt/{urllib.parse.quote(full)}?{q}",
         {"Authorization": f"Bearer {tok}"} if tok else None)))
@@ -299,12 +321,14 @@ def image(prompt, w, h, path, seed, style=None):
                     with open(path, "wb") as f:
                         f.write(raw)
                     im = Image.open(path).convert("RGB")
+                    if name == "pollinations" and not tok:
+                        im = im.crop((0, 0, im.width, int(im.height * 0.9)))
                     cover(im, w, h).save(path, quality=93)
                     return name
             except Exception as e:
-                log(f"    imagem ({name}): {str(e)[:120]}")
-                # Sem crédito/limite do dia: não adianta insistir neste serviço
-                if isinstance(e, urllib.error.HTTPError) and e.code in (401, 402, 403):
+                log(f"    imagem ({name}): {_http_detail(e)[:300]}")
+                # Pedido recusado (sem crédito, limite do dia ou parâmetro): não adianta insistir neste serviço
+                if isinstance(e, urllib.error.HTTPError) and e.code in (400, 401, 402, 403, 404):
                     break
             time.sleep(4 + attempt * 6)
     return None
@@ -320,11 +344,17 @@ def cover(im, w, h):
     return im.crop((x, y, x + w, y + h))
 
 
-def fallback_image(path, w, h, prev=None):
-    from PIL import Image, ImageDraw
+def fallback_image(path, w, h, prev=None, salt=0):
+    """Sem imagem nova: reaproveita uma anterior espelhada e num recorte diferente (não parece cena repetida)."""
+    from PIL import Image, ImageDraw, ImageOps
 
     if prev and os.path.exists(prev):
-        shutil.copy(prev, path)
+        im = ImageOps.mirror(Image.open(prev).convert("RGB"))
+        k = 0.72
+        cw, ch = int(im.width * k), int(im.height * k)
+        x = [0, im.width - cw, (im.width - cw) // 2][salt % 3]
+        y = [im.height - ch, 0, (im.height - ch) // 2][salt % 3]
+        cover(im.crop((x, y, x + cw, y + ch)), w, h).save(path, quality=92)
         return
     im = Image.new("RGB", (w, h))
     d = ImageDraw.Draw(im)
@@ -336,13 +366,21 @@ def fallback_image(path, w, h, prev=None):
 
 # ------------------------------------------------------------------------------------------------ montagem
 
-def clip(img, seconds, motion, w, h, out):
-    """Imagem parada -> clipe com movimento de câmera (zoom/pan com aceleração suave, como em animação)."""
+def hero(prompt, script):
+    """Troca HERO pela aparência fixa do protagonista (o mesmo rosto em todas as cenas)."""
+    cast = (script.get("cast") or "").strip().rstrip(".")
+    return prompt.replace("HERO", f"the main character ({cast})" if cast else "the main character")
+
+
+def clip(img, seconds, motion, w, h, out, slow=False):
+    """Imagem parada -> clipe com movimento de câmera (zoom/pan com aceleração suave, como em animação).
+    slow: movimento lento de câmera de cinema (cinemático)."""
     frames = max(2, round(seconds * FPS))
     k = 2 if w < h else 1.5  # vertical: mais resolução para o zoom; horizontal (longo): mais rápido
     big_w, big_h = int(w * k) // 2 * 2, int(h * k) // 2 * 2
     e = f"(3*pow(on/{frames},2)-2*pow(on/{frames},3))"  # easing in-out
-    z = {"zoom_in": f"1.03+0.22*{e}", "zoom_out": f"1.25-0.22*{e}"}.get(motion, "1.20")
+    amp = 0.10 if slow else 0.22
+    z = {"zoom_in": f"1.03+{amp}*{e}", "zoom_out": f"{1.03 + amp:.2f}-{amp}*{e}"}.get(motion, "1.20" if not slow else "1.10")
     if motion == "pan_left":
         x = f"(iw-iw/zoom)*(1-{e})"
     elif motion == "pan_right":
@@ -356,8 +394,9 @@ def clip(img, seconds, motion, w, h, out):
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", out], check=True)
 
 
-def join(clips, lens, out):
-    """Junta os clipes com transição (xfade); cada clipe já tem XF a mais para a sobreposição."""
+def join(clips, lens, out, soft=False):
+    """Junta os clipes com transição (xfade); cada clipe já tem XF a mais para a sobreposição.
+    soft: só fusões (cinemático, sem cortina/círculo)."""
     if len(clips) == 1:
         shutil.copy(clips[0], out)
         return
@@ -365,7 +404,7 @@ def join(clips, lens, out):
     for c in clips:
         args += ["-i", c]
     parts, prev, offset = [], "[0:v]", 0.0
-    kinds = ["fade", "smoothleft", "fadeblack", "smoothright", "dissolve", "circleopen"]
+    kinds = ["fade", "dissolve"] if soft else ["fade", "smoothleft", "fadeblack", "smoothright", "dissolve", "circleopen"]
     for i in range(1, len(clips)):
         offset += lens[i - 1] - XF
         label = f"[v{i}]"
@@ -486,9 +525,11 @@ def render(video, work):
         voice = "en-US-AndrewNeural" if en else "pt-BR-AntonioNeural"
     scenes = script["scenes"]
     base_seed = random.randint(1, 10_000_000)
+    cine = style == "cinematic"
+    look = CINEMATIC if cine else None
 
     clips, lens, voices, words, chapters, starts, t = [], [], [], [], [], [], 0.0
-    prev_img = None
+    missing = []
     for i, sc in enumerate(scenes):
         log(f"  cena {i + 1}/{len(scenes)}")
         mp3 = os.path.join(work, f"v{i}.mp3")
@@ -498,9 +539,10 @@ def render(video, work):
         lead = 0.12
         length = lead + a_len + PAUSE + XF  # XF a mais: some na transição
         img = os.path.join(work, f"i{i}.jpg")
-        if not image(sc["image"], w, h, img, base_seed + i):
-            fallback_image(img, w, h, prev_img)
-        prev_img = img
+        prompt = hero(sc["image"], script) if cine else sc["image"]
+        # Cinemático: mesma semente em todas as cenas ajuda o rosto do protagonista a sair parecido
+        if not image(prompt, w, h, img, base_seed if cine else base_seed + i, style=look):
+            missing.append((i, prompt))
         clips.append({"img": img, "length": length, "advance": length - XF, "motion": sc.get("motion") or "zoom_in"})
         lens.append(length)
         voices.append((t + lead, audio))
@@ -510,6 +552,21 @@ def render(video, work):
             chapters.append((t, sc["chapter"]))
         t += length - XF
     total = t + XF
+
+    # Cenas sem imagem: mais uma tentativa com calma (limite por minuto dos serviços) antes de reaproveitar outra
+    if missing:
+        log(f"  {len(missing)} cena(s) sem imagem, tentando de novo…")
+        time.sleep(30)
+        missing = [(i, p) for i, p in missing
+                   if not image(p, w, h, clips[i]["img"], (base_seed if cine else base_seed + i) + 7, style=look)]
+    if len(missing) > len(scenes) * 0.3:
+        # Vídeo com metade das cenas repetidas não vale publicar: volta para a fila e tenta mais tarde
+        raise RuntimeError(f"os geradores de imagem falharam em {len(missing)} de {len(scenes)} cenas")
+    ok = [c["img"] for j, c in enumerate(clips) if j not in {i for i, _ in missing}]
+    for n, (i, _) in enumerate(missing):
+        # Reaproveita uma imagem boa que não é a vizinha, espelhada e noutro recorte
+        far = [p for p in ok if abs(int(os.path.basename(p)[1:-4]) - i) > 1] or ok
+        fallback_image(clips[i]["img"], w, h, far[(i * 3) % len(far)] if far else None, salt=n)
 
     silent = os.path.join(work, "video.mp4")
     log(f"  montando ({style})…")
@@ -527,9 +584,9 @@ def render(video, work):
                     log(f"    recorte: {e}")
                 yt_styles.parallax_clip(c["img"], fg, c["length"], c["motion"], w, h, out)
             else:
-                clip(c["img"], c["length"], c["motion"], w, h, out)
+                clip(c["img"], c["length"], c["motion"], w, h, out, slow=cine)
             files.append(out)
-        join(files, lens, silent)
+        join(files, lens, silent, soft=cine)
 
     # Áudio: narração + trilha baixinha (abaixa mais quando tem voz)
     mixl = np.zeros(int((total + 1) * SR), dtype=np.float32)
@@ -585,8 +642,10 @@ def render(video, work):
         pt = os.path.join(work, "particles.mov")
         particles(w, h, pt)
         args += ["-stream_loop", "-1", "-i", pt]
-        fc = (f"[0:v]eq=saturation=1.12:contrast=1.05,vignette=PI/5[b];"
-              f"[2:v]scale={w}:{h},format=rgba,colorchannelmixer=aa=0.75[p];"
+        grade = ("eq=saturation=0.95:contrast=1.08,colorbalance=rs=0.04:bs=-0.05:rh=0.03:bh=-0.04,vignette=PI/4.5" if cine
+                 else "eq=saturation=1.12:contrast=1.05,vignette=PI/5")
+        fc = (f"[0:v]{grade}[b];"
+              f"[2:v]scale={w}:{h},format=rgba,colorchannelmixer=aa={0.45 if cine else 0.75}[p];"
               f"[b][p]overlay=shortest=1,noise=alls=5:allf=t,subtitles={ass}:fontsdir={FONTS}[s]")
         bar = 3
     if short:  # barra de progresso embaixo
@@ -600,7 +659,8 @@ def render(video, work):
 
     # Capa
     thumb_src = os.path.join(work, "thumb_src.jpg")
-    if not image(script["thumbnail_image"], 1280, 720, thumb_src, base_seed + 999):
+    thumb_prompt = hero(script["thumbnail_image"], script) if cine else script["thumbnail_image"]
+    if not image(thumb_prompt, 1280, 720, thumb_src, base_seed if cine else base_seed + 999, style=look):
         shutil.copy(os.path.join(work, "i0.jpg"), thumb_src)
     thumb = os.path.join(work, "thumb.jpg")
     thumbnail(thumb_src, script["thumbnail_text"], thumb)

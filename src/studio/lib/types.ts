@@ -396,7 +396,7 @@ export interface YtChannel {
   enabled: boolean;
   language: "pt" | "en" | "es";
   mode: "bible" | "clips";
-  style: "parallax" | "whiteboard" | "classic";
+  style: "parallax" | "whiteboard" | "classic" | "cinematic";
   niche: string;
   shorts_per_day: number;
   long_per_week: number;
@@ -430,6 +430,32 @@ export interface YtVideo {
   updated_at: string;
 }
 
+/** Achadinho da Shopee (Renda extra → Achadinhos): vídeo de produto com o link de afiliado, para o Shopee Vídeo. */
+export interface Deal {
+  id: string;
+  itemid: string;
+  title: string;
+  name: string | null;
+  price: number | null;
+  sale_price: number | null;
+  discount: number | null;
+  rating: number | null;
+  likes: number | null;
+  shop_name: string | null;
+  category: string | null;
+  image_url: string | null;
+  product_link: string | null;
+  aff_link: string | null;
+  caption: string | null;
+  video_url: string | null;
+  thumb_url: string | null;
+  status: "rendering" | "ready" | "posted" | "skipped" | "failed";
+  error: string | null;
+  posted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Fonte de cortes (pasta/arquivo do Drive de uma campanha de clipping) — Renda extra → Cortes. */
 export interface ClipSource {
   id: string;
@@ -439,6 +465,7 @@ export interface ClipSource {
   hashtags: string | null;
   credit: string | null;
   rules: string | null;
+  mirror_url: string | null;
   clips_wanted: number;
   per_day: number;
   status: "queued" | "processing" | "done" | "failed";
@@ -521,6 +548,7 @@ export interface TableMap {
   yt_channels: YtChannel;
   yt_videos: YtVideo;
   clip_sources: ClipSource;
+  deals: Deal;
   strategies: Strategy;
   site_reviews: SiteReview;
 }
