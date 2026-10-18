@@ -140,6 +140,14 @@ def pick(feed_urls, used, n):
     return out
 
 
+def fit_caption(text, limit=150):
+    """O Shopee Vídeo aceita 150 caracteres: tira hashtags do fim até caber, sem cortar palavra."""
+    text = " ".join(text.split())
+    while len(text) > limit and "#" in text:
+        text = text[: text.rfind("#")].rstrip()
+    return text if len(text) <= limit else text[: limit - 1].rsplit(" ", 1)[0] + "…"
+
+
 def aff_link(product_link, itemid):
     """Link de afiliado no formato do guia da Shopee (an_redir + affiliate_id + sub_id)."""
     return (f"https://s.shopee.com.br/an_redir?origin_link={urllib.parse.quote(product_link, safe='')}"
@@ -163,7 +171,7 @@ def write_brief(p):
             "title": {"type": "string", "description": "nome do produto para a cena principal, até 5 palavras"},
             "subtitle": {"type": "string", "description": "preço no formato 'De R$ X por R$ Y' ou 'Por só R$ Y'"},
             "cta": {"type": "string", "description": "chamada final, até 5 palavras, ex.: 'Toque no produto abaixo'"},
-            "caption": {"type": "string", "description": "legenda do Shopee Vídeo: 2 frases curtas + 4 a 6 hashtags"},
+            "caption": {"type": "string", "description": "legenda do Shopee Vídeo, NO MÁXIMO 140 caracteres contando as hashtags: 1 frase curta + 3 hashtags"},
         },
     }
     price, sale = num(p.get("price")), num(p.get("sale_price") or p.get("price"))
@@ -281,7 +289,7 @@ def main():
             brief = write_brief(p)
             video, thumb = render(p, brief, user_id, row["id"])
             rest("PATCH", f"deals?id=eq.{row['id']}", {
-                "name": brief["name"], "brief": brief, "caption": brief["caption"], "video_url": video, "thumb_url": thumb,
+                "name": brief["name"], "brief": brief, "caption": fit_caption(brief["caption"]), "video_url": video, "thumb_url": thumb,
                 "status": "ready", "updated_at": now().isoformat()})
             made += 1
         except Exception as e:  # noqa: BLE001 — um produto com problema não derruba os outros
