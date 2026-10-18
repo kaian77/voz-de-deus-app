@@ -98,7 +98,8 @@ export async function uniqueSlug(db: SupabaseClient, name: string, id: string) {
 
 // ---------------------------------------------------------------------------
 // Dados reais do cliente: Instagram (bio + fotos dos posts) e Google Maps (horário, fotos, categoria, descrição).
-// As fotos são copiadas para o storage (as do Instagram expiram). Rodar de novo não repete foto nem texto.
+// Espaço: fotos do Google entram só como link (não expiram, não ocupam o storage); as do Instagram expiram,
+// então até 6 são copiadas para o storage. Rodar de novo não repete foto nem texto.
 // ---------------------------------------------------------------------------
 type Imported = { at?: string; sources?: string[]; instagram?: string; maps?: string };
 
@@ -136,16 +137,16 @@ export async function importClientData(db: SupabaseClient, page: Record<string, 
   const patch: Record<string, unknown> = {};
   const status: Imported = { instagram: prev.instagram, maps: prev.maps };
   const room = () => Math.max(0, 12 - photos.length);
-  const addPhotos = async (urls: string[], max: number) => {
+  const addPhotos = async (urls: string[], max: number, copy = true) => {
     let added = 0;
     for (const url of urls) {
       if (added >= max || !room()) break;
       const key = url.split("?")[0];
       if (sources.has(key)) continue;
       sources.add(key);
-      const copy = await copyPhoto(db, page.user_id, page.id, url);
-      if (copy) {
-        photos.push(copy);
+      const saved = copy ? await copyPhoto(db, page.user_id, page.id, url) : url;
+      if (saved) {
+        photos.push(saved);
         added++;
       }
     }
@@ -161,7 +162,7 @@ export async function importClientData(db: SupabaseClient, page: Record<string, 
       addNote("Categoria no Google", d.category);
       addNote("Descrição no Google", d.description);
       if (lead.rating && !page.rating) Object.assign(patch, { rating: lead.rating, reviews: lead.reviews });
-      const n = await addPhotos(d.photos ?? [], 6);
+      const n = await addPhotos(d.photos ?? [], 6, false);
       status.maps = `ok: ${n} foto(s)${d.hours ? ", horário" : ", sem horário no Google"}`;
     } else if (lead) {
       if (lead.details_status !== "queued" && lead.details_status !== "running" && lead.details_status !== "failed") {
@@ -179,7 +180,7 @@ export async function importClientData(db: SupabaseClient, page: Record<string, 
       const ig = await igPublicProfile(user);
       addNote("Bio do Instagram", ig.bio);
       addNote("Categoria no Instagram", ig.category);
-      let n = await addPhotos(ig.photos, 8);
+      let n = await addPhotos(ig.photos, 6);
       if (n < 2 && ig.picture) n += await addPhotos([ig.picture], 1);
       status.instagram = `ok: ${n} foto(s)`;
     } catch (e) {
