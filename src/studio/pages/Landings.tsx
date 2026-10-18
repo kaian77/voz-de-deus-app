@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { renderLanding } from "@/landing/render";
 import { api } from "../lib/api";
-import { useInvalidate, useRemoveRow, useTable } from "../lib/hooks";
+import { useInvalidate, useTable } from "../lib/hooks";
 import type { LandingPage } from "../lib/types";
 import { EmptyState, PageHeader, Panel, relativeTime } from "../components/bits";
 
@@ -78,6 +78,9 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
   const save = async () => {
     if (!form.name.trim() || !form.niche.trim()) throw new Error("Preencha o nome e a área");
     const saved = await api.update("landing_pages", current.id, { ...form, name: form.name.trim(), niche: form.niche.trim() });
+    // fotos/logo tirados: apaga os arquivos do storage (não ocupam espaço à toa)
+    const gone = [...current.photos, current.logo].filter((u): u is string => !!u && !saved.photos.includes(u) && saved.logo !== u);
+    if (gone.length) api.invoke("ai", { action: "landing_remove_files", id: current.id, urls: gone }).catch(() => {});
     setCurrent(saved);
     return saved;
   };
@@ -338,7 +341,14 @@ export default function Landings() {
   const navigate = useNavigate();
   const invalidate = useInvalidate();
   const { data: pages = [], isLoading } = useTable("landing_pages", { order: "updated_at" });
-  const remove = useRemoveRow("landing_pages");
+  const remove = async (p: LandingPage) => {
+    try {
+      await api.invoke("ai", { action: "landing_delete", id: p.id });
+      invalidate("landing_pages");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   const [creating, setCreating] = useState(false);
   const id = params.get("id");
   const leadId = params.get("lead");
@@ -406,7 +416,7 @@ export default function Landings() {
                 {p.status !== "draft" && (
                   <Button size="sm" variant="ghost" asChild><a href={publicUrl(p)} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /></a></Button>
                 )}
-                <Button size="sm" variant="ghost" aria-label="Apagar" onClick={() => confirm(`Apagar a página de ${p.name || "sem nome"}?`) && remove.mutate(p.id)}>
+                <Button size="sm" variant="ghost" aria-label="Apagar" onClick={() => confirm(`Apagar a página de ${p.name || "sem nome"}?`) && remove(p)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>

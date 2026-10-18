@@ -254,6 +254,17 @@ Deno.serve(async (req) => {
       await db.from("yt_channels").update({ trends, trends_at: new Date().toISOString(), error: null }).eq("id", channel.id);
       return json({ trends });
     }
+    if (action === "landing_delete" || action === "landing_remove_files") {
+      // Espaço do storage: apagar a página (ou tirar uma foto) apaga os arquivos dela na hora
+      const { data: page } = await db.from("landing_pages").select("id,photos,logo").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
+      if (!page) throw new HttpError(404, "Página não encontrada");
+      const keep = new Set(action === "landing_delete" ? [] : [...(page.photos ?? []), page.logo]);
+      const urls = action === "landing_delete" ? [...(page.photos ?? []), page.logo] : ((input.urls as string[] | undefined) ?? []);
+      // só arquivos do próprio dono que a página não usa mais
+      await removeStudioFiles(db, urls.filter((u) => u && !keep.has(u) && String(u).includes(`/media/${userId}/`)));
+      if (action === "landing_delete") await db.from("landing_pages").delete().eq("id", page.id);
+      return json({ ok: true });
+    }
     if (action === "landing_import") {
       // Puxa os dados reais do cliente (Instagram + Google Maps) para a página
       const { data: page } = await db.from("landing_pages").select("*").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
