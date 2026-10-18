@@ -168,6 +168,28 @@ export async function optimizeStorage(db: SupabaseClient, days = 3) {
     if (p) paths.push(p);
   }
 
+  // Vídeos de produto pelo arquivo (pasta videos/, nome = id do vídeo): pega os que ficaram sem registro,
+  // os de registro já "apagado" e os que passaram do prazo; mantém os de post ainda por publicar
+  const { data: files } = await db.rpc("studio_files", { folder: "videos" });
+  const fileIds = ((files ?? []) as { name: string; bytes: number; created_at: string }[])
+    .map((f) => ({ ...f, id: f.name.split("/").pop()!.replace(/\.mp4$/, "") }));
+  let orphanBytes = 0;
+  if (fileIds.length) {
+    const { data: rows } = await db.from("product_videos").select("id,post_id,status,video_url,created_at")
+      .in("id", fileIds.map((f) => f.id).filter((id) => /^[0-9a-f-]{36}$/.test(id)));
+    const byId = new Map((rows ?? []).map((r) => [r.id, r]));
+    const busyFiles = await waitingPosts((rows ?? []).map((r) => r.post_id));
+    for (const f of fileIds) {
+      if (paths.includes(f.name)) continue;
+      const row = byId.get(f.id);
+      const young = f.created_at > before;
+      const inUse = row && (["queued", "rendering", "pending_brief"].includes(row.status) || (row.post_id && busyFiles.has(row.post_id)));
+      if (inUse || (young && row?.video_url)) continue;
+      paths.push(f.name);
+      orphanBytes += f.bytes;
+    }
+  }
+
   for (let i = 0; i < paths.length; i += 100) {
     const { error } = await db.storage.from("media").remove(paths.slice(i, i + 100));
     if (error) throw new Error(`Não consegui apagar os arquivos: ${error.message}`);
@@ -180,5 +202,9 @@ export async function optimizeStorage(db: SupabaseClient, days = 3) {
     await db.from("deals").update({ status: "skipped" }).in("id", ids(deals)).in("status", ["ready", "rendering"]);
     await db.from("deals").update({ video_url: null, thumb_url: null }).in("id", ids(deals));
   }
-  return { files: paths.length, videos: doneVideos.length + doneAi.length, previews: yt?.length ?? 0, deals: deals?.length ?? 0 };
+  // Registro que apontava para arquivo apagado agora fica sem link (o Studio não mostra vídeo quebrado)
+  const gone = fileIds.filter((f) => paths.includes(f.name)).map((f) => f.id);
+  if (gone.length) await db.from("product_videos").update({ video_url: null, file_deleted_at: now }).in("id", gone).not("video_url", "is", null);
+  return { files: paths.length, videos: doneVideos.length + doneAi.length, previews: yt?.length ?? 0, deals: deals?.length ?? 0,
+    freed_mb: Math.round(orphanBytes / 1024 ** 2) };
 }

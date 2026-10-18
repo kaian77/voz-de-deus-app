@@ -78,7 +78,7 @@ export default function Usage() {
     setOptimizing(true);
     try {
       const r = await api.invoke<{ files: number }>("ai", { action: "usage_optimize", days: 3 });
-      toast.success(r.files ? `${r.files} arquivo(s) antigos apagados do Supabase` : "Nada antigo para apagar agora");
+      toast.success(r.files ? `${r.files} arquivo(s) apagados do Supabase` : "Nada antigo para apagar agora (vídeos de posts agendados ficam guardados)");
       refetch();
     } catch (e) {
       toast.error((e as Error).message);
