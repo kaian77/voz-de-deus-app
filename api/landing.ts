@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { renderLanding, type LandingData } from "../src/landing/render.js";
 import { demoReport, renderReport, type ReportData } from "../src/landing/report.js";
 import { renderAgency } from "../src/landing/agency.js";
+import { mergeOffer } from "../src/studio/lib/offer.js";
 
 const URL_ = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rrlxhnmfsmknzhqpfrhr.supabase.co";
 const KEY =
@@ -58,7 +59,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       res.setHeader("Cache-Control", "no-store");
       return res.end();
     }
-    return send(res, 200, renderAgency(), "public, s-maxage=300, stale-while-revalidate=3600");
+    // preços, links e WhatsApp salvos no Studio ("Preços e links")
+    const saved = KEY ? await fetch(`${URL_}/rest/v1/rpc/paginaspro_offer`, { method: "POST", headers, body: "{}" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
+    return send(res, 200, renderAgency(mergeOffer(saved)), "public, s-maxage=60, stale-while-revalidate=600");
   }
   // Painel do cliente (plano mensal): /r/<token>
   const token = (url.searchParams.get("report") ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 64);

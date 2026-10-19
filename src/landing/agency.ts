@@ -2,17 +2,19 @@
 // HTML único, sem dependências; servido por api/landing.ts (?home=1). Interativo: celular 3D que segue o dedo/mouse
 // e troca de ramo, busca "sem site x com site", calculadora de retorno, painel de exemplo e planos.
 // Contagem própria (visita, clique no WhatsApp, origem) -> função site_track -> painel "Seu site" no Studio.
-import { OFFER } from "../studio/lib/offer.js";
+import { OFFER, type Offer } from "../studio/lib/offer.js";
 import { WIDGET_CSS, WIDGET_JS, WIDGET_TITLE, widgetHtml, type WidgetKind } from "./widgets.js";
 
-const WG_TABS: [WidgetKind, string][] = [["plate", "Nutricionista"], ["tooth", "Dentista"], ["body", "Fisioterapia e clínicas"], ["breath", "Psicologia"], ["skin", "Estética e dermato"]];
+const WG_TABS: [WidgetKind, string][] = [["plate", "Nutricionista"], ["tooth", "Dentista"], ["body", "Fisioterapia e clínicas"], ["breath", "Psicologia"], ["skin", "Estética e dermato"], ["law", "Advocacia"]];
 
-const WA = "5561992372216";
-const waLink = (text: string) => `https://wa.me/${WA}?text=${encodeURIComponent(text)}`;
-const HELLO = waLink("Oi, Bruno! Vi o site da PáginasPro e quero ver a prévia do site do meu negócio. Vou te mandar o @ do Instagram, fotos, endereço, horário e os serviços.");
 const brl = (n: number) => n.toLocaleString("pt-BR");
 
-export function renderAgency(): string {
+/** o = preços, links e WhatsApp (padrões de offer.ts com o que o dono salvou no Studio). */
+export function renderAgency(o: Offer = OFFER): string {
+  const WA = o.whatsapp;
+  const waLink = (text: string) => `https://wa.me/${WA}?text=${encodeURIComponent(text)}`;
+  const HELLO = waLink("Oi, Bruno! Vi o site da PáginasPro e quero ver a prévia do site do meu negócio. Vou te mandar o @ do Instagram, fotos, endereço, horário e os serviços.");
+  const phone = WA.replace(/^55/, "").replace(/^(\d{2})(\d{4,5})(\d{4})$/, "($1) $2-$3");
   return String.raw`<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>PáginasPro · Sites que fazem o WhatsApp tocar · Bruno Braga</title>
@@ -382,14 +384,14 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
     <div>
       <span class="kicker" style="color:#A9A79E"><i></i>Faça a conta</span>
       <h2 style="margin-top:18px">Um cliente novo <span class="serif">já paga o ano.</span></h2>
-      <p class="sub">Mexa nos valores com o que é real no seu negócio. O site custa R$ ${brl(OFFER.monthly)} por mês.</p>
+      <p class="sub">Mexa nos valores com o que é real no seu negócio. O site custa R$ ${brl(o.monthly)} por mês.</p>
     </div>
     <div>
       <div class="field"><label for="ticket">Quanto vale um cliente para você <b id="ticketV">R$ 150</b></label><input id="ticket" type="range" min="30" max="2000" step="10" value="150"></div>
       <div class="field"><label for="extra">Clientes novos por mês vindos do site <b id="extraV">3</b></label><input id="extra" type="range" min="1" max="20" step="1" value="3"></div>
       <div class="result-box">
         <div class="row"><span>Você ganha por mês</span><b id="gain">R$ 450</b></div>
-        <div class="row"><span>O site custa</span><b>R$ ${brl(OFFER.monthly)}</b></div>
+        <div class="row"><span>O site custa</span><b>R$ ${brl(o.monthly)}</b></div>
         <div class="x" id="mult">7,6x</div>
         <small>o que o site devolve para cada real investido (simulação com os seus números)</small>
       </div>
@@ -433,7 +435,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   <div class="wrap">
     <span class="kicker reveal"><i></i>Exclusivo do Premium</span>
     <h2 class="reveal" style="margin-top:18px;max-width:15em">Um site que o cliente <span class="serif">mexe com o dedo.</span></h2>
-    <p class="reveal" style="color:var(--muted);margin:14px 0 26px;max-width:36em">No Premium, o seu site ganha uma experiência interativa do seu ramo, com as suas cores. Conteúdo educativo, dentro das regras de cada conselho. Experimente:</p>
+    <p class="reveal" style="color:var(--muted);margin:14px 0 26px;max-width:36em">No Premium, o seu site ganha uma experiência interativa do seu ramo, com as suas cores. Conteúdo informativo, dentro das regras de cada conselho e da OAB. Experimente:</p>
     <div class="toggle reveal wg-tabs" role="group" aria-label="Escolha a profissão" style="flex-wrap:wrap">${WG_TABS.map(([k, label], i) => `<button type="button" aria-pressed="${i === 0}" data-wgtab="${k}">${label}</button>`).join("")}</div>
     <div class="reveal" style="--wp:#173B2C;--wi:#111110;--ws:#EAE7DD">
       ${WG_TABS.map(([k], i) => `<div class="wg-slot" data-slot="${k}"${i ? " hidden" : ""}><h3 style="margin-bottom:6px">${WIDGET_TITLE[k][0]}</h3><p style="color:var(--muted);margin-bottom:18px;font-size:15.5px">${WIDGET_TITLE[k][1]}</p>${widgetHtml(k)}</div>`).join("")}
@@ -448,23 +450,23 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
     <div class="plans">
       <div class="plan main reveal">
         <span class="name">Mensal · o mais escolhido</span>
-        <div class="price"><b>R$ ${brl(OFFER.monthly)}</b><span>/mês</span></div>
+        <div class="price"><b>R$ ${brl(o.monthly)}</b><span>/mês</span></div>
         <span class="note">Sem taxa de entrada</span>
         <ul><li>Site completo no ar</li><li>Painel de resultados só seu</li><li>Alterações sempre que precisar</li><li>Domínio próprio configurado (se você tiver)</li><li>Atendimento direto comigo no WhatsApp</li></ul>
         <a class="btn lime magnet" data-wa href="${waLink("Oi, Bruno! Quero o plano mensal da PáginasPro.")}" target="_blank" rel="noopener">Quero o mensal</a>
       </div>
       <div class="plan reveal">
         <span class="name">Avulso</span>
-        <div class="price"><b>R$ ${brl(OFFER.oneTime)}</b><span>uma vez</span></div>
+        <div class="price"><b>R$ ${brl(o.oneTime)}</b><span>uma vez</span></div>
         <span class="note">Paga uma vez, sem mensalidade</span>
-        <ul><li>Site completo no ar</li><li>Alterações depois: R$ ${brl(OFFER.change)} cada</li><li>Painel de resultados opcional: + R$ ${brl(OFFER.panelAddon)}/mês</li></ul>
+        <ul><li>Site completo no ar</li><li>Alterações depois: R$ ${brl(o.change)} cada</li><li>Painel de resultados opcional: + R$ ${brl(o.panelAddon)}/mês</li></ul>
         <a class="btn ghost magnet" data-wa href="${waLink("Oi, Bruno! Quero o site avulso da PáginasPro.")}" target="_blank" rel="noopener">Quero o avulso</a>
       </div>
     </div>
     <div class="plan premium reveal">
       <div><span class="name">Premium · um site igual a este</span>
       <p class="note" style="margin-top:8px;max-width:34em">Animações, foto em 3D que se mexe com o dedo, galeria arrastável e a conversa animada do WhatsApp, com as cores e a cara do seu negócio.</p></div>
-      <div class="pp"><div><b>R$ ${brl(OFFER.premiumMonthly)}</b><span>/mês com painel e alterações</span></div><div><b>R$ ${brl(OFFER.premiumOneTime)}</b><span>à vista, sem mensalidade</span></div></div>
+      <div class="pp"><div><b>R$ ${brl(o.premiumMonthly)}</b><span>/mês com painel e alterações</span></div><div><b>R$ ${brl(o.premiumOneTime)}</b><span>à vista, sem mensalidade</span></div></div>
       <a class="btn magnet" data-wa href="${waLink("Oi, Bruno! Quero o site Premium da PáginasPro, igual ao seu.")}" target="_blank" rel="noopener"><i class="dot"></i>Quero o Premium</a>
     </div>
     <p class="addon reveal">Em todos, você vê a prévia pronta antes de decidir.</p>
@@ -494,7 +496,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
 </section>
 </main>
 
-<footer><div class="wrap"><span><b style="color:var(--ink)">PáginasPro</b> · por Bruno Braga · Brasília · DF</span><a data-wa href="${HELLO}" target="_blank" rel="noopener">WhatsApp (61) 99237-2216</a></div></footer>
+<footer><div class="wrap"><span><b style="color:var(--ink)">PáginasPro</b> · por Bruno Braga · Brasília · DF</span><a data-wa href="${HELLO}" target="_blank" rel="noopener">WhatsApp ${phone}</a></div></footer>
 <a class="fab" id="fab" data-wa href="${HELLO}" target="_blank" rel="noopener" aria-label="Chamar no WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm4.5 12.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>Chamar no WhatsApp</a>
 
 <div class="wa-sheet" id="waSheet" aria-hidden="true">
@@ -655,11 +657,11 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
     document.querySelectorAll('[data-slot]').forEach(function(el){ el.hidden = el.getAttribute('data-slot') !== k; });
   }
   document.querySelectorAll('[data-wgtab]').forEach(function(b){ b.onclick = function(){ wgShow(b.getAttribute('data-wgtab')); }; });
-  var WG_BY_NICHE = { 'Dentista': 'tooth', 'Nutricionista': 'plate', 'Estética': 'skin' };
+  var WG_BY_NICHE = { 'Dentista': 'tooth', 'Nutricionista': 'plate', 'Estética': 'skin', 'Advocacia': 'law' };
   box.addEventListener('click', function(e){ var b = e.target.closest('button'); if (b && WG_BY_NICHE[b.textContent]) wgShow(WG_BY_NICHE[b.textContent]); });
 
   // calculadora
-  var ticket = document.getElementById('ticket'), extra = document.getElementById('extra'), COST = ${OFFER.monthly};
+  var ticket = document.getElementById('ticket'), extra = document.getElementById('extra'), COST = ${o.monthly};
   function money(v){ return 'R$ ' + Math.round(v).toLocaleString('pt-BR'); }
   function calc(){
     var g = +ticket.value * +extra.value;

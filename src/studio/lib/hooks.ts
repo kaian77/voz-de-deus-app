@@ -1,3 +1,4 @@
+import { mergeOffer, type Offer } from "./offer";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "./api";
@@ -17,6 +18,12 @@ export function useTable<T extends TableName>(
 
 export function useSettings() {
   return useQuery({ queryKey: ["settings"], queryFn: () => api.getSettings() });
+}
+
+/** Preços e links da PáginasPro: padrões de lib/offer.ts com o que o dono salvou em "Preços e links". */
+export function useOffer() {
+  const { data } = useSettings();
+  return mergeOffer(data?.landing_offer as Partial<Offer> | null);
 }
 
 export function useSaveRow<T extends TableName>(table: T) {
