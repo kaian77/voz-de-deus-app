@@ -304,7 +304,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   <div class="blob"></div>
   <div class="wrap grid">
     <div>
-      <span class="kicker reveal"><i></i>Bruno Braga · sites para negócios locais</span>
+      <span class="kicker reveal"><i></i>Bruno Braga · sites para qualquer negócio</span>
       <h1 style="margin-top:22px" class="split">Seu cliente te acha. <span class="serif">O WhatsApp toca.</span></h1>
       <p class="lead reveal">Eu monto o site do seu negócio com as suas fotos, seu horário, o mapa e o botão do WhatsApp. <b>Você vê ele pronto antes de pagar qualquer coisa.</b></p>
       <div class="ctas reveal">
@@ -335,7 +335,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   </div>
 </section>
 
-<div class="marquee" aria-hidden="true"><div class="track"><span>Dentistas</span><span>Nutricionistas</span><span>Barbearias</span><span>Advogados</span><span>Clínicas de estética</span><span>Psicólogos</span><span>Pet shops</span><span>Fisioterapeutas</span><span>Salões</span><span>Personal trainers</span><span>Dentistas</span><span>Nutricionistas</span><span>Barbearias</span><span>Advogados</span><span>Clínicas de estética</span><span>Psicólogos</span><span>Pet shops</span><span>Fisioterapeutas</span><span>Salões</span><span>Personal trainers</span></div></div>
+<div class="marquee" aria-hidden="true"><div class="track"><span>Dentistas</span><span>Nutricionistas</span><span>Barbearias</span><span>Advogados</span><span>Clínicas de estética</span><span>Psicólogos</span><span>Pet shops</span><span>Fisioterapeutas</span><span>Salões</span><span>Personal trainers</span><span>Restaurantes</span><span>Lojas</span><span>Oficinas</span><span>Qualquer negócio</span><span>Dentistas</span><span>Nutricionistas</span><span>Barbearias</span><span>Advogados</span><span>Clínicas de estética</span><span>Psicólogos</span><span>Pet shops</span><span>Fisioterapeutas</span><span>Salões</span><span>Personal trainers</span><span>Restaurantes</span><span>Lojas</span><span>Oficinas</span><span>Qualquer negócio</span></div></div>
 
 <section class="compare">
   <div class="wrap">
@@ -444,7 +444,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
       <details class="reveal"><summary>E se eu não gostar da prévia?</summary><p>Você não paga nada. A prévia é para você ver o site funcionando antes de decidir.</p></details>
       <details class="reveal"><summary>Preciso ter domínio (.com.br)?</summary><p>Não. Seu site já sai com um endereço pronto. Se você tiver ou quiser comprar um domínio próprio, eu configuro.</p></details>
       <details class="reveal"><summary>Quem vai fazer o meu site?</summary><p>Eu, Bruno Braga. Você fala direto comigo pelo WhatsApp, sem atendente e sem fila.</p></details>
-      <details class="reveal"><summary>Funciona para o meu ramo?</summary><p>Se o seu cliente procura você no Google ou chega pelo Instagram, funciona: saúde, beleza, advocacia, pet, oficina, comércio de bairro.</p></details>
+      <details class="reveal"><summary>Funciona para o meu ramo?</summary><p>Sim, para qualquer ramo. Clínica, salão, loja, restaurante, oficina, escritório, prestador de serviço, profissional autônomo, comércio de bairro ou negócio online: cada site é feito sob medida para o que você faz e para o seu cliente.</p></details>
     </div>
   </div>
 </section>
