@@ -77,13 +77,18 @@ const BODY = `
 <div class="wg-body">
   <div class="wg-stage">
     <svg viewBox="0 0 200 340" class="wg-svg" aria-label="Corpo humano">
-      <g fill="var(--ws)" stroke="var(--wl)" stroke-width="2">
-        <circle cx="100" cy="36" r="24"/>
-        <path d="M70 70 Q100 60 130 70 L150 80 Q160 84 162 96 L172 170 Q174 180 166 182 L158 182 L148 110 L142 112 L144 200 L136 320 Q134 330 124 330 L114 330 L108 210 L92 210 L86 330 L76 330 Q66 330 64 320 L56 200 L58 112 L52 110 L42 182 L34 182 Q26 180 28 170 L38 96 Q40 84 50 80 Z"/>
+      <g fill="#fff" stroke="var(--wl)" stroke-width="2">
+        <rect x="40" y="70" width="20" height="116" rx="10" transform="rotate(10 50 74)"/>
+        <rect x="140" y="70" width="20" height="116" rx="10" transform="rotate(-10 150 74)"/>
+        <rect x="70" y="170" width="27" height="156" rx="13"/>
+        <rect x="103" y="170" width="27" height="156" rx="13"/>
+        <rect x="60" y="64" width="80" height="122" rx="28"/>
+        <rect x="91" y="50" width="18" height="20" rx="6"/>
+        <circle cx="100" cy="32" r="22"/>
       </g>
       <g class="wg-dots">
-        <circle data-spot="neck" cx="100" cy="66" r="9"/><circle data-spot="shoulder" cx="58" cy="86" r="9"/><circle data-spot="back" cx="100" cy="150" r="9"/>
-        <circle data-spot="wrist" cx="160" cy="170" r="9"/><circle data-spot="knee" cx="80" cy="256" r="9"/><circle data-spot="ankle" cx="122" cy="318" r="9"/>
+        <circle data-spot="neck" cx="100" cy="60" r="8"/><circle data-spot="shoulder" cx="66" cy="78" r="8"/><circle data-spot="back" cx="100" cy="150" r="8"/>
+        <circle data-spot="wrist" cx="168" cy="176" r="8"/><circle data-spot="knee" cx="84" cy="252" r="8"/><circle data-spot="ankle" cx="116" cy="314" r="8"/>
       </g>
     </svg>
   </div>

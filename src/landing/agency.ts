@@ -525,12 +525,13 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   var sheet = document.getElementById('waSheet'), bubble = document.getElementById('waBubble'), txt = document.getElementById('waText'), caret = document.getElementById('waCaret'), busy = false;
   function openWa(href){
     track('whatsapp');
-    if (reduce || busy) { location.href = href; return; }
+    var framed = window.top !== window;
+    if ((reduce && !framed) || busy) { location.href = href; return; }
     busy = true;
     var msg = decodeURIComponent((href.split('text=')[1] || '').replace(/\+/g, ' '));
     var short = msg.length > 120 ? msg.slice(0, 117) + '…' : msg;
     var d = new Date(); document.getElementById('waTime').textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-    document.getElementById('waNow').href = href;
+    var now = document.getElementById('waNow'); now.href = href; now.target = '_blank'; now.rel = 'noopener';
     txt.textContent = ''; caret.style.display = ''; bubble.className = 'bubble'; sheet.className = 'wa-sheet';
     sheet.setAttribute('aria-hidden', 'false');
     requestAnimationFrame(function(){ sheet.classList.add('open'); });
@@ -542,6 +543,8 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
         if (i >= short.length) {
           clearInterval(t); caret.style.display = 'none';
           setTimeout(function(){ bubble.classList.add('read'); sheet.classList.add('go'); }, 200);
+          // numa prévia (link de teste) a página não pode sair: fica no "abrir agora"
+          if (framed) { busy = false; return; }
           setTimeout(function(){ location.href = href; }, 1350);
           setTimeout(function(){ sheet.className = 'wa-sheet'; sheet.setAttribute('aria-hidden', 'true'); busy = false; }, 2600);
         }
