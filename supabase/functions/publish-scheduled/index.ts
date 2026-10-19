@@ -8,7 +8,7 @@ import { autoLinkPosts } from "../_shared/auto-link.ts";
 import { finishRenderedVideos, prepareBriefs } from "../_shared/product-video.ts";
 import { pollAiVideos } from "../_shared/ai-video.ts";
 import { runAutopilot } from "../_shared/content-ideas.ts";
-import { cleanupStorage } from "../_shared/storage-cleanup.ts";
+import { cleanupStorage, optimizeStorage } from "../_shared/storage-cleanup.ts";
 import { wahaKeepAlive } from "../_shared/whatsapp.ts";
 import { runSaleAlerts } from "../_shared/sale-alerts.ts";
 import { runDailyDigest } from "../_shared/daily.ts";
@@ -57,8 +57,12 @@ Deno.serve(async (req) => {
       ? await runAutopilot(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
       : undefined;
     // Uma vez por hora: apaga os vídeos antigos (já baixados ou publicados) para liberar espaço
-    const cleanup = new Date().getUTCMinutes() === 50
-      ? await cleanupStorage(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
+    // e, uma vez por dia (4h50 de Brasília), a faxina do botão "Otimizar agora": vídeos usados com mais de 3 dias
+    // e arquivos que ficaram sem registro
+    const clock = new Date();
+    const cleanup = clock.getUTCMinutes() === 50
+      ? await (clock.getUTCHours() === 7 ? optimizeStorage(db, 3) : cleanupStorage(db))
+        .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
       : undefined;
     // A cada 10 minutos: "acorda" os servidores WAHA (hospedagem grátis dorme após 15 min sem acesso)
     const waha = new Date().getUTCMinutes() % 10 === 7
