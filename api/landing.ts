@@ -4,6 +4,7 @@
 // Prévia vencida (preview_until) não abre mais: a cliente não usa o link de prévia como site.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { renderLanding, type LandingData } from "../src/landing/render.js";
+import { renderReport, type ReportData } from "../src/landing/report.js";
 
 const URL_ = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rrlxhnmfsmknzhqpfrhr.supabase.co";
 const KEY =
@@ -24,22 +25,55 @@ function send(res: ServerResponse, status: number, html: string, cache: string) 
   res.end(html);
 }
 
+/** De onde veio a visita (referrer ou utm_source) -> chave do painel. */
+function source(ref: string) {
+  const r = ref.toLowerCase();
+  if (!r) return "direto";
+  if (/google\./.test(r) || r === "google") return "google";
+  if (/instagram/.test(r)) return "instagram";
+  if (/facebook|fb\.|^fb$/.test(r)) return "facebook";
+  if (/whatsapp|wa\.me/.test(r)) return "whatsapp";
+  if (/tiktok/.test(r)) return "tiktok";
+  return "outros";
+}
+
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", "https://x");
   const slug = (url.searchParams.get("slug") ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 80);
   const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "voz-de-deus-app.vercel.app").toLowerCase().split(":")[0];
   const own = !slug && !host.endsWith(".vercel.app") ? host.replace(/^www\./, "").replace(/[^a-z0-9.-]/g, "") : "";
-  if ((!slug && !own) || !KEY) return send(res, 404, NOT_FOUND, "no-store");
   const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
+
+  // Painel do cliente (plano mensal): /r/<token>
+  const token = (url.searchParams.get("report") ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 64);
+  if (token && KEY) {
+    const r = await fetch(`${URL_}/rest/v1/rpc/landing_report`, { method: "POST", headers, body: JSON.stringify({ p_token: token }) });
+    const data = r.ok ? ((await r.json()) as ReportData | null) : null;
+    return data ? send(res, 200, renderReport(data), "no-store") : send(res, 404, NOT_FOUND, "no-store");
+  }
+  // Aviso do navegador do visitante (visita, clique no WhatsApp, rota no mapa): conta só página publicada
+  const event = url.searchParams.get("e");
+  if (event && KEY) {
+    if (["view", "whatsapp", "maps"].includes(event)) {
+      await fetch(`${URL_}/rest/v1/rpc/landing_track`, {
+        method: "POST", headers,
+        body: JSON.stringify({ p_slug: slug, p_domain: own, p_event: event, p_source: source(url.searchParams.get("r") ?? "") }),
+      }).catch(() => {});
+    }
+    res.statusCode = 204;
+    res.setHeader("Cache-Control", "no-store");
+    return res.end();
+  }
+  if ((!slug && !own) || !KEY) return send(res, 404, NOT_FOUND, "no-store");
   const filter = own ? `domain=ilike.${own}&status=eq.published` : `slug=eq.${slug}&status=in.(preview,published)`;
   const r = await fetch(`${URL_}/rest/v1/landing_pages?${filter}&select=*&limit=1`, { headers });
   const page = (r.ok ? ((await r.json()) as Row[]) : [])[0];
   if (!page?.content) return send(res, 404, NOT_FOUND, "no-store");
   if (page.status === "preview" && page.preview_until && new Date(page.preview_until).getTime() < Date.now()) return send(res, 410, EXPIRED, "no-store");
-  // Visita contada sem travar a resposta
-  fetch(`${URL_}/rest/v1/rpc/landing_view`, { method: "POST", headers, body: JSON.stringify({ p_slug: page.slug }) }).catch(() => {});
+  // Prévia: visita contada aqui (sem cache); publicada: quem conta é o navegador (script com track)
+  if (page.status === "preview") fetch(`${URL_}/rest/v1/rpc/landing_view`, { method: "POST", headers, body: JSON.stringify({ p_slug: page.slug }) }).catch(() => {});
   // Publicada com domínio próprio: o endereço oficial (Google) é o domínio
   const canonical = page.status === "published" && page.domain ? `https://${page.domain}/` : `https://${host}/p/${page.slug}`;
   const preview = page.status === "preview";
-  send(res, 200, renderLanding(page, { url: canonical, preview, sample: preview }), preview ? "no-store" : "public, s-maxage=60, stale-while-revalidate=600");
+  send(res, 200, renderLanding(page, { url: canonical, preview, sample: preview, track: !preview }), preview ? "no-store" : "public, s-maxage=60, stale-while-revalidate=600");
 }

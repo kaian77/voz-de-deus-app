@@ -9,6 +9,10 @@
       "destination": "/api/landing?slug=:slug"
     },
     {
+      "source": "/r/:token",
+      "destination": "/api/landing?report=:token"
+    },
+    {
       "source": "/((?!p/|api/).*)",
       "has": [
         {

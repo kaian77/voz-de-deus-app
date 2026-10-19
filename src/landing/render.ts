@@ -48,27 +48,27 @@ export type LandingData = {
   content: LandingContent;
 };
 
-const FONTS: Record<LandingContent["fonts"], { head: string; body: string; url: string; weight: number }> = {
+export const FONTS: Record<LandingContent["fonts"], { head: string; body: string; url: string; weight: number }> = {
   fraunces: { head: "'Fraunces', Georgia, serif", body: "'Inter', system-ui, sans-serif", weight: 500, url: "family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600" },
   cormorant: { head: "'Cormorant Garamond', Georgia, serif", body: "'Manrope', system-ui, sans-serif", weight: 600, url: "family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600" },
   dmserif: { head: "'DM Serif Display', Georgia, serif", body: "'DM Sans', system-ui, sans-serif", weight: 400, url: "family=DM+Serif+Display&family=DM+Sans:wght@400;500;600" },
   jakarta: { head: "'Plus Jakarta Sans', system-ui, sans-serif", body: "'Plus Jakarta Sans', system-ui, sans-serif", weight: 700, url: "family=Plus+Jakarta+Sans:wght@400;500;600;700;800" },
 };
 
-const esc = (s: unknown) =>
+export const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-const hex = (v: string, fallback: string) => (/^#[0-9a-f]{6}$/i.test(v ?? "") ? v : fallback);
+export const hex = (v: string, fallback: string) => (/^#[0-9a-f]{6}$/i.test(v ?? "") ? v : fallback);
 
 /** Mistura duas cores hex (t = 0 → a, 1 → b). */
-function mix(a: string, b: string, t: number) {
+export function mix(a: string, b: string, t: number) {
   const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
   const [x, y] = [p(a), p(b)];
   return "#" + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0")).join("");
 }
 
 /** Texto legível sobre a cor (preto ou branco). */
-function onColor(h: string) {
+export function onColor(h: string) {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? "#111111" : "#ffffff";
 }
@@ -93,7 +93,8 @@ export function whatsappLink(d: LandingData) {
 const SAMPLE_HOURS = "Seg a sex: 8h às 18h (exemplo, confirmar)";
 
 /** opts.preview = link de prévia (faixa + sem indexar); opts.sample = mostra exemplo no que falta (prévia e Studio). */
-export function renderLanding(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean } = {}): string {
+/** opts.track = conta visitas e cliques (só na página servida pela api/landing.ts, nunca na prévia do Studio). */
+export function renderLanding(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean; track?: boolean } = {}): string {
   const c = d.content;
   const f = FONTS[c.fonts] ?? FONTS.fraunces;
   const primary = hex(c.colors?.primary, "#2f5d50");
@@ -290,11 +291,17 @@ ${galleryHtml}
 <section class="final"><div class="wrap reveal"><h2>${esc(c.final_title)}</h2><p>${esc(c.final_text)}</p>${cta()}</div></section>
 ${contactRows.length || mapQuery ? `<section class="contact" id="contato"><div class="wrap">
 <div class="reveal"><span class="eyebrow">Contato</span><h2>Fale com a gente</h2><dl>${contactRows.join("")}</dl></div>
-${mapQuery ? `<iframe class="reveal" loading="lazy" title="Mapa" src="https://www.google.com/maps?q=${mapQuery}&output=embed"></iframe>` : ""}
+${mapQuery ? `<div class="reveal"><iframe loading="lazy" title="Mapa" src="https://www.google.com/maps?q=${mapQuery}&output=embed"></iframe>
+<a class="btn ghost small" style="margin-top:14px" data-track="maps" href="https://www.google.com/maps/dir/?api=1&destination=${mapQuery}" target="_blank" rel="noopener">Como chegar</a></div>` : ""}
 </div></section>` : ""}
 </main>
 <footer><div class="wrap"><span>© ${new Date().getFullYear()} ${esc(d.name)}${d.city ? ` · ${esc(d.city)}` : ""}</span>${d.registry ? `<span>${esc(d.registry)}</span>` : ""}</div></footer>
 ${wa ? `<a class="float" href="${esc(wa)}" target="_blank" rel="noopener" aria-label="WhatsApp">${WA_ICON}</a>` : ""}
+${opts.track ? `<script>
+(function(){function t(e,r){var u=location.pathname.replace(/\\/$/,'')+'?e='+e+(r?'&r='+encodeURIComponent(r):'');try{navigator.sendBeacon?navigator.sendBeacon(u):fetch(u,{method:'POST',keepalive:true})}catch(x){}}
+t('view',(new URLSearchParams(location.search).get('utm_source'))||document.referrer);
+document.addEventListener('click',function(ev){var a=ev.target.closest&&ev.target.closest('a');if(!a)return;if(/wa\\.me\\//.test(a.href))t('whatsapp');else if(a.getAttribute('data-track')==='maps')t('maps')},true)})();
+</script>` : ""}
 <script>
 (function(){var els=document.querySelectorAll('.reveal');if(!('IntersectionObserver'in window)){els.forEach(function(e){e.classList.add('in')});return}
 var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{rootMargin:'0px 0px -8% 0px'});els.forEach(function(e){io.observe(e)})})();
