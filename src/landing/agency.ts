@@ -1,4 +1,4 @@
-// Site da PáginasPro (Bruno Braga): a vitrine do serviço de landing pages, em paginaspro.vercel.app.
+// Site da PáginasPro (Bruno Braga): a vitrine do serviço de landing pages, em paginaspro.app.br.
 // HTML único, sem dependências; servido por api/landing.ts (?home=1). Interativo: celular 3D que segue o dedo/mouse
 // e troca de ramo, busca "sem site x com site", calculadora de retorno, painel de exemplo e planos.
 // Contagem própria (visita, clique no WhatsApp, origem) -> função site_track -> painel "Seu site" no Studio.
@@ -21,7 +21,7 @@ export function renderAgency(o: Offer = OFFER): string {
 <meta name="description" content="Site profissional para o seu negócio, com as suas fotos, horário, mapa e botão do WhatsApp. Você vê a prévia pronta antes de pagar. Por Bruno Braga.">
 <meta property="og:title" content="PáginasPro · Sites que fazem o WhatsApp tocar">
 <meta property="og:description" content="Você vê o site do seu negócio pronto antes de pagar qualquer coisa.">
-<meta property="og:url" content="https://paginaspro.vercel.app/"><link rel="canonical" href="https://paginaspro.vercel.app/">
+<meta property="og:url" content="https://paginaspro.app.br/"><link rel="canonical" href="https://paginaspro.app.br/">
 <meta name="theme-color" content="#111110">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23111110'/%3E%3Ccircle cx='44' cy='20' r='7' fill='%23D4FF3F'/%3E%3Cpath d='M18 46V18h12a9 9 0 0 1 0 18h-6' stroke='%23F3F1EA' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

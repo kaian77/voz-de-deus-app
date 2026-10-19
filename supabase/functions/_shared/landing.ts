@@ -209,7 +209,7 @@ export const DNS_RECORDS = [
 export function cleanDomain(v: unknown) {
   const d = String(v ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
   if (!d) return "";
-  if (!/^([a-z0-9-]+\.)+[a-z]{2,}$/.test(d) || d.endsWith(".vercel.app")) throw new HttpError(400, "Domínio inválido (ex.: clinicaana.com.br)");
+  if (!/^([a-z0-9-]+\.)+[a-z]{2,}$/.test(d) || d.endsWith(".vercel.app") || /(^|\.)paginaspro\.app\.br$/.test(d)) throw new HttpError(400, "Domínio inválido (ex.: clinicaana.com.br)");
   return d;
 }
 
