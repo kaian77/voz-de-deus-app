@@ -30,7 +30,13 @@ from worker import URL, http, rest
 SCRAPER = os.environ.get("SCRAPER_URL", "http://localhost:8080").rstrip("/")
 UA = "BraxStudio-leads/1.0 (https://github.com/kaian77/voz-de-deus-app)"
 # Endereços que não são site próprio: quem só tem isso continua sendo um bom lead
-NOT_A_SITE = re.compile(r"instagram\.com|facebook\.com|fb\.com|wa\.me|whatsapp\.com|linktr\.ee|linkbio|bio\.link|beacons\.ai|business\.site|ifood\.com|tiktok\.com", re.I)
+# Agenda online (Doctoralia, Boa Consulta...), link de bio e encurtador também não são site próprio: a pessoa ainda precisa de um.
+NOT_A_SITE = re.compile(
+    r"instagram\.com|facebook\.com|fb\.com|fb\.me|wa\.me|wa\.link|whatsapp\.com|linktr\.ee|linkbio|bio\.link|beacons\.ai|business\.site|"
+    r"ifood\.com|tiktok\.com|doctoralia|boaconsulta|agendar|agendamento|calendly|linkme|lnk\.bio|taplink|instabio|linkin\.bio|"
+    r"bit\.ly|encurtador|zenklub|psicologiaviva|g\.page|maps\.app\.goo|google\.com/maps|youtube\.com|tuasaude|minhavida",
+    re.I,
+)
 
 
 def now():
@@ -197,14 +203,24 @@ def details(row):
     }
 
 
-def to_lead(row, search):
+def reject_reason(row):
+    """Por que o lugar não vira lead (None = vira). Fica no log para entender buscas que voltam vazias."""
     site = (row.get("website") or "").strip()
     if site and not NOT_A_SITE.search(site):
+        return "site"
+    if not mobile(row.get("phone")):
+        return "sem celular"
+    if not (row.get("place_id") or row.get("cid") or row.get("link")) or not (row.get("title") or "").strip():
+        return "sem dados"
+    return None
+
+
+def to_lead(row, search):
+    if reject_reason(row):
         return None
+    site = (row.get("website") or "").strip()
     wa = mobile(row.get("phone"))
     place = row.get("place_id") or row.get("cid") or row.get("link")
-    if not wa or not place or not (row.get("title") or "").strip():
-        return None
 
     def num(k, cast):
         try:
@@ -287,18 +303,29 @@ def run(search):
                 errors.append(str(e))
                 print(f"  pedaço {i}: {e}")
                 continue
-            fresh = []
+            fresh, why, sites = [], {}, []
             for row in rows:
-                lead = to_lead(row, search)
-                if lead and inside(lead, bbox) and lead["place_id"] not in places and lead["whatsapp"] not in phones:
-                    places.add(lead["place_id"])
-                    phones.add(lead["whatsapp"])
-                    fresh.append(lead)
+                reason = reject_reason(row)
+                lead = None if reason else to_lead(row, search)
+                if lead and not inside(lead, bbox):
+                    reason = "fora da área"
+                elif lead and (lead["place_id"] in places or lead["whatsapp"] in phones):
+                    reason = "já na lista"
+                if reason:
+                    why[reason] = why.get(reason, 0) + 1
+                    if reason == "site" and len(sites) < 4:
+                        sites.append(re.sub(r"^https?://(www\.)?", "", (row.get("website") or ""))[:40])
+                    continue
+                places.add(lead["place_id"])
+                phones.add(lead["whatsapp"])
+                fresh.append(lead)
             fresh = fresh[: wanted - found]
             if fresh:
                 http("POST", f"{URL}/rest/v1/leads?on_conflict=user_id,place_id", fresh, {"Prefer": "resolution=ignore-duplicates,return=minimal"})
                 found += len(fresh)
-            print(f"  pedaço {i} ({km:g} km): {len(rows)} lugares, {len(fresh)} leads novos ({found}/{wanted})")
+            print(f"  pedaço {i} ({km:g} km): {len(rows)} lugares, {len(fresh)} leads novos ({found}/{wanted})"
+                  + (f" · descartados: {', '.join(f'{n} {k}' for k, n in why.items())}" if why else "")
+                  + (f" · sites: {', '.join(sites)}" if sites else ""))
             rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"found": found, "updated_at": now()})
             if found >= wanted:
                 break
