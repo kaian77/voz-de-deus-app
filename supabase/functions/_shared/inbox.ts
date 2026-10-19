@@ -236,6 +236,11 @@ function carrierContact(info: string) {
   return null;
 }
 
+/** URL comparável: sem protocolo, www, query e barra final. */
+function normUrl(u: string) {
+  return u.replace(/[).,!?]+$/, "").replace(/^https?:\/\/(www\.)?/i, "").split(/[?#]/)[0].replace(/\/+$/, "").toLowerCase();
+}
+
 const FINAL_TOOL: AgentTool = {
   name: "responder",
   description: "Envia a resposta final ao contato. Sempre termine chamando esta ferramenta.",
@@ -275,7 +280,16 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
   }
   const lines = history.map((m) => `${m.direction === "in" ? "CONTATO" : "MARCA"}: ${m.text}`).join("\n");
   const store = await storeFor(db, conversation.user_id).catch(() => null);
-  const tools = storeTools(store);
+  // Links de produto que a busca devolveu nesta resposta: a IA só pode mandar produto que a loja tem de verdade
+  const found = new Set<string>();
+  const tools = storeTools(store).map((t) => t.name !== "buscar_produtos" ? t : {
+    ...t,
+    run: async (input: { busca: string }) => {
+      const out = await t.run!(input);
+      if (Array.isArray(out)) for (const p of out as { link?: string }[]) if (p.link) found.add(normUrl(p.link));
+      return out;
+    },
+  });
   const system =
     `Você é o atendente virtual da marca no ${conversation.channel === "whatsapp" ? "WhatsApp" : "direct do Instagram"}. ` +
     `Responda em português do Brasil, de forma calorosa, curta (até 3 frases), natural, sem parecer robô, no máximo 1 emoji.\n\n` +
@@ -284,7 +298,9 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
     `menção ou resposta a story, post/reel compartilhado, foto/áudio sem pergunta, só cumprimento ("oi", "bom dia"), só emoji, elogio, agradecimento, ` +
     `"ok"/"obrigado" de fim de conversa, papo, piada, spam, divulgação, proposta de parceria e qualquer assunto que não seja comprar. ` +
     `Se for sobre produto/compra mas você não tiver certeza da resposta (nem as ferramentas nem a base resolvem), não chute: handoff=true com reply vazio, ` +
-    `que a equipe responde.\n\n` : "") +
+    `que a equipe responde.\n` +
+    `PRODUTO PEDIDO: só mande link de produto se buscar_produtos achou EXATAMENTE o que a pessoa pediu (o mesmo personagem, time, profissão, tema ou objeto). ` +
+    `Nunca ofereça produto parecido, "outra opção", substituto ou sugestão que ela não pediu. Se a loja não tem o que ela pediu, NÃO responda nada (ignore=true, reply vazio).\n\n` : "") +
     `Como atender (quando for responder):\n` +
     `- Leia a conversa inteira e responda ao que a pessoa quer AGORA, considerando tudo o que já foi dito. Se ela mandou várias mensagens seguidas, responda tudo numa mensagem só.\n` +
     `- Não repita cumprimentos, perguntas ou links que a MARCA já mandou na conversa. Não faça a mesma pergunta duas vezes. ` +
@@ -295,7 +311,7 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
     (tools.length
       ? `- Use as ferramentas para consultar a loja de verdade: buscar_produtos (o catálogo é grande; procure antes de dizer que não tem), ` +
         `info_loja (frete, trocas, contato), cupons_ativos e consultar_pedido. Só afirme o que veio das ferramentas, da base de conhecimento ou das instruções.\n` +
-        `- Produto pedido pelo nome popular (ex.: "homem aranha") pode ter outro nome na loja (ex.: "Zé Aranha"): busque por palavras-chave e explique a versão que a loja tem.\n` +
+        `- Produto pedido pelo nome popular (ex.: "homem aranha") pode ter outro nome na loja (ex.: "Zé Aranha"): busque por palavras-chave. Só conta se for claramente o mesmo personagem/tema; senão a loja não tem.\n` +
         `- Cupom: quando pedirem desconto, passe os cupons da base de conhecimento/instruções (ou de cupons_ativos) — só códigos que vieram de lá, com as condições (primeira compra, valor mínimo, validade). ` +
         `Nunca passe cupom com nome de pessoa no código. Se não houver, diga com gentileza que no momento não há cupom ativo.\n` +
         `- Pedido: peça o número do pedido e o e-mail (ou nome completo) de quem comprou; só depois consulte e passe status, transportadora e rastreio.\n` +
@@ -314,8 +330,15 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
     `Contato: ${conversation.contact_name ?? conversation.contact_username ?? "sem nome"}\n\nConversa até agora:\n${lines}\n\n` +
       `Decida se a última mensagem do CONTATO é dúvida de produto/compra. Se for, escreva a próxima mensagem da MARCA; se não, ignore=true. Termine com a ferramenta responder.`,
     [...tools, FINAL_TOOL], "medium");
+  // Trava: link de produto que a busca não devolveu (inventado ou de outro produto) não sai; no Instagram fica sem resposta
+  const reply = result.ignore ? "" : String(result.reply ?? "");
+  const invented = (reply.match(/https?:\/\/\S+/g) ?? []).some((u) => /\/produtos?\//i.test(u) && !found.has(normUrl(u)));
+  if (invented && !result.handoff) {
+    return { reply: "", ignore: conversation.channel === "instagram", handoff: conversation.channel !== "instagram",
+      handoff_reason: "IA tentou mandar um produto que a busca não achou", settings, personal: false };
+  }
   return {
-    reply: result.ignore ? "" : String(result.reply ?? ""), ignore: Boolean(result.ignore) && !result.handoff,
+    reply, ignore: Boolean(result.ignore) && !result.handoff,
     handoff: Boolean(result.handoff), handoff_reason: String(result.handoff_reason ?? ""), settings, personal: false,
   };
 }
