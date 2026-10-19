@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,31 @@ const INFO: Record<Platform, { name: string; features: string; note: string }> =
   },
 };
 
+/** Marca da conta: a da PáginasPro tem atendente próprio e fica fora das automações e do piloto automático da loja. */
+function BrandSelect({ account }: { account: SocialAccount }) {
+  const qc = useQueryClient();
+  const change = async (brand: string) => {
+    try {
+      await api.invoke("inbox", { action: "account_brand", account_id: account.id, brand });
+      await qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
+      toast.success(brand === "paginaspro" ? "Conta marcada como PáginasPro" : "Conta marcada como Brax Pins");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  return (
+    <select
+      aria-label="Marca da conta"
+      value={account.meta.brand === "paginaspro" ? "paginaspro" : "brax"}
+      onChange={(e) => change(e.target.value)}
+      className="h-7 rounded-md border bg-background px-1.5 text-xs"
+    >
+      <option value="brax">Brax Pins</option>
+      <option value="paginaspro">PáginasPro</option>
+    </select>
+  );
+}
+
 export function ConnectedAccount({ account, onRemove }: { account: SocialAccount; onRemove: () => void }) {
   const [confirming, setConfirming] = useState(false);
   return (
@@ -42,6 +68,7 @@ export function ConnectedAccount({ account, onRemove }: { account: SocialAccount
             : account.followers_count != null ? `${account.followers_count.toLocaleString("pt-BR")} seguidores` : "Conectada"}
         </p>
       </div>
+      {(account.platform === "instagram" || account.platform === "whatsapp") && !confirming && <BrandSelect account={account} />}
       {confirming ? (
         <div className="flex items-center gap-1">
           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setConfirming(false)}>Cancelar</Button>

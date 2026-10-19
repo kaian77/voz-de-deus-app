@@ -1,4 +1,6 @@
 // Tratamento de comentários e DMs do Instagram, usado pelo webhook e pela busca periódica (poller).
+import { isPaginasPro } from "./brand.ts";
+import { storeClientPhoto } from "./paginaspro-agent.ts";
 import { adminClient } from "./util.ts";
 import { igPrivateReply, igReplyToComment, igRequest, igTokenFor } from "./instagram.ts";
 import { autoReply, recordInbound } from "./inbox.ts";
@@ -21,6 +23,7 @@ export async function handleComment(igUserId: string, value: CommentValue) {
   const { data: account } = await db.from("social_accounts").select("*").eq("platform", "instagram").eq("external_id", igUserId).maybeSingle();
   if (!account) return;
   if (!value.id || value.from?.id === igUserId) return; // ignora comentários da própria conta (evita loop)
+  if (isPaginasPro(account.meta)) return; // automações de comentário são da Brax Pins
 
   const { data: event, error } = await db.from("comment_events").insert({
     user_id: account.user_id,
@@ -103,7 +106,7 @@ export async function handleComment(igUserId: string, value: CommentValue) {
 export type MessagingEvent = {
   sender: { id: string };
   recipient: { id: string };
-  message?: { mid: string; text?: string; is_echo?: boolean; attachments?: { type: string }[] };
+  message?: { mid: string; text?: string; is_echo?: boolean; attachments?: { type: string; payload?: { url?: string } }[] };
   /** Nome de usuário já conhecido (vem da busca periódica); evita uma chamada extra à API */
   username?: string;
 };
@@ -119,7 +122,15 @@ export async function handleDirectMessage(igUserId: string, event: MessagingEven
   const profile = event.username
     ? { username: event.username, name: undefined as string | undefined }
     : await igRequest<{ name?: string; username?: string }>(token, event.sender.id, { params: { fields: "name,username" } }).catch(() => ({} as { name?: string; username?: string }));
-  const text = msg.text ?? (msg.attachments?.length ? `[${msg.attachments.map((a) => a.type).join(", ")} enviado]` : "");
-  const recorded = await recordInbound(db, account, "instagram", { id: event.sender.id, name: profile.name, username: profile.username }, { externalId: msg.mid, text });
+  const text = msg.text ?? (msg.attachments?.length ? `[${msg.attachments.map((a) => a.type === "image" ? "foto" : a.type).join(", ")} enviad${msg.attachments[0].type === "image" ? "a" : "o"}]` : "");
+  // PáginasPro: foto mandada no direct vai para o site do cliente (o link do Instagram expira; copia para o storage)
+  let mediaUrl: string | null = null;
+  const image = msg.attachments?.find((a) => a.type === "image");
+  if (image && isPaginasPro(account.meta)) {
+    const url = image.payload?.url;
+    const res = url ? await fetch(url).catch(() => null) : null;
+    if (res?.ok) mediaUrl = await storeClientPhoto(db, account.user_id, new Uint8Array(await res.arrayBuffer()), res.headers.get("content-type") ?? "image/jpeg").catch(() => null);
+  }
+  const recorded = await recordInbound(db, account, "instagram", { id: event.sender.id, name: profile.name, username: profile.username }, { externalId: msg.mid, text, mediaUrl });
   if (recorded) await autoReply(db, recorded.conversation, recorded.message.id);
 }

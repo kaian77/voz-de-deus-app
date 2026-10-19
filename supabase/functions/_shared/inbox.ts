@@ -7,6 +7,8 @@ import { type AgentTool, aiEnabled, brandContext, generateJSON, runAgent } from 
 import { sleep } from "./util.ts";
 import { nsCoupons, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "./nuvemshop.ts";
 import { notify } from "./push.ts";
+import { isPaginasPro } from "./brand.ts";
+import { paginasproReply } from "./paginaspro-agent.ts";
 
 export type Channel = "instagram" | "whatsapp";
 type Sender = "contact" | "ai" | "human" | "agent";
@@ -26,7 +28,7 @@ export async function recordInbound(
   account: { id: string; user_id: string; meta?: any },
   channel: Channel,
   contact: { id: string; altId?: string; name?: string; username?: string },
-  message: { externalId: string; text: string },
+  message: { externalId: string; text: string; mediaUrl?: string | null },
 ) {
   const now = new Date().toISOString();
   // altId: id antigo do mesmo contato (WhatsApp "@lid"); a conversa passa a usar o telefone
@@ -56,6 +58,7 @@ export async function recordInbound(
     sender: "contact",
     text: message.text,
     external_id: message.externalId,
+    media_url: message.mediaUrl ?? null,
   }).select().single();
   if (error) return null;
 
@@ -68,6 +71,31 @@ export async function recordInbound(
     contact_username: conversation.contact_username ?? contact.username,
   }).eq("id", conversation.id).select().single();
   return { conversation: updated ?? conversation, message: inserted };
+}
+
+/**
+ * Mensagem que o dono mandou pelo app do WhatsApp Business (coexistência): entra no histórico como "human".
+ * A primeira mensagem dele (a abordagem do lead) já cria a conversa; quando o lead responder, a IA assume.
+ */
+export async function recordEcho(
+  db: SupabaseClient,
+  account: { id: string; user_id: string; meta?: any },
+  contactId: string,
+  message: { externalId: string; text: string },
+) {
+  const { data: found } = await db.from("conversations").select("*").eq("account_id", account.id).eq("contact_id", contactId).maybeSingle();
+  const conversation = found ?? (await db.from("conversations").insert({
+    user_id: account.user_id, account_id: account.id, channel: "whatsapp", contact_id: contactId,
+    ai_enabled: agentAllowed(account.meta, contactId),
+  }).select().single()).data;
+  if (!conversation) return null;
+  const { error } = await db.from("messages").insert({
+    user_id: account.user_id, conversation_id: conversation.id, direction: "out", sender: "human",
+    text: message.text, external_id: message.externalId,
+  });
+  if (error) return null; // eco repetido ou de mensagem que a própria API mandou
+  await db.from("conversations").update({ last_message_at: new Date().toISOString(), unread: 0 }).eq("id", conversation.id);
+  return conversation;
 }
 
 /** Envia uma mensagem pelo canal da conversa e registra no histórico. */
@@ -346,6 +374,9 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
 /** Responde automaticamente se o agente estiver ligado para a marca e para a conversa. */
 export async function autoReply(db: SupabaseClient, conversation: any, inboundMessageId: string) {
   if (!aiEnabled() || !conversation.ai_enabled || conversation.status === "needs_human") return;
+  // Conta da PáginasPro: atendente próprio (sites), nunca o da loja
+  const { data: acc } = await db.from("social_accounts").select("meta").eq("id", conversation.account_id).maybeSingle();
+  if (isPaginasPro(acc?.meta)) return paginasproReply(db, conversation, inboundMessageId);
   const { data: settings } = await db.from("brand_settings").select("agent_enabled").eq("user_id", conversation.user_id).maybeSingle();
   if (!settings?.agent_enabled) return;
 
@@ -360,7 +391,7 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
 
   // Sem palavra nenhuma (menção em story, post compartilhado, foto, áudio, só emoji): não é dúvida, não responde
   const { data: last } = await db.from("messages").select("text").eq("id", inboundMessageId).maybeSingle();
-  const said = String(last?.text ?? "").replace(/^\[[^\]]*enviado\]$/, "");
+  const said = String(last?.text ?? "").replace(/^\[[^\]]*enviad[oa]\]$/, "");
   if (!/\p{L}/u.test(said)) return;
 
   const draft = await draftReply(db, conversation);

@@ -604,7 +604,7 @@ Deno.serve(async (req) => {
           `Audite a "vitrine" deste perfil do Instagram (bio, nome, link, grade, consistência visual, formatos, engajamento por post, horários). ` +
           `Dê nota de 0 a 100, 3 opções de bio (até 150 caracteres cada), ideias de destaques, feedback da grade, pilares de conteúdo, ` +
           `melhores horários (com base nos dados) e ações rápidas.\n\nDados:\n${JSON.stringify(data).slice(0, 60000)}`, "high");
-        const account = await db.from("social_accounts").select("id").eq("user_id", userId).eq("platform", "instagram").limit(1).maybeSingle();
+        const account = await db.from("social_accounts").select("id").eq("user_id", userId).eq("platform", "instagram").order("connected_at").limit(1).maybeSingle();
         const { data: saved } = await db.from("profile_audits").insert({
           user_id: userId, account_id: input.account_id ?? account.data?.id ?? null, source: "ai", snapshot: data.profile, analysis,
         }).select().single();

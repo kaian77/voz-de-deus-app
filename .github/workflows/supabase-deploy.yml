@@ -61,6 +61,11 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+      # WhatsApp da PáginasPro (app + API juntos, botão "Conectar com Facebook"): id do app da Meta e da configuração
+      # do Login do Facebook para Empresas (públicos, podem ser variáveis) e o segredo do app (se for diferente do WHATSAPP_APP_SECRET)
+      META_APP_ID: ${{ vars.META_APP_ID || secrets.META_APP_ID }}
+      WA_ES_CONFIG_ID: ${{ vars.WA_ES_CONFIG_ID || secrets.WA_ES_CONFIG_ID }}
+      META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1

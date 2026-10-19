@@ -14,6 +14,7 @@ import type { SocialAccount } from "../lib/types";
 import { useRemoveRow, useTable } from "../lib/hooks";
 import { PlatformIcon, StatusDot } from "./bits";
 import { ConnectedAccount } from "../pages/Accounts";
+import PaginasProWhatsApp from "./PaginasProWhatsApp";
 
 type Provider = "waha" | "meta";
 
@@ -65,6 +66,7 @@ export default function WhatsAppConnect() {
       </div>
 
       <div className="space-y-3">
+        {!list.some((a) => a.meta.brand === "paginaspro") && <PaginasProWhatsApp />}
         {list.map((a) => (
           <div key={a.id} className="space-y-1.5">
             <ConnectedAccount account={a} onRemove={() => remove.mutate(a.id)} />

@@ -1,5 +1,6 @@
 // Aviso de venda no WhatsApp: o cron procura vendas novas no Mercado Livre, na Shopee e no site (Nuvemshop)
 // e manda uma mensagem para o número escolhido, pelo WhatsApp conectado (de preferência o WAHA).
+import { isPaginasPro } from "./brand.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ml, mlTokenFor } from "./mercadolivre.ts";
 import { shopee, shopeeTokenFor } from "./shopee.ts";
@@ -87,7 +88,9 @@ export async function sendWhatsAppTo(db: SupabaseClient, userId: string, phone: 
   const digits = phone.replace(/\D/g, "");
   phone = digits.length <= 11 ? `55${digits}` : digits;
   const { data: accounts } = await db.from("social_accounts").select("*").eq("user_id", userId).eq("platform", "whatsapp").order("connected_at");
-  const acc = (accounts ?? []).find((a) => a.meta?.provider === "waha") ?? accounts?.[0];
+  // Aviso de venda da loja nunca sai pelo número da PáginasPro
+  const mine = (accounts ?? []).filter((a) => !isPaginasPro(a.meta));
+  const acc = mine.find((a) => a.meta?.provider === "waha") ?? mine[0];
   if (!acc) throw new Error("Conecte um WhatsApp em Contas");
   const { data: tok } = await db.from("account_tokens").select("access_token").eq("account_id", acc.id).maybeSingle();
   if (acc.meta?.provider === "waha") {

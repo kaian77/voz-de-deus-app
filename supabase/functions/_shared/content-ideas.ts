@@ -1,6 +1,7 @@
 // Piloto automático de conteúdo: olha as datas comemorativas que vêm aí, os produtos da loja e o que o público
 // do Instagram curte, e cria carrosséis (e vídeos, quando fazem sentido) com os produtos do tema — ex.: Outubro Rosa
 // com o pin do laço rosa. Tudo fica em Aprovações; dali o usuário aprova, agenda em massa ou publica na hora.
+import { isPaginasPro } from "./brand.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4";
 import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
@@ -221,7 +222,9 @@ export async function generateIdeas(db: SupabaseClient, userId: string, opts: { 
   const days = opts.days ?? 21;
   const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", userId).maybeSingle();
   const timeZone = settings?.timezone ?? "America/Sao_Paulo";
-  const { data: accounts } = await db.from("social_accounts").select("*").eq("user_id", userId).in("platform", ["instagram", "tiktok"]);
+  // Piloto automático da loja: contas da PáginasPro ficam de fora
+  const { data: allAccounts } = await db.from("social_accounts").select("*").eq("user_id", userId).in("platform", ["instagram", "tiktok"]).order("connected_at");
+  const accounts = (allAccounts ?? []).filter((a) => !isPaginasPro(a.meta));
   const platforms = [...new Set((accounts ?? []).map((a) => a.platform as string))];
   if (!platforms.length) throw new Error("Conecte o Instagram ou o TikTok em Contas.");
   const ig = accounts?.find((a) => a.platform === "instagram");

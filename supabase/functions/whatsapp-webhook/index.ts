@@ -3,8 +3,10 @@
 //   - WAHA (self-hosted, grátis): POST em ?account=<id>&secret=<segredo> com eventos "message"
 // Mensagem recebida -> registra na caixa de entrada e o agente de IA responde.
 import { adminClient, env, hmacHex, timingSafeEqual } from "../_shared/util.ts";
-import { autoReply, recordInbound } from "../_shared/inbox.ts";
-import { waMarkRead, waMessageText, wahaPhoneFromLid, wahaSendSeen } from "../_shared/whatsapp.ts";
+import { autoReply, recordEcho, recordInbound } from "../_shared/inbox.ts";
+import { waDownloadMedia, waMarkRead, waMessageText, wahaPhoneFromLid, wahaSendSeen } from "../_shared/whatsapp.ts";
+import { isPaginasPro } from "../_shared/brand.ts";
+import { storeClientPhoto } from "../_shared/paginaspro-agent.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -18,10 +20,30 @@ async function handleValue(value: any) {
 
   for (const m of value.messages) {
     const contact = value.contacts?.find((c: any) => c.wa_id === m.from);
-    const recorded = await recordInbound(db, account, "whatsapp", { id: m.from, name: contact?.profile?.name }, { externalId: m.id, text: waMessageText(m) });
+    // PáginasPro: foto que o cliente manda vai para o site dele
+    let mediaUrl: string | null = null;
+    if (m.type === "image" && token && isPaginasPro(account.meta)) {
+      const file = await waDownloadMedia(token.access_token, m.image?.id).catch(() => null);
+      if (file) mediaUrl = await storeClientPhoto(db, account.user_id, file.bytes, file.type).catch(() => null);
+    }
+    const text = m.type === "image" ? `[foto enviada]${m.image?.caption ? ` ${m.image.caption}` : ""}` : waMessageText(m);
+    const recorded = await recordInbound(db, account, "whatsapp", { id: m.from, name: contact?.profile?.name }, { externalId: m.id, text, mediaUrl });
     if (!recorded) continue;
     if (token) await waMarkRead(token.access_token, phoneNumberId, m.id);
     await autoReply(db, recorded.conversation, recorded.message.id);
+  }
+}
+
+/** Coexistência: mensagens que o dono mandou pelo app do WhatsApp Business (abordagem do lead, conversa manual). */
+async function handleEchoes(value: any) {
+  const phoneNumberId = value.metadata?.phone_number_id;
+  if (!phoneNumberId || !value.message_echoes?.length) return;
+  const db = adminClient();
+  const { data: account } = await db.from("social_accounts").select("*").eq("platform", "whatsapp").eq("external_id", phoneNumberId).maybeSingle();
+  if (!account) return;
+  for (const m of value.message_echoes) {
+    if (!m.to) continue;
+    await recordEcho(db, account, String(m.to), { externalId: m.id, text: waMessageText(m) || "[mensagem]" });
   }
 }
 
@@ -80,6 +102,7 @@ Deno.serve(async (req) => {
   for (const entry of body.entry ?? []) {
     for (const change of entry.changes ?? []) {
       if (change.field === "messages") jobs.push(handleValue(change.value).catch((e) => console.error("WhatsApp falhou", e)));
+      if (change.field === "smb_message_echoes") jobs.push(handleEchoes(change.value).catch((e) => console.error("WhatsApp eco falhou", e)));
     }
   }
   const all = Promise.all(jobs);

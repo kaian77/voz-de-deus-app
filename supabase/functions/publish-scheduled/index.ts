@@ -16,6 +16,7 @@ import { runDailyVideos } from "../_shared/video-autopilot.ts";
 import { sendPendingReviewEmails } from "../_shared/reviews.ts";
 import { runMlSync, watchNewProducts } from "../_shared/ml-sync.ts";
 import { ytAutopilot } from "../_shared/youtube.ts";
+import { runPaginasproJobs } from "../_shared/paginaspro-agent.ts";
 import { sendPendingPush } from "../_shared/push.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
@@ -86,6 +87,9 @@ Deno.serve(async (req) => {
     // Canal do YouTube: planeja o dia seguinte (depois das 15h) e escreve um roteiro por rodada, em segundo plano
     const youtube = ytAutopilot(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(youtube);
+    // PáginasPro: prévias pedidas pelo atendente (a IA leva ~1 min; roda em segundo plano)
+    const paginaspro = runPaginasproJobs(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
+    if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(paginaspro);
     return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, cleanup, waha, mlsync, mlnew, sales, reviews, push });
   } catch (err) {
     return handleError(err);
