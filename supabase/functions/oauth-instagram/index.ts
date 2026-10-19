@@ -27,15 +27,19 @@ Deno.serve(async (req) => {
     const profile = await igProfile(accessToken);
     const db = adminClient();
 
+    // Marca: reconectar mantém a que estava; o @ da PáginasPro já entra como PáginasPro (fora das automações da loja)
+    const externalId = String(profile.user_id ?? profile.id);
+    const { data: previous } = await db.from("social_accounts").select("meta").eq("platform", "instagram").eq("external_id", externalId).maybeSingle();
+    const brand = previous?.meta?.brand ?? (/paginaspro/i.test(String(profile.username ?? "")) ? "paginaspro" : undefined);
     const { data: account, error } = await db.from("social_accounts").upsert({
       user_id: userId,
       platform: "instagram",
-      external_id: String(profile.user_id ?? profile.id),
+      external_id: externalId,
       username: profile.username,
       display_name: profile.name,
       avatar_url: profile.profile_picture_url,
       followers_count: profile.followers_count,
-      meta: { biography: profile.biography, website: profile.website, media_count: profile.media_count },
+      meta: { biography: profile.biography, website: profile.website, media_count: profile.media_count, ...(brand ? { brand } : {}) },
       connected_at: new Date().toISOString(),
     }, { onConflict: "platform,external_id" }).select().single();
     if (error) throw error;

@@ -1,5 +1,6 @@
 // Máquina de estados da publicação. Cada execução avança o post o máximo possível;
 // vídeos que ainda estão processando ficam em "publishing" e são retomados no próximo ciclo do cron.
+import { isPaginasPro } from "./brand.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { igCreateContainer, igPublishContainer, igTokenFor, igWaitContainer } from "./instagram.ts";
 import { TikTokError, tiktokCaption, ttPublishPhotos, ttPublishStatus, ttPublishVideo, ttTokenFor, ttUploadToInbox } from "./tiktok.ts";
@@ -31,9 +32,11 @@ async function accountFor(db: SupabaseClient, post: Post, platform: string) {
   const wanted = post.options?.account_ids?.[platform];
   let query = db.from("social_accounts").select("*").eq("user_id", post.user_id).eq("platform", platform);
   if (wanted) query = query.eq("id", wanted);
-  const { data } = await query.order("connected_at").limit(1);
-  if (!data?.[0]) throw new Error(`Nenhuma conta de ${platform} conectada`);
-  return data[0];
+  const { data } = await query.order("connected_at");
+  // Sem conta escolhida: posta na da Brax Pins (a da PáginasPro só recebe post que pediu por ela)
+  const account = wanted ? data?.[0] : (data ?? []).find((a) => !isPaginasPro(a.meta));
+  if (!account) throw new Error(`Nenhuma conta de ${platform} conectada`);
+  return account;
 }
 
 export function validatePost(post: Pick<Post, "kind" | "platforms" | "media">): string | null {

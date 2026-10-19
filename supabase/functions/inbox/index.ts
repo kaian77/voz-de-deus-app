@@ -5,10 +5,13 @@
 //   { action: "connect_waha", base_url, session?, api_key? }                   -> WAHA (self-hosted, grátis)
 //   { action: "test_sale_alert", phone }            -> manda um aviso de venda de teste para o número
 //   { action: "whatsapp_settings", account_id, agent?, agent_numbers?, agent_prompt? } -> onde e como a IA responde no número
+//   { action: "wa_signup_config" }                  -> dados públicos do botão "Conectar com Facebook" (coexistência)
+//   { action: "connect_whatsapp_signup", code, phone_number_id, waba_id } -> conecta o WhatsApp Business da PáginasPro (app + API)
+//   { action: "account_brand", account_id, brand }  -> conta da Brax Pins ou da PáginasPro
 // Nos dois: label ("Loja", "Pessoal"...) e agent (a IA responde sozinha nesse número?). Dá para ter vários números.
 import { adminClient, assertPublicHttpsUrl, corsHeaders, functionsUrl, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { draftReply, sendMessage } from "../_shared/inbox.ts";
-import { agentAllowed, waPhoneInfo, waSubscribeApp, wahaSession, wahaSetWebhook, wahaStart } from "../_shared/whatsapp.ts";
+import { agentAllowed, waExchangeCode, waPhoneInfo, waSignupConfig, waSubscribeApp, waSyncCoexistence, wahaSession, wahaSetWebhook, wahaStart } from "../_shared/whatsapp.ts";
 import { aiEnabled } from "../_shared/claude.ts";
 import { saleMessage, sendWhatsAppTo } from "../_shared/sale-alerts.ts";
 
@@ -57,6 +60,38 @@ Deno.serve(async (req) => {
         if (error) throw error;
         await db.from("account_tokens").upsert({ account_id: account.id, access_token, updated_at: new Date().toISOString() });
         return json(account);
+      }
+      case "wa_signup_config":
+        return json(waSignupConfig());
+      case "connect_whatsapp_signup": {
+        // Coexistência: o número continua no app do celular e a IA da PáginasPro responde pela API
+        const code = String(body.code ?? "");
+        const phoneId = String(body.phone_number_id ?? "");
+        const wabaId = String(body.waba_id ?? "");
+        if (!code || !phoneId || !wabaId) throw new HttpError(400, "A conexão não terminou: tente de novo e vá até o fim no Facebook");
+        const token = await waExchangeCode(code);
+        const info = await waPhoneInfo(token, phoneId);
+        await waSubscribeApp(token, wabaId);
+        const { data: account, error } = await db.from("social_accounts").upsert({
+          user_id: userId, platform: "whatsapp", external_id: phoneId,
+          username: info.display_phone_number, display_name: info.verified_name || "PáginasPro",
+          meta: { provider: "meta", brand: "paginaspro", coexistence: true, waba_id: wabaId, label: "PáginasPro", agent: true },
+          connected_at: new Date().toISOString(),
+        }, { onConflict: "platform,external_id" }).select().single();
+        if (error) throw error;
+        await db.from("account_tokens").upsert({ account_id: account.id, access_token: token, updated_at: new Date().toISOString() });
+        await waSyncCoexistence(token, phoneId);
+        return json(account);
+      }
+      case "account_brand": {
+        // Marca da conta: a da PáginasPro não recebe automações, piloto automático nem atendente da loja
+        const brand = body.brand === "paginaspro" ? "paginaspro" : "brax";
+        const { data: acc } = await db.from("social_accounts").select("*").eq("id", body.account_id).eq("user_id", userId).in("platform", ["instagram", "whatsapp"]).maybeSingle();
+        if (!acc) throw new HttpError(404, "Conta não encontrada");
+        const meta = { ...acc.meta, brand };
+        const { error } = await db.from("social_accounts").update({ meta }).eq("id", acc.id);
+        if (error) throw error;
+        return json({ meta });
       }
       case "connect_waha": {
         const cfg = { base_url: String(body.base_url ?? "").replace(/\/$/, ""), session: body.session || "default", api_key: body.api_key || null };

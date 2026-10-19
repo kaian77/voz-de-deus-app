@@ -65,7 +65,7 @@ export interface SocialAccount {
   display_name: string | null;
   avatar_url: string | null;
   followers_count: number | null;
-  meta: { biography?: string; website?: string; media_count?: number; provider?: "meta" | "waha"; label?: string | null; agent?: boolean; agent_numbers?: string[]; agent_prompt?: string; status?: string; url?: string; analysis?: MarketplaceAnalysis; ml_sync?: MlSyncState; ml_quality?: MlQualityReport };
+  meta: { biography?: string; website?: string; media_count?: number; provider?: "meta" | "waha"; label?: string | null; agent?: boolean; agent_numbers?: string[]; agent_prompt?: string; status?: string; url?: string; analysis?: MarketplaceAnalysis; ml_sync?: MlSyncState; ml_quality?: MlQualityReport; brand?: "brax" | "paginaspro"; coexistence?: boolean };
   connected_at: string;
 }
 

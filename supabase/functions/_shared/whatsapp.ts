@@ -168,3 +168,43 @@ export async function wahaKeepAlive(db: SupabaseClient) {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Coexistência (app do WhatsApp Business + API juntos), conectada pelo botão "Conectar com Facebook" do Studio
+// (Embedded Signup com featureType whatsapp_business_app_onboarding). O dono continua usando o app no celular;
+// o que ele manda pelo app chega no webhook como smb_message_echoes.
+// Precisa: META_APP_ID (id do app da Meta), WA_ES_CONFIG_ID (configuração do Login do Facebook para Empresas)
+// e o segredo do app (META_APP_SECRET ou o mesmo WHATSAPP_APP_SECRET usado para conferir o webhook).
+// ---------------------------------------------------------------------------
+export function waSignupConfig() {
+  const appId = Deno.env.get("META_APP_ID") ?? "";
+  const configId = Deno.env.get("WA_ES_CONFIG_ID") ?? "";
+  return { app_id: appId, config_id: configId, ready: Boolean(appId && configId && (Deno.env.get("META_APP_SECRET") || Deno.env.get("WHATSAPP_APP_SECRET"))) };
+}
+
+/** Troca o código do login pelo token de negócio (não expira). */
+export async function waExchangeCode(code: string): Promise<string> {
+  const url = new URL(graph("oauth/access_token"));
+  url.searchParams.set("client_id", env("META_APP_ID"));
+  url.searchParams.set("client_secret", Deno.env.get("META_APP_SECRET") || env("WHATSAPP_APP_SECRET"));
+  url.searchParams.set("code", code);
+  const data = await (await fetch(url)).json().catch(() => ({}));
+  if (!data.access_token) throw new Error(`WhatsApp: não consegui concluir a conexão (${data.error?.message ?? "código inválido ou expirado"})`);
+  return data.access_token;
+}
+
+/** Depois de conectar: puxa contatos e conversas recentes do app (a Meta só deixa nas primeiras 24h). */
+export async function waSyncCoexistence(token: string, phoneNumberId: string) {
+  for (const sync_type of ["smb_app_state_sync", "history"]) {
+    await wa(token, `${phoneNumberId}/smb_app_data`, { messaging_product: "whatsapp", sync_type }).catch((e) => console.error("sync", sync_type, e));
+  }
+}
+
+/** Baixa uma mídia recebida (foto que o cliente mandou) -> bytes e tipo. */
+export async function waDownloadMedia(token: string, mediaId: string): Promise<{ bytes: Uint8Array; type: string } | null> {
+  const info = await wa<{ url?: string; mime_type?: string }>(token, mediaId).catch(() => null);
+  if (!info?.url) return null;
+  const res = await fetch(info.url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return null;
+  return { bytes: new Uint8Array(await res.arrayBuffer()), type: info.mime_type ?? res.headers.get("content-type") ?? "image/jpeg" };
+}
