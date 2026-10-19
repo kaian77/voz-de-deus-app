@@ -4,7 +4,7 @@
 // Prévia vencida (preview_until) não abre mais: a cliente não usa o link de prévia como site.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { renderLanding, type LandingData } from "../src/landing/render.js";
-import { renderReport, type ReportData } from "../src/landing/report.js";
+import { demoReport, renderReport, type ReportData } from "../src/landing/report.js";
 import { renderAgency } from "../src/landing/agency.js";
 
 const URL_ = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rrlxhnmfsmknzhqpfrhr.supabase.co";
@@ -62,6 +62,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
   // Painel do cliente (plano mensal): /r/<token>
   const token = (url.searchParams.get("report") ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 64);
+  if (token === "demo") return send(res, 200, renderReport(demoReport()), "public, s-maxage=3600");
   if (token && KEY) {
     const r = await fetch(`${URL_}/rest/v1/rpc/landing_report`, { method: "POST", headers, body: JSON.stringify({ p_token: token }) });
     const data = r.ok ? ((await r.json()) as ReportData | null) : null;
