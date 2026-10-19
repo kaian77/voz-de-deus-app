@@ -7,7 +7,7 @@ export const OFFER = {
   panelAddon: 19,
   /** Links do Mercado Pago (criados pelo dono no app). Vazio = a mensagem sai sem link de pagamento. */
   oneTimeLink: "https://mpago.la/1rDD3Gz",
-  monthlyLink: "",
+  monthlyLink: "https://mpago.la/29WANe2",
 };
 
 const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
