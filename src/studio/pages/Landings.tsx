@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowLeft, Copy, Download, ExternalLink, Globe, ImagePlus, Link2, Loader2, Monitor, Plus, RefreshCw, Send, Smartphone, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,9 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { renderLanding } from "@/landing/render";
 import { api } from "../lib/api";
-import { useInvalidate, useTable } from "../lib/hooks";
+import { useInvalidate, useOffer, useTable } from "../lib/hooks";
 import type { LandingPage, LandingStat, SiteStat } from "../lib/types";
-import { OFFER } from "../lib/offer";
+import type { Offer } from "../lib/offer";
 import { EmptyState, PageHeader, Panel, relativeTime } from "../components/bits";
 
 const NICHES = ["Nutrição", "Medicina", "Odontologia", "Psicologia", "Fisioterapia", "Estética", "Dermatologia", "Pediatria", "Advocacia", "Contabilidade", "Personal trainer", "Salão de beleza"];
@@ -27,9 +28,55 @@ type DomainInfo = { domain: string | null; vercel: string; status: "ok" | "dns" 
 const SOURCE_LABEL: Record<string, string> = { google: "Google", instagram: "Instagram", facebook: "Facebook", whatsapp: "WhatsApp", tiktok: "TikTok", direto: "Direto", outros: "Outros" };
 const MY_SITE = "https://paginaspro.vercel.app";
 
+const PRICE_FIELDS: [keyof Offer, string, "n" | "t"][] = [
+  ["monthly", "Mensal (R$/mês)", "n"], ["oneTime", "Avulso (R$)", "n"], ["change", "Alteração avulsa (R$)", "n"], ["panelAddon", "Painel no avulso (R$/mês)", "n"],
+  ["premiumMonthly", "Premium mensal (R$/mês)", "n"], ["premiumOneTime", "Premium à vista (R$)", "n"],
+  ["monthlyLink", "Link Mercado Pago · mensal", "t"], ["oneTimeLink", "Link Mercado Pago · avulso", "t"],
+  ["premiumMonthlyLink", "Link Mercado Pago · Premium mensal", "t"], ["premiumOneTimeLink", "Link Mercado Pago · Premium à vista", "t"],
+  ["whatsapp", "Seu WhatsApp (no seu site)", "t"],
+];
+
+/** Preços, links do Mercado Pago e WhatsApp: valem nas mensagens dos leads, no editor e no site da PáginasPro. */
+function PricesPanel({ onClose }: { onClose: () => void }) {
+  const offer = useOffer();
+  const qc = useQueryClient();
+  const [form, setForm] = useState<Record<string, string>>(() => Object.fromEntries(PRICE_FIELDS.map(([k]) => [k, String(offer[k] ?? "")])));
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    setSaving(true);
+    try {
+      const value = Object.fromEntries(PRICE_FIELDS.map(([k, , t]) => [k, t === "n" ? Number(String(form[k]).replace(",", ".")) || null : form[k]]));
+      await api.saveSettings({ landing_offer: value });
+      await qc.invalidateQueries({ queryKey: ["settings"] });
+      toast.success("Preços e links salvos. O seu site atualiza em até 1 minuto.");
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="mt-4 border-t pt-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {PRICE_FIELDS.map(([k, label, t]) => (
+          <Field key={k} label={label} className={t === "t" ? "sm:col-span-2" : ""}>
+            <Input id={`offer-${k}`} value={form[k]} inputMode={t === "n" ? "decimal" : k === "whatsapp" ? "tel" : "url"} onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))} placeholder={t === "t" && k !== "whatsapp" ? "https://mpago.la/... (vazio = mensagem sem link)" : ""} />
+          </Field>
+        ))}
+      </div>
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose}>Cancelar</Button>
+        <Button size="sm" onClick={save} disabled={saving}>{saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}Salvar</Button>
+      </div>
+    </div>
+  );
+}
+
 /** Painel só do dono: resultados do site da PáginasPro (a vitrine dele) nos últimos 30 dias. */
 function MySitePanel() {
   const { data = [] } = useTable("site_stats", { order: "day", limit: 60 });
+  const [editing, setEditing] = useState(false);
   const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
   const last = (data as SiteStat[]).filter((s) => s.site === "paginaspro" && s.day > since);
   const views = last.reduce((a, s) => a + s.views, 0);
@@ -43,7 +90,8 @@ function MySitePanel() {
       title="Seu site · PáginasPro"
       description="Só você vê. Visitas e quem tocou para te chamar no WhatsApp, últimos 30 dias."
       action={
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
+          <Button size="sm" variant="outline" onClick={() => setEditing((v) => !v)}>Preços e links</Button>
           <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(MY_SITE).then(() => toast.success("Link do seu site copiado"))}><Copy className="mr-1.5 h-4 w-4" />Link</Button>
           <Button size="sm" variant="outline" asChild><a href={MY_SITE} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Abrir</a></Button>
         </div>
@@ -61,12 +109,14 @@ function MySitePanel() {
           {top.map(([k, v]) => <p key={k} className="flex justify-between gap-2"><span className="text-muted-foreground">{SOURCE_LABEL[k] ?? k}</span><span className="tabular">{v}</span></p>)}
         </div>
       </div>
+      {editing && <PricesPanel onClose={() => setEditing(false)} />}
     </Panel>
   );
 }
 
 /** Plano mensal: liga o painel de resultados do cliente (/r/<token>) e mostra os números para você. */
 function PlanPanel({ page, onChange }: { page: LandingPage; onChange: (p: LandingPage) => void }) {
+  const OFFER = useOffer();
   const { data: stats = [] } = useTable("landing_stats", { eq: { page_id: page.id }, order: "day", limit: 60 });
   const [busy, setBusy] = useState(false);
   const host = page.domain ? `https://${page.domain}` : LANDING_HOST;
@@ -199,6 +249,7 @@ function Field({ label, children, className }: { label: string; children: React.
 }
 
 function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
+  const OFFER = useOffer();
   const invalidate = useInvalidate();
   const [form, setForm] = useState<Form>(() => toForm(page));
   const [current, setCurrent] = useState(page);

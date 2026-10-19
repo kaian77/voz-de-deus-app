@@ -236,6 +236,8 @@ export interface BrandSettings {
   autopilot_last_run?: string | null;
   autopilot_error?: string | null;
   sale_alert_phone?: string | null;
+  /** PáginasPro: preços, links do Mercado Pago e WhatsApp (por cima dos padrões de lib/offer.ts) */
+  landing_offer?: Record<string, unknown> | null;
   sale_alert_channels?: string[];
   sale_alert_since?: string | null;
   daily_digest?: boolean;

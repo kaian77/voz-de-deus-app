@@ -3,11 +3,12 @@
 // Cada widget usa as variáveis --wp (cor principal), --wi (texto) e --ws (fundo claro), definidas no .wg.
 // Uso: widgetFor(ramo) -> tipo ou null; widgetHtml(tipo) -> HTML; WIDGET_CSS e WIDGET_JS uma vez por página.
 
-export type WidgetKind = "plate" | "tooth" | "body" | "breath" | "skin";
+export type WidgetKind = "plate" | "tooth" | "body" | "breath" | "skin" | "law";
 
 export function widgetFor(niche: string): WidgetKind | null {
   const n = niche.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   if (/nutri/.test(n)) return "plate";
+  if (/advoca|advog|jurid|direito|escritorio de adv/.test(n)) return "law";
   if (/odonto|dent|ortodon|sorriso/.test(n)) return "tooth";
   if (/psico|terapeuta|psiquiat|terapia/.test(n)) return "breath";
   if (/estet|dermat|pele|biomed|cosmet/.test(n)) return "skin";
@@ -20,6 +21,7 @@ export const WIDGET_TITLE: Record<WidgetKind, [string, string]> = {
   tooth: ["Conheça o seu dente", "Mexa no dente e toque em cada camada para ver o que cuida dela."],
   body: ["Onde está o incômodo?", "Toque no ponto do corpo e veja como a avaliação ajuda."],
   breath: ["Respire com a gente", "Um minuto de respiração guiada para desacelerar agora."],
+  law: ["Como funciona o seu caso", "Escolha o assunto e toque em cada etapa para entender o caminho, do primeiro contato à solução."],
   skin: ["Por dentro da sua pele", "Toque em cada camada e veja quais cuidados agem nela."],
 };
 
@@ -128,7 +130,20 @@ const SKIN = `
   </div>
 </div>`;
 
-const HTML: Record<WidgetKind, string> = { plate: PLATE, tooth: TOOTH, body: BODY, breath: BREATH, skin: SKIN };
+const LAW = `
+<div class="wg-law">
+  <div class="wg-stage wg-law-stage">
+    <div class="wg-chips wg-areas"><button type="button" data-area="familia" aria-pressed="true">Família</button><button type="button" data-area="trabalho">Trabalhista</button><button type="button" data-area="consumidor">Consumidor</button><button type="button" data-area="inss">Previdenciário</button></div>
+    <ol class="wg-line"></ol>
+  </div>
+  <div class="wg-panel">
+    <div class="wg-card" aria-live="polite"><h4>Toque numa etapa</h4><p>Cada caso é único. A primeira conversa serve para entender a sua situação e explicar os caminhos possíveis.</p></div>
+    <div class="wg-bring"><h5>O que levar na primeira conversa</h5><ul class="wg-list"></ul></div>
+    <p class="wg-note">Conteúdo informativo. Prazos e resultados dependem de cada caso.</p>
+  </div>
+</div>`;
+
+const HTML: Record<WidgetKind, string> = { plate: PLATE, tooth: TOOTH, body: BODY, breath: BREATH, skin: SKIN, law: LAW };
 
 export function widgetHtml(kind: WidgetKind) {
   return `<div class="wg" data-wg="${kind}">${HTML[kind]}</div>`;
@@ -174,6 +189,21 @@ export const WIDGET_CSS = `
 .wg-lead{font-size:16px}
 .wg-go{margin-top:16px;font:inherit;font-weight:700;border:0;border-radius:999px;padding:13px 22px;background:var(--wp);color:#fff;cursor:pointer}
 .wg-count{margin-top:10px;font-size:14px;font-weight:600;color:var(--wp);min-height:22px}
+.wg-law-stage{display:block;place-items:initial;min-height:0;padding:20px}
+.wg-line{list-style:none;padding:0;margin-top:18px;position:relative;display:grid;gap:4px}
+.wg-line:before{content:"";position:absolute;left:15px;top:14px;bottom:14px;width:3px;border-radius:3px;background:var(--wl)}
+.wg-line:after{content:"";position:absolute;left:15px;top:14px;width:3px;border-radius:3px;background:var(--wp);height:var(--fill,0%);transition:height .6s cubic-bezier(.2,.8,.2,1)}
+.wg-line li{position:relative;z-index:1}
+.wg-line button{font:inherit;display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:none;border:0;padding:9px 0;cursor:pointer;color:var(--wi);font-weight:600;font-size:15.5px}
+.wg-line button i{flex:none;width:33px;height:33px;border-radius:50%;background:#fff;border:3px solid var(--wl);display:grid;place-items:center;font-style:normal;font-size:13px;font-weight:800;color:color-mix(in srgb,var(--wi) 55%,#fff);transition:background .3s,border-color .3s,color .3s,transform .3s}
+.wg-line li.done button i{border-color:var(--wp);color:var(--wp)}
+.wg-line li.on button i{background:var(--wp);border-color:var(--wp);color:#fff;transform:scale(1.12)}
+.wg-bring{margin-top:16px}
+.wg-bring h5{font-size:14px;margin-bottom:8px}
+.wg-list{list-style:none;padding:0;display:grid;gap:6px}
+.wg-list li{display:flex;gap:10px;font-size:14.5px;cursor:pointer;user-select:none}
+.wg-list li:before{content:"";flex:none;width:18px;height:18px;margin-top:2px;border-radius:5px;border:2px solid var(--wl);background:#fff;transition:background .2s,border-color .2s}
+.wg-list li.ok:before{background:var(--wp);border-color:var(--wp);box-shadow:inset 0 0 0 3px #fff}
 @media (max-width:760px){.wg>div{grid-template-columns:1fr}.wg-stage{min-height:240px}}
 @media (prefers-reduced-motion:reduce){.wg *{animation:none!important;transition:none!important}}
 `;
@@ -198,6 +228,12 @@ const T = {
     wrist: ["Punho e mão", "Formigamento ou dor ao digitar merece atenção cedo. A avaliação vê força, movimento e o que mudar no trabalho."],
     knee: ["Joelho", "Estalo, inchaço ou dor para subir escada merecem atenção. A avaliação mostra o que está envolvido e quais exercícios são indicados para você."],
     ankle: ["Tornozelo e pé", "Torção que não sarou direito ou dor ao pisar: a avaliação identifica o que falta e orienta a reabilitação."],
+  },
+  law: {
+    familia: { steps: [["Primeira conversa", "Você conta a situação (divórcio, guarda, pensão, partilha) e entende os caminhos possíveis, inclusive o acordo."], ["Documentos", "Reunimos certidões e comprovantes que mostram a situação da família e dos bens."], ["Tentativa de acordo", "Quando há diálogo, o acordo costuma ser o caminho mais rápido e menos desgastante. Pode ser feito em cartório em alguns casos."], ["Processo, se preciso", "Sem acordo, o pedido vai à Justiça. Você é informado de cada movimentação."], ["Decisão e cumprimento", "Com a decisão ou o acordo homologado, acompanhamos o cumprimento do que foi definido."]], bring: ["RG e CPF", "Certidão de casamento ou nascimento dos filhos", "Comprovantes de renda", "Documentos dos bens (se houver)"] },
+    trabalho: { steps: [["Primeira conversa", "Você explica o que aconteceu no trabalho: verbas não pagas, horas extras, demissão, assédio."], ["Análise dos documentos", "Conferimos carteira, contracheques e rescisão para ver o que pode ser pedido."], ["Prazo", "A ação trabalhista tem prazo: até 2 anos depois de sair da empresa. Por isso vale não deixar para depois."], ["Audiência", "Há tentativa de acordo e, se não houver, a apresentação de provas e testemunhas."], ["Sentença", "O juiz decide; ainda pode haver recurso. Você acompanha cada etapa."]], bring: ["Carteira de trabalho", "Contracheques", "Termo de rescisão (TRCT)", "Prints e mensagens do trabalho"] },
+    consumidor: { steps: [["Primeira conversa", "Cobrança indevida, produto com defeito, voo cancelado, nome negativado: você conta o problema."], ["Provas", "Notas, contratos, protocolos e prints mostram o que aconteceu."], ["Tentativa de solução", "Muitas vezes uma notificação ou reclamação formal resolve antes de ir à Justiça."], ["Ação, se preciso", "Dependendo do valor, o caso pode ir ao Juizado Especial, que costuma ser mais simples."], ["Decisão", "O juiz decide sobre devolução, conserto ou indenização, conforme cada caso."]], bring: ["RG e CPF", "Nota fiscal ou contrato", "Protocolos de atendimento", "Prints, e-mails e fotos"] },
+    inss: { steps: [["Primeira conversa", "Aposentadoria, auxílio por incapacidade, BPC, pensão: você explica a situação."], ["Análise do histórico", "Conferimos o CNIS (seu histórico de contribuições) e os documentos."], ["Pedido no INSS", "O pedido é feito pelo Meu INSS, com os documentos certos desde o início."], ["Perícia ou análise", "Em benefícios por incapacidade há perícia; em outros, análise dos documentos."], ["Recurso ou ação", "Se o pedido for negado, ainda dá para recorrer ou entrar na Justiça, conforme o caso."]], bring: ["RG e CPF", "Carteira de trabalho e carnês", "Extrato do CNIS (Meu INSS)", "Laudos e exames (se for por saúde)"] },
   },
   plate: {
     veg: "Verduras e legumes: metade do prato. Fibras, vitaminas e saciedade.",
@@ -243,6 +279,25 @@ export const WIDGET_JS = `
         st.addEventListener('pointermove', function(e){ var b = st.getBoundingClientRect(); svg.style.transform = 'rotateY(' + (((e.clientX - b.left) / b.width - .5) * 50) + 'deg) rotateX(' + (-((e.clientY - b.top) / b.height - .5) * 30) + 'deg)'; });
         st.addEventListener('pointerleave', function(){ svg.style.transform = ''; });
       }
+    }
+    if (kind === 'law') {
+      var area = 'familia', line = root.querySelector('.wg-line'), list = root.querySelector('.wg-list');
+      var step = function(i){
+        var steps = T.law[area].steps;
+        line.querySelectorAll('li').forEach(function(li, j){ li.classList.toggle('on', j === i); li.classList.toggle('done', j < i); });
+        line.style.setProperty('--fill', (steps.length > 1 ? (i / (steps.length - 1)) * 100 : 0) * .92 + '%');
+        card(root, steps[i][0], steps[i][1], 'Etapa ' + (i + 1) + ' de ' + steps.length);
+      };
+      var load = function(a){
+        area = a; press(root, 'data-area', a);
+        line.innerHTML = T.law[a].steps.map(function(st, i){ return '<li><button type="button"><i>' + (i + 1) + '</i>' + st[0] + '</button></li>'; }).join('');
+        line.querySelectorAll('button').forEach(function(b, i){ b.onclick = function(){ step(i); }; });
+        list.innerHTML = T.law[a].bring.map(function(x){ return '<li>' + x + '</li>'; }).join('');
+        list.querySelectorAll('li').forEach(function(li){ li.onclick = function(){ li.classList.toggle('ok'); }; });
+        step(0);
+      };
+      root.querySelectorAll('[data-area]').forEach(function(b){ b.onclick = function(){ load(b.getAttribute('data-area')); }; });
+      load('familia');
     }
     if (kind === 'body') {
       root.querySelectorAll('[data-spot]').forEach(function(c){ c.addEventListener('click', function(){

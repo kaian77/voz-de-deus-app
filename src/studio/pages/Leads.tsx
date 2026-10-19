@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
-import { useInvalidate, useSaveRow, useTable } from "../lib/hooks";
+import { useInvalidate, useOffer, useSaveRow, useTable } from "../lib/hooks";
 import type { Lead, LeadSearch, LeadStatus } from "../lib/types";
 import { EmptyState, PageHeader, Panel, relativeTime, SectionLabel, WhatsAppIcon } from "../components/bits";
 import LeadsMap, { areaColor, LEAD_STATUS } from "../components/LeadsMap";
@@ -67,6 +67,7 @@ export default function Leads() {
   const busy = searches.some((s) => s.status === "queued" || s.status === "running");
   const { data: leads = [] } = useTable("leads", { limit: 2000 }, { refetchInterval: busy ? 10000 : undefined });
   const { data: pages = [] } = useTable("landing_pages");
+  const offer = useOffer();
   useTable("lead_searches", undefined, { refetchInterval: busy ? 10000 : undefined });
   const save = useSaveRow("leads");
 
@@ -118,7 +119,7 @@ export default function Leads() {
   const copyOffer = (l: Lead, kind: "monthly" | "oneTime" | "premium") => {
     const page = pages.find((p) => p.lead_id === l.id && p.status !== "draft");
     const link = page ? (page.status === "published" && page.domain ? `https://${page.domain}` : `https://paginaspro.vercel.app/p/${page.slug}`) : null;
-    navigator.clipboard.writeText(offerMessages(l.name, link)[kind]).then(() => toast.success(kind === "monthly" ? "Mensagem do plano mensal copiada" : kind === "premium" ? "Mensagem do Premium copiada" : "Mensagem do avulso copiada"));
+    navigator.clipboard.writeText(offerMessages(l.name, link, offer)[kind]).then(() => toast.success(kind === "monthly" ? "Mensagem do plano mensal copiada" : kind === "premium" ? "Mensagem do Premium copiada" : "Mensagem do avulso copiada"));
   };
 
   const openWhatsApp = (l: Lead) => {
