@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { renderLanding } from "@/landing/render";
 import { api } from "../lib/api";
 import { useInvalidate, useTable } from "../lib/hooks";
-import type { LandingPage, LandingStat } from "../lib/types";
+import type { LandingPage, LandingStat, SiteStat } from "../lib/types";
 import { OFFER } from "../lib/offer";
 import { EmptyState, PageHeader, Panel, relativeTime } from "../components/bits";
 
@@ -23,6 +23,47 @@ const previewExpired = (p: LandingPage) => !!p.preview_until && new Date(p.previ
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 
 type DomainInfo = { domain: string | null; vercel: string; status: "ok" | "dns" | "manual" | null; records: { type: string; name: string; value: string }[] };
+
+const SOURCE_LABEL: Record<string, string> = { google: "Google", instagram: "Instagram", facebook: "Facebook", whatsapp: "WhatsApp", tiktok: "TikTok", direto: "Direto", outros: "Outros" };
+const MY_SITE = "https://paginaspro.vercel.app";
+
+/** Painel só do dono: resultados do site da PáginasPro (a vitrine dele) nos últimos 30 dias. */
+function MySitePanel() {
+  const { data = [] } = useTable("site_stats", { order: "day", limit: 60 });
+  const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+  const last = (data as SiteStat[]).filter((s) => s.site === "paginaspro" && s.day > since);
+  const views = last.reduce((a, s) => a + s.views, 0);
+  const wa = last.reduce((a, s) => a + s.whatsapp, 0);
+  const src: Record<string, number> = {};
+  for (const s of last) for (const [k, v] of Object.entries(s.sources ?? {})) src[k] = (src[k] ?? 0) + Number(v || 0);
+  const top = Object.entries(src).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const max = Math.max(1, ...last.map((s) => s.views));
+  return (
+    <Panel
+      title="Seu site · PáginasPro"
+      description="Só você vê. Visitas e quem tocou para te chamar no WhatsApp, últimos 30 dias."
+      action={
+        <div className="flex gap-1">
+          <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(MY_SITE).then(() => toast.success("Link do seu site copiado"))}><Copy className="mr-1.5 h-4 w-4" />Link</Button>
+          <Button size="sm" variant="outline" asChild><a href={MY_SITE} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Abrir</a></Button>
+        </div>
+      }
+      className="mb-4"
+    >
+      <div className="grid gap-4 sm:grid-cols-[auto_auto_minmax(0,1fr)_minmax(0,1fr)] sm:items-end">
+        <div><p className="text-2xl font-semibold tabular">{views}</p><p className="text-xs text-muted-foreground">visitas</p></div>
+        <div><p className="text-2xl font-semibold tabular">{wa}</p><p className="text-xs text-muted-foreground">chamaram no WhatsApp{views ? ` · ${Math.round((wa / views) * 100)}%` : ""}</p></div>
+        <div className="flex h-12 items-end gap-[3px]" aria-label="Visitas por dia">
+          {last.map((s) => <div key={s.day} title={`${s.day.slice(8, 10)}/${s.day.slice(5, 7)}: ${s.views} visitas, ${s.whatsapp} WhatsApp`} className="flex-1 rounded-sm bg-foreground/70" style={{ height: `${Math.max(6, (s.views / max) * 100)}%` }} />)}
+          {!last.length && <p className="text-xs text-muted-foreground">Ainda sem visitas. Mande o link nos seus contatos e no Instagram.</p>}
+        </div>
+        <div className="space-y-1 text-xs">
+          {top.map(([k, v]) => <p key={k} className="flex justify-between gap-2"><span className="text-muted-foreground">{SOURCE_LABEL[k] ?? k}</span><span className="tabular">{v}</span></p>)}
+        </div>
+      </div>
+    </Panel>
+  );
+}
 
 /** Plano mensal: liga o painel de resultados do cliente (/r/<token>) e mostra os números para você. */
 function PlanPanel({ page, onChange }: { page: LandingPage; onChange: (p: LandingPage) => void }) {
@@ -511,6 +552,7 @@ export default function Landings() {
         description="Envie as fotos e os dados do cliente; a IA escreve, escolhe cores e fontes e você publica com um link."
         actions={<Button onClick={() => create()} disabled={creating}>{creating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}Nova página</Button>}
       />
+      <MySitePanel />
       {pages.length === 0 ? (
         <EmptyState icon={<Globe className="h-5 w-5" />} title="Nenhuma página ainda" action={<Button variant="outline" onClick={() => navigate("/studio/leads")}>Ver meus leads</Button>}>
           Crie do zero ou, na tela Leads, toque em "Landing" num lead para já vir com os dados dele.
