@@ -11,8 +11,8 @@ export const OFFER = {
   /** Premium: layout animado igual ao site da PáginasPro */
   premiumMonthly: 129,
   premiumOneTime: 997,
-  premiumMonthlyLink: "",
-  premiumOneTimeLink: "",
+  premiumMonthlyLink: "https://mpago.la/1YEqfgd",
+  premiumOneTimeLink: "https://mpago.la/1Bu8EjD",
 };
 
 const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
