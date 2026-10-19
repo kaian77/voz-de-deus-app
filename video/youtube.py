@@ -309,7 +309,7 @@ def image(prompt, w, h, path, seed, style=None):
                     return raw, ctype
                 return base64.b64decode(json.loads(raw)["result"]["image"]), "image/jpeg"
             return run
-        tries.append(("cloudflare flux", cf("@cf/black-forest-labs/flux-1-schnell", {"prompt": full, "steps": 8, "seed": seed % 2_000_000})))
+        tries.append(("cloudflare flux", cf("@cf/black-forest-labs/flux-1-schnell", {"prompt": full, "steps": 8})))
         # Reserva no mesmo Cloudflare (outro modelo, devolve PNG)
         tries.append(("cloudflare sdxl", cf("@cf/bytedance/stable-diffusion-xl-lightning",
                                             {"prompt": full, "width": 768 if w < h else 1024, "height": 1024 if w < h else 768, "seed": seed % 2_000_000})))
