@@ -148,6 +148,7 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="cinematic">Cinemático (cena de filme realista, câmera lenta)</SelectItem>
+              <SelectItem value="collage">Colagem (estilo Vox: fotos antigas recortadas, mapas e etiquetas)</SelectItem>
               <SelectItem value="parallax">Animação 2.5D (personagem se mexe sobre o fundo)</SelectItem>
               <SelectItem value="whiteboard">Desenho à mão (mão desenha, papel amassa)</SelectItem>
               <SelectItem value="classic">Clássico (zoom nas imagens)</SelectItem>
