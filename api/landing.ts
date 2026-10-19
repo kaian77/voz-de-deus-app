@@ -43,10 +43,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const url = new URL(req.url ?? "/", "https://x");
   const slug = (url.searchParams.get("slug") ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 80);
   const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "voz-de-deus-app.vercel.app").toLowerCase().split(":")[0];
-  const own = !slug && !host.endsWith(".vercel.app") ? host.replace(/^www\./, "").replace(/[^a-z0-9.-]/g, "") : "";
+  const own = !slug && !host.endsWith(".vercel.app") && !/(^|\.)paginaspro\.app\.br$/.test(host) ? host.replace(/^www\./, "").replace(/[^a-z0-9.-]/g, "") : "";
   const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
 
-  // Site da PáginasPro (vitrine do dono): paginaspro.vercel.app -> /inicio (redirect no vercel.json)
+  // Site da PáginasPro (vitrine do dono): paginaspro.app.br (e o antigo paginaspro.vercel.app) -> /inicio (redirect no vercel.json)
   if (url.searchParams.get("home")) {
     const e = url.searchParams.get("e");
     if (e) {

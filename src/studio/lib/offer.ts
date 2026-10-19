@@ -40,7 +40,7 @@ export function offerMessages(name: string, link?: string | null, o: Offer = OFF
   const preview = link ? `\n\nA prévia que montei para vocês está aqui: ${link}` : "";
   return {
     premium:
-      `Também tenho a versão Premium do site da ${name}: o mesmo conteúdo, com animações, foto em 3D que se mexe com o dedo, galeria e uma apresentação bem mais marcante (igual ao meu site: https://paginaspro.vercel.app).\n\n` +
+      `Também tenho a versão Premium do site da ${name}: o mesmo conteúdo, com animações, foto em 3D que se mexe com o dedo, galeria e uma apresentação bem mais marcante (igual ao meu site: https://paginaspro.app.br).\n\n` +
       `• Premium mensal: ${brl(o.premiumMonthly)} por mês, com painel de resultados e alterações inclusas\n` +
       `• Premium à vista: ${brl(o.premiumOneTime)} uma vez só (alterações depois a ${brl(o.change)} cada)${preview}` +
       (o.premiumMonthlyLink || o.premiumOneTimeLink

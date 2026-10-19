@@ -17,7 +17,7 @@
       "has": [
         {
           "type": "host",
-          "value": "paginaspro.vercel.app"
+          "value": "(paginaspro\\.vercel\\.app|(www\\.)?paginaspro\\.app\\.br)"
         }
       ],
       "destination": "/api/landing?home=1"
@@ -27,7 +27,7 @@
       "has": [
         {
           "type": "host",
-          "value": "paginaspro.vercel.app"
+          "value": "(paginaspro\\.vercel\\.app|(www\\.)?paginaspro\\.app\\.br)"
         }
       ],
       "destination": "/api/landing"
@@ -37,7 +37,7 @@
       "missing": [
         {
           "type": "host",
-          "value": "(.*\\.vercel\\.app|localhost.*|127\\.0\\.0\\.1.*)"
+          "value": "(.*\\.vercel\\.app|localhost.*|127\\.0\\.0\\.1.*|(www\\.)?paginaspro\\.app\\.br)"
         }
       ],
       "destination": "/api/landing"
@@ -93,7 +93,7 @@
       "has": [
         {
           "type": "host",
-          "value": "paginaspro.vercel.app"
+          "value": "(paginaspro\\.vercel\\.app|(www\\.)?paginaspro\\.app\\.br)"
         }
       ],
       "destination": "/inicio",

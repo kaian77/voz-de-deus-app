@@ -18,7 +18,7 @@ import { EmptyState, PageHeader, Panel, relativeTime } from "../components/bits"
 const NICHES = ["Nutrição", "Medicina", "Odontologia", "Psicologia", "Fisioterapia", "Estética", "Dermatologia", "Pediatria", "Advocacia", "Contabilidade", "Personal trainer", "Salão de beleza"];
 
 // Endereço neutro só das landing pages (o mesmo projeto da Vercel; o Studio continua no endereço dele)
-const LANDING_HOST = "https://paginaspro.vercel.app";
+const LANDING_HOST = "https://paginaspro.app.br";
 const publicUrl = (p: LandingPage) => (p.status === "published" && p.domain ? `https://${p.domain}` : `${LANDING_HOST}/p/${p.slug}`);
 const previewExpired = (p: LandingPage) => !!p.preview_until && new Date(p.preview_until).getTime() < Date.now();
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
@@ -26,7 +26,7 @@ const shortDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { d
 type DomainInfo = { domain: string | null; vercel: string; status: "ok" | "dns" | "manual" | null; records: { type: string; name: string; value: string }[] };
 
 const SOURCE_LABEL: Record<string, string> = { google: "Google", instagram: "Instagram", facebook: "Facebook", whatsapp: "WhatsApp", tiktok: "TikTok", direto: "Direto", outros: "Outros" };
-const MY_SITE = "https://paginaspro.vercel.app";
+const MY_SITE = "https://paginaspro.app.br";
 
 const PRICE_FIELDS: [keyof Offer, string, "n" | "t"][] = [
   ["monthly", "Mensal (R$/mês)", "n"], ["oneTime", "Avulso (R$)", "n"], ["change", "Alteração avulsa (R$)", "n"], ["panelAddon", "Painel no avulso (R$/mês)", "n"],

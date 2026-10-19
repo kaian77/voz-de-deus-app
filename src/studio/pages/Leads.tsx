@@ -118,7 +118,7 @@ export default function Leads() {
   // Mensagens de preço prontas (mensal e avulso), com o link da prévia se o lead já tem landing
   const copyOffer = (l: Lead, kind: "monthly" | "oneTime" | "premium") => {
     const page = pages.find((p) => p.lead_id === l.id && p.status !== "draft");
-    const link = page ? (page.status === "published" && page.domain ? `https://${page.domain}` : `https://paginaspro.vercel.app/p/${page.slug}`) : null;
+    const link = page ? (page.status === "published" && page.domain ? `https://${page.domain}` : `https://paginaspro.app.br/p/${page.slug}`) : null;
     navigator.clipboard.writeText(offerMessages(l.name, link, offer)[kind]).then(() => toast.success(kind === "monthly" ? "Mensagem do plano mensal copiada" : kind === "premium" ? "Mensagem do Premium copiada" : "Mensagem do avulso copiada"));
   };
 
