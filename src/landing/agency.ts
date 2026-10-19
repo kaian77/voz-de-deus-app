@@ -3,6 +3,9 @@
 // e troca de ramo, busca "sem site x com site", calculadora de retorno, painel de exemplo e planos.
 // Contagem própria (visita, clique no WhatsApp, origem) -> função site_track -> painel "Seu site" no Studio.
 import { OFFER } from "../studio/lib/offer.js";
+import { WIDGET_CSS, WIDGET_JS, WIDGET_TITLE, widgetHtml, type WidgetKind } from "./widgets.js";
+
+const WG_TABS: [WidgetKind, string][] = [["plate", "Nutricionista"], ["tooth", "Dentista"], ["body", "Fisioterapia e clínicas"], ["breath", "Psicologia"], ["skin", "Estética e dermato"]];
 
 const WA = "5561992372216";
 const waLink = (text: string) => `https://wa.me/${WA}?text=${encodeURIComponent(text)}`;
@@ -201,6 +204,8 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .tcard p{color:var(--muted);margin:10px 0 22px}
 .tclose{display:block;margin:14px auto 0;background:none;border:0;font:inherit;font-size:14px;color:var(--muted);cursor:pointer}
 
+.wg-tabs{border-radius:24px}
+${WIDGET_CSS}
 /* features bento */
 .bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin-top:50px}
 .tile{background:#fff;border:1px solid var(--line);border-radius:28px;padding:28px;position:relative;overflow:hidden}
@@ -424,6 +429,18 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   </div>
 </section>
 
+<section id="premium-interativo" style="padding-top:0">
+  <div class="wrap">
+    <span class="kicker reveal"><i></i>Exclusivo do Premium</span>
+    <h2 class="reveal" style="margin-top:18px;max-width:15em">Um site que o cliente <span class="serif">mexe com o dedo.</span></h2>
+    <p class="reveal" style="color:var(--muted);margin:14px 0 26px;max-width:36em">No Premium, o seu site ganha uma experiência interativa do seu ramo, com as suas cores. Conteúdo educativo, dentro das regras de cada conselho. Experimente:</p>
+    <div class="toggle reveal wg-tabs" role="group" aria-label="Escolha a profissão" style="flex-wrap:wrap">${WG_TABS.map(([k, label], i) => `<button type="button" aria-pressed="${i === 0}" data-wgtab="${k}">${label}</button>`).join("")}</div>
+    <div class="reveal" style="--wp:#173B2C;--wi:#111110;--ws:#EAE7DD">
+      ${WG_TABS.map(([k], i) => `<div class="wg-slot" data-slot="${k}"${i ? " hidden" : ""}><h3 style="margin-bottom:6px">${WIDGET_TITLE[k][0]}</h3><p style="color:var(--muted);margin-bottom:18px;font-size:15.5px">${WIDGET_TITLE[k][1]}</p>${widgetHtml(k)}</div>`).join("")}
+    </div>
+  </div>
+</section>
+
 <section id="planos" style="padding-top:0">
   <div class="wrap">
     <span class="kicker reveal"><i></i>Planos</span>
@@ -508,12 +525,13 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   var sheet = document.getElementById('waSheet'), bubble = document.getElementById('waBubble'), txt = document.getElementById('waText'), caret = document.getElementById('waCaret'), busy = false;
   function openWa(href){
     track('whatsapp');
-    if (reduce || busy) { location.href = href; return; }
+    var framed = window.top !== window;
+    if ((reduce && !framed) || busy) { location.href = href; return; }
     busy = true;
     var msg = decodeURIComponent((href.split('text=')[1] || '').replace(/\+/g, ' '));
     var short = msg.length > 120 ? msg.slice(0, 117) + '…' : msg;
     var d = new Date(); document.getElementById('waTime').textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-    document.getElementById('waNow').href = href;
+    var now = document.getElementById('waNow'); now.href = href; now.target = '_blank'; now.rel = 'noopener';
     txt.textContent = ''; caret.style.display = ''; bubble.className = 'bubble'; sheet.className = 'wa-sheet';
     sheet.setAttribute('aria-hidden', 'false');
     requestAnimationFrame(function(){ sheet.classList.add('open'); });
@@ -525,6 +543,8 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
         if (i >= short.length) {
           clearInterval(t); caret.style.display = 'none';
           setTimeout(function(){ bubble.classList.add('read'); sheet.classList.add('go'); }, 200);
+          // numa prévia (link de teste) a página não pode sair: fica no "abrir agora"
+          if (framed) { busy = false; return; }
           setTimeout(function(){ location.href = href; }, 1350);
           setTimeout(function(){ sheet.className = 'wa-sheet'; sheet.setAttribute('aria-hidden', 'true'); busy = false; }, 2600);
         }
@@ -629,6 +649,15 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
     };
   });
 
+  // abas das animações do Premium (e o ramo escolhido no celular abre a animação dele)
+  function wgShow(k){
+    document.querySelectorAll('[data-wgtab]').forEach(function(b){ b.setAttribute('aria-pressed', b.getAttribute('data-wgtab') === k ? 'true' : 'false'); });
+    document.querySelectorAll('[data-slot]').forEach(function(el){ el.hidden = el.getAttribute('data-slot') !== k; });
+  }
+  document.querySelectorAll('[data-wgtab]').forEach(function(b){ b.onclick = function(){ wgShow(b.getAttribute('data-wgtab')); }; });
+  var WG_BY_NICHE = { 'Dentista': 'tooth', 'Nutricionista': 'plate', 'Estética': 'skin' };
+  box.addEventListener('click', function(e){ var b = e.target.closest('button'); if (b && WG_BY_NICHE[b.textContent]) wgShow(WG_BY_NICHE[b.textContent]); });
+
   // calculadora
   var ticket = document.getElementById('ticket'), extra = document.getElementById('extra'), COST = ${OFFER.monthly};
   function money(v){ return 'R$ ' + Math.round(v).toLocaleString('pt-BR'); }
@@ -659,5 +688,6 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   window.addEventListener('scroll', function(){ fab.classList.toggle('show', scrollY > innerHeight * .7); }, { passive: true });
 })();
 </script>
+<script>${WIDGET_JS}</script>
 </body></html>`;
 }
