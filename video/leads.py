@@ -55,14 +55,16 @@ def queued():
 
 def geocode(place):
     """Área pesquisada no OpenStreetMap -> (lat, lng, [sul, norte, oeste, leste]) ou None."""
-    q = urllib.parse.urlencode({"format": "json", "limit": 1, "countrycodes": "br", "q": place})
+    q = urllib.parse.urlencode({"format": "json", "limit": 5, "countrycodes": "br", "q": place})
     req = urllib.request.Request(f"https://nominatim.openstreetmap.org/search?{q}", headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=30) as r:
         hits = json.loads(r.read())
     time.sleep(1)  # Nominatim pede no máximo 1 requisição por segundo
     if not hits:
         return None
-    h = hits[0]
+    # "Brasilia" sozinho também acha rua com esse nome em outro estado: cidade/bairro vem antes de rua, o mais conhecido primeiro
+    areas = [h for h in hits if h.get("class") in ("boundary", "place")]
+    h = max(areas, key=lambda h: float(h.get("importance") or 0)) if areas else hits[0]
     return float(h["lat"]), float(h["lon"]), [float(x) for x in h["boundingbox"]]
 
 
