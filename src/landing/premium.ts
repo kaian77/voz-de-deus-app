@@ -2,6 +2,7 @@
 // Cores e fontes do cliente; foto do topo num cartão 3D que segue o dedo/mouse, título palavra a palavra, faixa
 // rolando com as especialidades, serviços que abrem ao tocar, galeria arrastável, blocos em mosaico e mini conversa
 // do WhatsApp ao chamar. Chamado por renderLanding quando tier = "premium" (prévia do Studio e página publicada).
+import { WIDGET_CSS, WIDGET_JS, WIDGET_TITLE, widgetFor, widgetHtml } from "./widgets.js";
 import { esc, FONTS, headline, hex, mix, onColor, SAMPLE_HOURS, WA_ICON, whatsappLink, type LandingContent, type LandingData } from "./render.js";
 
 export function renderPremium(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean; track?: boolean } = {}): string {
@@ -206,6 +207,8 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
     ig && `<div><dt>Instagram</dt><dd><a href="https://instagram.com/${esc(ig)}" target="_blank" rel="noopener">@${esc(ig)}</a></dd></div>`,
   ].filter(Boolean);
   const tagLine = tags.map((t) => `<span>${esc(t)}</span>`).join("");
+  // Animação interativa do ramo (dente, prato, corpo, respiração, pele), quando houver uma para a área
+  const wk = widgetFor(`${d.niche} ${c.eyebrow ?? ""}`);
 
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -216,7 +219,7 @@ ${hero ? `<meta property="og:image" content="${esc(hero)}">` : ""}${opts.url ? `
 <meta name="theme-color" content="${primary}">${opts.preview ? '<meta name="robots" content="noindex">' : ""}
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?${f.url}&display=swap" rel="stylesheet">
-<style>${css}</style></head>
+<style>${css}${wk ? WIDGET_CSS : ""}</style></head>
 <body>
 ${opts.preview ? `<div aria-hidden="true" style="position:fixed;inset:0;z-index:40;pointer-events:none;background:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='200'%3E%3Ctext x='20' y='120' transform='rotate(-24 140 100)' font-family='Arial' font-size='30' font-weight='700' fill='%23000' fill-opacity='.07'%3EPR%C3%89VIA%3C/text%3E%3C/svg%3E&quot;)"></div>
 <div style="position:fixed;left:0;right:0;bottom:0;z-index:41;background:${ink};color:#fff;text-align:center;font-size:13px;padding:10px 16px;font-family:system-ui,sans-serif">PRÉVIA · site ainda não publicado</div><style>.fab{bottom:62px}footer{padding-bottom:64px}</style>` : ""}
@@ -247,6 +250,11 @@ ${d.registry ? `<p style="font-size:14px;margin-top:20px;color:var(--muted)">${e
 <span class="kicker reveal"><i></i>Serviços</span><h2 class="reveal" style="margin-top:16px;max-width:15em">${esc(c.services_title)}</h2>
 <div class="svc">${c.services.map((s, i) => `<details class="reveal"${i === 0 ? " open" : ""}><summary><span class="n">${String(i + 1).padStart(2, "0")}</span><h3>${esc(s.title)}</h3><span class="ar">+</span></summary><p>${esc(s.text)}</p></details>`).join("")}</div>
 </div></section>
+
+${wk ? `<section style="padding-top:0"><div class="wrap">
+<span class="kicker reveal"><i></i>Experimente</span><h2 class="reveal" style="margin-top:16px">${esc(WIDGET_TITLE[wk][0])}</h2><p class="reveal" style="color:var(--muted);margin:12px 0 30px;max-width:34em">${esc(WIDGET_TITLE[wk][1])}</p>
+<div class="reveal" style="--wp:${primary};--wi:${ink};--ws:${soft}">${widgetHtml(wk)}</div>
+</div></section>` : ""}
 
 <section id="como-funciona" style="padding-top:0"><div class="wrap">
 <span class="kicker reveal"><i></i>Como funciona</span><h2 class="reveal" style="margin-top:16px">Simples <em>do começo ao fim.</em></h2>
@@ -342,13 +350,13 @@ document.addEventListener('click',function(ev){var a=ev.target.closest&&ev.targe
     var bubble = document.getElementById('waBubble'), txt = document.getElementById('waText'), caret = document.getElementById('waCaret'), busy = false;
     var go = function(href){
       if (window.__wa) window.__wa();
-      if (window.top !== window) { window.open(href, '_blank'); return; }
-      if (reduce || busy) { location.href = href; return; }
+      var framed = window.top !== window;
+      if ((reduce && !framed) || busy) { location.href = href; return; }
       busy = true;
       var msg = decodeURIComponent((href.split('text=')[1] || '').split('+').join(' '));
       var short = msg.length > 120 ? msg.slice(0, 117) + '…' : msg;
       var d = new Date(); document.getElementById('waTime').textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-      document.getElementById('waNow').href = href;
+      var now = document.getElementById('waNow'); now.href = href; now.target = '_blank'; now.rel = 'noopener';
       txt.textContent = ''; caret.style.display = ''; bubble.className = 'bubble'; sheet.className = 'wa-sheet';
       requestAnimationFrame(function(){ sheet.classList.add('open'); });
       setTimeout(function(){
@@ -359,6 +367,8 @@ document.addEventListener('click',function(ev){var a=ev.target.closest&&ev.targe
           if (i >= short.length) {
             clearInterval(t); caret.style.display = 'none';
             setTimeout(function(){ bubble.classList.add('read'); sheet.classList.add('go'); }, 200);
+            // numa prévia (Studio, link de teste) a página não pode sair: fica no "abrir agora"
+            if (framed) { busy = false; return; }
             setTimeout(function(){ location.href = href; }, 1350);
             setTimeout(function(){ sheet.className = 'wa-sheet'; busy = false; }, 2600);
           }
@@ -372,6 +382,7 @@ document.addEventListener('click',function(ev){var a=ev.target.closest&&ev.targe
   }
 })();
 </script>
+${wk ? `<script>${WIDGET_JS}</script>` : ""}
 </body></html>`;
 }
 
