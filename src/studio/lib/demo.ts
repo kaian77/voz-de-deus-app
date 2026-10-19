@@ -99,6 +99,7 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
     leads: [],
     landing_pages: [],
     landing_stats: [],
+    site_stats: [],
     yt_channels: [],
     yt_videos: [],
     clip_sources: [],

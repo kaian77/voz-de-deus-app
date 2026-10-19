@@ -5,6 +5,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { renderLanding, type LandingData } from "../src/landing/render.js";
 import { renderReport, type ReportData } from "../src/landing/report.js";
+import { renderAgency } from "../src/landing/agency.js";
 
 const URL_ = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rrlxhnmfsmknzhqpfrhr.supabase.co";
 const KEY =
@@ -44,6 +45,21 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const own = !slug && !host.endsWith(".vercel.app") ? host.replace(/^www\./, "").replace(/[^a-z0-9.-]/g, "") : "";
   const headers = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
 
+  // Site da PáginasPro (vitrine do dono): paginaspro.vercel.app -> /inicio (redirect no vercel.json)
+  if (url.searchParams.get("home")) {
+    const e = url.searchParams.get("e");
+    if (e) {
+      if (KEY && (e === "view" || e === "whatsapp")) {
+        await fetch(`${URL_}/rest/v1/rpc/site_track`, {
+          method: "POST", headers, body: JSON.stringify({ p_site: "paginaspro", p_event: e, p_source: source(url.searchParams.get("r") ?? "") }),
+        }).catch(() => {});
+      }
+      res.statusCode = 204;
+      res.setHeader("Cache-Control", "no-store");
+      return res.end();
+    }
+    return send(res, 200, renderAgency(), "public, s-maxage=300, stale-while-revalidate=3600");
+  }
   // Painel do cliente (plano mensal): /r/<token>
   const token = (url.searchParams.get("report") ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 64);
   if (token && KEY) {

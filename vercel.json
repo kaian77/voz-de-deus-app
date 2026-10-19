@@ -13,6 +13,16 @@
       "destination": "/api/landing?report=:token"
     },
     {
+      "source": "/inicio",
+      "has": [
+        {
+          "type": "host",
+          "value": "paginaspro.vercel.app"
+        }
+      ],
+      "destination": "/api/landing?home=1"
+    },
+    {
       "source": "/((?!p/|api/).*)",
       "has": [
         {
@@ -75,6 +85,19 @@
           "value": "max-age=63072000; includeSubDomains; preload"
         }
       ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "paginaspro.vercel.app"
+        }
+      ],
+      "destination": "/inicio",
+      "permanent": false
     }
   ]
 }

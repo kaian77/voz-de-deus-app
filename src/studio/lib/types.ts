@@ -404,6 +404,15 @@ export interface LandingStat {
   sources: Record<string, number>;
 }
 
+/** Visitas e cliques no WhatsApp do site da PáginasPro (vitrine do dono), por dia. */
+export interface SiteStat {
+  site: string;
+  day: string;
+  views: number;
+  whatsapp: number;
+  sources: Record<string, number>;
+}
+
 /** Canal do YouTube conectado (Renda extra → YouTube). Um canal por idioma. */
 export interface YtChannel {
   id: string;
@@ -563,6 +572,7 @@ export interface TableMap {
   leads: Lead;
   landing_pages: LandingPage;
   landing_stats: LandingStat;
+  site_stats: SiteStat;
   yt_channels: YtChannel;
   yt_videos: YtVideo;
   clip_sources: ClipSource;
