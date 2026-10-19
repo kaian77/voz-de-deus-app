@@ -10,7 +10,8 @@ import { cn } from "@/lib/utils";
 import { renderLanding } from "@/landing/render";
 import { api } from "../lib/api";
 import { useInvalidate, useTable } from "../lib/hooks";
-import type { LandingPage } from "../lib/types";
+import type { LandingPage, LandingStat } from "../lib/types";
+import { OFFER } from "../lib/offer";
 import { EmptyState, PageHeader, Panel, relativeTime } from "../components/bits";
 
 const NICHES = ["Nutrição", "Medicina", "Odontologia", "Psicologia", "Fisioterapia", "Estética", "Dermatologia", "Pediatria", "Advocacia", "Contabilidade", "Personal trainer", "Salão de beleza"];
@@ -22,6 +23,61 @@ const previewExpired = (p: LandingPage) => !!p.preview_until && new Date(p.previ
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 
 type DomainInfo = { domain: string | null; vercel: string; status: "ok" | "dns" | "manual" | null; records: { type: string; name: string; value: string }[] };
+
+/** Plano mensal: liga o painel de resultados do cliente (/r/<token>) e mostra os números para você. */
+function PlanPanel({ page, onChange }: { page: LandingPage; onChange: (p: LandingPage) => void }) {
+  const { data: stats = [] } = useTable("landing_stats", { eq: { page_id: page.id }, order: "day", limit: 60 });
+  const [busy, setBusy] = useState(false);
+  const host = page.domain ? `https://${page.domain}` : LANDING_HOST;
+  const reportUrl = page.report_token ? `${host}/r/${page.report_token}` : "";
+  const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+  const last = (stats as LandingStat[]).filter((s) => s.day > since);
+  const total = (k: "views" | "whatsapp" | "maps") => last.reduce((a, s) => a + s[k], 0);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const on = page.plan !== "monthly";
+      const token = page.report_token ?? [...crypto.getRandomValues(new Uint8Array(18))].map((b) => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
+      onChange(await api.update("landing_pages", page.id, { plan: on ? "monthly" : "none", report_token: token }));
+      toast.success(on ? "Plano mensal ligado: painel liberado" : "Plano mensal desligado: painel bloqueado");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const sendReport = () => {
+    const n = String(page.whatsapp ?? "").replace(/\D/g, "");
+    const text = `Oi! Este é o painel do site de vocês: ${reportUrl}\n\nSalva nos favoritos: ali você vê quantas pessoas visitaram o site e quantas te chamaram no WhatsApp por ele, atualizado na hora. Precisando mudar algo no site, é só tocar em "Pedir alteração".`;
+    window.open(`https://wa.me/${n.length <= 11 && n ? `55${n}` : n}?text=${encodeURIComponent(text)}`, "_blank");
+  };
+
+  return (
+    <Panel
+      title="Plano do cliente"
+      description={page.plan === "monthly" ? `Mensal (R$ ${OFFER.monthly}/mês): painel de resultados + alterações inclusas.` : `Avulso: alterações cobradas à parte (R$ ${OFFER.change}); painel bloqueado (opcional por + R$ ${OFFER.panelAddon}/mês: ligue o mensal).`}
+      action={<Button size="sm" variant={page.plan === "monthly" ? "outline" : "default"} onClick={toggle} disabled={busy}>{page.plan === "monthly" ? "Desligar mensal" : "Ligar plano mensal"}</Button>}
+    >
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {([["views", "visitas"], ["whatsapp", "WhatsApp"], ["maps", "rota"]] as const).map(([k, label]) => (
+          <div key={k} className="rounded-md bg-secondary/60 py-2">
+            <p className="text-lg font-semibold tabular">{total(k)}</p>
+            <p className="text-[11px] text-muted-foreground">{label} · 30 dias</p>
+          </div>
+        ))}
+      </div>
+      {page.plan === "monthly" && reportUrl && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(reportUrl).then(() => toast.success("Link do painel copiado"))}><Copy className="mr-1.5 h-4 w-4" />Link do painel</Button>
+          <Button size="sm" variant="outline" asChild><a href={reportUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Ver painel</a></Button>
+          {page.whatsapp && <Button size="sm" variant="outline" onClick={sendReport}><Send className="mr-1.5 h-4 w-4" />Mandar para o cliente</Button>}
+        </div>
+      )}
+      <p className="mt-3 text-[11px] text-muted-foreground">O botão "Pedir alteração" do painel abre o seu WhatsApp de avisos de venda.</p>
+    </Panel>
+  );
+}
 
 /** Domínio próprio do cliente (depois de vender): conecta e mostra o que o cliente precisa pôr no DNS. */
 function DomainPanel({ page, onChange }: { page: LandingPage; onChange: (domain: string | null) => void }) {
@@ -354,6 +410,7 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
               </div>
             </Panel>
           )}
+          {current.status === "published" && <PlanPanel page={current} onChange={setCurrent} />}
           {current.status === "published" && <DomainPanel page={current} onChange={(domain) => setCurrent({ ...current, domain })} />}
           {current.status !== "draft" && (
             <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => publish("draft")}>Tirar do ar</button>

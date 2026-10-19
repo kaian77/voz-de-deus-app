@@ -386,9 +386,22 @@ export interface LandingPage {
   preview_until: string | null;
   /** Domínio próprio do cliente (sem www), quando publicada */
   domain: string | null;
+  /** monthly = plano mensal (painel de resultados /r/<report_token> + alterações inclusas) */
+  plan: "none" | "monthly";
+  report_token: string | null;
   views: number;
   created_at: string;
   updated_at: string;
+}
+
+/** Totais por dia de uma landing page publicada (visitas, cliques no WhatsApp, rota no mapa, origem). */
+export interface LandingStat {
+  page_id: string;
+  day: string;
+  views: number;
+  whatsapp: number;
+  maps: number;
+  sources: Record<string, number>;
 }
 
 /** Canal do YouTube conectado (Renda extra → YouTube). Um canal por idioma. */
@@ -549,6 +562,7 @@ export interface TableMap {
   lead_searches: LeadSearch;
   leads: Lead;
   landing_pages: LandingPage;
+  landing_stats: LandingStat;
   yt_channels: YtChannel;
   yt_videos: YtVideo;
   clip_sources: ClipSource;

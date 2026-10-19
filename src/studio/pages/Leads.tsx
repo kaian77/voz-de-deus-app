@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { Download, ExternalLink, Globe, Loader2, MapPin, Search, Star } from "lucide-react";
+import { Copy, Download, ExternalLink, Globe, Loader2, MapPin, Search, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,6 +12,7 @@ import { useInvalidate, useSaveRow, useTable } from "../lib/hooks";
 import type { Lead, LeadSearch, LeadStatus } from "../lib/types";
 import { EmptyState, PageHeader, Panel, relativeTime, SectionLabel, WhatsAppIcon } from "../components/bits";
 import LeadsMap, { areaColor, LEAD_STATUS } from "../components/LeadsMap";
+import { offerMessages } from "../lib/offer";
 
 const MSG_KEY = "studio-leads-msg";
 const DEFAULT_MSG =
@@ -65,6 +66,7 @@ export default function Leads() {
   const { data: searches = [] } = useTable("lead_searches");
   const busy = searches.some((s) => s.status === "queued" || s.status === "running");
   const { data: leads = [] } = useTable("leads", { limit: 2000 }, { refetchInterval: busy ? 10000 : undefined });
+  const { data: pages = [] } = useTable("landing_pages");
   useTable("lead_searches", undefined, { refetchInterval: busy ? 10000 : undefined });
   const save = useSaveRow("leads");
 
@@ -111,6 +113,13 @@ export default function Leads() {
 
   const setStatus = (l: Lead, status: LeadStatus) =>
     save.mutate({ id: l.id, status, ...(status === "contacted" && !l.contacted_at ? { contacted_at: new Date().toISOString() } : {}) });
+
+  // Mensagens de preço prontas (mensal e avulso), com o link da prévia se o lead já tem landing
+  const copyOffer = (l: Lead, kind: "monthly" | "oneTime") => {
+    const page = pages.find((p) => p.lead_id === l.id && p.status !== "draft");
+    const link = page ? (page.status === "published" && page.domain ? `https://${page.domain}` : `https://paginaspro.vercel.app/p/${page.slug}`) : null;
+    navigator.clipboard.writeText(offerMessages(l.name, link)[kind]).then(() => toast.success(kind === "monthly" ? "Mensagem do plano mensal copiada" : "Mensagem do avulso copiada"));
+  };
 
   const openWhatsApp = (l: Lead) => {
     window.open(`https://wa.me/${l.whatsapp}?text=${encodeURIComponent(fill(msg, l, l.search_id ? byId.get(l.search_id) : undefined))}`, "_blank");
@@ -232,7 +241,7 @@ export default function Leads() {
                     {l.maps_url && <a href={l.maps_url} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 hover:underline">Maps <ExternalLink className="h-3 w-3" /></a>}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Select value={l.status} onValueChange={(v) => setStatus(l, v as LeadStatus)}>
                     <SelectTrigger className="h-8 w-[130px] text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -244,6 +253,12 @@ export default function Leads() {
                   </Button>
                   <Button size="sm" variant="outline" className="h-8" disabled={!l.whatsapp} onClick={() => openWhatsApp(l)}>
                     <WhatsAppIcon className="mr-1.5 h-4 w-4" />Chamar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => copyOffer(l, "monthly")} title="Copiar mensagem do plano mensal">
+                    <Copy className="mr-1 h-3.5 w-3.5" />Mensal
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => copyOffer(l, "oneTime")} title="Copiar mensagem do avulso">
+                    <Copy className="mr-1 h-3.5 w-3.5" />Avulso
                   </Button>
                 </div>
               </div>
