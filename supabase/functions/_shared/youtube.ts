@@ -102,7 +102,8 @@ export async function ytResearch(token: string, niche: string, language = "pt"):
   const ids = new Set<string>();
   for (const q of [niche, `${niche} shorts`]) {
     const data = await yt(token, "search", {
-      part: "id", type: "video", q, order: "viewCount", publishedAfter: after, regionCode: en ? "US" : "BR", relevanceLanguage: en ? "en" : "pt", maxResults: "25",
+      part: "id", type: "video", q, order: "viewCount", publishedAfter: after, regionCode: en ? "US" : language === "es" ? "MX" : "BR",
+      relevanceLanguage: ["en", "es"].includes(language) ? language : "pt", maxResults: "25",
     });
     // deno-lint-ignore no-explicit-any
     for (const it of data.items ?? []) if ((it as any).id?.videoId) ids.add((it as any).id.videoId);
@@ -200,8 +201,15 @@ const COLLAGE =
   `descrevendo o mapa antigo da região e label "Origem → Destino"), tv para um momento marcante e photo no resto. ` +
   `Toda cena tem label curta (lugar, nome, data ou versículo).`;
 
+/** Canal em espanhol: mesmas regras, texto falado e publicado em espanhol neutro (América Latina). */
+const RULES_ES =
+  RULES_PT +
+  `\n\nIMPORTANTE: este canal é EM ESPANHOL para a América Latina (México, Colômbia, Argentina, Peru e hispânicos dos EUA). ` +
+  `Escreva narration, title, description, tags, thumbnail_text, topic, angle e label em espanhol latino-americano neutro e natural ` +
+  `(cite os versículos no formato espanhol, ex.: Éxodo 14:21; use a Reina-Valera como referência).`;
+
 const rules = (niche: string, language: string, style = "") =>
-  (language === "en" ? RULES_EN : RULES_PT).replace("{niche}", niche) +
+  (language === "en" ? RULES_EN : language === "es" ? RULES_ES : RULES_PT).replace("{niche}", niche) +
   (style === "cinematic" ? CINEMATIC : style === "collage" ? COLLAGE : "");
 
 export async function planTopics(niche: string, trends: Trend[], recent: string[], kinds: ("short" | "long")[], language = "pt") {
@@ -224,11 +232,11 @@ export async function writeScript(niche: string, video: { kind: string; topic: s
     ? `Formato: YouTube Shorts vertical de 45 a 55 segundos (130 a 150 palavras faladas no total), 14 a 18 cenas de UMA frase curta cada ` +
       `(no máximo 12 palavras; a imagem troca a cada 2 a 4 segundos, ritmo rápido de vídeo viral). ` +
       `A primeira frase é o gancho (pergunta ou fato chocante) e prende nos 2 primeiros segundos. ` +
-      `Termine com uma pergunta para comentarem e ${en ? `"subscribe for more Bible secrets"` : `"se inscreve para mais curiosidades da Bíblia"`}. Sem capítulos (chapter = null). ` +
+      `Termine com uma pergunta para comentarem e ${en ? `"subscribe for more Bible secrets"` : language === "es" ? `"suscríbete para más secretos de la Biblia"` : `"se inscreve para mais curiosidades da Bíblia"`}. Sem capítulos (chapter = null). ` +
       `Inclua #shorts nas hashtags.`
     : `Formato: vídeo horizontal de 6 a 8 minutos (900 a 1150 palavras faladas), 55 a 75 cenas de UMA frase cada (a imagem troca a cada 5 a 8 segundos). ` +
       `Abertura com gancho forte nos primeiros 15 segundos e a promessa do vídeo; depois 5 a 7 capítulos (curiosidades), ` +
-      `cada um começando numa cena com chapter preenchido (a primeira cena tem chapter "${en ? "Introduction" : "Introdução"}"); ` +
+      `cada um começando numa cena com chapter preenchido (a primeira cena tem chapter "${en ? "Introduction" : language === "es" ? "Introducción" : "Introdução"}"); ` +
       `fechamento com uma lição e chamada para se inscrever e comentar.`;
   return await generateJSON(Script,
     rules(niche, language, style),
@@ -273,7 +281,10 @@ export async function planDay(db: SupabaseClient, channel: any, date: string, on
   const { data: past } = await db.from("yt_videos").select("topic").eq("channel_ref", channel.id).order("created_at", { ascending: false }).limit(80);
   const items = await planTopics(channel.niche, trends, (past ?? []).map((p) => p.topic).filter(Boolean), kinds, channel.language);
   // Canal em inglês publica no fim da tarde/noite dos EUA
-  const times = channel.language === "en" ? { short: ["14:00", "21:00", "11:00"], long: "21:30" } : { short: SHORT_TIMES, long: "18:00" };
+  // Horário de Brasília. EN: almoço e noite em Nova York. ES: 13h e 20h na Cidade do México (UTC-6) = 16h e 23h aqui
+  const times = channel.language === "en" ? { short: ["14:00", "21:00", "11:00"], long: "21:30" }
+    : channel.language === "es" ? { short: ["16:00", "23:00", "10:00"], long: "22:30" }
+    : { short: SHORT_TIMES, long: "18:00" };
   const now = Date.now();
   let s = 0;
   const rows = items.map((it) => {

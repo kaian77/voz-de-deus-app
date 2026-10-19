@@ -528,7 +528,6 @@ def render(video, work, channel=None):
         channel = (rest("GET", f"yt_channels?id=eq.{video['channel_ref']}&select=voice,language,style") or [{}])[0]
     style = channel.get("style") or "parallax"
     lang = channel.get("language") or "pt"
-    en = lang == "en"
     voices = {"pt": "pt-BR-AntonioNeural", "en": "en-US-AndrewNeural", "es": "es-MX-JorgeNeural"}
     voice = channel.get("voice") or voices.get(lang, voices["pt"])
     if not voice.startswith(lang + "-"):  # voz de outro idioma: usa a padrão do idioma do canal
@@ -692,7 +691,7 @@ def render(video, work, channel=None):
         shutil.copy(os.path.join(work, "i0.jpg"), thumb_src)
     thumb = os.path.join(work, "thumb.jpg")
     thumbnail(thumb_src, script["thumbnail_text"], thumb)
-    return final, thumb, total, chapters, en
+    return final, thumb, total, chapters, lang
 
 
 def hand_asset(work):
@@ -727,14 +726,15 @@ def hand_asset(work):
         return None
 
 
-def description(script, chapters, short, en=False):
+def description(script, chapters, short, lang="pt"):
     desc = script["description"].strip()
+    words = {"en": ("Chapters", "References"), "es": ("Capítulos", "Referencias")}.get(lang, ("Capítulos", "Referências"))
     if not short and len(chapters) >= 3:
         fmt = lambda s: f"{int(s // 60)}:{int(s % 60):02d}"  # noqa: E731
         lines = [f"{fmt(0 if i == 0 else c[0])} {c[1]}" for i, c in enumerate(chapters)]
-        desc += ("\n\nChapters:\n" if en else "\n\nCapítulos:\n") + "\n".join(lines)
+        desc += f"\n\n{words[0]}:\n" + "\n".join(lines)
     if script.get("references"):
-        desc += ("\n\nReferences: " if en else "\n\nReferências: ") + "; ".join(script["references"])
+        desc += f"\n\n{words[1]}: " + "; ".join(script["references"])
     return desc[:4900]
 
 
@@ -742,7 +742,7 @@ def process(video):
     vid = video["id"]
     patch(vid, status="rendering", attempts=video["attempts"] + 1, error=None)
     with tempfile.TemporaryDirectory() as work:
-        final, thumb, total, chapters, en = render(video, work)
+        final, thumb, total, chapters, lang = render(video, work)
         short = video["kind"] == "short"
         thumb_url = storage_upload(thumb, f"{video['user_id']}/youtube/{vid}.jpg", "image/jpeg")
         # Prévia leve (até ~15 MB) para assistir no Studio sem precisar abrir o YouTube
@@ -757,9 +757,10 @@ def process(video):
         future = publish_at and dt.datetime.fromisoformat(publish_at.replace("Z", "+00:00")) > dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=20)
         meta = {
             "snippet": {
-                "title": script["title"][:100], "description": description(script, chapters, short, en),
+                "title": script["title"][:100], "description": description(script, chapters, short, lang),
                 "tags": [t[:30] for t in script.get("tags", [])][:15], "categoryId": "27",
-                "defaultLanguage": "en" if en else "pt-BR", "defaultAudioLanguage": "en" if en else "pt-BR",
+                "defaultLanguage": {"en": "en", "es": "es-419"}.get(lang, "pt-BR"),
+                "defaultAudioLanguage": {"en": "en", "es": "es-419"}.get(lang, "pt-BR"),
             },
             # Agendado (privado até a hora); vídeo atrasado sai público na hora.
             # App do Google ainda não auditado: o YouTube deixa tudo privado até a auditoria.

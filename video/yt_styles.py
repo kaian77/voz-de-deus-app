@@ -461,8 +461,16 @@ def _back(x):
     return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2
 
 
+def _zoom_crop(im, k=1.7):
+    """Close no meio da imagem (segunda foto da cena, como um detalhe ampliado)."""
+    cw, ch = int(im.width / k), int(im.height / k)
+    x, y = (im.width - cw) // 2, int((im.height - ch) * 0.4)
+    return im.crop((x, y, x + cw, y + ch))
+
+
 def _scene_layers(sc, w, h, rng, si):
-    """Monta as camadas de uma cena (imagem final de cada elemento + onde e quando entra)."""
+    """Monta as camadas de uma cena (imagem final de cada elemento + onde e quando entra).
+    Vertical: tudo entre 4% e 64% da altura, para não brigar com as legendas (que ficam perto dos 70%)."""
     from PIL import Image
 
     im = Image.open(sc["img"]).convert("RGB")
@@ -472,7 +480,8 @@ def _scene_layers(sc, w, h, rng, si):
     layout = sc.get("layout") or "photo"
     label = (sc.get("label") or "").strip()
     tag_c = TAG_COLORS[si % len(TAG_COLORS)]
-    cy = 0.38 if vertical else 0.46  # acima das legendas
+    cy = 0.35 if vertical else 0.47
+    top = 0.09 if vertical else 0.1  # linha das etiquetas e do selo
 
     def add(img, cx, cy_, delay, kind="drop", angle=0.0):
         if angle:
@@ -481,32 +490,32 @@ def _scene_layers(sc, w, h, rng, si):
                        "delay": delay, "kind": kind, "phase": float(rng.uniform(0, 6.28))})
 
     if layout == "map":
-        card = _card(im, int(w * 0.9), int(h * (0.5 if vertical else 0.78)), rng, torn=False)
-        card = _shadowed(card)
-        add(card, 0.5, cy, 0.0, "pop")
+        card = _card(im, int(w * 0.94), int(h * (0.56 if vertical else 0.8)), rng, torn=False)
+        add(_shadowed(card), 0.5, cy, 0.0, "pop")
         layers[-1]["route"] = True
         parts = [p.strip() for p in label.replace("->", "→").split("→") if p.strip()]
-        layers[-1]["route_tags"] = [_tag(p, int(u * 0.034), TAG_COLORS[0]) for p in parts[:2]]
+        layers[-1]["route_tags"] = [_tag(p, int(u * 0.036), TAG_COLORS[0]) for p in parts[:2]]
         return layers
 
     if layout == "tv":
-        add(_shadowed(_tv(im, int(w * (0.86 if vertical else 0.55)))), 0.5, cy, 0.0, "drop", float(rng.uniform(-2, 2)))
+        add(_shadowed(_tv(im, int(w * (0.96 if vertical else 0.62)))), 0.5, cy + 0.02, 0.0, "drop", float(rng.uniform(-2, 2)))
     elif layout == "sticker" and sc.get("cut"):
         back = _shadowed(_card(im, int(w * 0.62), int(h * 0.3), rng))
-        add(back, 0.66 if vertical else 0.62, cy - 0.12, 0.0, "slide", float(rng.uniform(4, 8)))
-        stick = _shadowed(_sticker(Image.open(sc["cut"]).convert("RGBA"), int(h * (0.42 if vertical else 0.7))))
-        add(stick, 0.42, cy + 0.04, 0.25, "pop", float(rng.uniform(-4, 2)))
+        add(back, 0.68 if vertical else 0.64, cy - 0.06, 0.0, "slide", float(rng.uniform(4, 8)))
+        stick = _shadowed(_sticker(Image.open(sc["cut"]).convert("RGBA"), int(h * (0.5 if vertical else 0.78))))
+        add(stick, 0.4, cy + 0.03, 0.25, "pop", float(rng.uniform(-4, 2)))
     else:
-        card = _shadowed(_card(im, int(w * (0.84 if vertical else 0.6)), int(h * (0.46 if vertical else 0.7)), rng))
-        add(card, 0.5, cy, 0.0, "drop", float(rng.uniform(-3.5, 3.5)))
-        add(_tape(int(u * 0.22), int(u * 0.055)), 0.5 + float(rng.uniform(-0.15, 0.15)), cy - (0.23 if vertical else 0.36),
+        card = _shadowed(_card(im, int(w * (0.92 if vertical else 0.62)), int(h * (0.5 if vertical else 0.72)), rng))
+        add(card, 0.48, cy, 0.0, "drop", float(rng.uniform(-3, 3)))
+        add(_tape(int(u * 0.24), int(u * 0.06)), 0.5 + float(rng.uniform(-0.15, 0.15)), cy - (0.25 if vertical else 0.36),
             0.2, "pop", float(rng.uniform(-12, 12)))
-    # Selo no canto e etiqueta com o lugar/nome
-    add(_shadowed(_stamp(im, int(u * 0.16), rng), blur=6, off=(4, 6)), 0.84 if vertical else 0.86, 0.12 if vertical else 0.2,
-        0.45, "pop", float(rng.uniform(-14, 14)))
+        # Segunda foto: detalhe ampliado entrando de lado por cima do canto de baixo
+        detail = _shadowed(_card(_zoom_crop(im), int(w * (0.4 if vertical else 0.26)), int(h * (0.2 if vertical else 0.34)), rng))
+        add(detail, 0.76 if vertical else 0.8, cy + (0.22 if vertical else 0.3), 1.1, "slide", float(rng.uniform(4, 9)))
+    # Selo no canto e etiqueta com o lugar/nome em cima (fora do caminho das legendas)
+    add(_shadowed(_stamp(im, int(u * 0.17), rng), blur=6, off=(4, 6)), 0.86, top + 0.01, 0.45, "pop", float(rng.uniform(-14, 14)))
     if label:
-        add(_shadowed(_tag(label, int(u * 0.042), tag_c), blur=5, off=(3, 5)), 0.36 if vertical else 0.3,
-            cy + (0.24 if vertical else 0.36), 0.55, "slide", float(rng.uniform(-3, 3)))
+        add(_shadowed(_tag(label, int(u * 0.046), tag_c), blur=5, off=(3, 5)), 0.32, top, 0.55, "slide", float(rng.uniform(-3, 3)))
     return layers
 
 
