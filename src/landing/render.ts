@@ -2,6 +2,8 @@
 // Usado na prévia do Studio (iframe) e na página publicada (/p/<slug>, função api/landing.ts) — mesmo resultado nos dois.
 // O layout é fixo e desenhado à mão; a IA só escreve os textos e escolhe cores, fontes e o estilo do topo.
 
+import { renderPremium } from "./premium.js";
+
 export type LandingContent = {
   template: "split" | "full";
   fonts: "fraunces" | "cormorant" | "dmserif" | "jakarta";
@@ -45,6 +47,8 @@ export type LandingData = {
   logo?: string | null;
   rating?: number | null;
   reviews?: number | null;
+  /** premium = layout animado (src/landing/premium.ts), vendido mais caro */
+  tier?: string | null;
   content: LandingContent;
 };
 
@@ -73,13 +77,13 @@ export function onColor(h: string) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? "#111111" : "#ffffff";
 }
 
-function headline(c: LandingContent) {
+export function headline(c: LandingContent) {
   const h = esc(c.headline);
   const mark = esc(c.highlight ?? "").trim();
   return mark && h.includes(mark) ? h.replace(mark, `<em>${mark}</em>`) : h;
 }
 
-const WA_ICON =
+export const WA_ICON =
   '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>';
 
 export function whatsappLink(d: LandingData) {
@@ -90,11 +94,12 @@ export function whatsappLink(d: LandingData) {
 }
 
 /** Horário de exemplo, só na prévia, quando o cliente não tem horário no Google nem informado (confirmar com ele). */
-const SAMPLE_HOURS = "Seg a sex: 8h às 18h (exemplo, confirmar)";
+export const SAMPLE_HOURS = "Seg a sex: 8h às 18h (exemplo, confirmar)";
 
 /** opts.preview = link de prévia (faixa + sem indexar); opts.sample = mostra exemplo no que falta (prévia e Studio). */
 /** opts.track = conta visitas e cliques (só na página servida pela api/landing.ts, nunca na prévia do Studio). */
 export function renderLanding(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean; track?: boolean } = {}): string {
+  if (d.tier === "premium") return renderPremium(d, opts);
   const c = d.content;
   const f = FONTS[c.fonts] ?? FONTS.fraunces;
   const primary = hex(c.colors?.primary, "#2f5d50");

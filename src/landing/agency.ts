@@ -25,7 +25,7 @@ export function renderAgency(): string {
 :root{--paper:#F3F1EA;--paper2:#EAE7DD;--ink:#111110;--muted:#6B6A63;--line:#D9D5C8;--lime:#D4FF3F;--forest:#173B2C;--orange:#FF6A3D}
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
-html,body{overflow-x:clip}
+html,body{overflow-x:hidden;overflow-x:clip}
 body{font-family:'Inter Tight',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:inherit;text-decoration:none}
 img{display:block;max-width:100%}
@@ -242,6 +242,11 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .plan li:before{content:"→";font-weight:700;color:var(--forest)}
 .plan.main li:before{color:var(--lime)}
 .plan .btn{margin-top:auto;justify-content:center}
+.plan.premium{margin-top:16px;display:grid;grid-template-columns:1.2fr 1fr auto;gap:24px;align-items:center;background:linear-gradient(120deg,#fff 0,#fff 55%,var(--lime) 160%)}
+.plan.premium .name{color:var(--forest)}
+.pp{display:flex;gap:26px;flex-wrap:wrap}
+.pp b{display:block;font-size:40px;font-weight:800;letter-spacing:-.05em;line-height:1}
+.pp span{font-size:13px;color:var(--muted)}
 .addon{margin-top:14px;font-size:14px;color:var(--muted);text-align:center}
 
 /* faq */
@@ -275,7 +280,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
 @media (max-width:960px){
   .nav nav{display:none}
   .hero{padding-top:110px}
-  .hero .grid,.compare .head,.serp,.calc .grid,.plans,.faq{grid-template-columns:1fr}
+  .hero .grid,.compare .head,.serp,.calc .grid,.plans,.faq,.plan.premium{grid-template-columns:1fr}
   .stage{min-height:560px;margin-top:10px}
   .phone{width:262px;height:540px}
   .c1{left:-70px;top:70px}.c2{right:-74px;top:auto;bottom:150px}.c3{left:-58px;bottom:40px}
@@ -439,7 +444,13 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
         <a class="btn ghost magnet" data-wa href="${waLink("Oi, Bruno! Quero o site avulso da PáginasPro.")}" target="_blank" rel="noopener">Quero o avulso</a>
       </div>
     </div>
-    <p class="addon reveal">Nos dois, você vê a prévia pronta antes de decidir.</p>
+    <div class="plan premium reveal">
+      <div><span class="name">Premium · um site igual a este</span>
+      <p class="note" style="margin-top:8px;max-width:34em">Animações, foto em 3D que se mexe com o dedo, galeria arrastável e a conversa animada do WhatsApp, com as cores e a cara do seu negócio.</p></div>
+      <div class="pp"><div><b>R$ ${brl(OFFER.premiumMonthly)}</b><span>/mês com painel e alterações</span></div><div><b>R$ ${brl(OFFER.premiumOneTime)}</b><span>à vista, sem mensalidade</span></div></div>
+      <a class="btn magnet" data-wa href="${waLink("Oi, Bruno! Quero o site Premium da PáginasPro, igual ao seu.")}" target="_blank" rel="noopener"><i class="dot"></i>Quero o Premium</a>
+    </div>
+    <p class="addon reveal">Em todos, você vê a prévia pronta antes de decidir.</p>
   </div>
 </section>
 

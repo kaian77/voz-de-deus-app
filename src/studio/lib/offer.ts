@@ -8,6 +8,11 @@ export const OFFER = {
   /** Links do Mercado Pago (criados pelo dono no app). Vazio = a mensagem sai sem link de pagamento. */
   oneTimeLink: "https://mpago.la/1rDD3Gz",
   monthlyLink: "https://mpago.la/29WANe2",
+  /** Premium: layout animado igual ao site da PáginasPro */
+  premiumMonthly: 129,
+  premiumOneTime: 997,
+  premiumMonthlyLink: "https://mpago.la/1YEqfgd",
+  premiumOneTimeLink: "https://mpago.la/1Bu8EjD",
 };
 
 const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
@@ -16,6 +21,15 @@ const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
 export function offerMessages(name: string, link?: string | null) {
   const preview = link ? `\n\nA prévia que montei para vocês está aqui: ${link}` : "";
   return {
+    premium:
+      `Também tenho a versão Premium do site da ${name}: o mesmo conteúdo, com animações, foto em 3D que se mexe com o dedo, galeria e uma apresentação bem mais marcante (igual ao meu site: https://paginaspro.vercel.app).\n\n` +
+      `• Premium mensal: ${brl(OFFER.premiumMonthly)} por mês, com painel de resultados e alterações inclusas\n` +
+      `• Premium à vista: ${brl(OFFER.premiumOneTime)} uma vez só (alterações depois a ${brl(OFFER.change)} cada)${preview}` +
+      (OFFER.premiumMonthlyLink || OFFER.premiumOneTimeLink
+        ? `\n\nAprovou a prévia? Pagamento:` +
+          (OFFER.premiumMonthlyLink ? `\n• mensal (cartão, todo mês): ${OFFER.premiumMonthlyLink}` : "") +
+          (OFFER.premiumOneTimeLink ? `\n• à vista (Pix, cartão ou boleto): ${OFFER.premiumOneTimeLink}` : "")
+        : ""),
     monthly:
       `Sobre o valor do site da ${name}: fica ${brl(OFFER.monthly)} por mês, sem taxa de entrada.\n\n` +
       `Já está tudo incluso:\n` +
