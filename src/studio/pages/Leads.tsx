@@ -115,10 +115,10 @@ export default function Leads() {
     save.mutate({ id: l.id, status, ...(status === "contacted" && !l.contacted_at ? { contacted_at: new Date().toISOString() } : {}) });
 
   // Mensagens de preço prontas (mensal e avulso), com o link da prévia se o lead já tem landing
-  const copyOffer = (l: Lead, kind: "monthly" | "oneTime") => {
+  const copyOffer = (l: Lead, kind: "monthly" | "oneTime" | "premium") => {
     const page = pages.find((p) => p.lead_id === l.id && p.status !== "draft");
     const link = page ? (page.status === "published" && page.domain ? `https://${page.domain}` : `https://paginaspro.vercel.app/p/${page.slug}`) : null;
-    navigator.clipboard.writeText(offerMessages(l.name, link)[kind]).then(() => toast.success(kind === "monthly" ? "Mensagem do plano mensal copiada" : "Mensagem do avulso copiada"));
+    navigator.clipboard.writeText(offerMessages(l.name, link)[kind]).then(() => toast.success(kind === "monthly" ? "Mensagem do plano mensal copiada" : kind === "premium" ? "Mensagem do Premium copiada" : "Mensagem do avulso copiada"));
   };
 
   const openWhatsApp = (l: Lead) => {
@@ -259,6 +259,9 @@ export default function Leads() {
                   </Button>
                   <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => copyOffer(l, "oneTime")} title="Copiar mensagem do avulso">
                     <Copy className="mr-1 h-3.5 w-3.5" />Avulso
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => copyOffer(l, "premium")} title="Copiar mensagem do Premium">
+                    <Copy className="mr-1 h-3.5 w-3.5" />Premium
                   </Button>
                 </div>
               </div>

@@ -97,7 +97,7 @@ function PlanPanel({ page, onChange }: { page: LandingPage; onChange: (p: Landin
   return (
     <Panel
       title="Plano do cliente"
-      description={page.plan === "monthly" ? `Mensal (R$ ${OFFER.monthly}/mês): painel de resultados + alterações inclusas.` : `Avulso: alterações cobradas à parte (R$ ${OFFER.change}); painel bloqueado (opcional por + R$ ${OFFER.panelAddon}/mês: ligue o mensal).`}
+      description={page.plan === "monthly" ? `Mensal (R$ ${page.tier === "premium" ? OFFER.premiumMonthly : OFFER.monthly}/mês): painel de resultados + alterações inclusas.` : `Avulso: alterações cobradas à parte (R$ ${OFFER.change}); painel bloqueado (opcional por + R$ ${OFFER.panelAddon}/mês: ligue o mensal).`}
       action={<Button size="sm" variant={page.plan === "monthly" ? "outline" : "default"} onClick={toggle} disabled={busy}>{page.plan === "monthly" ? "Desligar mensal" : "Ligar plano mensal"}</Button>}
     >
       <div className="grid grid-cols-3 gap-2 text-center">
@@ -169,8 +169,8 @@ function DomainPanel({ page, onChange }: { page: LandingPage; onChange: (domain:
   );
 }
 
-type Form = Pick<LandingPage, "name" | "niche" | "city" | "whatsapp" | "instagram" | "address" | "hours" | "registry" | "notes" | "photos" | "logo">;
-const EMPTY: Form = { name: "", niche: "", city: "", whatsapp: "", instagram: "", address: "", hours: "", registry: "", notes: "", photos: [], logo: null };
+type Form = Pick<LandingPage, "name" | "niche" | "city" | "whatsapp" | "instagram" | "address" | "hours" | "registry" | "notes" | "photos" | "logo" | "tier">;
+const EMPTY: Form = { name: "", niche: "", city: "", whatsapp: "", instagram: "", address: "", hours: "", registry: "", notes: "", photos: [], logo: null, tier: "normal" };
 const toForm = (page: LandingPage): Form => ({ ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map((k) => [k, page[k as keyof Form] ?? EMPTY[k as keyof Form]])) });
 
 /** Resumo do que veio do Instagram/Google para mostrar no editor. */
@@ -428,6 +428,17 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
               {form.logo && <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => set("logo", null)}>Remover</button>}
             </div>
             <input ref={logoInput} type="file" accept="image/*" hidden onChange={(e) => { upload(e.target.files, true); e.target.value = ""; }} />
+          </Panel>
+
+          <Panel title="Modelo" description="O conteúdo é o mesmo; muda o visual. Troque à vontade e veja na prévia.">
+            <div className="grid grid-cols-2 gap-2">
+              {([["normal", "Normal", `R$ ${OFFER.monthly}/mês · R$ ${OFFER.oneTime}`], ["premium", "Premium", `R$ ${OFFER.premiumMonthly}/mês · R$ ${OFFER.premiumOneTime}`]] as const).map(([k, label, price]) => (
+                <button key={k} type="button" onClick={() => set("tier", k)} className={cn("rounded-lg border p-3 text-left transition-colors", form.tier === k ? "border-foreground bg-secondary" : "hover:bg-secondary/50")}>
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="text-[11px] text-muted-foreground">{k === "premium" ? "Animado, foto 3D, galeria" : "Limpo e direto"} · {price}</p>
+                </button>
+              ))}
+            </div>
           </Panel>
 
           <Button className="w-full" size="lg" onClick={() => generate()} disabled={busy !== null}>

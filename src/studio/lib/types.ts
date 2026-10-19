@@ -389,6 +389,8 @@ export interface LandingPage {
   /** monthly = plano mensal (painel de resultados /r/<report_token> + alterações inclusas) */
   plan: "none" | "monthly";
   report_token: string | null;
+  /** premium = layout animado (src/landing/premium.ts) */
+  tier: "normal" | "premium";
   views: number;
   created_at: string;
   updated_at: string;
