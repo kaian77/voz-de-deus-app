@@ -52,6 +52,13 @@ CINEMATIC = (
 )
 
 
+# Estilo colagem (estilo Vox): gravuras antigas em P&B que viram fotos recortadas; mapas antigos para as rotas
+COLLAGE = ("vintage 19th century engraving illustration, black and white etching, crosshatching, high contrast, "
+           "single clear subject, plain light background, no text, no letters, no watermark")
+COLLAGE_MAP = ("antique hand-drawn parchment map, old cartography, sepia ink, coastlines and mountains, top-down view, "
+               "no text, no letters, no labels, no watermark")
+
+
 def now():
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
@@ -511,22 +518,31 @@ def thumbnail(src, text, out):
 
 # ------------------------------------------------------------------------------------------------ vídeo
 
-def render(video, work):
+def render(video, work, channel=None):
     import numpy as np
 
     script = video["script"]
     short = video["kind"] == "short"
     w, h = (1080, 1920) if short else (1920, 1080)
-    channel = (rest("GET", f"yt_channels?id=eq.{video['channel_ref']}&select=voice,language,style") or [{}])[0]
+    if channel is None:
+        channel = (rest("GET", f"yt_channels?id=eq.{video['channel_ref']}&select=voice,language,style") or [{}])[0]
     style = channel.get("style") or "parallax"
-    en = channel.get("language") == "en"
-    voice = channel.get("voice") or ("en-US-AndrewNeural" if en else "pt-BR-AntonioNeural")
-    if not voice.startswith("en-" if en else "pt-"):  # voz de outro idioma: usa a padrão do idioma do canal
-        voice = "en-US-AndrewNeural" if en else "pt-BR-AntonioNeural"
+    lang = channel.get("language") or "pt"
+    en = lang == "en"
+    voices = {"pt": "pt-BR-AntonioNeural", "en": "en-US-AndrewNeural", "es": "es-MX-JorgeNeural"}
+    voice = channel.get("voice") or voices.get(lang, voices["pt"])
+    if not voice.startswith(lang + "-"):  # voz de outro idioma: usa a padrão do idioma do canal
+        voice = voices.get(lang, voices["pt"])
     scenes = script["scenes"]
     base_seed = random.randint(1, 10_000_000)
     cine = style == "cinematic"
+    collage = style == "collage"
     look = CINEMATIC if cine else None
+
+    def look_for(sc):
+        if collage:
+            return COLLAGE_MAP if sc.get("layout") == "map" else COLLAGE
+        return look
 
     clips, lens, voices, words, chapters, starts, t = [], [], [], [], [], [], 0.0
     missing = []
@@ -541,9 +557,10 @@ def render(video, work):
         img = os.path.join(work, f"i{i}.jpg")
         prompt = hero(sc["image"], script) if cine else sc["image"]
         # Cinemático: mesma semente em todas as cenas ajuda o rosto do protagonista a sair parecido
-        if not image(prompt, w, h, img, base_seed if cine else base_seed + i, style=look):
+        if not image(prompt, w, h, img, base_seed if cine else base_seed + i, style=look_for(sc)):
             missing.append((i, prompt))
-        clips.append({"img": img, "length": length, "advance": length - XF, "motion": sc.get("motion") or "zoom_in"})
+        clips.append({"img": img, "length": length, "advance": length - XF, "motion": sc.get("motion") or "zoom_in",
+                      "layout": sc.get("layout") or "photo", "label": sc.get("label") or ""})
         lens.append(length)
         voices.append((t + lead, audio))
         words += [{**x, "t": x["t"] + t + lead} for x in ws]
@@ -558,7 +575,7 @@ def render(video, work):
         log(f"  {len(missing)} cena(s) sem imagem, tentando de novo…")
         time.sleep(30)
         missing = [(i, p) for i, p in missing
-                   if not image(p, w, h, clips[i]["img"], (base_seed if cine else base_seed + i) + 7, style=look)]
+                   if not image(p, w, h, clips[i]["img"], (base_seed if cine else base_seed + i) + 7, style=look_for(scenes[i]))]
     if len(missing) > len(scenes) * 0.3:
         # Vídeo com metade das cenas repetidas não vale publicar: volta para a fila e tenta mais tarde
         raise RuntimeError(f"os geradores de imagem falharam em {len(missing)} de {len(scenes)} cenas")
@@ -572,6 +589,14 @@ def render(video, work):
     log(f"  montando ({style})…")
     if style == "whiteboard":
         yt_styles.whiteboard_video(clips, w, h, silent, hand=hand_asset(work))
+    elif collage:
+        for i, c in enumerate(clips):  # personagem recortado vira adesivo
+            if c["layout"] == "sticker":
+                try:
+                    c["cut"] = yt_styles.cutout(c["img"], os.path.join(work, f"cut{i}.png"))
+                except Exception as e:
+                    log(f"    recorte: {e}")
+        yt_styles.collage_video(clips, w, h, silent, seed=base_seed % 1000)
     else:
         files = []
         for i, c in enumerate(clips):
@@ -637,6 +662,9 @@ def render(video, work):
     if style == "whiteboard":  # papel limpo: sem vinheta, grão nem partículas
         fc = f"[0:v]subtitles={ass}:fontsdir={FONTS}[s]"
         bar = 2
+    elif collage:  # papel com grão de filme, sem partículas
+        fc = f"[0:v]noise=alls=7:allf=t,vignette=PI/6,subtitles={ass}:fontsdir={FONTS}[s]"
+        bar = 2
     else:
         # Cor mais viva + vinheta + partículas de luz + grão de filme + legendas
         pt = os.path.join(work, "particles.mov")
@@ -660,7 +688,7 @@ def render(video, work):
     # Capa
     thumb_src = os.path.join(work, "thumb_src.jpg")
     thumb_prompt = hero(script["thumbnail_image"], script) if cine else script["thumbnail_image"]
-    if not image(thumb_prompt, 1280, 720, thumb_src, base_seed if cine else base_seed + 999, style=look):
+    if not image(thumb_prompt, 1280, 720, thumb_src, base_seed if cine else base_seed + 999, style=COLLAGE if collage else look):
         shutil.copy(os.path.join(work, "i0.jpg"), thumb_src)
     thumb = os.path.join(work, "thumb.jpg")
     thumbnail(thumb_src, script["thumbnail_text"], thumb)
@@ -749,7 +777,48 @@ def process(video):
         log(f"  ✓ https://youtu.be/{up['id']} ({total:.0f}s)")
 
 
+# Roteiro fixo para ver um estilo novo antes de ligar no canal (workflow "Prévia de estilo")
+SAMPLE = {
+    "title": "O mar se abriu — e ninguém esperava o que veio depois",
+    "thumbnail_text": "O MAR SE ABRIU",
+    "thumbnail_image": "Moses raising his staff as the Red Sea parts into two walls of water",
+    "cast": "",
+    "scenes": [
+        {"narration": "Seiscentos mil hebreus encurralados entre o mar e o exército do faraó.", "label": "Mar Vermelho",
+         "layout": "photo", "image": "a huge crowd of ancient Hebrews on a beach trapped between the sea and an army"},
+        {"narration": "À frente, um homem de oitenta anos com um cajado na mão.", "label": "Moisés",
+         "layout": "sticker", "image": "old Moses with long beard holding a wooden staff, full body"},
+        {"narration": "Eles tinham saído do Egito poucos dias antes, rumo à terra prometida.", "label": "Egito → Canaã",
+         "layout": "map", "image": "antique map of Egypt, the Sinai peninsula and Canaan"},
+        {"narration": "Atrás deles vinham seiscentos carros de guerra.", "label": "Êxodo 14:7",
+         "layout": "tv", "image": "ancient Egyptian war chariots with horses charging"},
+        {"narration": "Então Moisés estendeu a mão sobre o mar, e as águas se dividiram.", "label": "Êxodo 14:21",
+         "layout": "photo", "image": "the Red Sea parting into two giant walls of water with a dry path in the middle"},
+        {"narration": "O povo atravessou a pé enxuto, no meio do mar.", "label": "A travessia",
+         "layout": "sticker", "image": "a Hebrew family walking with a donkey, full body"},
+        {"narration": "E você, acredita que Deus ainda abre caminhos onde não existe saída?", "label": "Comente",
+         "layout": "photo", "image": "a lone traveler looking at a path opening between two mountains at dawn"},
+    ],
+}
+
+
+def preview(style, lang="pt"):
+    """Renderiza o roteiro de exemplo no estilo pedido e salva em previews/ (o workflow publica na branch previews)."""
+    video = {"script": SAMPLE, "kind": "short"}
+    channel = {"style": style, "language": lang, "voice": None}
+    os.makedirs(os.path.join(HERE, "..", "previews"), exist_ok=True)
+    with tempfile.TemporaryDirectory() as work:
+        final, thumb, total, _, _ = render(video, work, channel)
+        shutil.copy(final, os.path.join(HERE, "..", "previews", f"{style}.mp4"))
+        shutil.copy(thumb, os.path.join(HERE, "..", "previews", f"{style}.jpg"))
+    log(f"✓ prévia {style}: {total:.0f}s")
+
+
 def main():
+    if "--preview" in sys.argv:
+        args = sys.argv[sys.argv.index("--preview") + 1:]
+        preview(args[0] if args else "collage", args[1] if len(args) > 1 else "pt")
+        return
     if "--check" in sys.argv:
         requeue_stuck()
         print("queued" if queued(1) else "empty")

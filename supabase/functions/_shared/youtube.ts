@@ -139,6 +139,13 @@ const Scene = z.object({
       "(close dramático, plano aberto épico, de cima, contra-luz). Cenas vizinhas bem diferentes entre si. Sem pedir texto na imagem",
   ),
   motion: z.enum(["zoom_in", "zoom_out", "pan_left", "pan_right"]),
+  layout: z.enum(["photo", "sticker", "tv", "map"]).describe(
+    "Só no estilo colagem (senão photo): photo = foto antiga recortada; sticker = personagem recortado como adesivo (imagem com 1 pessoa de corpo inteiro); " +
+      "tv = cena dentro de uma TV antiga; map = mapa antigo com a rota (a imagem descreve o mapa da região)",
+  ),
+  label: z.string().describe(
+    "Só no estilo colagem (senão string vazia): etiqueta de 1 a 3 palavras (lugar, nome, data ou versículo); no layout map, 'Origem → Destino'",
+  ),
   chapter: z.string().nullable().describe("Só em vídeo longo: título do capítulo quando um novo capítulo começa nesta cena; senão null"),
 });
 
@@ -185,8 +192,17 @@ const CINEMATIC =
   `Roteiro como HISTÓRIA contada (não lista de fatos): gancho com virada ("...e aí tudo piorou"), tensão crescente, momento emocional e a lição no fim, ` +
   `sempre fiel ao texto bíblico.`;
 
+/** Estilo colagem (estilo Vox): gravuras antigas recortadas, adesivos, etiquetas, TV antiga e mapa com a rota. */
+const COLLAGE =
+  `\n\nESTILO DESTE CANAL: colagem de papel estilo documentário (Vox): cada cena é uma gravura antiga em preto e branco recortada sobre papel colorido. ` +
+  `Nas imagens descreva UM assunto claro (pessoa, objeto, construção, multidão) como gravura do século XIX, sem cenário complicado. ` +
+  `Varie o layout: use sticker quando a cena tem um personagem de corpo inteiro, map quando a história muda de lugar (1 ou 2 por vídeo, ` +
+  `descrevendo o mapa antigo da região e label "Origem → Destino"), tv para um momento marcante e photo no resto. ` +
+  `Toda cena tem label curta (lugar, nome, data ou versículo).`;
+
 const rules = (niche: string, language: string, style = "") =>
-  (language === "en" ? RULES_EN : RULES_PT).replace("{niche}", niche) + (style === "cinematic" ? CINEMATIC : "");
+  (language === "en" ? RULES_EN : RULES_PT).replace("{niche}", niche) +
+  (style === "cinematic" ? CINEMATIC : style === "collage" ? COLLAGE : "");
 
 export async function planTopics(niche: string, trends: Trend[], recent: string[], kinds: ("short" | "long")[], language = "pt") {
   const out = await generateJSON(Plan,

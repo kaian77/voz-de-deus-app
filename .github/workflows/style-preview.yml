@@ -1,0 +1,56 @@
+# Prévia de um estilo de vídeo do YouTube antes de ligar no canal: renderiza o roteiro de exemplo (video/youtube.py
+# --preview) e publica o MP4 e a capa na branch "previews" (só esses arquivos), para o dono ver.
+name: Prévia de estilo
+
+on:
+  workflow_dispatch:
+    inputs:
+      style:
+        description: "Estilo (collage, cinematic, parallax, whiteboard, classic)"
+        default: collage
+      language:
+        description: "Idioma da narração (pt, en, es)"
+        default: pt
+
+permissions:
+  contents: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      POLLINATIONS_TOKEN: ${{ secrets.POLLINATIONS_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependências
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0" "rembg[cpu]>=2.0.50"
+          mkdir -p ~/.fonts && cp video/engine/assets/fonts/*.ttf ~/.fonts/ && fc-cache -f >/dev/null
+
+      - name: Modelo de recorte (cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.u2net
+          key: u2net-v1
+
+      - name: Renderizar a prévia
+        run: cd video && python3 youtube.py --preview "${{ inputs.style }}" "${{ inputs.language }}"
+
+      - name: Publicar na branch previews
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan previews-tmp
+          git rm -rf --cached . -q
+          git add -f previews/
+          git commit -qm "Prévia do estilo ${{ inputs.style }} (${{ inputs.language }})"
+          git push -fq origin HEAD:previews

@@ -426,7 +426,7 @@ export interface YtChannel {
   enabled: boolean;
   language: "pt" | "en" | "es";
   mode: "bible" | "clips";
-  style: "parallax" | "whiteboard" | "classic" | "cinematic";
+  style: "parallax" | "whiteboard" | "classic" | "cinematic" | "collage";
   niche: string;
   shorts_per_day: number;
   long_per_week: number;
