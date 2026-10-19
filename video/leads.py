@@ -5,8 +5,8 @@ Fila: tabela lead_searches (status "queued"), criada pela tela Leads do Studio. 
 ("nutricionista" em "Sobradinho DF", N leads):
 - acha a área no OpenStreetMap (Nominatim, grátis) e guarda o retângulo para o mapa do Studio;
 - roda o robô open source gosom/google-maps-scraper (sobe como container no workflow, API em localhost:8080),
-  dividindo a área em pedaços quando pedem muitos leads (o Google Maps mostra no máximo ~120 por busca);
-- fica só com empresas SEM site (Instagram/Facebook/link de WhatsApp contam como "sem site") e COM celular;
+  primeiro "tema em lugar" e, se vier pouco, bairro a bairro da área em volta (o Maps mostra no máximo ~120 por busca);
+- fica só com empresas SEM site (Instagram/Facebook/link de WhatsApp, agenda online e guia do bairro contam como "sem site") e COM celular;
 - ignora quem já está na lista (mesmo lugar ou mesmo número) e grava até N leads novos na tabela leads.
 
 Variáveis: SUPABASE_URL, SUPABASE_SERVICE_KEY, SCRAPER_URL (padrão http://localhost:8080).
@@ -34,7 +34,7 @@ UA = "BraxStudio-leads/1.0 (https://github.com/kaian77/voz-de-deus-app)"
 NOT_A_SITE = re.compile(
     r"instagram\.com|facebook\.com|fb\.com|fb\.me|wa\.me|wa\.link|whatsapp\.com|linktr\.ee|linkbio|bio\.link|beacons\.ai|business\.site|"
     r"ifood\.com|tiktok\.com|doctoralia|boaconsulta|agendar|agendamento|calendly|linkme|lnk\.bio|taplink|instabio|linkin\.bio|"
-    r"bit\.ly|encurtador|zenklub|psicologiaviva|g\.page|maps\.app\.goo|google\.com/maps|youtube\.com|tuasaude|minhavida",
+    r"bit\.ly|encurtador|zenklub|psicologiaviva|g\.page|maps\.app\.goo|google\.com/maps|youtube\.com|tuasaude|minhavida|cliquesobradinho|/empresas?/|guiamais|apontador|telelistas",
     re.I,
 )
 
@@ -64,6 +64,29 @@ def geocode(place):
         return None
     h = hits[0]
     return float(h["lat"]), float(h["lon"]), [float(x) for x in h["boundingbox"]]
+
+
+def nearby(bbox, limit=6):
+    """Bairros/cidades dentro da área (OpenStreetMap, ao contrário) -> ["Sobradinho II, Distrito Federal", ...].
+    A busca no Maps só com o tema cai perto do servidor do GitHub (EUA); com o nome de cada bairro ela fica no lugar certo."""
+    s, n, w, e = bbox
+    names = []
+    for i in range(3):
+        for j in range(3):
+            lat, lon = s + (i + 0.5) * (n - s) / 3, w + (j + 0.5) * (e - w) / 3
+            q = urllib.parse.urlencode({"format": "json", "lat": f"{lat:.5f}", "lon": f"{lon:.5f}", "zoom": 14, "addressdetails": 1})
+            try:
+                req = urllib.request.Request(f"https://nominatim.openstreetmap.org/reverse?{q}", headers={"User-Agent": UA})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    a = json.loads(r.read()).get("address") or {}
+            except Exception:
+                a = {}
+            time.sleep(1)  # Nominatim: no máximo 1 requisição por segundo
+            name = next((a[k] for k in ("suburb", "city_district", "neighbourhood", "town", "city", "village") if a.get(k)), None)
+            label = f"{name}, {a['state']}" if name and a.get("state") else name
+            if label and label not in names:
+                names.append(label)
+    return names[:limit]
 
 
 def around(lat, lng, bbox, km):
@@ -286,16 +309,19 @@ def run(search):
     base = 2.5 if wanted <= 30 else 4
     places, phones = known(search["user_id"])
     found, errors, i = int(search.get("found") or 0), [], 0  # tentar de novo continua de onde parou
-    # 1ª rodada: o miolo do lugar. Se vier pouco (nichos pequenos, poucas empresas sem site), a 2ª rodada
-    # amplia a área (até ~2,4x) e varre em 4 pedaços buscando só o tema, para o Maps mostrar o que está perto de cada um.
-    rounds = [(base, 1 if wanted <= 15 else 2, f"{search['query']} em {search['place']}"), (base * 2.4, 2, search["query"])]
-    for km, n, keyword in rounds:
+    # 1ª rodada: o miolo do lugar. Se vier pouco, a 2ª amplia a área (~2,4x). O robô não prende a busca ao ponto do mapa: pedaços com o mesmo texto devolvem os mesmos lugares e só o
+    # tema sem lugar cai nos EUA. Por isso a 1ª rodada é uma busca só ("tema em lugar") e a 2ª busca bairro a bairro.
+    for km in (base, base * 2.4):
         if found >= wanted:
             break
         bbox = around(lat, lng, region, km)
         rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"lat": lat, "lng": lng, "bbox": bbox, "updated_at": now()})
-        depth = 5 if wanted <= 30 and km == base else 10
-        for cell in cells(bbox, n):
+        cell = cells(bbox, 1)[0]
+        if km == base:
+            jobs = [(f"{search['query']} em {search['place']}", 5 if wanted <= 15 else 10)]
+        else:
+            jobs = [(f"{search['query']} em {name}", 5) for name in nearby(bbox)]
+        for keyword, depth in jobs:
             i += 1
             try:
                 rows = scrape(keyword, cell, depth)
@@ -323,7 +349,7 @@ def run(search):
             if fresh:
                 http("POST", f"{URL}/rest/v1/leads?on_conflict=user_id,place_id", fresh, {"Prefer": "resolution=ignore-duplicates,return=minimal"})
                 found += len(fresh)
-            print(f"  pedaço {i} ({km:g} km): {len(rows)} lugares, {len(fresh)} leads novos ({found}/{wanted})"
+            print(f"  pedaço {i} ({keyword}): {len(rows)} lugares, {len(fresh)} leads novos ({found}/{wanted})"
                   + (f" · descartados: {', '.join(f'{n} {k}' for k, n in why.items())}" if why else "")
                   + (f" · sites: {', '.join(sites)}" if sites else ""))
             rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"found": found, "updated_at": now()})
