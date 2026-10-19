@@ -382,6 +382,10 @@ export interface LandingPage {
   /** O que foi puxado do Instagram/Google Maps (maps = "pending" enquanto o robô busca) */
   imported: { at?: string; sources?: string[]; instagram?: string; maps?: string } | null;
   status: "draft" | "preview" | "published";
+  /** Até quando o link de prévia abre (7 dias a cada "Link de prévia"/"Renovar") */
+  preview_until: string | null;
+  /** Domínio próprio do cliente (sem www), quando publicada */
+  domain: string | null;
   views: number;
   created_at: string;
   updated_at: string;

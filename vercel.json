@@ -19,6 +19,16 @@
       "destination": "/api/landing"
     },
     {
+      "source": "/((?!api/|media/).*)",
+      "missing": [
+        {
+          "type": "host",
+          "value": "(.*\\.vercel\\.app|localhost.*|127\\.0\\.0\\.1.*)"
+        }
+      ],
+      "destination": "/api/landing"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

@@ -8,7 +8,7 @@ import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStor
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
-import { importClientData, uniqueSlug, writeLanding } from "../_shared/landing.ts";
+import { cleanDomain, DNS_RECORDS, importClientData, uniqueSlug, vercelDomain, vercelDomainStatus, writeLanding } from "../_shared/landing.ts";
 import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, ytDeleteVideo, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
@@ -265,6 +265,26 @@ Deno.serve(async (req) => {
       if (action === "landing_delete") await db.from("landing_pages").delete().eq("id", page.id);
       return json({ ok: true });
     }
+    if (action === "landing_domain") {
+      // Domínio próprio do cliente: salva, põe na Vercel (se houver VERCEL_TOKEN) e diz o que falta no DNS
+      const { data: page } = await db.from("landing_pages").select("id,domain").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
+      if (!page) throw new HttpError(404, "Página não encontrada");
+      const domain = input.check ? page.domain : cleanDomain(input.domain);
+      let vercelResult = "auto";
+      if (!input.check && page.domain && page.domain !== domain) await vercelDomain(page.domain, true);
+      if (!input.check) {
+        if (domain) {
+          const { data: taken } = await db.from("landing_pages").select("id").ilike("domain", domain).neq("id", page.id).maybeSingle();
+          if (taken) throw new HttpError(400, "Esse domínio já está em outra página");
+          vercelResult = await vercelDomain(domain);
+          if (vercelResult !== "auto" && vercelResult !== "manual") throw new HttpError(400, `Vercel: ${vercelResult}`);
+        }
+        const { error } = await db.from("landing_pages").update({ domain: domain || null, updated_at: new Date().toISOString() }).eq("id", page.id);
+        if (error) throw new HttpError(error.code === "23505" ? 400 : 500, error.code === "23505" ? "Esse domínio já está em outra página" : error.message);
+      }
+      const status = domain ? await vercelDomainStatus(domain) : null;
+      return json({ domain: domain || null, vercel: vercelResult, status, records: DNS_RECORDS });
+    }
     if (action === "landing_import") {
       // Puxa os dados reais do cliente (Instagram + Google Maps) para a página
       const { data: page } = await db.from("landing_pages").select("*").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
@@ -293,6 +313,8 @@ Deno.serve(async (req) => {
         // mode: preview = link para a cliente ver (sem indexar, com faixa "Prévia"); published = no ar; draft = tira do ar
         const mode = input.unpublish ? "draft" : input.mode === "preview" ? "preview" : "published";
         patch.status = mode;
+        // Prévia vale 7 dias (cada "Link de prévia"/"Renovar" conta de novo); depois o link mostra "prévia expirada"
+        if (mode === "preview") patch.preview_until = new Date(Date.now() + 7 * 86400_000).toISOString();
         // Rascunho nasce com endereço provisório; na primeira publicação ganha o nome do cliente (e não muda mais)
         if (mode !== "draft" && page.slug.startsWith("rascunho-")) patch.slug = await uniqueSlug(db, page.name, page.id);
       }

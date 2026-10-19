@@ -194,3 +194,59 @@ export async function importClientData(db: SupabaseClient, page: Record<string, 
   patch.imported = { at: new Date().toISOString(), sources: [...sources], ...status };
   return patch;
 }
+
+// ---------------------------------------------------------------------------
+// Domínio próprio do cliente (ex.: clinicaana.com.br). A página abre pelo domínio quando:
+// 1) o domínio está no projeto da Vercel (automático com o secret VERCEL_TOKEN; senão o dono adiciona no painel);
+// 2) o cliente aponta o DNS: A @ 76.76.21.21 e CNAME www cname.vercel-dns.com.
+// api/landing.ts acha a página pelo host (vercel.json manda todo domínio fora de *.vercel.app para lá).
+// ---------------------------------------------------------------------------
+export const DNS_RECORDS = [
+  { type: "A", name: "@", value: "76.76.21.21" },
+  { type: "CNAME", name: "www", value: "cname.vercel-dns.com" },
+];
+
+export function cleanDomain(v: unknown) {
+  const d = String(v ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+  if (!d) return "";
+  if (!/^([a-z0-9-]+\.)+[a-z]{2,}$/.test(d) || d.endsWith(".vercel.app")) throw new HttpError(400, "Domínio inválido (ex.: clinicaana.com.br)");
+  return d;
+}
+
+async function vercel(path: string, init: RequestInit = {}) {
+  const token = Deno.env.get("VERCEL_TOKEN");
+  if (!token) return null;
+  const url = new URL(`https://api.vercel.com${path}`);
+  const team = Deno.env.get("VERCEL_TEAM_ID");
+  if (team) url.searchParams.set("teamId", team);
+  const res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } });
+  const body = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, body };
+}
+
+const project = () => Deno.env.get("VERCEL_PROJECT_ID") || "voz-de-deus-app";
+
+/** Põe (ou tira) o domínio no projeto da Vercel. Devolve "auto" (feito), "manual" (sem token) ou a mensagem de erro. */
+export async function vercelDomain(domain: string, remove = false): Promise<string> {
+  if (!Deno.env.get("VERCEL_TOKEN")) return "manual";
+  for (const name of remove ? [`www.${domain}`, domain] : [domain, `www.${domain}`]) {
+    const r = remove
+      ? await vercel(`/v9/projects/${project()}/domains/${name}`, { method: "DELETE" })
+      : await vercel(`/v10/projects/${project()}/domains`, {
+        method: "POST",
+        body: JSON.stringify(name.startsWith("www.") ? { name, redirect: domain, redirectStatusCode: 308 } : { name }),
+      });
+    const code = r?.body?.error?.code;
+    if (r && !r.ok && code !== "domain_already_in_use_by_project" && code !== "domain_already_exists" && !(remove && r.status === 404)) {
+      return r.body?.error?.message ?? `Vercel respondeu ${r.status}`;
+    }
+  }
+  return "auto";
+}
+
+/** Situação do domínio: "ok" (no ar), "dns" (falta o cliente apontar o DNS), "manual" (sem token: conferir no painel). */
+export async function vercelDomainStatus(domain: string): Promise<"ok" | "dns" | "manual"> {
+  const r = await vercel(`/v6/domains/${domain}/config`);
+  if (!r) return "manual";
+  return r.ok && r.body?.misconfigured === false ? "ok" : "dns";
+}

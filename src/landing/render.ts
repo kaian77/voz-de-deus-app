@@ -258,7 +258,9 @@ ${hero ? `<meta property="og:image" content="${esc(hero)}">` : ""}${opts.url ? `
 <link href="https://fonts.googleapis.com/css2?${f.url}&display=swap" rel="stylesheet">
 <style>${css}</style></head>
 <body>
-${opts.preview ? `<div style="background:${ink};color:#fff;text-align:center;font-size:13px;padding:8px 16px">Prévia do site · ainda não publicado</div>` : ""}
+${opts.preview ? `<div style="background:${ink};color:#fff;text-align:center;font-size:13px;padding:8px 16px">Prévia do site · ainda não publicado</div>
+<div aria-hidden="true" style="position:fixed;inset:0;z-index:40;pointer-events:none;background:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='200'%3E%3Ctext x='20' y='120' transform='rotate(-24 140 100)' font-family='Arial' font-size='30' font-weight='700' fill='%23000' fill-opacity='.07'%3EPR%C3%89VIA%3C/text%3E%3C/svg%3E&quot;)"></div>
+<div style="position:fixed;left:0;right:0;bottom:0;z-index:41;background:${ink};color:#fff;text-align:center;font-size:13px;padding:10px 16px;font-family:system-ui,sans-serif">PRÉVIA · site ainda não publicado</div><style>.float{bottom:62px}footer{padding-bottom:64px}</style>` : ""}
 <header class="nav"><div class="wrap">${brand}
 <nav class="links"><a href="#sobre">Sobre</a><a href="#servicos">Serviços</a><a href="#como-funciona">Como funciona</a><a href="#duvidas">Dúvidas</a><a href="#contato">Contato</a></nav>
 ${cta("btn small")}</div></header>
