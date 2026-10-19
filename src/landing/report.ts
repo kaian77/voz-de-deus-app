@@ -13,7 +13,30 @@ export type ReportData = {
   content?: Partial<Pick<LandingContent, "colors" | "fonts">> | null;
   support?: string | null;
   stats: Day[] | null;
+  /** Painel de exemplo (/r/demo), com números fictícios */
+  demo?: boolean;
 };
+
+/** Painel de exemplo para mostrar a quem ainda não é cliente: números inventados, mas estáveis (não mudam a cada visita). */
+export function demoReport(): ReportData {
+  const today = new Date(Date.now() - 3 * 3600_000);
+  const stats: Day[] = Array.from({ length: 60 }, (_, i) => {
+    const dt = new Date(today);
+    dt.setUTCDate(dt.getUTCDate() - (59 - i));
+    const weekend = [0, 6].includes(dt.getUTCDay());
+    const views = Math.round((i < 30 ? 7 : 11) + 6 * Math.sin(i * 1.7) + (weekend ? -3 : 3) + (i % 5));
+    return {
+      day: dt.toISOString().slice(0, 10), views,
+      whatsapp: Math.max(0, Math.round(views * 0.16 + Math.sin(i) * 1.2)), maps: Math.max(0, Math.round(views * 0.07)),
+      sources: { instagram: Math.round(views * 0.45), google: Math.round(views * 0.33), direto: views - Math.round(views * 0.45) - Math.round(views * 0.33) },
+    };
+  });
+  return {
+    name: "Dra. Lívia Rocha", slug: "exemplo", status: "published", plan: "monthly", demo: true,
+    content: { colors: { primary: "#0F4C5C", ink: "#14242A", soft: "#EAF3F3" }, fonts: "fraunces" },
+    support: "5561992372216", stats,
+  };
+}
 
 const SOURCES: Record<string, string> = { google: "Google", instagram: "Instagram", facebook: "Facebook", whatsapp: "WhatsApp", tiktok: "TikTok", direto: "Link direto", outros: "Outros" };
 
@@ -120,6 +143,7 @@ footer{margin-top:24px;text-align:center;font-size:12px;color:${mix(ink, "#fffff
 </style></head>
 <body><div class="wrap">
 <header>${brand}<a href="${esc(site)}" target="_blank" rel="noopener">Ver meu site ↗</a></header>
+${d.demo ? `<p style="background:${ink};color:#fff;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:16px">Painel de exemplo com números fictícios. É assim que o seu fica, com as cores e o logo do seu site.</p>` : ""}
 <h1>Resultados do seu site</h1>
 ${body}
 <footer>Atualizado agora · os números contam visitas reais (robôs ficam de fora)</footer>

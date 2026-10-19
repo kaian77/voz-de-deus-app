@@ -4,9 +4,9 @@
 // Contagem própria (visita, clique no WhatsApp, origem) -> função site_track -> painel "Seu site" no Studio.
 import { OFFER } from "../studio/lib/offer.js";
 
-const WA = "5561992372217";
+const WA = "5561992372216";
 const waLink = (text: string) => `https://wa.me/${WA}?text=${encodeURIComponent(text)}`;
-const HELLO = waLink("Oi, Bruno! Vi o site da PáginasPro e quero ver a prévia do site do meu negócio.");
+const HELLO = waLink("Oi, Bruno! Vi o site da PáginasPro e quero ver a prévia do site do meu negócio. Vou te mandar o @ do Instagram, fotos, endereço, horário e os serviços.");
 const brl = (n: number) => n.toLocaleString("pt-BR");
 
 export function renderAgency(): string {
@@ -166,6 +166,33 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .step.dark{background:var(--forest);color:var(--paper);border:0}
 .step.dark .n{color:var(--lime)}
 .step.dark p{color:#BFD0C6}
+
+.need{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
+.need span{font-size:12.5px;font-weight:600;background:var(--paper);border-radius:99px;padding:6px 11px}
+
+/* animação ao chamar no WhatsApp */
+.wa-sheet{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:20px;background:rgba(17,17,16,.0);backdrop-filter:blur(0);-webkit-backdrop-filter:blur(0);visibility:hidden;transition:background .35s,backdrop-filter .35s,visibility 0s .35s}
+.wa-sheet.open{visibility:visible;background:rgba(17,17,16,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:background .35s,backdrop-filter .35s}
+.wa-card{width:min(380px,100%);border-radius:28px;overflow:hidden;background:#EFEAE2;box-shadow:0 40px 80px -30px rgba(0,0,0,.6);transform:translateY(40px) scale(.94);opacity:0;transition:transform .5s cubic-bezier(.2,.9,.2,1.15),opacity .3s}
+.wa-sheet.open .wa-card{transform:none;opacity:1}
+.wa-head{display:flex;align-items:center;gap:12px;background:#111110;color:#F3F1EA;padding:14px 16px}
+.wa-head .av{width:40px;height:40px;border-radius:50%;background:var(--lime);color:var(--ink);display:grid;place-items:center;font-weight:800}
+.wa-head b{display:block;font-size:15px}
+.wa-head small{font-size:12px;color:#9FE870}
+.wa-body{padding:18px 14px 10px;min-height:150px;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;background:#EFEAE2 radial-gradient(rgba(0,0,0,.035) 1px,transparent 1px) 0 0/14px 14px}
+.bubble{align-self:flex-end;max-width:86%;background:#D9FDD3;color:#111;border-radius:14px 14px 4px 14px;padding:9px 12px 6px;font-size:14px;line-height:1.4;box-shadow:0 1px 1px rgba(0,0,0,.08);transform-origin:100% 100%;transform:scale(.6);opacity:0;transition:transform .35s cubic-bezier(.2,.9,.2,1.2),opacity .2s}
+.bubble.in{transform:none;opacity:1}
+.bubble .meta{display:flex;justify-content:flex-end;align-items:center;gap:3px;font-size:10.5px;color:#667781;margin-top:2px}
+.bubble .ticks{color:#8696a0;transition:color .3s}
+.bubble.read .ticks{color:#53BDEB}
+.caret{display:inline-block;width:2px;height:15px;background:#111;vertical-align:-2px;margin-left:1px;animation:blink .8s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.wa-foot{display:flex;align-items:center;gap:10px;padding:12px 14px 16px;background:#EFEAE2}
+.wa-foot .bar{flex:1;height:6px;border-radius:99px;background:rgba(0,0,0,.08);overflow:hidden}
+.wa-foot .bar i{display:block;height:100%;width:0;background:#25D366;border-radius:99px}
+.wa-sheet.go .wa-foot .bar i{width:100%;transition:width 1.1s cubic-bezier(.4,0,.2,1)}
+.wa-foot span{font-size:12.5px;color:#54656F;font-weight:600;white-space:nowrap}
+.wa-foot a{font-size:12.5px;font-weight:700;color:#008069}
 
 /* features bento */
 .bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin-top:50px}
@@ -358,7 +385,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
     <span class="kicker reveal"><i></i>Como funciona</span>
     <h2 class="reveal" style="margin-top:18px;max-width:14em">Você não precisa fazer nada <span class="serif">além de olhar.</span></h2>
     <div class="steps">
-      <div class="step reveal"><span class="n">1</span><h3>Me chama no WhatsApp</h3><p>Manda o @ do seu Instagram ou o nome do negócio no Google. Eu pego fotos, horário e endereço de lá.</p></div>
+      <div class="step reveal"><span class="n">1</span><h3>Me chama e manda o básico</h3><p>Tudo pelo WhatsApp mesmo, em poucos minutos:</p><div class="need"><span>@ do Instagram</span><span>Fotos para o site</span><span>Endereço (se tiver)</span><span>Horário de funcionamento</span><span>Tipo de serviço</span></div></div>
       <div class="step reveal"><span class="n">2</span><h3>Recebe a prévia pronta</h3><p>Em até 24 h te mando o link do seu site funcionando. Pode testar os botões, mostrar para quem quiser.</p></div>
       <div class="step dark reveal"><span class="n">3</span><h3>Gostou? Está no ar.</h3><p>Ajusto o que você pedir e publico. Não gostou, não paga nada. Simples assim.</p></div>
     </div>
@@ -373,7 +400,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
       <div class="tile t1 reveal">
         <span class="tag">Painel de resultados</span>
         <h3>Você vê quantas pessoas te chamaram pelo site</h3>
-        <p>Um painel só seu, com as cores do seu site, atualizado na hora. Exemplo:</p>
+        <p>Um painel só seu, com as cores do seu site, atualizado na hora. Exemplo: <a href="/r/demo" target="_blank" rel="noopener" style="font-weight:700;text-decoration:underline;text-underline-offset:3px">abrir um painel de verdade ↗</a></p>
         <div class="panel-demo"><div><b data-count="412">0</b><span>visitas</span></div><div><b data-count="63">0</b><span>chamaram no WhatsApp</span></div><div><b data-count="29">0</b><span>pediram rota</span></div></div>
         <div class="bars" id="bars"></div>
       </div>
@@ -413,7 +440,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   <div class="wrap faq">
     <div><span class="kicker reveal"><i></i>Dúvidas</span><h2 class="reveal" style="margin-top:18px">Pergunta <span class="serif">que todo mundo faz.</span></h2></div>
     <div>
-      <details class="reveal"><summary>Eu preciso mandar alguma coisa?</summary><p>Só o @ do seu Instagram ou o nome do seu negócio no Google Maps. Fotos, horário e endereço eu pego de lá. Se quiser, pode mandar fotos novas.</p></details>
+      <details class="reveal"><summary>O que eu preciso mandar?</summary><p>Pelo WhatsApp mesmo: o @ do seu Instagram, as fotos que quer no site (do seu trabalho, do espaço, sua ou da equipe), o endereço (se tiver), o horário de funcionamento e o tipo de serviço que você faz. Quer mais alguma coisa no site, como formação, convênios ou formas de pagamento? É só mandar junto.</p></details>
       <details class="reveal"><summary>E se eu não gostar da prévia?</summary><p>Você não paga nada. A prévia é para você ver o site funcionando antes de decidir.</p></details>
       <details class="reveal"><summary>Preciso ter domínio (.com.br)?</summary><p>Não. Seu site já sai com um endereço pronto. Se você tiver ou quiser comprar um domínio próprio, eu configuro.</p></details>
       <details class="reveal"><summary>Quem vai fazer o meu site?</summary><p>Eu, Bruno Braga. Você fala direto comigo pelo WhatsApp, sem atendente e sem fila.</p></details>
@@ -425,22 +452,61 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
 <section class="final">
   <div class="wrap"><div class="card reveal">
     <span class="ring" style="width:520px;height:520px;left:-160px;top:-220px"></span><span class="ring" style="width:380px;height:380px;right:-120px;bottom:-200px"></span>
-    <h2>Me manda o @ do seu Instagram. <span class="serif">Eu te mostro seu site pronto.</span></h2>
-    <p>Sem compromisso. Se gostar, a gente coloca no ar.</p>
+    <h2>Me manda o seu @ e suas fotos. <span class="serif">Eu te mostro seu site pronto.</span></h2>
+    <p>@ do Instagram, fotos, endereço, horário e tipo de serviço. Sem compromisso: se gostar, a gente coloca no ar.</p>
     <a class="btn magnet" data-wa href="${HELLO}" target="_blank" rel="noopener"><i class="dot"></i>Chamar o Bruno no WhatsApp</a>
   </div></div>
 </section>
 </main>
 
-<footer><div class="wrap"><span><b style="color:var(--ink)">PáginasPro</b> · por Bruno Braga · Brasília · DF</span><a data-wa href="${HELLO}" target="_blank" rel="noopener">WhatsApp (61) 99237-2217</a></div></footer>
+<footer><div class="wrap"><span><b style="color:var(--ink)">PáginasPro</b> · por Bruno Braga · Brasília · DF</span><a data-wa href="${HELLO}" target="_blank" rel="noopener">WhatsApp (61) 99237-2216</a></div></footer>
 <a class="fab" id="fab" data-wa href="${HELLO}" target="_blank" rel="noopener" aria-label="Chamar no WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm4.5 12.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>Chamar no WhatsApp</a>
+
+<div class="wa-sheet" id="waSheet" aria-hidden="true">
+  <div class="wa-card" role="dialog" aria-label="Abrindo o WhatsApp">
+    <div class="wa-head"><span class="av">B</span><div><b>Bruno Braga · PáginasPro</b><small>online</small></div></div>
+    <div class="wa-body"><div class="bubble" id="waBubble"><span id="waText"></span><span class="caret" id="waCaret"></span><div class="meta"><span id="waTime"></span><span class="ticks">✓✓</span></div></div></div>
+    <div class="wa-foot"><div class="bar"><i></i></div><span>Abrindo seu WhatsApp…</span><a id="waNow" href="#" rel="noopener">abrir agora</a></div>
+  </div>
+</div>
 
 <script>
 (function(){
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   function track(e){ try{ var u = '/inicio?e=' + e + (e === 'view' ? '&r=' + encodeURIComponent(new URLSearchParams(location.search).get('utm_source') || document.referrer) : ''); navigator.sendBeacon ? navigator.sendBeacon(u) : fetch(u, {method:'POST', keepalive:true}); }catch(x){} }
   track('view');
-  document.querySelectorAll('[data-wa]').forEach(function(a){ a.addEventListener('click', function(){ track('whatsapp'); }); });
+  // ao chamar: mini conversa do WhatsApp com a mensagem sendo digitada e enviada, depois abre o WhatsApp de verdade
+  var sheet = document.getElementById('waSheet'), bubble = document.getElementById('waBubble'), txt = document.getElementById('waText'), caret = document.getElementById('waCaret'), busy = false;
+  function openWa(href){
+    track('whatsapp');
+    if (reduce || busy) { location.href = href; return; }
+    busy = true;
+    var msg = decodeURIComponent((href.split('text=')[1] || '').replace(/\+/g, ' '));
+    var short = msg.length > 120 ? msg.slice(0, 117) + '…' : msg;
+    var d = new Date(); document.getElementById('waTime').textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    document.getElementById('waNow').href = href;
+    txt.textContent = ''; caret.style.display = ''; bubble.className = 'bubble'; sheet.className = 'wa-sheet';
+    sheet.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(function(){ sheet.classList.add('open'); });
+    setTimeout(function(){
+      bubble.classList.add('in');
+      var i = 0, step = Math.max(1, Math.ceil(short.length / 38));
+      var t = setInterval(function(){
+        i += step; txt.textContent = short.slice(0, i);
+        if (i >= short.length) {
+          clearInterval(t); caret.style.display = 'none';
+          setTimeout(function(){ bubble.classList.add('read'); sheet.classList.add('go'); }, 200);
+          setTimeout(function(){ location.href = href; }, 1350);
+          setTimeout(function(){ sheet.className = 'wa-sheet'; sheet.setAttribute('aria-hidden', 'true'); busy = false; }, 2600);
+        }
+      }, 22);
+    }, 260);
+  }
+  document.querySelectorAll('[data-wa]').forEach(function(a){
+    a.removeAttribute('target');
+    a.addEventListener('click', function(e){ e.preventDefault(); openWa(a.href); });
+  });
+  sheet.addEventListener('click', function(e){ if (e.target === sheet) { sheet.className = 'wa-sheet'; busy = false; } });
 
   // título palavra a palavra
   document.querySelectorAll('.split').forEach(function(h){
