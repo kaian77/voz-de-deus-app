@@ -61,8 +61,8 @@ jobs:
         if: steps.queue.outputs.status == 'queued'
         uses: actions/cache@v4
         with:
-          path: ~/.u2net
-          key: u2net-v1
+          path: ~/.rembg
+          key: rembg-u2net-v2
 
       - name: Fazer e enviar os vídeos
         if: steps.queue.outputs.status == 'queued'

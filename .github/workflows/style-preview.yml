@@ -39,8 +39,8 @@ jobs:
       - name: Modelo de recorte (cache)
         uses: actions/cache@v4
         with:
-          path: ~/.u2net
-          key: u2net-v1
+          path: ~/.rembg
+          key: rembg-u2net-v2
 
       - name: Renderizar a prévia
         run: cd video && python3 youtube.py --preview "${{ inputs.style }}" "${{ inputs.language }}"
