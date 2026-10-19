@@ -194,6 +194,13 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
 .wa-foot span{font-size:12.5px;color:#54656F;font-weight:600;white-space:nowrap}
 .wa-foot a{font-size:12.5px;font-weight:700;color:#008069}
 
+.thanks{position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:20px;background:rgba(17,17,16,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.tcard{width:min(400px,100%);background:var(--paper);border-radius:28px;padding:32px 26px;text-align:center}
+.tcard .tk{display:grid;place-items:center;width:64px;height:64px;margin:0 auto 16px;border-radius:50%;background:var(--lime);font-size:30px;font-weight:800}
+.tcard h3{font-size:28px}
+.tcard p{color:var(--muted);margin:10px 0 22px}
+.tclose{display:block;margin:14px auto 0;background:none;border:0;font:inherit;font-size:14px;color:var(--muted);cursor:pointer}
+
 /* features bento */
 .bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin-top:50px}
 .tile{background:#fff;border:1px solid var(--line);border-radius:28px;padding:28px;position:relative;overflow:hidden}
@@ -475,6 +482,17 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   function track(e){ try{ var u = '/inicio?e=' + e + (e === 'view' ? '&r=' + encodeURIComponent(new URLSearchParams(location.search).get('utm_source') || document.referrer) : ''); navigator.sendBeacon ? navigator.sendBeacon(u) : fetch(u, {method:'POST', keepalive:true}); }catch(x){} }
   track('view');
+
+  // volta do Mercado Pago (?pago=1): agradece e pede para avisar no WhatsApp
+  if (/[?&]pago=1/.test(location.search)) {
+    var thanks = document.createElement('div');
+    thanks.className = 'thanks';
+    thanks.innerHTML = '<div class="tcard"><span class="tk">✓</span><h3>Pagamento recebido!</h3><p>Obrigado por escolher a PáginasPro. Me avisa no WhatsApp que eu já coloco o seu site no ar.</p>' +
+      '<a class="btn" data-wa href="https://wa.me/${WA}?text=' + encodeURIComponent('Oi, Bruno! Acabei de fazer o pagamento da PáginasPro. Pode colocar meu site no ar!') + '"><i class="dot"></i>Avisar o Bruno</a>' +
+      '<button type="button" class="tclose">Fechar</button></div>';
+    document.body.appendChild(thanks);
+    thanks.querySelector('.tclose').onclick = function(){ thanks.remove(); };
+  }
   // ao chamar: mini conversa do WhatsApp com a mensagem sendo digitada e enviada, depois abre o WhatsApp de verdade
   var sheet = document.getElementById('waSheet'), bubble = document.getElementById('waBubble'), txt = document.getElementById('waText'), caret = document.getElementById('waCaret'), busy = false;
   function openWa(href){
