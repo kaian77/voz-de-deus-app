@@ -17,7 +17,60 @@ const NICHES = ["Nutrição", "Medicina", "Odontologia", "Psicologia", "Fisioter
 
 // Endereço neutro só das landing pages (o mesmo projeto da Vercel; o Studio continua no endereço dele)
 const LANDING_HOST = "https://paginaspro.vercel.app";
-const publicUrl = (p: LandingPage) => `${LANDING_HOST}/p/${p.slug}`;
+const publicUrl = (p: LandingPage) => (p.status === "published" && p.domain ? `https://${p.domain}` : `${LANDING_HOST}/p/${p.slug}`);
+const previewExpired = (p: LandingPage) => !!p.preview_until && new Date(p.preview_until).getTime() < Date.now();
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+
+type DomainInfo = { domain: string | null; vercel: string; status: "ok" | "dns" | "manual" | null; records: { type: string; name: string; value: string }[] };
+
+/** Domínio próprio do cliente (depois de vender): conecta e mostra o que o cliente precisa pôr no DNS. */
+function DomainPanel({ page, onChange }: { page: LandingPage; onChange: (domain: string | null) => void }) {
+  const [value, setValue] = useState(page.domain ?? "");
+  const [info, setInfo] = useState<DomainInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async (check: boolean) => {
+    setBusy(true);
+    try {
+      const r = await api.invoke<DomainInfo>("ai", { action: "landing_domain", id: page.id, domain: value, check });
+      setInfo(r);
+      if (!check) {
+        onChange(r.domain);
+        toast.success(r.domain ? "Domínio salvo" : "Domínio removido");
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const records = info?.records ?? [{ type: "A", name: "@", value: "76.76.21.21" }, { type: "CNAME", name: "www", value: "cname.vercel-dns.com" }];
+  return (
+    <Panel title="Domínio próprio" description="Depois de vender: o site abre no endereço do cliente (ex.: clinicaana.com.br). O domínio é comprado pelo cliente (Registro.br, Hostinger...).">
+      <div className="flex gap-2">
+        <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="clinicaana.com.br" inputMode="url" autoCapitalize="none" />
+        <Button variant="outline" onClick={() => run(false)} disabled={busy || value.trim() === (page.domain ?? "")}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}</Button>
+      </div>
+      {page.domain && (
+        <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+          <p>No painel do domínio (onde o cliente comprou), em DNS, criar:</p>
+          <div className="rounded-md border font-mono text-[11px]">
+            {records.map((r) => (
+              <div key={r.type} className="grid grid-cols-[60px_50px_1fr] gap-2 border-b px-2 py-1.5 last:border-0"><span>{r.type}</span><span>{r.name}</span><span className="break-all">{r.value}</span></div>
+            ))}
+          </div>
+          {info?.vercel === "manual" || info?.status === "manual" ? (
+            <p>Sem o secret VERCEL_TOKEN: adicione <b>{page.domain}</b> e <b>www.{page.domain}</b> no painel da Vercel (projeto → Settings → Domains).</p>
+          ) : info?.status === "ok" ? (
+            <p className="text-emerald-600">Domínio funcionando: https://{page.domain}</p>
+          ) : info?.status === "dns" ? (
+            <p>Esperando o DNS do cliente (pode levar de minutos a algumas horas depois de configurar).</p>
+          ) : null}
+          <Button size="sm" variant="ghost" onClick={() => run(true)} disabled={busy}>Conferir domínio</Button>
+        </div>
+      )}
+    </Panel>
+  );
+}
 
 type Form = Pick<LandingPage, "name" | "niche" | "city" | "whatsapp" | "instagram" | "address" | "hours" | "registry" | "notes" | "photos" | "logo">;
 const EMPTY: Form = { name: "", niche: "", city: "", whatsapp: "", instagram: "", address: "", hours: "", registry: "", notes: "", photos: [], logo: null };
@@ -147,7 +200,7 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
       invalidate("landing_pages");
       if (mode !== "draft") {
         await navigator.clipboard?.writeText(publicUrl(r)).catch(() => {});
-        toast.success(mode === "preview" ? "Link de prévia pronto e copiado" : "Publicada! Link copiado.");
+        toast.success(mode === "preview" ? "Link de prévia pronto e copiado (vale 7 dias)" : "Publicada! Link copiado.");
       } else toast.success("Página tirada do ar");
     } catch (e) {
       toast.error((e as Error).message);
@@ -190,7 +243,9 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
           current.status === "published"
             ? `No ar em ${publicUrl(current)} · ${current.views} visitas`
             : current.status === "preview"
-              ? `Prévia para a cliente: ${publicUrl(current)} · ${current.views} visitas (não aparece no Google)`
+              ? `Prévia para a cliente: ${publicUrl(current)} · ${current.views} visitas · ${
+                previewExpired(current) ? "EXPIRADA (renove para a cliente ver)" : current.preview_until ? `abre até ${shortDate(current.preview_until)}` : "sem prazo"
+              } (marca d'água "Prévia", não aparece no Google)`
               : "Rascunho: só você vê."
         }
         actions={
@@ -205,6 +260,9 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
                 <>
                   <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(publicUrl(current)).then(() => toast.success("Link copiado"))}><Copy className="mr-1.5 h-4 w-4" />Link</Button>
                   <Button variant="outline" size="sm" asChild><a href={publicUrl(current)} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Abrir</a></Button>
+                  {current.status === "preview" && (
+                    <Button variant="outline" size="sm" onClick={() => publish("preview")} disabled={busy !== null}><RefreshCw className="mr-1.5 h-4 w-4" />Renovar prévia (7 dias)</Button>
+                  )}
                   {form.whatsapp && <Button variant="outline" size="sm" onClick={sendToClient}><Send className="mr-1.5 h-4 w-4" />Mandar para a cliente</Button>}
                 </>
               )}
@@ -296,6 +354,7 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
               </div>
             </Panel>
           )}
+          {current.status === "published" && <DomainPanel page={current} onChange={(domain) => setCurrent({ ...current, domain })} />}
           {current.status !== "draft" && (
             <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => publish("draft")}>Tirar do ar</button>
           )}

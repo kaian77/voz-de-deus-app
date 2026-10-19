@@ -57,6 +57,10 @@ jobs:
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       REVIEW_EMAIL_FROM: ${{ vars.REVIEW_EMAIL_FROM }}
+      # Domínio próprio das landing pages: token da Vercel (Account Settings → Tokens); projeto e time são opcionais
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
