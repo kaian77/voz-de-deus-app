@@ -153,7 +153,27 @@ export default function Messages() {
   const { data: conversations = [] } = useTable("conversations", { order: "last_message_at" }, { refetchInterval: isDemo ? undefined : 20000 });
   const { data: settings } = useSettings();
   const invalidate = useInvalidate();
+  const { data: accounts = [] } = useTable("social_accounts");
   const [filter, setFilter] = useState<"all" | "needs_human" | "ai">("all");
+  // Caixa separada por marca: Brax Pins (loja) ou PáginasPro (sites); a escolha fica salva neste aparelho
+  const [brand, setBrandState] = useState<"brax" | "paginaspro">(() => {
+    try {
+      return localStorage.getItem("inbox-brand") === "paginaspro" ? "paginaspro" : "brax";
+    } catch {
+      return "brax";
+    }
+  });
+  const setBrand = (b: "brax" | "paginaspro") => {
+    setBrandState(b);
+    setSelectedId(null);
+    try {
+      localStorage.setItem("inbox-brand", b);
+    } catch {
+      /* sem armazenamento: só não lembra a escolha */
+    }
+  };
+  const ppAccounts = useMemo(() => new Set(accounts.filter((a) => a.meta?.brand === "paginaspro").map((a) => a.id)), [accounts]);
+  const brandOf = (c: { account_id: string }) => (ppAccounts.has(c.account_id) ? "paginaspro" : "brax");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -175,12 +195,15 @@ export default function Messages() {
   const list = useMemo(
     () =>
       conversations
+        .filter((c) => brandOf(c) === brand)
         .filter((c) => (filter === "needs_human" ? c.status === "needs_human" : filter === "ai" ? c.ai_enabled && c.status === "open" : c.status !== "closed"))
         .filter((c) => !query || nameOf(c).toLowerCase().includes(query.toLowerCase())),
-    [conversations, filter, query],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conversations, filter, query, brand, ppAccounts],
   );
   const selected = conversations.find((c) => c.id === selectedId) ?? (typeof window !== "undefined" && window.innerWidth >= 1024 ? list[0] : undefined);
-  const waiting = conversations.filter((c) => c.status === "needs_human").length;
+  const waitingBy = (b: string) => conversations.filter((c) => c.status === "needs_human" && brandOf(c) === b).length;
+  const waiting = waitingBy(brand);
   const FILTERS = [
     { id: "all", label: "Todas" },
     { id: "needs_human", label: `Com você${waiting ? ` (${waiting})` : ""}` },
@@ -190,7 +213,7 @@ export default function Messages() {
   return (
     <div>
       <PageHeader title="Mensagens" description="Direct do Instagram e WhatsApp. O agente responde e passa para você quando precisa." />
-      {settings && !settings.agent_enabled && (
+      {settings && !settings.agent_enabled && brand === "brax" && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-3 text-[13px]">
           <span><span className="font-medium">O agente de IA está desligado.</span> <span className="text-muted-foreground">As mensagens chegam aqui, mas ninguém responde automaticamente.</span></span>
           <Button asChild size="sm" variant="outline" className="h-8"><Link to="/studio/claude">Configurar agente</Link></Button>
@@ -199,6 +222,18 @@ export default function Messages() {
       <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
         <div className={cn("flex flex-col overflow-hidden rounded-lg border bg-card", selectedId && "hidden lg:flex")}>
           <div className="space-y-2 border-b p-2">
+            {ppAccounts.size > 0 && (
+              <div className="grid grid-cols-2 gap-1 rounded-md bg-secondary p-1">
+                {([["brax", "Brax Pins"], ["paginaspro", "PáginasPro"]] as const).map(([id, label]) => {
+                  const n = waitingBy(id);
+                  return (
+                    <button key={id} onClick={() => setBrand(id)} className={cn("h-7 rounded text-xs font-medium", brand === id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+                      {label}{n ? ` (${n})` : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input className="h-8 pl-8 text-[13px]" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar contato" aria-label="Buscar contato" />
