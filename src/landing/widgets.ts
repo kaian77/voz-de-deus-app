@@ -3,7 +3,7 @@
 // Cada widget usa as variáveis --wp (cor principal), --wi (texto) e --ws (fundo claro), definidas no .wg.
 // Uso: widgetFor(ramo) -> tipo ou null; widgetHtml(tipo) -> HTML; WIDGET_CSS e WIDGET_JS uma vez por página.
 
-export type WidgetKind = "plate" | "tooth" | "body" | "breath" | "skin" | "law";
+export type WidgetKind = "plate" | "tooth" | "body" | "breath" | "skin" | "law" | "makeup";
 
 export function widgetFor(niche: string): WidgetKind | null {
   const n = niche.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -11,6 +11,7 @@ export function widgetFor(niche: string): WidgetKind | null {
   if (/advoca|advog|jurid|direito|escritorio de adv/.test(n)) return "law";
   if (/odonto|dent|ortodon|sorriso/.test(n)) return "tooth";
   if (/psico|terapeuta|psiquiat|terapia/.test(n)) return "breath";
+  if (/maqui|makeup|make up|\bmake\b|noiva|beauty|beleza/.test(n)) return "makeup";
   if (/estet|dermat|pele|biomed|cosmet/.test(n)) return "skin";
   if (/fisio|pilates|quiropr|ortoped|osteop|reabilit|clinica|medic|saude|acupunt|massag/.test(n)) return "body";
   return null;
@@ -23,6 +24,7 @@ export const WIDGET_TITLE: Record<WidgetKind, [string, string]> = {
   breath: ["Respire com a gente", "Um minuto de respiração guiada para desacelerar agora."],
   law: ["Como funciona o seu caso", "Escolha o assunto e toque em cada etapa para entender o caminho, do primeiro contato à solução."],
   skin: ["Por dentro da sua pele", "Toque em cada camada e veja quais cuidados agem nela."],
+  makeup: ["Monte a make passo a passo", "Toque em cada etapa e veja como uma maquiagem profissional é construída, da pele à finalização."],
 };
 
 const PLATE = `
@@ -143,7 +145,46 @@ const LAW = `
   </div>
 </div>`;
 
-const HTML: Record<WidgetKind, string> = { plate: PLATE, tooth: TOOTH, body: BODY, breath: BREATH, skin: SKIN, law: LAW };
+
+const MAKEUP = `
+<div class="wg-mk">
+  <div class="wg-stage">
+    <svg viewBox="0 0 240 280" class="wg-svg wg-face" aria-label="Rosto com as etapas da maquiagem">
+      <defs>
+        <radialGradient id="wgGlow" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+      </defs>
+      <ellipse cx="120" cy="112" rx="90" ry="100" fill="#3B2A24"/>
+      <rect x="30" y="104" width="180" height="150" rx="44" fill="#3B2A24"/>
+      <path d="M34 280 C44 244 86 236 120 236 C154 236 196 244 206 280 Z" fill="var(--wp)" opacity=".85"/>
+      <rect x="99" y="190" width="42" height="56" rx="16" fill="#D6A782"/>
+      <ellipse cx="120" cy="126" rx="64" ry="80" fill="#E2B794"/>
+      <g data-raw="base" fill="#C99470" opacity=".55"><ellipse cx="97" cy="140" rx="13" ry="5"/><ellipse cx="143" cy="140" rx="13" ry="5"/><circle cx="82" cy="156" r="2.6"/><circle cx="160" cy="104" r="2.4"/><circle cx="150" cy="164" r="2.2"/></g>
+      <ellipse data-mk="base" cx="120" cy="126" rx="64" ry="80" fill="#EBC5A4"/>
+      <ellipse data-mk="prep" cx="120" cy="112" rx="58" ry="70" fill="url(#wgGlow)"/>
+      <g data-mk="eyes"><ellipse cx="97" cy="122" rx="17" ry="10" fill="#A8707C"/><ellipse cx="143" cy="122" rx="17" ry="10" fill="#A8707C"/><ellipse cx="97" cy="118" rx="12" ry="5" fill="#D9A6A0" opacity=".8"/><ellipse cx="143" cy="118" rx="12" ry="5" fill="#D9A6A0" opacity=".8"/></g>
+      <g fill="#fff"><ellipse cx="97" cy="128" rx="12" ry="6.5"/><ellipse cx="143" cy="128" rx="12" ry="6.5"/></g>
+      <g fill="#3B2A24"><circle cx="97" cy="128" r="4.6"/><circle cx="143" cy="128" r="4.6"/></g>
+      <g data-mk="eyes" fill="none" stroke="#1d1411" stroke-width="2.6" stroke-linecap="round"><path d="M84 126 C90 119 104 119 111 125 L114 122"/><path d="M156 126 C150 119 136 119 129 125 L126 122"/></g>
+      <g fill="none" stroke="#3B2A24" stroke-width="3.4" stroke-linecap="round"><path d="M84 106 C92 100 104 100 110 104"/><path d="M156 106 C148 100 136 100 130 104"/></g>
+      <path d="M120 132 C117 146 113 152 116 156 C119 158 122 158 125 156" fill="none" stroke="#B98463" stroke-width="2" stroke-linecap="round"/>
+      <path d="M104 174 C110 168 116 170 120 172 C124 170 130 168 136 174 C130 182 124 185 120 185 C116 185 110 182 104 174 Z" fill="#C98C7E"/>
+      <path data-mk="lips" d="M104 174 C110 168 116 170 120 172 C124 170 130 168 136 174 C130 182 124 185 120 185 C116 185 110 182 104 174 Z" fill="#B23A48"/>
+      <path data-mk="lips" d="M106 174 C114 176 126 176 134 174" fill="none" stroke="#7d1f2c" stroke-width="1.4" stroke-linecap="round"/>
+      <g data-mk="fix"><circle cx="82" cy="152" r="13" fill="#E88F8F" opacity=".45"/><circle cx="158" cy="152" r="13" fill="#E88F8F" opacity=".45"/><ellipse cx="86" cy="140" rx="9" ry="3.5" fill="#fff" opacity=".6"/><ellipse cx="154" cy="140" rx="9" ry="3.5" fill="#fff" opacity=".6"/></g>
+      <g data-mk="fix" class="wg-spark" fill="#fff"><path d="M48 70 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3z"/><path d="M196 92 l2.4 6 6 2.4 -6 2.4 -2.4 6 -2.4 -6 -6 -2.4 6 -2.4z"/><path d="M190 196 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z"/></g>
+      <path d="M54 118 C52 66 88 34 126 38 C168 42 190 78 186 120 C178 96 160 74 132 66 C116 84 86 100 54 118 Z" fill="#3B2A24"/>
+      <ellipse class="wg-focus" cx="120" cy="126" rx="74" ry="90" fill="none" stroke="var(--wp)" stroke-width="2.5" stroke-dasharray="6 7"/>
+    </svg>
+  </div>
+  <div class="wg-panel">
+    <div class="wg-chips wg-steps"><button type="button" data-step="0"><i>1</i>Pele</button><button type="button" data-step="1"><i>2</i>Base</button><button type="button" data-step="2"><i>3</i>Olhos</button><button type="button" data-step="3"><i>4</i>Boca</button><button type="button" data-step="4"><i>5</i>Finalização</button></div>
+    <div class="wg-card" aria-live="polite"><h4>Toque numa etapa</h4><p>Uma make bem feita é construída em camadas. Toque em cada etapa ou veja tudo de uma vez.</p></div>
+    <button type="button" class="wg-go">Montar a make</button>
+    <p class="wg-note">Conteúdo informativo. Cada pele e cada ocasião pedem escolhas diferentes.</p>
+  </div>
+</div>`;
+
+const HTML: Record<WidgetKind, string> = { plate: PLATE, tooth: TOOTH, body: BODY, breath: BREATH, skin: SKIN, law: LAW, makeup: MAKEUP };
 
 export function widgetHtml(kind: WidgetKind) {
   return `<div class="wg" data-wg="${kind}">${HTML[kind]}</div>`;
@@ -204,6 +245,19 @@ export const WIDGET_CSS = `
 .wg-list li{display:flex;gap:10px;font-size:14.5px;cursor:pointer;user-select:none}
 .wg-list li:before{content:"";flex:none;width:18px;height:18px;margin-top:2px;border-radius:5px;border:2px solid var(--wl);background:#fff;transition:background .2s,border-color .2s}
 .wg-list li.ok:before{background:var(--wp);border-color:var(--wp);box-shadow:inset 0 0 0 3px #fff}
+.wg-mk [data-mk]{opacity:0;transition:opacity .7s ease}
+.wg-mk [data-mk].on{opacity:1}
+.wg-mk [data-raw]{transition:opacity .7s ease}
+.wg-mk [data-raw].off{opacity:0}
+.wg-face{max-width:260px;filter:drop-shadow(0 18px 22px rgba(0,0,0,.12))}
+.wg-focus{opacity:0;transition:opacity .3s;animation:wgdash 6s linear infinite}
+.wg-focus.on{opacity:1}
+@keyframes wgdash{to{stroke-dashoffset:-130}}
+.wg-spark.on path{transform-box:fill-box;transform-origin:center;animation:wgtw 1.6s ease-in-out infinite}
+.wg-spark path:nth-child(2){animation-delay:.5s!important}.wg-spark path:nth-child(3){animation-delay:1s!important}
+@keyframes wgtw{0%,100%{transform:scale(.6);opacity:.5}50%{transform:scale(1.15);opacity:1}}
+.wg-steps button i{width:auto;height:auto;border-radius:0;font-style:normal;font-weight:800;color:var(--wp)}
+.wg-steps button.done{border-color:color-mix(in srgb,var(--wp) 45%,transparent)}
 @media (max-width:760px){.wg>div{grid-template-columns:1fr}.wg-stage{min-height:240px}}
 @media (prefers-reduced-motion:reduce){.wg *{animation:none!important;transition:none!important}}
 `;
@@ -235,6 +289,13 @@ const T = {
     consumidor: { steps: [["Primeira conversa", "Cobrança indevida, produto com defeito, voo cancelado, nome negativado: você conta o problema."], ["Provas", "Notas, contratos, protocolos e prints mostram o que aconteceu."], ["Tentativa de solução", "Muitas vezes uma notificação ou reclamação formal resolve antes de ir à Justiça."], ["Ação, se preciso", "Dependendo do valor, o caso pode ir ao Juizado Especial, que costuma ser mais simples."], ["Decisão", "O juiz decide sobre devolução, conserto ou indenização, conforme cada caso."]], bring: ["RG e CPF", "Nota fiscal ou contrato", "Protocolos de atendimento", "Prints, e-mails e fotos"] },
     inss: { steps: [["Primeira conversa", "Aposentadoria, auxílio por incapacidade, BPC, pensão: você explica a situação."], ["Análise do histórico", "Conferimos o CNIS (seu histórico de contribuições) e os documentos."], ["Pedido no INSS", "O pedido é feito pelo Meu INSS, com os documentos certos desde o início."], ["Perícia ou análise", "Em benefícios por incapacidade há perícia; em outros, análise dos documentos."], ["Recurso ou ação", "Se o pedido for negado, ainda dá para recorrer ou entrar na Justiça, conforme o caso."]], bring: ["RG e CPF", "Carteira de trabalho e carnês", "Extrato do CNIS (Meu INSS)", "Laudos e exames (se for por saúde)"] },
   },
+  makeup: [
+    ["Preparação da pele", "Limpeza, hidratação e primer deixam a pele pronta para receber a maquiagem e ajudam a base a assentar de forma uniforme.", "Limpeza · hidratação · primer", [120, 118, 66, 82]],
+    ["Base e corretivo", "A base uniformiza o tom e o corretivo cuida de olheiras e pontinhos. Cor, textura e cobertura são escolhidas para o seu tipo de pele.", "Tom da pele · textura · cobertura", [120, 126, 74, 90]],
+    ["Olhos", "Sombra, delineado e máscara valorizam o formato dos olhos. Do natural ao marcado, o estilo acompanha a ocasião e o seu gosto.", "Sombra · delineado · cílios", [120, 122, 52, 20]],
+    ["Boca", "Contorno e cor equilibram a make: tons nude para algo leve, cores fortes para destacar. Lábio hidratado antes ajuda o batom a assentar.", "Contorno · batom · gloss", [120, 177, 26, 14]],
+    ["Finalização", "Blush, iluminador, pó e spray fixador fecham a make e ajudam a manter o acabamento para eventos, ensaios e festas.", "Blush · iluminador · fixador", [120, 128, 82, 98]],
+  ],
   plate: {
     veg: "Verduras e legumes: metade do prato. Fibras, vitaminas e saciedade.",
     prot: "Proteínas: um quarto do prato. Carnes, ovos, feijão, lentilha.",
@@ -305,6 +366,23 @@ export const WIDGET_JS = `
         root.querySelectorAll('[data-spot]').forEach(function(x){ x.classList.toggle('on', x === c); });
         card(root, T.body[k][0], T.body[k][1], 'Agende sua avaliação');
       }); });
+    }
+    if (kind === 'makeup') {
+      var keys = ['prep', 'base', 'eyes', 'lips', 'fix'], focus = root.querySelector('.wg-focus'), go = root.querySelector('.wg-go'), auto = null;
+      var show = function(i){
+        root.querySelectorAll('[data-mk]').forEach(function(el){ el.classList.toggle('on', keys.indexOf(el.getAttribute('data-mk')) <= i); });
+        root.querySelectorAll('[data-raw]').forEach(function(el){ el.classList.toggle('off', i >= 1); });
+        root.querySelectorAll('[data-step]').forEach(function(b, j){ b.setAttribute('aria-pressed', j === i ? 'true' : 'false'); b.classList.toggle('done', j < i); });
+        var s = T.makeup[i], f = s[3];
+        focus.setAttribute('cx', f[0]); focus.setAttribute('cy', f[1]); focus.setAttribute('rx', f[2]); focus.setAttribute('ry', f[3]); focus.classList.add('on');
+        card(root, s[0], s[1], s[2]);
+      };
+      root.querySelectorAll('[data-step]').forEach(function(b){ b.onclick = function(){ clearTimeout(auto); auto = null; go.textContent = 'Montar a make'; show(+b.getAttribute('data-step')); }; });
+      go.onclick = function(){
+        if (auto) { clearTimeout(auto); auto = null; go.textContent = 'Montar a make'; return; }
+        var i = 0; go.textContent = 'Parar';
+        (function next(){ show(i); i++; auto = i < 5 ? setTimeout(next, 2200) : null; if (!auto) go.textContent = 'Ver de novo'; })();
+      };
     }
     if (kind === 'breath') {
       var orb = root.querySelector('.wg-orb'), say = root.querySelector('.wg-say'), cnt = root.querySelector('.wg-count'), btn = root.querySelector('.wg-go'), timer = null;

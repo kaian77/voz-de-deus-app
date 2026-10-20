@@ -7,6 +7,7 @@ import { type AgentTool, aiEnabled, runAgent } from "./claude.ts";
 import { importClientData, uniqueSlug, writeLanding } from "./landing.ts";
 import { sendMessage, transcript } from "./inbox.ts";
 import { notify } from "./push.ts";
+import { clientOffer } from "./mercadopago.ts";
 import { sleep } from "./util.ts";
 
 const SITE = "https://paginaspro.app.br";
@@ -67,7 +68,8 @@ function systemPrompt(o: Record<string, number | string>, channel: string) {
     `REGRAS:\n` +
     `- Nunca prometa quantidade de clientes, vendas ou posição no Google. Pode dizer que o site ajuda a passar confiança e facilita o contato pelo WhatsApp.\n` +
     `- Nunca dê desconto nem invente preço, prazo, função ou garantia que não esteja aqui: nesses casos handoff=true (o Bruno responde).\n` +
-    `- Quando a pessoa disser que pagou: agradeça, diga que vou conferir e colocar o site no ar em seguida, e handoff=true com motivo "pagou".\n` +
+    `- Quando a pessoa disser que pagou: se o estado da prévia diz "pagamento confirmado", só agradeça e mande o link do site no ar (handoff=false). ` +
+    `Senão agradeça, diga que o site entra no ar assim que o pagamento for confirmado e handoff=true com motivo "pagou".\n` +
     `- Não repita links ou perguntas que já foram mandados na conversa. Responda a tudo o que a pessoa disse numa mensagem só.\n` +
     `- Mensagens com [foto enviada] são fotos que a pessoa mandou: elas já vão para o site, agradeça e siga.\n` +
     `- Assunto fora de site/negócio, reclamação séria ou algo que você não sabe: handoff=true com reply curto ("vou ver isso e já te respondo").`
@@ -97,11 +99,14 @@ export async function paginasproReply(db: SupabaseClient, conversation: any, inb
     if ((count ?? 0) > 0) return;
   }
 
-  const offer = await offerFor(db, conversation.user_id);
-  const { data: page } = await db.from("landing_pages").select("id,name,niche,slug,status,domain,auto_status,photos")
+  const { data: page } = await db.from("landing_pages").select("id,name,niche,slug,status,domain,auto_status,photos,pay_links,paid_at")
     .eq("conversation_id", conversation.id).maybeSingle();
+  // Com a prévia pronta, os links à vista são só deste cliente: o pagamento publica o site sozinho (mercadopago.ts)
+  let offer = await offerFor(db, conversation.user_id);
+  if (page && !page.slug.startsWith("rascunho-") && !page.paid_at) offer = await clientOffer(db, page, offer);
   const state = page
-    ? `Prévia desta conversa: ${page.auto_status === "queued" || page.auto_status === "working" ? "sendo montada agora" : page.slug.startsWith("rascunho-") ? "ainda não montada" : `link ${pageUrl(page)} (${page.status === "published" ? "no ar" : "prévia"})`}; ${page.photos?.length ?? 0} foto(s).`
+    ? `Prévia desta conversa: ${page.auto_status === "queued" || page.auto_status === "working" ? "sendo montada agora" : page.slug.startsWith("rascunho-") ? "ainda não montada" : `link ${pageUrl(page)} (${page.status === "published" ? "no ar" : "prévia"})`}; ${page.photos?.length ?? 0} foto(s).` +
+      (page.paid_at ? ` Pagamento confirmado em ${new Date(page.paid_at).toLocaleDateString("pt-BR")}; site no ar.` : "")
     : "Ainda não existe prévia para esta pessoa.";
 
   const tool: AgentTool = {

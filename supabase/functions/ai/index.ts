@@ -8,7 +8,7 @@ import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStor
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
-import { cleanDomain, DNS_RECORDS, importClientData, uniqueSlug, vercelDomain, vercelDomainStatus, writeLanding } from "../_shared/landing.ts";
+import { cleanDomain, DNS_RECORDS, importClientData, publishPatch, vercelDomain, vercelDomainStatus, writeLanding } from "../_shared/landing.ts";
 import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, ytDeleteVideo, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
@@ -310,13 +310,9 @@ Deno.serve(async (req) => {
         patch.content = await writeLanding(input.fresh ? { ...page, content: null } : page, input.instructions ? String(input.instructions).slice(0, 1500) : undefined);
       } else {
         if (!page.content) throw new HttpError(400, "Gere a página antes de publicar");
-        // mode: preview = link para a cliente ver (sem indexar, com faixa "Prévia"); published = no ar; draft = tira do ar
+        // mode: preview = link para a cliente ver (vale 7 dias a cada "Renovar"); published = no ar; draft = tira do ar
         const mode = input.unpublish ? "draft" : input.mode === "preview" ? "preview" : "published";
-        patch.status = mode;
-        // Prévia vale 7 dias (cada "Link de prévia"/"Renovar" conta de novo); depois o link mostra "prévia expirada"
-        if (mode === "preview") patch.preview_until = new Date(Date.now() + 7 * 86400_000).toISOString();
-        // Rascunho nasce com endereço provisório; na primeira publicação ganha o nome do cliente (e não muda mais)
-        if (mode !== "draft" && page.slug.startsWith("rascunho-")) patch.slug = await uniqueSlug(db, page.name, page.id);
+        Object.assign(patch, await publishPatch(db, page, mode));
       }
       const { data, error } = await db.from("landing_pages").update(patch).eq("id", page.id).select().single();
       if (error) throw new HttpError(500, error.message);
