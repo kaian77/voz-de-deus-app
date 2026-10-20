@@ -49,6 +49,7 @@ export type LandingData = {
   reviews?: number | null;
   /** premium = layout animado (src/landing/premium.ts), vendido mais caro */
   tier?: string | null;
+  widget?: string | null;
   content: LandingContent;
 };
 
