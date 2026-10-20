@@ -10,10 +10,12 @@
 //   { action: "account_brand", account_id, brand }  -> conta da Brax Pins ou da PáginasPro
 // Nos dois: label ("Loja", "Pessoal"...) e agent (a IA responde sozinha nesse número?). Dá para ter vários números.
 import { adminClient, assertPublicHttpsUrl, corsHeaders, functionsUrl, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
-import { draftReply, sendMessage } from "../_shared/inbox.ts";
+import { autoReply, draftReply, sendMessage } from "../_shared/inbox.ts";
 import { agentAllowed, waExchangeCode, waPhoneInfo, waSignupConfig, waSubscribeApp, waSyncCoexistence, wahaSession, wahaSetWebhook, wahaStart } from "../_shared/whatsapp.ts";
 import { aiEnabled } from "../_shared/claude.ts";
 import { saleMessage, sendWhatsAppTo } from "../_shared/sale-alerts.ts";
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -37,6 +39,20 @@ Deno.serve(async (req) => {
         if (!body.text?.trim()) throw new HttpError(400, "Mensagem vazia");
         await ownConversation(body.conversation_id);
         return json(await sendMessage(db, body.conversation_id, body.text.trim(), "human"));
+      }
+      case "resume": {
+        // "Devolver para a IA": tira de "com você" e, se a última mensagem é do cliente e ficou sem resposta, a IA responde agora
+        const conv = await ownConversation(body.conversation_id);
+        const { data: updated } = await db.from("conversations").update({ status: "open", handoff_reason: null, ai_enabled: true })
+          .eq("id", conv.id).select().single();
+        const { data: last } = await db.from("messages").select("id,direction").eq("conversation_id", conv.id)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (updated && last?.direction === "in") {
+          const job = autoReply(db, updated, last.id).catch((e) => console.error("resume", conv.id, e));
+          if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(job);
+          else await job;
+        }
+        return json({ ok: true, replying: last?.direction === "in" });
       }
       case "suggest": {
         if (!aiEnabled()) throw new HttpError(400, "Configure ANTHROPIC_API_KEY para usar a IA.");

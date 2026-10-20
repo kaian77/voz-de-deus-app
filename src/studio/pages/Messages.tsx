@@ -22,6 +22,15 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
   const invalidate = useInvalidate();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<"send" | "suggest" | null>(null);
+  const resume = async () => {
+    try {
+      const r = await api.invoke<{ replying: boolean }>("inbox", { action: "resume", conversation_id: conversation.id });
+      invalidate("conversations");
+      toast.success(r.replying ? "Devolvida para a IA. Ela responde em alguns segundos." : "Devolvida para a IA.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   const bottom = useRef<HTMLDivElement>(null);
   const windowOpen = conversation.last_inbound_at && Date.now() - new Date(conversation.last_inbound_at).getTime() < 24 * 3600 * 1000;
 
@@ -83,7 +92,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
           <Switch id={`ai-${conversation.id}`} checked={conversation.ai_enabled} onCheckedChange={(v) => saveConv.mutate({ id: conversation.id, ai_enabled: v })} />
         </label>
         {conversation.status === "needs_human" ? (
-          <Button size="sm" variant="outline" className="h-8" onClick={() => saveConv.mutate({ id: conversation.id, status: "open", handoff_reason: null })}>Marcar como resolvida</Button>
+          <Button size="sm" variant="outline" className="h-8" onClick={resume}>Devolver para a IA</Button>
         ) : (
           <Button size="sm" variant="ghost" className="h-8" onClick={() => saveConv.mutate({ id: conversation.id, status: "needs_human", handoff_reason: "Assumida por você" })}>Assumir conversa</Button>
         )}
@@ -91,7 +100,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
       {conversation.status === "needs_human" && (
         <div className="flex items-center gap-2 border-b bg-secondary/50 px-4 py-2 text-xs">
           <StatusDot tone="warning">Com você</StatusDot>
-          <span className="text-muted-foreground">{conversation.handoff_reason ?? "Atendimento humano"}. O agente fica pausado até você marcar como resolvida.</span>
+          <span className="text-muted-foreground">{conversation.handoff_reason ?? "Atendimento humano"}. O agente fica pausado até você devolver para a IA (ela responde a última mensagem na hora).</span>
         </div>
       )}
       <div className="flex-1 space-y-3 overflow-y-auto bg-background px-4 py-5">
