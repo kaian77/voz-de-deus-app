@@ -57,7 +57,7 @@ async function usedKeys(db: SupabaseClient, userId: string) {
 }
 
 /** Cria `count` carrosséis da PáginasPro em Aprovações. */
-export async function generatePaginasproIdeas(db: SupabaseClient, userId: string, opts: { count?: number; focus?: string; format?: "reel" | "carousel" } = {}) {
+export async function generatePaginasproIdeas(db: SupabaseClient, userId: string, opts: { count?: number; focus?: string; format?: "reel" | "carousel"; scene?: string } = {}) {
   if (!aiEnabled()) throw new Error("Configure ANTHROPIC_API_KEY para o Studio criar conteúdo sozinho.");
   const count = Math.min(Math.max(opts.count ?? 3, 1), 7);
   const { data: accounts } = await db.from("social_accounts").select("*").eq("user_id", userId).eq("platform", "instagram");
@@ -108,7 +108,7 @@ export async function generatePaginasproIdeas(db: SupabaseClient, userId: string
       status: "pending_approval",
       created_by: "agent",
       notes: idea.why,
-      options: { brand: "paginaspro", account_ids: { instagram: ig.id }, idea: { key: idea.key, theme: idea.theme, why: idea.why, pillar: idea.pillar } },
+      options: { brand: "paginaspro", account_ids: { instagram: ig.id }, ...(opts.scene ? { reel_scene: opts.scene } : {}), idea: { key: idea.key, theme: idea.theme, why: idea.why, pillar: idea.pillar } },
     }).select("id").single();
     if (error) {
       console.error("ideia paginaspro", idea.key, error);

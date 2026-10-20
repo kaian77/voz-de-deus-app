@@ -1,6 +1,7 @@
 import { api } from "./api";
 import { renderSlidesToJpeg } from "./carousel";
 import { renderReel } from "./reel";
+import type { ReelScene } from "./reel-motion";
 import type { CarouselDesign, MediaItem, Post, Slide } from "./types";
 
 /** Renderiza os slides desenhados em JPEG e envia para o storage, devolvendo a lista de mídias. */
@@ -14,8 +15,11 @@ export async function renderAndUploadSlides(slides: Slide[], design?: CarouselDe
 }
 
 /** Mídia de um post criado pela IA: Reel com slides vira MP4 gravado no navegador; carrossel vira JPEGs. */
-export async function renderPostMedia(post: Pick<Post, "kind" | "slides" | "media" | "design">): Promise<MediaItem[]> {
+export async function renderPostMedia(post: Pick<Post, "kind" | "slides" | "media" | "design" | "options">): Promise<MediaItem[]> {
   if (!post.slides?.length || post.media.length) return post.media;
-  if (post.kind === "reel") return [{ url: await api.upload(await renderReel(post.slides, post.design ?? {}), "reel.mp4"), type: "video" }];
+  if (post.kind === "reel") {
+    const scene = post.options?.reel_scene as ReelScene | undefined;
+    return [{ url: await api.upload(await renderReel(post.slides, post.design ?? {}, scene), "reel.mp4"), type: "video" }];
+  }
   return renderAndUploadSlides(post.kind === "carousel" ? post.slides : post.slides.slice(0, 1), post.design);
 }

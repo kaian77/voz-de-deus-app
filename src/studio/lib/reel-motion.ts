@@ -448,7 +448,7 @@ function sceneCounter(ctx: CanvasRenderingContext2D, lt: number) {
   ctx.restore();
 }
 
-export type ReelScene = "compare" | "persona" | "counter";
+export type ReelScene = "compare" | "persona" | "counter" | "cards";
 
 /** Monta a linha do tempo do Reel a partir dos slides: [duração total, desenhar(t)]. */
 export function paginasproReel(slides: Slide[], scene: ReelScene = "compare") {
@@ -456,7 +456,7 @@ export function paginasproReel(slides: Slide[], scene: ReelScene = "compare") {
   const middle = slides.slice(1, -1).slice(0, 4);
   const last = slides.length > 1 ? slides[slides.length - 1] : { title: "Prévia *grátis* em 24 h", body: "Me chama no direct." };
   const T_HOOK = 3.2;
-  const T_CMP = scene === "persona" ? 6.6 : scene === "counter" ? 5.8 : 5.2;
+  const T_CMP = scene === "persona" ? 6.6 : scene === "counter" ? 5.8 : scene === "cards" ? 0 : 5.2;
   const T_CARD = 2.4;
   const T_END = 3.8;
   const tCards = T_HOOK + T_CMP;

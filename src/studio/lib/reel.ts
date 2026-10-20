@@ -1,7 +1,7 @@
 // Reels a partir dos slides do carrossel: cada slide entra deslizando num quadro 9:16 (1080x1920), com barrinhas
 // de progresso no topo e a marca embaixo, gravado do canvas em MP4 (MediaRecorder) — sem servidor de vídeo.
 import { renderSlide, SLIDE_H, SLIDE_W } from "./carousel";
-import { paginasproReel } from "./reel-motion";
+import { paginasproReel, type ReelScene } from "./reel-motion";
 import type { CarouselDesign, Slide } from "./types";
 
 const W = 1080;
@@ -18,7 +18,7 @@ function mp4Type() {
 export const reelSupported = () => !!mp4Type();
 
 /** Grava o Reel dos slides e devolve o MP4 (leva o tempo do vídeo: ~3 s por slide; a aba precisa ficar aberta). */
-export async function renderReel(slides: Slide[], design: CarouselDesign = {}): Promise<Blob> {
+export async function renderReel(slides: Slide[], design: CarouselDesign = {}, scene?: ReelScene): Promise<Blob> {
   const type = mp4Type();
   if (!type) throw new Error("Este navegador não grava MP4. Aprove este Reel pelo Chrome (computador ou celular) ou pelo Safari do iPhone.");
   const pp = design.theme === "paginaspro";
@@ -30,7 +30,7 @@ export async function renderReel(slides: Slide[], design: CarouselDesign = {}): 
     // Cena do meio muda de um Reel para outro (fixa por post: depende do texto do gancho)
     const scenes = ["compare", "persona", "counter"] as const;
     const seed = [...(slides[0]?.title ?? "")].reduce((a, c) => a + c.charCodeAt(0), 0);
-    const motion = paginasproReel(slides, scenes[seed % scenes.length]);
+    const motion = paginasproReel(slides, scene ?? scenes[seed % scenes.length]);
     const canvas = document.createElement("canvas");
     canvas.width = W;
     canvas.height = H;

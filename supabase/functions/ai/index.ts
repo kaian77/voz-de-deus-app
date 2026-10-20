@@ -452,6 +452,7 @@ Deno.serve(async (req) => {
       const r = await generatePaginasproIdeas(db, userId, {
         count: Number(input.count) || 3, focus: input.focus ? String(input.focus).slice(0, 500) : undefined,
         format: input.format === "reel" || input.format === "carousel" ? input.format : undefined,
+        scene: ["compare", "persona", "counter", "cards"].includes(String(input.scene)) ? String(input.scene) : undefined,
       });
       await db.from("brand_settings").update({ pp_autopilot_last_run: new Date().toISOString(), pp_autopilot_error: null }).eq("user_id", userId);
       return json(r);

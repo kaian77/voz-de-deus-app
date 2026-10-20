@@ -3,12 +3,13 @@
 // Cada widget usa as variáveis --wp (cor principal), --wi (texto) e --ws (fundo claro), definidas no .wg.
 // Uso: widgetFor(ramo) -> tipo ou null; widgetHtml(tipo) -> HTML; WIDGET_CSS e WIDGET_JS uma vez por página.
 
-export type WidgetKind = "plate" | "tooth" | "body" | "breath" | "skin" | "law" | "makeup";
+export type WidgetKind = "plate" | "tooth" | "body" | "breath" | "skin" | "law" | "makeup" | "social";
 
 export function widgetFor(niche: string): WidgetKind | null {
   const n = niche.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   if (/nutri/.test(n)) return "plate";
   if (/advoca|advog|jurid|direito|escritorio de adv/.test(n)) return "law";
+  if (/social media|socialmedia|marketing|midias? socia|redes socia|trafego|agencia|conteudo digital|criador de conteudo/.test(n)) return "social";
   if (/odonto|dent|ortodon|sorriso/.test(n)) return "tooth";
   if (/psico|terapeuta|psiquiat|terapia/.test(n)) return "breath";
   if (/maqui|makeup|make up|\bmake\b|noiva|beauty|beleza/.test(n)) return "makeup";
@@ -24,6 +25,7 @@ export const WIDGET_TITLE: Record<WidgetKind, [string, string]> = {
   breath: ["Respire com a gente", "Um minuto de respiração guiada para desacelerar agora."],
   law: ["Como funciona o seu caso", "Escolha o assunto e toque em cada etapa para entender o caminho, do primeiro contato à solução."],
   skin: ["Por dentro da sua pele", "Toque em cada camada e veja quais cuidados agem nela."],
+  social: ["Como cuidamos do seu Instagram", "Toque em cada etapa e veja o que acontece por trás de um perfil bem cuidado, do planejamento aos números."],
   makeup: ["Monte a make passo a passo", "Toque em cada etapa e veja como uma maquiagem profissional é construída, da pele à finalização."],
 };
 
@@ -184,7 +186,53 @@ const MAKEUP = `
   </div>
 </div>`;
 
-const HTML: Record<WidgetKind, string> = { plate: PLATE, tooth: TOOTH, body: BODY, breath: BREATH, skin: SKIN, law: LAW, makeup: MAKEUP };
+const SOCIAL = `
+<div class="wg-sm">
+  <div class="wg-stage">
+    <svg viewBox="0 0 240 300" class="wg-svg wg-phone" aria-label="Celular com as etapas do trabalho nas redes sociais">
+      <rect x="40" y="6" width="160" height="288" rx="26" fill="#1c1c1a"/>
+      <rect x="48" y="14" width="144" height="272" rx="20" fill="#fff"/>
+      <rect x="98" y="20" width="44" height="8" rx="4" fill="#1c1c1a"/>
+      <g fill="#111"><circle cx="66" cy="46" r="10" fill="var(--wp)"/><rect x="82" y="40" width="54" height="6" rx="3"/><rect x="82" y="50" width="34" height="5" rx="2.5" fill="#bbb"/></g>
+      <g data-sm="plan">
+        <text x="58" y="82" font-size="11" font-weight="800" fill="#111">Calendário do mês</text>
+        <g class="wg-cal">${Array.from({ length: 20 }, (_, i) => `<rect x="${58 + (i % 5) * 26}" y="${92 + Math.floor(i / 5) * 26}" width="22" height="22" rx="5" fill="#f1efe8" style="--d:${i * 0.05}s"/>`).join("")}
+        ${[1, 3, 6, 8, 11, 13, 16, 18].map((i, k) => `<circle cx="${69 + (i % 5) * 26}" cy="${103 + Math.floor(i / 5) * 26}" r="5" fill="${["var(--wp)", "#f3a83b", "#5b8def"][k % 3]}" class="wg-dot" style="--d:${0.3 + k * 0.08}s"/>`).join("")}</g>
+        <text x="58" y="210" font-size="9" fill="#777">● post  ● reels  ● story</text>
+      </g>
+      <g data-sm="create">
+        <rect x="58" y="70" width="124" height="150" rx="12" fill="var(--wp)"/>
+        <rect x="58" y="70" width="124" height="150" rx="12" fill="url(#wgSmG)"/>
+        <defs><linearGradient id="wgSmG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#000" stop-opacity=".25"/></linearGradient></defs>
+        <text x="70" y="118" font-size="20" font-weight="800" fill="#fff">5 dicas</text><text x="70" y="140" font-size="12" font-weight="600" fill="#fff">para o seu negócio</text>
+        <rect x="70" y="190" width="56" height="16" rx="8" fill="#fff" opacity=".9"/>
+        <g class="wg-cursor"><path d="M150 168 l0 22 6 -6 6 11 4 -2 -6 -11 9 0z" fill="#111" stroke="#fff" stroke-width="1.5"/></g>
+      </g>
+      <g data-sm="post">
+        ${Array.from({ length: 9 }, (_, i) => `<rect x="${56 + (i % 3) * 43}" y="${70 + Math.floor(i / 3) * 43}" width="41" height="41" fill="${i === 0 ? "var(--wp)" : ["#e9dccf", "#cfd8cf", "#ddd3e6"][i % 3]}" class="${i === 0 ? "wg-new" : ""}"/>`).join("")}
+        <g class="wg-heart"><path d="M120 236 c-6 -8 -20 -6 -20 4 c0 9 20 20 20 20 c0 0 20 -11 20 -20 c0 -10 -14 -12 -20 -4z" fill="#ff4d6d"/></g>
+      </g>
+      <g data-sm="reply">
+        <rect x="58" y="76" width="96" height="28" rx="14" fill="#efefef" class="wg-b" style="--d:0s"/><text x="68" y="94" font-size="10" fill="#111" class="wg-b" style="--d:0s">Qual o horário?</text>
+        <rect x="76" y="114" width="108" height="40" rx="14" fill="var(--wp)" class="wg-b" style="--d:.5s"/><text x="84" y="131" font-size="9.5" fill="#fff" class="wg-b" style="--d:.5s">Seg a sáb, 9h às 19h.</text><text x="84" y="145" font-size="9.5" fill="#fff" class="wg-b" style="--d:.5s">Quer agendar? 😊</text>
+        <rect x="58" y="164" width="72" height="28" rx="14" fill="#efefef" class="wg-b" style="--d:1s"/><text x="68" y="182" font-size="10" fill="#111" class="wg-b" style="--d:1s">Quero sim!</text>
+      </g>
+      <g data-sm="measure">
+        <text x="58" y="82" font-size="11" font-weight="800" fill="#111">Relatório do mês</text>
+        ${[60, 85, 70, 110, 95, 130].map((h, i) => `<rect x="${62 + i * 20}" y="${230 - h}" width="14" height="${h}" rx="4" fill="${i === 5 ? "var(--wp)" : "#d8d4c8"}" class="wg-bar" style="--d:${i * 0.1}s"/>`).join("")}
+        <text x="58" y="250" font-size="8" fill="#777">alcance · visitas · cliques</text>
+      </g>
+    </svg>
+  </div>
+  <div class="wg-panel">
+    <div class="wg-chips wg-steps"><button type="button" data-step="0"><i>1</i>Planejar</button><button type="button" data-step="1"><i>2</i>Criar</button><button type="button" data-step="2"><i>3</i>Publicar</button><button type="button" data-step="3"><i>4</i>Responder</button><button type="button" data-step="4"><i>5</i>Medir</button></div>
+    <div class="wg-card" aria-live="polite"><h4>Toque numa etapa</h4><p>Um perfil bem cuidado tem um processo por trás. Toque em cada etapa ou veja tudo de uma vez.</p></div>
+    <button type="button" class="wg-go">Ver o processo</button>
+    <p class="wg-note">Conteúdo informativo. Cada perfil e cada negócio pedem uma estratégia diferente.</p>
+  </div>
+</div>`;
+
+const HTML: Record<WidgetKind, string> = { plate: PLATE, tooth: TOOTH, body: BODY, breath: BREATH, skin: SKIN, law: LAW, makeup: MAKEUP, social: SOCIAL };
 
 export function widgetHtml(kind: WidgetKind) {
   return `<div class="wg" data-wg="${kind}">${HTML[kind]}</div>`;
@@ -258,6 +306,18 @@ export const WIDGET_CSS = `
 @keyframes wgtw{0%,100%{transform:scale(.6);opacity:.5}50%{transform:scale(1.15);opacity:1}}
 .wg-steps button i{width:auto;height:auto;border-radius:0;font-style:normal;font-weight:800;color:var(--wp)}
 .wg-steps button.done{border-color:color-mix(in srgb,var(--wp) 45%,transparent)}
+.wg-sm [data-sm]{opacity:0;transition:opacity .45s ease;pointer-events:none}
+.wg-sm [data-sm].on{opacity:1}
+.wg-phone{max-width:250px;filter:drop-shadow(0 18px 22px rgba(0,0,0,.18))}
+.wg-sm .on .wg-cal rect,.wg-sm .on .wg-dot,.wg-sm .on .wg-b{animation:wgpop .45s backwards;animation-delay:var(--d)}
+.wg-sm .on .wg-bar{transform-box:fill-box;transform-origin:bottom;animation:wggrow .8s cubic-bezier(.2,.8,.2,1) backwards;animation-delay:var(--d)}
+.wg-sm .on .wg-new{animation:wgpop .6s .2s backwards}
+.wg-sm .on .wg-heart{transform-box:fill-box;transform-origin:center;animation:wgbeat 1.2s .6s infinite}
+.wg-sm .on .wg-cursor{animation:wgmove 2s ease-in-out infinite}
+@keyframes wgpop{from{opacity:0;transform:translateY(6px) scale(.8)}}
+@keyframes wggrow{from{transform:scaleY(0)}}
+@keyframes wgbeat{0%,100%{transform:scale(.9)}50%{transform:scale(1.15)}}
+@keyframes wgmove{0%,100%{transform:translate(0,0)}50%{transform:translate(-40px,14px)}}
 @media (max-width:760px){.wg>div{grid-template-columns:1fr}.wg-stage{min-height:240px}}
 @media (prefers-reduced-motion:reduce){.wg *{animation:none!important;transition:none!important}}
 `;
@@ -295,6 +355,13 @@ const T = {
     ["Olhos", "Sombra, delineado e máscara valorizam o formato dos olhos. Do natural ao marcado, o estilo acompanha a ocasião e o seu gosto.", "Sombra · delineado · cílios", [120, 122, 52, 20]],
     ["Boca", "Contorno e cor equilibram a make: tons nude para algo leve, cores fortes para destacar. Lábio hidratado antes ajuda o batom a assentar.", "Contorno · batom · gloss", [120, 177, 26, 14]],
     ["Finalização", "Blush, iluminador, pó e spray fixador fecham a make e ajudam a manter o acabamento para eventos, ensaios e festas.", "Blush · iluminador · fixador", [120, 128, 82, 98]],
+  ],
+  social: [
+    ["Planejar", "Antes de postar, o mês é organizado: datas importantes, o que o negócio quer vender e o tipo de cada post (feed, reels, stories).", "Calendário · pauta · objetivos"],
+    ["Criar", "Fotos, artes e vídeos feitos com a identidade da marca: cores, fontes e tom de voz iguais em todos os posts.", "Artes · reels · legendas"],
+    ["Publicar", "Os posts saem nos dias e horários combinados, com legenda, hashtags e capa pensadas para o perfil.", "Agenda · horários · consistência"],
+    ["Responder", "Comentários e mensagens respondidos com rapidez e no tom da marca. É ali que muita gente decide comprar ou agendar.", "Direct · comentários · atendimento"],
+    ["Medir", "Todo mês, um relatório mostra alcance, visitas no perfil e cliques, e o que ajustar no próximo mês.", "Relatório · ajustes · próximos passos"],
   ],
   plate: {
     veg: "Verduras e legumes: metade do prato. Fibras, vitaminas e saciedade.",
@@ -383,6 +450,21 @@ export const WIDGET_JS = `
         var i = 0; go.textContent = 'Parar';
         (function next(){ show(i); i++; auto = i < 5 ? setTimeout(next, 2200) : null; if (!auto) go.textContent = 'Ver de novo'; })();
       };
+    }
+    if (kind === 'social') {
+      var skeys = ['plan', 'create', 'post', 'reply', 'measure'], sgo = root.querySelector('.wg-go'), sauto = null;
+      var sshow = function(i){
+        root.querySelectorAll('[data-sm]').forEach(function(el){ el.classList.toggle('on', el.getAttribute('data-sm') === skeys[i]); });
+        root.querySelectorAll('[data-step]').forEach(function(b, j){ b.setAttribute('aria-pressed', j === i ? 'true' : 'false'); b.classList.toggle('done', j < i); });
+        card(root, T.social[i][0], T.social[i][1], T.social[i][2]);
+      };
+      root.querySelectorAll('[data-step]').forEach(function(b){ b.onclick = function(){ clearTimeout(sauto); sauto = null; sgo.textContent = 'Ver o processo'; sshow(+b.getAttribute('data-step')); }; });
+      sgo.onclick = function(){
+        if (sauto) { clearTimeout(sauto); sauto = null; sgo.textContent = 'Ver o processo'; return; }
+        var i = 0; sgo.textContent = 'Parar';
+        (function next(){ sshow(i); i++; sauto = i < 5 ? setTimeout(next, 2600) : null; if (!sauto) sgo.textContent = 'Ver de novo'; })();
+      };
+      sshow(0);
     }
     if (kind === 'breath') {
       var orb = root.querySelector('.wg-orb'), say = root.querySelector('.wg-say'), cnt = root.querySelector('.wg-count'), btn = root.querySelector('.wg-go'), timer = null;
