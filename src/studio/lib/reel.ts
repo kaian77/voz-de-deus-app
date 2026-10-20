@@ -1,6 +1,7 @@
 // Reels a partir dos slides do carrossel: cada slide entra deslizando num quadro 9:16 (1080x1920), com barrinhas
 // de progresso no topo e a marca embaixo, gravado do canvas em MP4 (MediaRecorder) — sem servidor de vídeo.
 import { renderSlide, SLIDE_H, SLIDE_W } from "./carousel";
+import { paginasproReel } from "./reel-motion";
 import type { CarouselDesign, Slide } from "./types";
 
 const W = 1080;
@@ -20,8 +21,20 @@ export const reelSupported = () => !!mp4Type();
 export async function renderReel(slides: Slide[], design: CarouselDesign = {}): Promise<Blob> {
   const type = mp4Type();
   if (!type) throw new Error("Este navegador não grava MP4. Aprove este Reel pelo Chrome (computador ou celular) ou pelo Safari do iPhone.");
-  const frames = await Promise.all(slides.map((s, i) => renderSlide(s, i, slides.length, design)));
   const pp = design.theme === "paginaspro";
+  if (pp && document.fonts) {
+    await Promise.all(["800 58px 'Inter Tight'", "400 40px 'Inter Tight'", "italic 400 62px 'Instrument Serif'"].map((f) => document.fonts.load(f).catch(() => undefined)));
+  }
+  // PáginasPro: Reel animado de verdade (gancho, sem site × com site, cartões, chamada)
+  if (pp) {
+    const motion = paginasproReel(slides);
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d")!;
+    return record(canvas, type, motion.total, (t) => motion.draw(ctx, t));
+  }
+  const frames = await Promise.all(slides.map((s, i) => renderSlide(s, i, slides.length, design)));
   const bg = pp ? "#111110" : "#0c0c0c";
   const ink = pp ? "#f3f1ea" : "#ffffff";
   const accent = pp ? "#d4ff3f" : "#ffc72c";
@@ -97,9 +110,11 @@ export async function renderReel(slides: Slide[], design: CarouselDesign = {}): 
     ctx.textAlign = "left";
   };
 
-  if (pp && document.fonts) {
-    await Promise.all(["800 58px 'Inter Tight'", "italic 400 62px 'Instrument Serif'"].map((f) => document.fonts.load(f).catch(() => undefined)));
-  }
+  return record(canvas, type, total, draw);
+}
+
+/** Desenha `draw(t)` a 30 quadros por segundo durante `total` segundos e grava o canvas em MP4. */
+async function record(canvas: HTMLCanvasElement, type: string, total: number, draw: (t: number) => void): Promise<Blob> {
   draw(0);
   const stream = canvas.captureStream(FPS);
   const recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 6_000_000 });
