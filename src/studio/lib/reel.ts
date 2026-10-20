@@ -27,7 +27,10 @@ export async function renderReel(slides: Slide[], design: CarouselDesign = {}): 
   }
   // PáginasPro: Reel animado de verdade (gancho, sem site × com site, cartões, chamada)
   if (pp) {
-    const motion = paginasproReel(slides);
+    // Cena do meio muda de um Reel para outro (fixa por post: depende do texto do gancho)
+    const scenes = ["compare", "persona", "counter"] as const;
+    const seed = [...(slides[0]?.title ?? "")].reduce((a, c) => a + c.charCodeAt(0), 0);
+    const motion = paginasproReel(slides, scenes[seed % scenes.length]);
     const canvas = document.createElement("canvas");
     canvas.width = W;
     canvas.height = H;
