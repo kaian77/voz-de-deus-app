@@ -56,7 +56,7 @@ const SYSTEM =
   `Nunca invente fatos: formação, anos de experiência, número de pacientes, prêmios, preços, convênios, depoimentos ou resultados garantidos. ` +
   `Use só o que foi informado; o resto escreva de forma que seja verdade para qualquer profissional sério da área.\n` +
   `- Saúde (medicina, nutrição, psicologia, odonto, fisio): siga as regras dos conselhos — sem promessa de resultado, sem antes/depois, sem "o melhor".\n` +
-  `- Cores: tire do logo ou da identidade que aparece nas fotos. Sem logo, escolha uma cor sóbria que combine com a área e com as fotos ` +
+  `- Cores: se as informações trazem "Cores da marca", use essas cores (em hex). Senão tire do logo ou da identidade que aparece nas fotos. Sem logo, escolha uma cor sóbria que combine com a área e com as fotos ` +
   `(nada de roxo/azul neon genérico). A primária precisa de contraste para texto branco no botão.\n` +
   `- Serviços e especialidades: só os que aparecem nas informações; se houver poucos, fique nos que a área sempre oferece, sem nomes de procedimentos específicos.\n` +
   `- Olhe as fotos: escolha a melhor para o topo e outra para o "Sobre" (evite print de texto, cardápio, arte com letras e foto ruim).`;
