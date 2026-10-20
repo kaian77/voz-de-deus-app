@@ -56,9 +56,16 @@ function systemPrompt(o: Record<string, number | string>, channel: string) {
     `Se perguntarem se é robô ou IA, diga a verdade: é o assistente do Bruno, e ele acompanha as conversas.\n\n` +
     `O QUE A PÁGINASPRO FAZ: site profissional (landing page) para qualquer negócio, com as fotos do cliente, serviços, horário, endereço com mapa e botão do WhatsApp. ` +
     `O cliente vê a prévia pronta antes de pagar; se não gostar, não paga nada. Site: ${SITE}\n\n` +
-    `PARA MONTAR A PRÉVIA eu preciso de: o @ do Instagram (se tiver), algumas fotos para o site (pode mandar aqui mesmo), o endereço (se tiver), ` +
-    `o horário de funcionamento e o tipo de serviço/o que o negócio faz. Peça o que faltar de forma leve, sem questionário enorme (no máximo 2 coisas por mensagem). ` +
-    `Assim que tiver pelo menos o nome do negócio, o ramo e (fotos OU o @ do Instagram), chame montar_previa com tudo o que já sabe e diga que em 1 ou 2 minutos o link chega aqui. ` +
+    `PARA A PRÉVIA FICAR BONITA E COMPLETA, colete em poucas mensagens (no máximo 2 perguntas por vez, de forma leve, sem formulário):\n` +
+    `1) nome do negócio, o que faz (ramo) e o @ do Instagram;\n` +
+    `2) os principais serviços e o diferencial (o que faz o cliente escolher ela/ele), há quanto tempo atua, se tem formação ou registro;\n` +
+    `3) fotos: 3 a 6 fotos boas do trabalho (resultados, ambiente, a pessoa atendendo) e o logo, se tiver; pode mandar aqui mesmo. Fotos de exemplo de sites ou estilos que gosta também ajudam;\n` +
+    `4) as cores da marca (ou "pode usar as cores do meu Instagram/logo");\n` +
+    `5) ${channel === "whatsapp" ? "endereço (se atende em local fixo) e horário" : "o WhatsApp do negócio (o botão do site abre ele), endereço (se atende em local fixo) e horário"}.\n` +
+    `Vá juntando o que a pessoa responde. Chame montar_previa quando tiver os itens 1 e 2 e pelo menos fotos OU o @ ` +
+    `(o resto melhora a página, mas não trava: se a pessoa não tiver ou demorar, monte com o que tem e diga que dá para ajustar depois). ` +
+    `Antes de chamar, se ainda faltar foto ou cor, pergunte uma vez ("quer mandar umas fotos do seu trabalho e as cores da marca? fica bem mais a sua cara"). ` +
+    `Ao chamar, passe TUDO o que a pessoa contou nos campos (serviços e diferenciais completos, cores, WhatsApp) e diga que em 1 ou 2 minutos o link chega aqui.\n` +
     `Se a pessoa pedir mudança numa prévia que já existe, chame montar_previa com o campo ajuste.\n\n` +
     `PLANOS (só passe quando a pessoa perguntar valor ou disser que gostou):\n` +
     `- Mensal: ${brl(o.monthly)}/mês, sem taxa de entrada, inclui alterações sempre que precisar${link(o.monthlyLink)} (cartão, renova sozinho)\n` +
@@ -119,7 +126,9 @@ export async function paginasproReply(db: SupabaseClient, conversation: any, inb
         ramo: { type: "string", description: "Área/tipo de serviço (ex.: Nutrição, Barbearia, Advocacia)" },
         cidade: { type: "string" }, instagram: { type: "string", description: "@ do Instagram" },
         endereco: { type: "string" }, horario: { type: "string" },
-        servicos: { type: "string", description: "Serviços, diferenciais e tudo de real que a pessoa contou" },
+        servicos: { type: "string", description: "Serviços, diferenciais, tempo de atuação, formação e tudo de real que a pessoa contou" },
+        cores: { type: "string", description: "Cores da marca que a pessoa pediu (ex.: 'rosa e dourado' ou '#E75A8D'); vazio para tirar do logo/fotos" },
+        whatsapp: { type: "string", description: "WhatsApp do negócio com DDD (só números), se a pessoa passou" },
         modelo: { type: "string", enum: ["normal", "premium"] },
         ajuste: { type: "string", description: "Só para mudar uma prévia que já existe: o que a pessoa pediu" },
       },
@@ -144,6 +153,13 @@ export async function paginasproReply(db: SupabaseClient, conversation: any, inb
   if (reply) await sendMessage(db, conversation.id, reply, "ai");
 }
 
+/** "(61) 99999-0000" -> "5561999990000"; inválido -> null. */
+function waNumber(v?: string) {
+  const d = String(v ?? "").replace(/\D/g, "").replace(/^0+/, "");
+  if (d.length === 10 || d.length === 11) return `55${d}`;
+  return d.length >= 12 && d.length <= 13 && d.startsWith("55") ? d : null;
+}
+
 /** Guarda os dados do cliente na landing desta conversa e põe na fila do cron. */
 // deno-lint-ignore no-explicit-any
 async function queuePreview(db: SupabaseClient, conversation: any, i: Record<string, string>) {
@@ -155,8 +171,8 @@ async function queuePreview(db: SupabaseClient, conversation: any, i: Record<str
     name: String(i.nome ?? existing?.name ?? "").slice(0, 120), niche: String(i.ramo ?? existing?.niche ?? "").slice(0, 80),
     city: i.cidade || existing?.city || null, instagram: i.instagram || existing?.instagram || null,
     address: i.endereco || existing?.address || null, hours: i.horario || existing?.hours || null,
-    notes: [existing?.notes, i.servicos].filter(Boolean).join("\n").slice(0, 3000) || null,
-    whatsapp: existing?.whatsapp ?? (conversation.channel === "whatsapp" ? conversation.contact_id : null),
+    notes: [existing?.notes, i.servicos, i.cores && `Cores da marca: ${i.cores}`].filter(Boolean).join("\n").slice(0, 3000) || null,
+    whatsapp: waNumber(i.whatsapp) ?? existing?.whatsapp ?? (conversation.channel === "whatsapp" ? conversation.contact_id : null),
     tier: i.modelo === "premium" ? "premium" : (existing?.tier ?? "normal"),
     photos, conversation_id: conversation.id, auto_status: "queued", auto_error: null,
     auto_instructions: i.ajuste ? String(i.ajuste).slice(0, 1500) : null, updated_at: new Date().toISOString(),
