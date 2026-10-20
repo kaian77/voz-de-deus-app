@@ -237,13 +237,226 @@ function brand(ctx: CanvasRenderingContext2D, alpha = 1) {
   ctx.restore();
 }
 
+/** Perfil do Instagram de exemplo dentro do celular; `link` é o link da bio (destacado quando `hl`). */
+function igProfile(ctx: CanvasRenderingContext2D, w: number, h: number, name: string, link: string, hl: number, tap: number) {
+  rr(ctx, 0, 0, w, h, 0, "#ffffff");
+  ctx.fillStyle = "#111";
+  ctx.font = `800 26px ${SANS}`;
+  ctx.fillText(name, 24, 80);
+  const g = ctx.createLinearGradient(24, 110, 140, 230);
+  g.addColorStop(0, "#f9ce34");
+  g.addColorStop(0.5, "#ee2a7b");
+  g.addColorStop(1, "#6228d7");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(84, 170, 60, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#d9cbbf";
+  ctx.beginPath();
+  ctx.arc(84, 170, 52, 0, Math.PI * 2);
+  ctx.fill();
+  ["posts", "seguidores", "seguindo"].forEach((l, i) => {
+    ctx.fillStyle = "#111";
+    const x = 168 + i * ((w - 180) / 3);
+    ctx.font = `800 22px ${SANS}`;
+    ctx.fillText(["128", "2.340", "310"][i], x, 160);
+    ctx.font = `400 14px ${SANS}`;
+    ctx.fillText(l, x, 184);
+  });
+  rr(ctx, 24, 260, w * 0.7, 16, 6, "#e3e3e3");
+  rr(ctx, 24, 288, w * 0.55, 16, 6, "#e3e3e3");
+  // Link da bio
+  if (hl > 0) rr(ctx, 16, 312, w - 32, 50, 12, `rgba(212,255,63,${0.9 * hl})`);
+  ctx.fillStyle = "#00376b";
+  ctx.font = `700 22px ${SANS}`;
+  ctx.fillText(`🔗 ${link}`, 26, 345);
+  for (let i = 0; i < 9; i++) rr(ctx, (i % 3) * (w / 3) + 2, 390 + Math.floor(i / 3) * (w / 3) + 2, w / 3 - 4, w / 3 - 4, 0, ["#e9dccf", "#cfd8cf", "#ddd3e6"][i % 3]);
+  if (tap > 0 && tap < 1) {
+    ctx.strokeStyle = `rgba(23,59,44,${1 - tap})`;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(w / 2, 337, 20 + 70 * tap, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+/** Bonequinho segurando o celular; `mood` -1 (chateado) a 1 (feliz); `jump` desloca para cima. */
+function person(ctx: CanvasRenderingContext2D, x: number, y: number, mood: number, jump: number, t: number) {
+  ctx.save();
+  ctx.translate(x, y - jump);
+  // Corpo e cabeça
+  rr(ctx, -120, 60, 240, 330, 110, FOREST);
+  rr(ctx, -60, 60, 120, 40, 20, LIME);
+  ctx.fillStyle = "#e8b48f";
+  ctx.beginPath();
+  ctx.arc(0, -40, 105, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#3b2a22";
+  ctx.beginPath();
+  ctx.arc(0, -70, 108, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.fill();
+  // Olhos (piscam)
+  const blink = Math.sin(t * 2.3) > 0.97 ? 0.15 : 1;
+  ctx.fillStyle = INK;
+  for (const ex of [-38, 38]) {
+    ctx.beginPath();
+    ctx.ellipse(ex, -40, 11, 14 * blink, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Boca: curva para cima (feliz) ou para baixo (chateado)
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 8;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-34, 14);
+  ctx.quadraticCurveTo(0, 14 + 34 * mood, 34, 14);
+  ctx.stroke();
+  if (mood > 0.6) {
+    ctx.fillStyle = "rgba(255,120,120,0.35)";
+    ctx.beginPath();
+    ctx.arc(-70, 0, 18, 0, Math.PI * 2);
+    ctx.arc(70, 0, 18, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Braço com o celular
+  ctx.strokeStyle = "#e8b48f";
+  ctx.lineWidth = 34;
+  ctx.beginPath();
+  ctx.moveTo(90, 140);
+  ctx.quadraticCurveTo(180, 170, 210, 90);
+  ctx.stroke();
+  rr(ctx, 175, -10, 80, 140, 16, "#26261f");
+  rr(ctx, 183, -2, 64, 124, 10, mood > 0.5 ? LIME : "#d8d8d8");
+  ctx.restore();
+}
+
+function bubble(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, p: number, color: string) {
+  if (p <= 0) return;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(p, p);
+  rr(ctx, -70, -70, 140, 120, 40, color);
+  ctx.beginPath();
+  ctx.moveTo(-20, 48);
+  ctx.lineTo(-44, 84);
+  ctx.lineTo(10, 48);
+  ctx.fill();
+  ctx.fillStyle = INK;
+  ctx.font = `800 70px ${SANS}`;
+  ctx.textAlign = "center";
+  ctx.fillText(text, 0, 14);
+  ctx.restore();
+}
+
+/** Cena do bonequinho: perfil só com link do WhatsApp (desanima e passa), perfil com link da PáginasPro (abre o site e comemora). */
+function scenePersona(ctx: CanvasRenderingContext2D, lt: number) {
+  const swap = easeOut((lt - 2.4) / 0.5);
+  const openSite = lt > 4.3;
+  const mood = lt < 1 ? 0 : lt < 2.6 ? -0.8 : lt < 3.6 ? 0 : 1;
+  const jump = openSite ? Math.abs(Math.sin((lt - 4.3) * 6)) * 60 : 0;
+  ctx.save();
+  ctx.font = `800 60px ${SANS}`;
+  ctx.textAlign = "center";
+  ctx.fillStyle = PAPER;
+  ctx.globalAlpha = easeOut(lt / 0.3);
+  ctx.fillText(openSite ? "Esse eu chamo agora!" : lt < 2.6 ? "Só um link de WhatsApp?" : "Opa, esse tem site…", W / 2, 300);
+  ctx.globalAlpha = 1;
+  ctx.textAlign = "left";
+  const pw = 470;
+  const ph = 860;
+  const px = W - pw - 60;
+  phone(ctx, px, 420, pw, ph, 0.04, (w, h) => {
+    if (openSite) {
+      screenWith(ctx, w, h, lt - 4.3);
+      return;
+    }
+    ctx.save();
+    ctx.translate(-w * swap, 0);
+    igProfile(ctx, w, h, "studio.exemplo", "wa.me/5561999…", 0, 0);
+    ctx.translate(w, 0);
+    igProfile(ctx, w, h, "salao.exemplo", "paginaspro.app.br/p/…", easeOut((lt - 3.0) / 0.4), (lt - 3.7) / 0.6);
+    ctx.restore();
+  });
+  person(ctx, 270, 1180, mood, jump, lt);
+  bubble(ctx, 360, 760, "?", back((lt - 1.0) / 0.35) * (lt < 2.6 ? 1 : 0), PAPER);
+  bubble(ctx, 360, 760 - jump, "!", openSite ? back((lt - 4.4) / 0.35) : 0, LIME);
+  if (openSite) {
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + lt;
+      const r = 230 + 40 * Math.sin(lt * 5 + i);
+      ctx.fillStyle = i % 2 ? LIME : PAPER;
+      ctx.beginPath();
+      ctx.arc(270 + Math.cos(a) * r, 1040 - jump + Math.sin(a) * r * 0.6, 9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.fillStyle = "rgba(243,241,234,0.45)";
+  ctx.font = `500 26px ${SANS}`;
+  ctx.textAlign = "center";
+  ctx.fillText("exemplo ilustrativo", W / 2, 1640);
+  ctx.restore();
+}
+
+const fmt = (n: number) => Math.round(n).toLocaleString("pt-BR");
+
+/** Cena dos contadores: números do painel subindo (verde) × sem site descendo (vermelho). Números ilustrativos. */
+function sceneCounter(ctx: CanvasRenderingContext2D, lt: number) {
+  ctx.save();
+  ctx.textAlign = "left";
+  const card = (y: number, title: string, rows: [string, number, number][], good: boolean, start: number) => {
+    const p = back((lt - start) / 0.5);
+    if (p <= 0) return;
+    ctx.save();
+    ctx.translate(0, (1 - p) * 300);
+    ctx.globalAlpha = clamp(p);
+    rr(ctx, 70, y, W - 140, 520, 44, good ? PAPER : "#1e1e1c");
+    ctx.fillStyle = good ? FOREST : RED;
+    ctx.font = `800 44px ${SANS}`;
+    ctx.fillText(title, 120, y + 90);
+    rows.forEach(([label, from, to], i) => {
+      const k = easeOut((lt - start - 0.4 - i * 0.25) / 1.6);
+      const v = from + (to - from) * k;
+      const yy = y + 200 + i * 150;
+      ctx.fillStyle = good ? GREY : "rgba(243,241,234,0.6)";
+      ctx.font = `500 32px ${SANS}`;
+      ctx.fillText(label, 120, yy);
+      ctx.fillStyle = good ? INK : PAPER;
+      ctx.font = `800 96px ${SANS}`;
+      ctx.fillText(fmt(v), 120, yy + 92);
+      const arrowX = W - 220;
+      ctx.fillStyle = good ? "#1fa45a" : RED;
+      ctx.beginPath();
+      if (good) {
+        ctx.moveTo(arrowX, yy + 70);
+        ctx.lineTo(arrowX + 40, yy + 10);
+        ctx.lineTo(arrowX + 80, yy + 70);
+      } else {
+        ctx.moveTo(arrowX, yy + 20);
+        ctx.lineTo(arrowX + 40, yy + 80);
+        ctx.lineTo(arrowX + 80, yy + 20);
+      }
+      ctx.fill();
+    });
+    ctx.restore();
+  };
+  card(300, "Com site (painel do cliente)", [["Visitas no mês", 0, 1248], ["Cliques no WhatsApp", 0, 186]], true, 0);
+  card(900, "Sem site", [["Clientes que te acham no Google", 186, 0], ["Visitas que dá para medir", 1248, 0]], false, 1.4);
+  ctx.fillStyle = "rgba(243,241,234,0.45)";
+  ctx.font = `500 26px ${SANS}`;
+  ctx.textAlign = "center";
+  ctx.fillText("números ilustrativos, só para mostrar o painel", W / 2, 1520);
+  ctx.restore();
+}
+
+export type ReelScene = "compare" | "persona" | "counter";
+
 /** Monta a linha do tempo do Reel a partir dos slides: [duração total, desenhar(t)]. */
-export function paginasproReel(slides: Slide[]) {
+export function paginasproReel(slides: Slide[], scene: ReelScene = "compare") {
   const hook = slides[0]?.title || "Seu cliente te procura e *não te acha*";
   const middle = slides.slice(1, -1).slice(0, 4);
   const last = slides.length > 1 ? slides[slides.length - 1] : { title: "Prévia *grátis* em 24 h", body: "Me chama no direct." };
   const T_HOOK = 3.2;
-  const T_CMP = 5.2;
+  const T_CMP = scene === "persona" ? 6.6 : scene === "counter" ? 5.8 : 5.2;
   const T_CARD = 2.4;
   const T_END = 3.8;
   const tCards = T_HOOK + T_CMP;
@@ -265,9 +478,16 @@ export function paginasproReel(slides: Slide[]) {
       kinetic(ctx, hook, lt - 0.3, 860, 112);
       ctx.restore();
     } else if (t < tCards) {
-      // 2) Sem site × com PáginasPro (exemplo ilustrativo)
+      // 2) Cena do meio: sem site × com PáginasPro, bonequinho ou contadores (exemplos ilustrativos)
       const lt = t - T_HOOK;
       const out = clamp((lt - (T_CMP - 0.35)) / 0.35);
+      if (scene !== "compare") {
+        ctx.save();
+        ctx.globalAlpha = 1 - out;
+        if (scene === "persona") scenePersona(ctx, lt);
+        else sceneCounter(ctx, lt);
+        ctx.restore();
+      } else {
       ctx.save();
       ctx.globalAlpha = 1 - out;
       ctx.font = `800 64px ${SANS}`;
@@ -290,6 +510,7 @@ export function paginasproReel(slides: Slide[]) {
       ctx.font = `500 26px ${SANS}`;
       ctx.fillText("exemplo ilustrativo", W / 2, 1600);
       ctx.restore();
+      }
     } else if (t < tEnd) {
       // 3) Cartões dos passos, um empilhando sobre o outro
       const idx = Math.floor((t - tCards) / T_CARD);
