@@ -279,7 +279,7 @@ function PaginasproAutopilot() {
   const qc = useQueryClient();
   const { data: settings } = useSettings();
   const { data: accounts = [] } = useTable("social_accounts");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"posts" | "reel" | null>(null);
   const ig = accounts.find((a) => a.platform === "instagram" && a.meta?.brand === "paginaspro");
   if (!ig) return null;
   const enabled = settings?.pp_autopilot_enabled ?? true;
@@ -294,17 +294,19 @@ function PaginasproAutopilot() {
     }
   };
 
-  const createNow = async () => {
-    setBusy(true);
+  const createNow = async (format?: "reel") => {
+    setBusy(format === "reel" ? "reel" : "posts");
     try {
-      const r = await api.invoke<{ created: unknown[] }>("ai", { action: "paginaspro_ideas", count: perWeek });
+      const r = await api.invoke<{ created: unknown[] }>("ai", { action: "paginaspro_ideas", count: format === "reel" ? 1 : perWeek, format });
       qc.invalidateQueries({ queryKey: ["table", "posts"] });
       qc.invalidateQueries({ queryKey: ["settings"] });
-      toast.success(r.created.length ? `${r.created.length} carrossel(éis) da PáginasPro aqui embaixo.` : "Nenhuma ideia nova agora.");
+      toast.success(r.created.length
+        ? format === "reel" ? "Reel da PáginasPro aqui embaixo. O vídeo é gravado quando você aprovar." : `${r.created.length} post(s) da PáginasPro aqui embaixo.`
+        : "Nenhuma ideia nova agora.");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
@@ -333,9 +335,13 @@ function PaginasproAutopilot() {
             {[2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n} posts por semana</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button size="sm" variant="outline" className="h-8" onClick={createNow} disabled={busy}>
-          {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}
-          {busy ? "Criando (até 1 minuto)" : "Criar posts agora"}
+        <Button size="sm" variant="outline" className="h-8" onClick={() => createNow()} disabled={busy !== null}>
+          {busy === "posts" ? <Loader2 className="animate-spin" /> : <Sparkles />}
+          {busy === "posts" ? "Criando (até 1 minuto)" : "Criar posts agora"}
+        </Button>
+        <Button size="sm" variant="outline" className="h-8" onClick={() => createNow("reel")} disabled={busy !== null}>
+          {busy === "reel" ? <Loader2 className="animate-spin" /> : <Clapperboard />}
+          {busy === "reel" ? "Criando o Reel" : "Criar Reel agora"}
         </Button>
       </div>
     </Panel>
