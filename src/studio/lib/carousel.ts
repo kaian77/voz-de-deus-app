@@ -88,6 +88,43 @@ export const THEMES: Record<ThemeId, Theme> = {
     titleFont: "Georgia, 'Times New Roman', serif",
     bodyFont: "Georgia, 'Times New Roman', serif",
   },
+  paginaspro: {
+    name: "PáginasPro (tinta e limão)",
+    background: (ctx) => {
+      solid("#111110")(ctx);
+      // Grade fina e a bolinha limão do logo, como no site da PáginasPro
+      ctx.save();
+      ctx.strokeStyle = "rgba(243,241,234,0.05)";
+      ctx.lineWidth = 2;
+      for (let x = 0; x <= SLIDE_W; x += 90) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, SLIDE_H);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= SLIDE_H; y += 90) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(SLIDE_W, y);
+        ctx.stroke();
+      }
+      const glow = ctx.createRadialGradient(SLIDE_W, SLIDE_H, 0, SLIDE_W, SLIDE_H, 700);
+      glow.addColorStop(0, "rgba(23,59,44,0.9)");
+      glow.addColorStop(1, "rgba(23,59,44,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, SLIDE_W, SLIDE_H);
+      ctx.fillStyle = "#d4ff3f";
+      ctx.beginPath();
+      ctx.arc(SLIDE_W - 120, 150, 22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    },
+    text: "#f3f1ea",
+    muted: "rgba(243,241,234,0.72)",
+    accent: "#d4ff3f",
+    titleFont: "'Inter Tight', 'Helvetica Neue', Arial, sans-serif",
+    bodyFont: "'Inter Tight', 'Helvetica Neue', Arial, sans-serif",
+  },
   vibrante: {
     name: "Vibrante",
     background: (ctx) => gradient(ctx, [[0, "#7c3aed"], [0.55, "#db2777"], [1, "#f97316"]]),
@@ -167,8 +204,11 @@ function paletteTheme(p: NonNullable<CarouselDesign["palette"]>): Theme {
 }
 
 async function fontsReady(theme: Theme) {
-  if (!theme.titleFont.startsWith("Anton") || typeof document === "undefined" || !document.fonts) return;
-  await document.fonts.load("80px Anton").catch(() => undefined);
+  if (typeof document === "undefined" || !document.fonts) return;
+  if (theme.titleFont.startsWith("Anton")) await document.fonts.load("80px Anton").catch(() => undefined);
+  if (theme.titleFont.startsWith("'Inter Tight'")) {
+    await Promise.all(["800 80px 'Inter Tight'", "400 40px 'Inter Tight'", "600 30px 'Inter Tight'"].map((f) => document.fonts.load(f).catch(() => undefined)));
+  }
 }
 
 /** Desenha a foto do produto (inteira) num cartão branco de cantos arredondados. */
@@ -234,7 +274,7 @@ export async function renderSlide(slide: Slide, index: number, total: number, de
   const product = slide.product_image && !slide.image_url ? await loadImage(slide.product_image) : null;
   // Anton tem um peso só (sem negrito falso) e fica em maiúsculas, como no site
   const brandFont = theme.titleFont === BRAND_TITLE;
-  const titleWeight = brandFont ? "400" : "700";
+  const titleWeight = brandFont ? "400" : theme.titleFont.startsWith("'Inter Tight'") ? "800" : "700";
   const titleText = brandFont ? (slide.title || "").toUpperCase() : slide.title || "";
   const title = fit(ctx, titleText, theme.titleFont, titleWeight, isCover ? 104 : 80, 44, maxWidth, product ? 3 : isCover ? 6 : 5);
   const body = slide.body ? fit(ctx, slide.body, theme.bodyFont, "400", product ? 38 : 46, 28, maxWidth, product ? 3 : 9) : { size: 0, lines: [] as string[] };

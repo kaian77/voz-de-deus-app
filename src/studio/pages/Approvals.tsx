@@ -273,6 +273,74 @@ function Autopilot() {
   );
 }
 
+/** Piloto do Instagram da PáginasPro: separado do da loja, só aparece com o @ da PáginasPro conectado. */
+function PaginasproAutopilot() {
+  const qc = useQueryClient();
+  const { data: settings } = useSettings();
+  const { data: accounts = [] } = useTable("social_accounts");
+  const [busy, setBusy] = useState(false);
+  const ig = accounts.find((a) => a.platform === "instagram" && a.meta?.brand === "paginaspro");
+  if (!ig) return null;
+  const enabled = settings?.pp_autopilot_enabled ?? true;
+  const perWeek = settings?.pp_autopilot_per_week ?? 3;
+
+  const save = async (patch: { pp_autopilot_enabled?: boolean; pp_autopilot_per_week?: number }) => {
+    try {
+      await api.saveSettings(patch);
+      qc.invalidateQueries({ queryKey: ["settings"] });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const createNow = async () => {
+    setBusy(true);
+    try {
+      const r = await api.invoke<{ created: unknown[] }>("ai", { action: "paginaspro_ideas", count: perWeek });
+      qc.invalidateQueries({ queryKey: ["table", "posts"] });
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      toast.success(r.created.length ? `${r.created.length} carrossel(éis) da PáginasPro aqui embaixo.` : "Nenhuma ideia nova agora.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Panel title={`Piloto automático · PáginasPro (@${ig.username})`} bodyClassName="p-0">
+      <label htmlFor="pp-autopilot" className="flex items-center justify-between gap-4 border-b px-4 py-3">
+        <span>
+          <span className="block text-[13px] font-medium">Criar posts da PáginasPro toda semana</span>
+          <span className="block text-xs text-muted-foreground">
+            Carrosséis nas cores da PáginasPro (tinta e limão) sobre por que ter site, como funciona a prévia, o Premium e os planos.
+            Sem promessa de resultado nem cliente inventado. Só posta no @{ig.username} e tudo chega aqui para você aprovar.
+            {settings?.pp_autopilot_last_run && !settings.pp_autopilot_error && Date.now() - new Date(settings.pp_autopilot_last_run).getTime() < 6 * 86400_000
+              ? ` Última vez: ${relativeTime(settings.pp_autopilot_last_run)}.`
+              : ""}
+          </span>
+          {settings?.pp_autopilot_error && (
+            <span className="mt-1 block text-xs text-danger">A última rodada falhou ({settings.pp_autopilot_error}). Tenta de novo em 1 hora.</span>
+          )}
+        </span>
+        <Switch id="pp-autopilot" checked={enabled} onCheckedChange={(v) => save({ pp_autopilot_enabled: v })} />
+      </label>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+        <Select value={String(perWeek)} onValueChange={(v) => save({ pp_autopilot_per_week: Number(v) })}>
+          <SelectTrigger className="h-8 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {[2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n} posts por semana</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button size="sm" variant="outline" className="h-8" onClick={createNow} disabled={busy}>
+          {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}
+          {busy ? "Criando (até 1 minuto)" : "Criar posts agora"}
+        </Button>
+      </div>
+    </Panel>
+  );
+}
+
 export default function Approvals() {
   const navigate = useNavigate();
   const { data: posts = [] } = useTable("posts");
@@ -324,6 +392,7 @@ export default function Approvals() {
       />
       <div className="space-y-4">
         <Autopilot />
+        <PaginasproAutopilot />
         <VideoAutopilot />
         {pending.length === 0 ? (
           <EmptyState icon={<Bot />} title="Nenhum post esperando aprovação">

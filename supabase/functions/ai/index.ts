@@ -15,6 +15,7 @@ import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
+import { generatePaginasproIdeas } from "../_shared/paginaspro-content.ts";
 import { finishStrategy, researchStrategy, startStrategy } from "../_shared/strategy.ts";
 import { brasiliaNow, digestMessage, salesSummary } from "../_shared/daily.ts";
 import { runVideosFor, videoAutopilotStatus } from "../_shared/video-autopilot.ts";
@@ -444,6 +445,12 @@ Deno.serve(async (req) => {
       // "Criar ideias agora": carrosséis vão para Aprovações; vídeos entram na fila e chegam lá quando ficam prontos
       const r = await generateIdeas(db, userId, { count: Number(input.count) || 4, focus: input.focus ? String(input.focus).slice(0, 500) : undefined });
       await db.from("brand_settings").update({ autopilot_last_run: new Date().toISOString(), autopilot_error: null }).eq("user_id", userId);
+      return json(r);
+    }
+    if (action === "paginaspro_ideas") {
+      // "Criar agora" do piloto da PáginasPro: carrosséis para o @ da PáginasPro em Aprovações
+      const r = await generatePaginasproIdeas(db, userId, { count: Number(input.count) || 3, focus: input.focus ? String(input.focus).slice(0, 500) : undefined });
+      await db.from("brand_settings").update({ pp_autopilot_last_run: new Date().toISOString(), pp_autopilot_error: null }).eq("user_id", userId);
       return json(r);
     }
     if (action === "video_post") {
