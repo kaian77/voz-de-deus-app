@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  BadgePercent, BarChart3, Bot, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Gauge, Inbox, Globe, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Star, Store, Workflow, Target, Youtube, Scissors,
+  BarChart3, Bot, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Gauge, Inbox, Globe, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Star, Store, Workflow, Target, Youtube, Scissors,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -56,7 +56,6 @@ const GROUPS: { label?: string; items: Item[] }[] = [
       { to: "/studio/landing", label: "Landing pages", icon: Globe },
       { to: "/studio/youtube", label: "Canal do YouTube", icon: Youtube },
       { to: "/studio/cortes", label: "Cortes", icon: Scissors },
-      { to: "/studio/achadinhos", label: "Achadinhos", icon: BadgePercent },
     ],
   },
   {
