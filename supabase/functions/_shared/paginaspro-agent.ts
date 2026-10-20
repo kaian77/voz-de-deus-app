@@ -69,6 +69,14 @@ function systemPrompt(o: Record<string, number | string>, channel: string) {
     `Antes de chamar, se ainda faltar foto ou cor, pergunte uma vez ("quer mandar umas fotos do seu trabalho e as cores da marca? fica bem mais a sua cara"). ` +
     `Ao chamar, passe TUDO o que a pessoa contou nos campos (serviços e diferenciais completos, cores, WhatsApp) e diga que em 1 ou 2 minutos o link chega aqui.\n` +
     `Se a pessoa pedir mudança numa prévia que já existe, chame montar_previa com o campo ajuste.\n\n` +
+    `MODELOS (explique quando a pessoa perguntar como fica, quais modelos tem, ou ao passar os planos):\n` +
+    `- Normal: limpo e direto, com fotos, serviços, horário, mapa e botão do WhatsApp.\n` +
+    `- Premium: animado (foto em 3D que mexe com o dedo, título que entra palavra por palavra, galeria, conversa do WhatsApp animada) ` +
+    `e uma animação interativa do ramo. Exemplos para ver no celular: ${SITE}/inicio#premium-interativo (as animações) e ${SITE}/inicio (o site da PáginasPro é feito no estilo Premium).\n` +
+    `Animações disponíveis no Premium: prato e água (nutrição), dente em camadas (odonto), corpo com pontos (fisio e clínicas), respiração guiada (psicologia), ` +
+    `pele em camadas (estética), caso passo a passo (advocacia), make em 5 etapas (maquiagem), processo de social media (marketing). ` +
+    `Se a pessoa quiser o Premium, pergunte UMA vez se quer a animação do ramo dela (diga qual combina), outra da lista ou nenhuma, e passe em montar_previa (modelo e animacao). ` +
+    `Se ela não escolher, o modelo é Normal e a animação fica automática pelo ramo.\n\n` +
     `PLANOS (só passe quando a pessoa perguntar valor ou disser que gostou):\n` +
     `- Mensal: ${brl(o.monthly)}/mês, sem taxa de entrada, inclui alterações sempre que precisar${link(o.monthlyLink)} (cartão, renova sozinho)\n` +
     `- Pagamento único: ${brl(o.oneTime)}, sem mensalidade; alteração depois ${brl(o.change)} cada${link(o.oneTimeLink)} (Pix, cartão ou boleto)\n` +
@@ -139,6 +147,7 @@ export async function paginasproReply(db: SupabaseClient, conversation: any, inb
         cores: { type: "string", description: "Cores da marca que a pessoa pediu (ex.: 'rosa e dourado' ou '#E75A8D'); vazio para tirar do logo/fotos" },
         whatsapp: { type: "string", description: "WhatsApp do negócio com DDD (só números), se a pessoa passou" },
         modelo: { type: "string", enum: ["normal", "premium"] },
+        animacao: { type: "string", enum: ["auto", "nenhuma", "nutricao", "odonto", "fisio", "psicologia", "estetica", "advocacia", "maquiagem", "marketing"], description: "Só no Premium: a animação que a pessoa escolheu (auto = pelo ramo)" },
         ajuste: { type: "string", description: "Só para mudar uma prévia que já existe: o que a pessoa pediu" },
       },
       required: ["nome", "ramo"],
@@ -198,6 +207,12 @@ export async function buildPreviewFromConversation(db: SupabaseClient, conversat
   return previewFromChat(db, conversation, `${who}\n${chat}`);
 }
 
+/** Animação pedida na conversa -> landing_pages.widget (null = pelo ramo). */
+const WIDGET_BY_NAME: Record<string, string | null> = {
+  auto: null, nenhuma: "none", nutricao: "plate", odonto: "tooth", fisio: "body", psicologia: "breath",
+  estetica: "skin", advocacia: "law", maquiagem: "makeup", marketing: "social",
+};
+
 /** "(61) 99999-0000" -> "5561999990000"; inválido -> null. */
 function waNumber(v?: string) {
   const d = String(v ?? "").replace(/\D/g, "").replace(/^0+/, "");
@@ -219,6 +234,7 @@ async function queuePreview(db: SupabaseClient, conversation: any, i: Record<str
     notes: [existing?.notes, i.servicos, i.cores && `Cores da marca: ${i.cores}`].filter(Boolean).join("\n").slice(0, 3000) || null,
     whatsapp: waNumber(i.whatsapp) ?? existing?.whatsapp ?? (conversation.channel === "whatsapp" ? conversation.contact_id : null),
     tier: i.modelo === "premium" ? "premium" : (existing?.tier ?? "normal"),
+    widget: i.animacao ? WIDGET_BY_NAME[i.animacao] ?? null : (existing?.widget ?? null),
     photos, conversation_id: conversation.id, auto_status: "queued", auto_error: null,
     auto_instructions: i.ajuste ? String(i.ajuste).slice(0, 1500) : null, updated_at: new Date().toISOString(),
   };

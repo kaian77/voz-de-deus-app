@@ -2,7 +2,7 @@
 // Cores e fontes do cliente; foto do topo num cartão 3D que segue o dedo/mouse, título palavra a palavra, faixa
 // rolando com as especialidades, serviços que abrem ao tocar, galeria arrastável, blocos em mosaico e mini conversa
 // do WhatsApp ao chamar. Chamado por renderLanding quando tier = "premium" (prévia do Studio e página publicada).
-import { WIDGET_CSS, WIDGET_JS, WIDGET_TITLE, widgetFor, widgetHtml } from "./widgets.js";
+import { WIDGET_CSS, WIDGET_JS, WIDGET_TITLE, widgetHtml, widgetOf } from "./widgets.js";
 import { esc, FONTS, headline, hex, mix, onColor, SAMPLE_HOURS, WA_ICON, whatsappLink, type LandingContent, type LandingData } from "./render.js";
 
 export function renderPremium(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean; track?: boolean } = {}): string {
@@ -208,7 +208,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
   ].filter(Boolean);
   const tagLine = tags.map((t) => `<span>${esc(t)}</span>`).join("");
   // Animação interativa do ramo (dente, prato, corpo, respiração, pele), quando houver uma para a área
-  const wk = widgetFor(`${d.niche} ${c.eyebrow ?? ""}`);
+  const wk = widgetOf(d.widget, `${d.niche} ${c.eyebrow ?? ""}`);
 
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">

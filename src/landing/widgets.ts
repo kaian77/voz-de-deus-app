@@ -18,6 +18,20 @@ export function widgetFor(niche: string): WidgetKind | null {
   return null;
 }
 
+/** Nome de cada animação (escolha no editor e no atendimento). */
+export const WIDGET_LABEL: Record<WidgetKind, string> = {
+  plate: "Prato e água (nutrição)", tooth: "Dente em camadas (odonto)", body: "Corpo com pontos (fisio e clínicas)",
+  breath: "Respiração guiada (psicologia)", skin: "Pele em camadas (estética)", law: "Caso passo a passo (advocacia)",
+  makeup: "Make em 5 etapas (maquiagem)", social: "Processo de social media (marketing)",
+};
+
+/** Animação da página: a escolhida (`widget`), nenhuma ("none") ou a do ramo. */
+export function widgetOf(choice: string | null | undefined, niche: string): WidgetKind | null {
+  if (choice === "none") return null;
+  if (choice && choice in WIDGET_LABEL) return choice as WidgetKind;
+  return widgetFor(niche);
+}
+
 export const WIDGET_TITLE: Record<WidgetKind, [string, string]> = {
   plate: ["Monte seu prato", "Toque nos grupos de alimentos e veja como fica um prato equilibrado."],
   tooth: ["Conheça o seu dente", "Mexa no dente e toque em cada camada para ver o que cuida dela."],
