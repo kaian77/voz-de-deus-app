@@ -158,6 +158,9 @@ section{padding:clamp(72px,10vw,120px) 0}
 .hero.split .photo{position:relative}
 .hero.split .photo img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:28px}
 .hero.split .photo:before{content:"";position:absolute;inset:auto -18px -18px auto;width:70%;height:70%;background:var(--soft);border-radius:28px;z-index:-1}
+.hero.split .mono{aspect-ratio:4/5;border-radius:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:32px;text-align:center;color:var(--on-p);background:radial-gradient(circle at 30% 20%,${mix(primary, "#ffffff", 0.25)},var(--p) 55%,${mix(primary, "#000000", 0.35)})}
+.hero.split .mono b{font-family:var(--head);font-size:clamp(96px,16vw,180px);line-height:1}
+.hero.split .mono span{font-weight:600;font-size:18px;opacity:.9}
 .hero .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px}
 .hero .lead{margin-top:22px}
 .trust{margin-top:28px;font-size:14px;color:var(--muted)}
@@ -244,7 +247,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
       : `<section class="hero split"><div class="wrap"><div>
   <span class="eyebrow">${esc(c.eyebrow)}</span><h1>${headline(c)}</h1><p class="lead">${esc(c.subheadline)}</p>
   <div class="actions">${cta()}<a class="btn ghost" href="#servicos">Conhecer os serviços</a></div>${rating}</div>
-  ${hero ? `<div class="photo"><img src="${esc(hero)}" alt="${esc(d.name)}"></div>` : ""}</div></section>`;
+  ${hero ? `<div class="photo"><img src="${esc(hero)}" alt="${esc(d.name)}"></div>` : `<div class="photo"><div class="mono" aria-hidden="true"><b>${esc((d.name.trim()[0] ?? "").toUpperCase())}</b><span>${esc(d.name)}</span></div></div>`}</div></section>`;
 
   const contactRows = [
     d.address && `<div><dt>Endereço</dt><dd>${esc(d.address)}</dd></div>`,
