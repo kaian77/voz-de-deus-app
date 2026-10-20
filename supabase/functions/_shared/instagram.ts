@@ -49,6 +49,8 @@ export function igAuthorizeUrl(redirectUri: string, state: string) {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", IG_SCOPES.join(","));
   url.searchParams.set("state", state);
+  // Pede login de novo: sem isso o Instagram entra direto na conta já aberta no navegador (ex.: a da loja ao conectar o @ da PáginasPro)
+  url.searchParams.set("force_reauth", "true");
   return url.toString();
 }
 
