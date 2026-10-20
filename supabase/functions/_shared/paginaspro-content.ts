@@ -57,7 +57,7 @@ async function usedKeys(db: SupabaseClient, userId: string) {
 }
 
 /** Cria `count` carrosséis da PáginasPro em Aprovações. */
-export async function generatePaginasproIdeas(db: SupabaseClient, userId: string, opts: { count?: number; focus?: string } = {}) {
+export async function generatePaginasproIdeas(db: SupabaseClient, userId: string, opts: { count?: number; focus?: string; format?: "reel" | "carousel" } = {}) {
   if (!aiEnabled()) throw new Error("Configure ANTHROPIC_API_KEY para o Studio criar conteúdo sozinho.");
   const count = Math.min(Math.max(opts.count ?? 3, 1), 7);
   const { data: accounts } = await db.from("social_accounts").select("*").eq("user_id", userId).eq("platform", "instagram");
@@ -85,7 +85,7 @@ export async function generatePaginasproIdeas(db: SupabaseClient, userId: string
       `Sites publicados até agora: ${sites ?? 0}${sites ? "" : " (ainda não há clientes para mostrar: não fale de clientes ou resultados)"}.\n` +
       `${opts.focus ? `Pedido do Bruno: ${opts.focus}\n` : ""}` +
       `Temas já usados (não repita): ${[...used].join(", ") || "nenhum"}.\n\n` +
-      `Crie ${count} posts variados (cerca de 1 em cada 3 como "reel", o resto "carousel") (misture os pilares educa, mostra, prova e oferta; no máximo 1 de oferta). ` +
+      `Crie ${count} posts variados (${opts.format ? `todos como "${opts.format}"` : 'cerca de 1 em cada 3 como "reel", o resto "carousel"'}) (misture os pilares educa, mostra, prova e oferta; no máximo 1 de oferta). ` +
       `Cada carrossel fala com um tipo de negócio ou com qualquer negócio local.`,
     "medium");
 
@@ -97,12 +97,12 @@ export async function generatePaginasproIdeas(db: SupabaseClient, userId: string
     const caption = `${idea.caption.trim()}\n\n${idea.hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ")}`;
     const { data, error } = await db.from("posts").insert({
       user_id: userId,
-      title: `PáginasPro: ${idea.theme}`,
-      kind: idea.format === "reel" ? "reel" : "carousel",
+      title: `PáginasPro${(opts.format ?? idea.format) === "reel" ? " · Reel" : ""}: ${idea.theme}`,
+      kind: (opts.format ?? idea.format) === "reel" ? "reel" : "carousel",
       platforms: ["instagram"],
       caption,
       media: [],
-      slides: idea.slides.slice(0, idea.format === "reel" ? 6 : 8).map((s) => ({ title: s.title, ...(s.body ? { body: s.body } : {}) })),
+      slides: idea.slides.slice(0, (opts.format ?? idea.format) === "reel" ? 6 : 8).map((s) => ({ title: s.title, ...(s.body ? { body: s.body } : {}) })),
       design: { theme: "paginaspro", handle: `@${ig.username}` },
       scheduled_at: at[i],
       status: "pending_approval",
