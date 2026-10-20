@@ -248,14 +248,6 @@ export async function runPaginasproJobs(db: SupabaseClient) {
         const { data } = await db.from("landing_pages").update(patch).eq("id", page.id).select().single();
         page = data ?? page;
       }
-      if (!page.photos?.length) {
-        if (page.conversation_id) {
-          await sendMessage(db, page.conversation_id, "Para montar o seu site eu preciso de pelo menos uma foto (do seu trabalho, do espaço ou sua). Pode me mandar aqui? 📸", "ai").catch(() => {});
-        }
-        await db.from("landing_pages").update({ auto_status: "need_photos" }).eq("id", page.id);
-        done.push({ id: page.id, need_photos: true });
-        continue;
-      }
       const adjusting = Boolean(page.content && page.auto_instructions);
       const content = await writeLanding(adjusting ? page : { ...page, content: null }, page.auto_instructions ?? undefined);
       const patch: Record<string, unknown> = { content, auto_status: "sent", auto_instructions: null, updated_at: new Date().toISOString() };
@@ -270,7 +262,8 @@ export async function runPaginasproJobs(db: SupabaseClient) {
         const first = page.name.split(/[\s·|-]+/)[0];
         const text = adjusting
           ? `Pronto, ajustei! Dá uma olhada: ${url}`
-          : `Pronto${first ? `, ${first}` : ""}! Montei a prévia do seu site: ${url}\n\nDá uma olhada com calma no celular e testa os botões. Se quiser mudar qualquer coisa (texto, foto, cor), é só me falar aqui.`;
+          : `Pronto${first ? `, ${first}` : ""}! Montei a prévia do seu site: ${url}\n\nDá uma olhada com calma no celular e testa os botões. Se quiser mudar qualquer coisa (texto, foto, cor), é só me falar aqui.` +
+            (page.photos?.length ? "" : "\n\nMontei sem foto por enquanto. Se mandar umas fotos suas ou do seu trabalho aqui, eu coloco no site e ele fica bem mais a sua cara. 📸");
         await sendMessage(db, page.conversation_id, text, "ai");
       }
       await notify(db, page.user_id, `🌐 Prévia enviada: ${page.name}`, url, "/studio/landing").catch(() => {});
