@@ -28,6 +28,11 @@ const INFO: Record<Platform, { name: string; features: string; note: string }> =
 function BrandSelect({ account }: { account: SocialAccount }) {
   const qc = useQueryClient();
   const change = async (brand: string) => {
+    // Trocar a marca muda quem responde as mensagens dessa conta (loja ou sites): confirma antes
+    const who = account.username ? `@${account.username}` : account.display_name;
+    if (!window.confirm(brand === "paginaspro"
+      ? `Marcar ${who} como PáginasPro? As mensagens dessa conta passam a ser atendidas pela IA de sites (não a da loja).`
+      : `Marcar ${who} como Brax Pins? As mensagens dessa conta passam a ser atendidas pela IA da loja.`)) return;
     try {
       await api.invoke("inbox", { action: "account_brand", account_id: account.id, brand });
       await qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });

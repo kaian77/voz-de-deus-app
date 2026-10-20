@@ -5,7 +5,7 @@
 import { OFFER, type Offer } from "../studio/lib/offer.js";
 import { WIDGET_CSS, WIDGET_JS, WIDGET_TITLE, widgetHtml, type WidgetKind } from "./widgets.js";
 
-const WG_TABS: [WidgetKind, string][] = [["plate", "Nutricionista"], ["tooth", "Dentista"], ["body", "Fisioterapia e clínicas"], ["breath", "Psicologia"], ["skin", "Estética e dermato"], ["law", "Advocacia"], ["makeup", "Maquiagem"]];
+const WG_TABS: [WidgetKind, string][] = [["plate", "Nutricionista"], ["tooth", "Dentista"], ["body", "Fisioterapia e clínicas"], ["breath", "Psicologia"], ["skin", "Estética e dermato"], ["law", "Advocacia"], ["makeup", "Maquiagem"], ["social", "Marketing e social media"]];
 
 const brl = (n: number) => n.toLocaleString("pt-BR");
 

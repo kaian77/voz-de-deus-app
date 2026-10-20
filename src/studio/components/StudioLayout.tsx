@@ -149,7 +149,7 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
 function Workspace() {
   const { data: settings } = useSettings();
   const { data: accounts } = useTable("social_accounts");
-  const ig = accounts?.find((a) => a.platform === "instagram");
+  const ig = accounts?.find((a) => a.platform === "instagram" && a.meta?.brand !== "paginaspro") ?? accounts?.find((a) => a.platform === "instagram");
   const name = settings?.brand_name || ig?.display_name || "Social Studio";
   return (
     <div className="flex items-center gap-2.5 px-2.5">
@@ -186,7 +186,7 @@ export default function StudioLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: accounts } = useTable("social_accounts");
-  const ig = accounts?.find((a) => a.platform === "instagram");
+  const ig = accounts?.find((a) => a.platform === "instagram" && a.meta?.brand !== "paginaspro") ?? accounts?.find((a) => a.platform === "instagram");
 
   const signOut = async () => {
     if (isDemo) {

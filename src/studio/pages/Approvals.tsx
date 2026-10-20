@@ -274,12 +274,22 @@ function Autopilot() {
   );
 }
 
+/** Tipos de animação do Reel da PáginasPro (cena do meio; "auto" varia de um Reel para outro). */
+const REEL_SCENES = [
+  ["auto", "Animação: automática"],
+  ["compare", "Celulares: sem site × com site"],
+  ["persona", "Bonequinho no celular"],
+  ["counter", "Contadores subindo/descendo"],
+  ["cards", "Só cards"],
+] as const;
+
 /** Piloto do Instagram da PáginasPro: separado do da loja, só aparece com o @ da PáginasPro conectado. */
 function PaginasproAutopilot() {
   const qc = useQueryClient();
   const { data: settings } = useSettings();
   const { data: accounts = [] } = useTable("social_accounts");
   const [busy, setBusy] = useState<"posts" | "reel" | null>(null);
+  const [scene, setScene] = useState("auto");
   const ig = accounts.find((a) => a.platform === "instagram" && a.meta?.brand === "paginaspro");
   if (!ig) return null;
   const enabled = settings?.pp_autopilot_enabled ?? true;
@@ -297,7 +307,7 @@ function PaginasproAutopilot() {
   const createNow = async (format?: "reel") => {
     setBusy(format === "reel" ? "reel" : "posts");
     try {
-      const r = await api.invoke<{ created: unknown[] }>("ai", { action: "paginaspro_ideas", count: format === "reel" ? 1 : perWeek, format });
+      const r = await api.invoke<{ created: unknown[] }>("ai", { action: "paginaspro_ideas", count: format === "reel" ? 1 : perWeek, format, scene: format === "reel" && scene !== "auto" ? scene : undefined });
       qc.invalidateQueries({ queryKey: ["table", "posts"] });
       qc.invalidateQueries({ queryKey: ["settings"] });
       toast.success(r.created.length
@@ -339,6 +349,12 @@ function PaginasproAutopilot() {
           {busy === "posts" ? <Loader2 className="animate-spin" /> : <Sparkles />}
           {busy === "posts" ? "Criando (até 1 minuto)" : "Criar posts agora"}
         </Button>
+        <Select value={scene} onValueChange={setScene}>
+          <SelectTrigger className="h-8 w-[190px] text-xs" aria-label="Tipo de animação do Reel"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {REEL_SCENES.map(([id, label]) => <SelectItem key={id} value={id}>{label}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <Button size="sm" variant="outline" className="h-8" onClick={() => createNow("reel")} disabled={busy !== null}>
           {busy === "reel" ? <Loader2 className="animate-spin" /> : <Clapperboard />}
           {busy === "reel" ? "Criando o Reel" : "Criar Reel agora"}
