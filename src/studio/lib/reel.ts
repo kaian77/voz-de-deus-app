@@ -1,6 +1,7 @@
 // Reels a partir dos slides do carrossel: cada slide entra deslizando num quadro 9:16 (1080x1920), com barrinhas
 // de progresso no topo e a marca embaixo, gravado do canvas em MP4 (MediaRecorder) — sem servidor de vídeo.
 import { renderSlide, SLIDE_H, SLIDE_W } from "./carousel";
+import { scheduleReelAudio, type Cue } from "./reel-audio";
 import { paginasproReel, type ReelScene } from "./reel-motion";
 import type { CarouselDesign, Slide } from "./types";
 
@@ -11,7 +12,8 @@ const FPS = 30;
 const ease = (t: number) => 1 - Math.pow(1 - Math.min(Math.max(t, 0), 1), 3);
 
 function mp4Type() {
-  const types = ["video/mp4;codecs=avc1.42E01E", "video/mp4;codecs=avc1", "video/mp4"];
+  // Com som (AAC) primeiro; sem suporte, o vídeo sai mudo mesmo
+  const types = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1,mp4a.40.2", "video/mp4;codecs=avc1.42E01E", "video/mp4;codecs=avc1", "video/mp4"];
   return typeof MediaRecorder !== "undefined" ? types.find((t) => MediaRecorder.isTypeSupported(t)) : undefined;
 }
 
@@ -35,7 +37,7 @@ export async function renderReel(slides: Slide[], design: CarouselDesign = {}, s
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d")!;
-    return record(canvas, type, motion.total, (t) => motion.draw(ctx, t));
+    return record(canvas, type, motion.total, (t) => motion.draw(ctx, t), motion.cues);
   }
   const frames = await Promise.all(slides.map((s, i) => renderSlide(s, i, slides.length, design)));
   const bg = pp ? "#111110" : "#0c0c0c";
@@ -117,14 +119,31 @@ export async function renderReel(slides: Slide[], design: CarouselDesign = {}, s
 }
 
 /** Desenha `draw(t)` a 30 quadros por segundo durante `total` segundos e grava o canvas em MP4. */
-async function record(canvas: HTMLCanvasElement, type: string, total: number, draw: (t: number) => void): Promise<Blob> {
+async function record(canvas: HTMLCanvasElement, type: string, total: number, draw: (t: number) => void, cues?: Cue[]): Promise<Blob> {
   draw(0);
   const stream = canvas.captureStream(FPS);
+  // Som: trilha + efeitos sintetizados, gravados junto com o vídeo
+  let audio: AudioContext | null = null;
+  let audioStart = 0;
+  if (cues && type.includes("mp4a") && typeof AudioContext !== "undefined") {
+    try {
+      audio = new AudioContext();
+      await audio.resume();
+      const dest = audio.createMediaStreamDestination();
+      audioStart = audio.currentTime + 0.15;
+      scheduleReelAudio(audio, dest, total, cues, audioStart);
+      dest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr));
+    } catch {
+      audio = null;
+    }
+  }
   const recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 6_000_000 });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   const done = new Promise<Blob>((resolve) => (recorder.onstop = () => resolve(new Blob(chunks, { type: "video/mp4" }))));
   recorder.start(500);
+  // Animação começa junto com o som
+  if (audio) await new Promise((r) => setTimeout(r, Math.max(0, (audioStart - audio!.currentTime) * 1000)));
   const t0 = performance.now();
   await new Promise<void>((resolve) => {
     // setInterval (não requestAnimationFrame): continua desenhando mesmo se o celular baixar a prioridade da aba
@@ -139,5 +158,7 @@ async function record(canvas: HTMLCanvasElement, type: string, total: number, dr
   });
   recorder.stop();
   stream.getTracks().forEach((tr) => tr.stop());
-  return done;
+  const blob = await done;
+  await audio?.close().catch(() => undefined);
+  return blob;
 }

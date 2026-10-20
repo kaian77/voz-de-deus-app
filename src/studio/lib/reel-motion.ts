@@ -1,6 +1,7 @@
 // Reel animado da PáginasPro (1080x1920), desenhado quadro a quadro no canvas a partir dos slides que a IA escreveu:
 // 1) gancho com as palavras pulando; 2) "sem site × com PáginasPro" com dois celulares (exemplo ilustrativo, marcado
 // como exemplo); 3) cartões dos passos voando; 4) chamada com botão pulsando. Cores e fontes da marca.
+import type { Cue } from "./reel-audio";
 import type { Slide } from "./types";
 
 export const W = 1080;
@@ -613,5 +614,24 @@ export function paginasproReel(slides: Slide[], scene: ReelScene = "compare") {
     ctx.fillRect(80, 120, (W - 160) * clamp(t / total), 8);
   };
 
-  return { total, draw };
+  // Momentos dos efeitos sonoros (mesmos tempos da animação)
+  const words = (text: string) => plain(text).split(/\s+/).filter(Boolean).length;
+  const cues: Cue[] = [{ t: 0.05, kind: "pop" }];
+  for (let i = 0; i < Math.min(words(hook), 12); i++) cues.push({ t: 0.3 + i * 0.12, kind: "pop" });
+  if (T_CMP > 0) {
+    const s0 = T_HOOK;
+    cues.push({ t: s0 - 0.25, kind: "whoosh" });
+    if (scene === "compare") cues.push({ t: s0 + 0.8, kind: "sad" }, { t: s0 + 1.4, kind: "whoosh" }, { t: s0 + 2.4, kind: "ding" });
+    if (scene === "persona") cues.push({ t: s0 + 1.0, kind: "sad" }, { t: s0 + 2.4, kind: "whoosh" }, { t: s0 + 3.7, kind: "pop" }, { t: s0 + 4.4, kind: "ding" });
+    if (scene === "counter") {
+      cues.push({ t: s0 + 1.4, kind: "whoosh" }, { t: s0 + 2.0, kind: "ding" });
+      for (let x = 0.4; x < 3.6; x += 0.12) cues.push({ t: s0 + x, kind: "tick" });
+    }
+  }
+  middle.forEach((_, k) => cues.push({ t: tCards + k * T_CARD - 0.1, kind: "whoosh" }, { t: tCards + k * T_CARD + 0.3, kind: "pop" }));
+  cues.push({ t: tEnd - 0.2, kind: "whoosh" });
+  for (let i = 0; i < Math.min(words(last.title), 10); i++) cues.push({ t: tEnd + i * 0.1, kind: "pop" });
+  cues.push({ t: tEnd + 1.25, kind: "ding" });
+
+  return { total, draw, cues };
 }
