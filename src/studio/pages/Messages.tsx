@@ -16,12 +16,83 @@ import { Avatar, EmptyState, PageHeader, PlatformIcon, relativeTime, StatusDot }
 const SENDER_LABEL: Record<Message["sender"], string> = { contact: "", ai: "Agente de IA", human: "Você", agent: "Claude" };
 const nameOf = (c: Conversation) => c.contact_name ?? c.contact_username ?? `+${c.contact_id.split("@")[0]}`;
 
+/** PáginasPro: prévia do site desta conversa — ver/copiar/mandar o link, ou criar com o que a conversa já tem. */
+function PreviewBar({ conversation }: { conversation: Conversation }) {
+  const { data: pages = [] } = useTable("landing_pages", { eq: { conversation_id: conversation.id } }, { refetchInterval: isDemo ? undefined : 15000 });
+  const invalidate = useInvalidate();
+  const [busy, setBusy] = useState<"build" | "send" | null>(null);
+  const page = pages[0];
+  const ready = page && !page.slug.startsWith("rascunho-");
+  const working = page && ["queued", "working"].includes(String(page.auto_status ?? ""));
+  const url = ready ? (page.status === "published" && page.domain ? `https://${page.domain}` : `https://paginaspro.app.br/p/${page.slug}`) : "";
+
+  const build = async () => {
+    setBusy("build");
+    try {
+      await api.invoke("inbox", { action: "pp_preview", conversation_id: conversation.id });
+      invalidate("landing_pages");
+      toast.success("Montando a prévia com o que a conversa já tem. Em 1 ou 2 minutos o link aparece aqui e chega para o cliente.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const send = async () => {
+    setBusy("send");
+    try {
+      await api.invoke("inbox", { action: "send", conversation_id: conversation.id, text: `Aqui está a prévia do seu site: ${url}` });
+      invalidate("messages");
+      toast.success("Link enviado na conversa.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copiado.");
+    } catch {
+      toast.error("Não consegui copiar. Segure o link para copiar.");
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b bg-secondary/40 px-4 py-2 text-xs">
+      <span className="font-medium">Site do cliente:</span>
+      {ready ? (
+        <>
+          <a href={url} target="_blank" rel="noreferrer" className="min-w-0 max-w-full truncate text-brand underline">{url.replace(/^https:\/\//, "")}</a>
+          <StatusDot tone={page.status === "published" ? "success" : "brand"}>{page.status === "published" ? "no ar" : "prévia"}</StatusDot>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={copy}>Copiar</Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={send} disabled={busy !== null}>{busy === "send" && <Loader2 className="animate-spin" />}Mandar o link</Button>
+          <Button asChild size="sm" variant="ghost" className="h-7 text-xs"><Link to="/studio/landings">Abrir no editor</Link></Button>
+        </>
+      ) : working ? (
+        <span className="flex items-center gap-1.5 text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> montando a prévia…</span>
+      ) : (
+        <span className="text-muted-foreground">{page?.auto_status === "failed" ? `não deu certo${page.auto_error ? ` (${page.auto_error})` : ""}.` : "ainda não tem prévia."}</span>
+      )}
+      {!working && (
+        <Button size="sm" variant={ready ? "ghost" : "default"} className="ml-auto h-7 text-xs" onClick={build} disabled={busy !== null}>
+          {busy === "build" ? <Loader2 className="animate-spin" /> : <Sparkles />}
+          {ready ? "Refazer com a conversa" : "Criar prévia com a conversa"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function Thread({ conversation, onBack }: { conversation: Conversation; onBack: () => void }) {
   const { data: messages = [] } = useTable("messages", { eq: { conversation_id: conversation.id }, order: "created_at", ascending: true }, { refetchInterval: isDemo ? undefined : 15000 });
   const saveConv = useSaveRow("conversations");
   const invalidate = useInvalidate();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState<"send" | "suggest" | null>(null);
+  const { data: accounts = [] } = useTable("social_accounts");
+  const isPaginasPro = accounts.some((a) => a.id === conversation.account_id && a.meta?.brand === "paginaspro");
   const resume = async () => {
     try {
       const r = await api.invoke<{ replying: boolean }>("inbox", { action: "resume", conversation_id: conversation.id });
@@ -97,6 +168,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
           <Button size="sm" variant="ghost" className="h-8" onClick={() => saveConv.mutate({ id: conversation.id, status: "needs_human", handoff_reason: "Assumida por você" })}>Assumir conversa</Button>
         )}
       </header>
+      {isPaginasPro && <PreviewBar conversation={conversation} />}
       {conversation.status === "needs_human" && (
         <div className="flex items-center gap-2 border-b bg-secondary/50 px-4 py-2 text-xs">
           <StatusDot tone="warning">Com você</StatusDot>

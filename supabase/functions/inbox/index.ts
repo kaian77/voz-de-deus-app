@@ -11,6 +11,7 @@
 // Nos dois: label ("Loja", "Pessoal"...) e agent (a IA responde sozinha nesse número?). Dá para ter vários números.
 import { adminClient, assertPublicHttpsUrl, corsHeaders, functionsUrl, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { autoReply, draftReply, sendMessage } from "../_shared/inbox.ts";
+import { buildPreviewFromConversation } from "../_shared/paginaspro-agent.ts";
 import { agentAllowed, waExchangeCode, waPhoneInfo, waSignupConfig, waSubscribeApp, waSyncCoexistence, wahaSession, wahaSetWebhook, wahaStart } from "../_shared/whatsapp.ts";
 import { aiEnabled } from "../_shared/claude.ts";
 import { saleMessage, sendWhatsAppTo } from "../_shared/sale-alerts.ts";
@@ -53,6 +54,13 @@ Deno.serve(async (req) => {
           else await job;
         }
         return json({ ok: true, replying: last?.direction === "in" });
+      }
+      case "pp_preview": {
+        // PáginasPro: monta a prévia com o que a conversa já tem (quando a IA não conseguiu); o link chega na conversa sozinho
+        const conv = await ownConversation(body.conversation_id);
+        const r = await buildPreviewFromConversation(db, conv);
+        if ("erro" in r) throw new HttpError(400, String(r.erro));
+        return json(r);
       }
       case "suggest": {
         if (!aiEnabled()) throw new HttpError(400, "Configure ANTHROPIC_API_KEY para usar a IA.");

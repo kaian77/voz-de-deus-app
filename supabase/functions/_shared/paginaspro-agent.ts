@@ -152,10 +152,7 @@ export async function paginasproReply(db: SupabaseClient, conversation: any, inb
     const { data: now } = await db.from("landing_pages").select("auto_status,slug").eq("conversation_id", conversation.id).maybeSingle();
     const queued = now && (now.auto_status === "queued" || now.auto_status === "working" || !now.slug.startsWith("rascunho-"));
     if (!queued) {
-      const fields = await generateJSON(PreviewFields,
-        "Extraia da conversa os dados do negócio do CLIENTE para montar o site. Só o que foi dito; vazio quando não foi dito.",
-        `${chat}${reply ? `\nEU: ${reply}` : ""}`, "low").catch(() => null);
-      const r = fields ? await queuePreview(db, conversation, fields as unknown as Record<string, string>) : { erro: "sem dados" };
+      const r = await previewFromChat(db, conversation, `${chat}${reply ? `\nEU: ${reply}` : ""}`);
       if ("erro" in r) console.error("montar_previa (rede de segurança)", conversation.id, r.erro);
     }
   }
@@ -173,6 +170,24 @@ const PreviewFields = z.object({
   servicos: z.string().describe("serviços, diferenciais e tudo de real que o cliente contou"),
   cores: z.string(), whatsapp: z.string(),
 });
+
+// deno-lint-ignore no-explicit-any
+async function previewFromChat(db: SupabaseClient, conversation: any, chat: string) {
+  const fields = await generateJSON(PreviewFields,
+    "Extraia da conversa os dados do negócio do CLIENTE para montar o site. Só o que foi dito; vazio quando não foi dito. " +
+      "Se o nome do negócio não foi dito, use o nome da pessoa ou o @ do Instagram.",
+    chat, "low").catch(() => null);
+  return fields ? queuePreview(db, conversation, fields as unknown as Record<string, string>) : { erro: "não consegui ler os dados da conversa" };
+}
+
+/** Botão "Criar prévia com a conversa" (Mensagens): resume a conversa e põe a prévia na fila; o link chega sozinho. */
+// deno-lint-ignore no-explicit-any
+export async function buildPreviewFromConversation(db: SupabaseClient, conversation: any) {
+  const history = await transcript(db, conversation.id, 60);
+  const chat = history.map((m) => `${m.direction === "in" ? "CLIENTE" : m.sender === "human" ? "BRUNO" : "EU"}: ${m.text}`).join("\n");
+  const who = `Contato: ${conversation.contact_name ?? ""} (@${conversation.contact_username ?? ""})`;
+  return previewFromChat(db, conversation, `${who}\n${chat}`);
+}
 
 /** "(61) 99999-0000" -> "5561999990000"; inválido -> null. */
 function waNumber(v?: string) {

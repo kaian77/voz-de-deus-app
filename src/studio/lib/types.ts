@@ -392,6 +392,9 @@ export interface LandingPage {
   preview_until: string | null;
   /** Domínio próprio do cliente (sem www), quando publicada */
   domain: string | null;
+  conversation_id?: string | null;
+  auto_status?: "queued" | "working" | "done" | "failed" | null;
+  auto_error?: string | null;
   /** monthly = plano mensal (painel de resultados /r/<report_token> + alterações inclusas) */
   plan: "none" | "monthly";
   report_token: string | null;
