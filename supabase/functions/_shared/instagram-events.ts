@@ -3,7 +3,7 @@ import { isPaginasPro } from "./brand.ts";
 import { storeClientPhoto } from "./paginaspro-agent.ts";
 import { adminClient } from "./util.ts";
 import { igPrivateReply, igReplyToComment, igRequest, igTokenFor } from "./instagram.ts";
-import { autoReply, recordInbound } from "./inbox.ts";
+import { autoReply, recordEcho, recordInbound } from "./inbox.ts";
 import { aiEnabled, brandContext, generateText } from "./claude.ts";
 import { matches } from "./matching.ts";
 
@@ -113,8 +113,24 @@ export type MessagingEvent = {
 
 export async function handleDirectMessage(igUserId: string, event: MessagingEvent) {
   const msg = event.message;
-  if (!msg || msg.is_echo || event.sender.id === igUserId) return; // ignora mensagens enviadas pela própria conta
+  if (!msg) return;
+  const fromSelf = msg.is_echo || event.sender.id === igUserId;
   const db = adminClient();
+  if (fromSelf) {
+    // PáginasPro: o que o Bruno manda pelo app (ex.: a abordagem do lead) entra no histórico como dele; a IA
+    // segue a conversa quando o lead responder e espera 3 h se ele estiver conversando. Na Brax Pins é ignorado.
+    if (!event.recipient?.id || event.recipient.id === igUserId) return;
+    const { data: own } = await db.from("social_accounts").select("*").eq("platform", "instagram").eq("external_id", igUserId).maybeSingle();
+    if (!own || !isPaginasPro(own.meta)) return;
+    // Dá tempo de a IA gravar a própria mensagem antes (o eco chega também para o que a API manda)
+    await new Promise((r) => setTimeout(r, 4000));
+    const text = msg.text ?? (msg.attachments?.length ? "[anexo]" : "");
+    if (!text) return;
+    const profile = await igRequest<{ name?: string; username?: string }>(await igTokenFor(db, own.id), event.recipient.id, { params: { fields: "name,username" } })
+      .catch(() => ({} as { name?: string; username?: string }));
+    await recordEcho(db, own, event.recipient.id, { externalId: msg.mid, text }, "instagram", profile);
+    return;
+  }
   const { data: account } = await db.from("social_accounts").select("*").eq("platform", "instagram").eq("external_id", igUserId).maybeSingle();
   if (!account) return;
 

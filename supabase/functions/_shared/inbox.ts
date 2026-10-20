@@ -74,21 +74,32 @@ export async function recordInbound(
 }
 
 /**
- * Mensagem que o dono mandou pelo app do WhatsApp Business (coexistência): entra no histórico como "human".
- * A primeira mensagem dele (a abordagem do lead) já cria a conversa; quando o lead responder, a IA assume.
+ * Mensagem que o dono mandou pelo app (WhatsApp Business em coexistência ou direct do Instagram da PáginasPro):
+ * entra no histórico como "human". A primeira mensagem dele (a abordagem do lead) já cria a conversa; quando o
+ * lead responder, a IA assume.
  */
 export async function recordEcho(
   db: SupabaseClient,
   account: { id: string; user_id: string; meta?: any },
   contactId: string,
   message: { externalId: string; text: string },
+  channel: "whatsapp" | "instagram" = "whatsapp",
+  contact: { name?: string; username?: string } = {},
 ) {
   const { data: found } = await db.from("conversations").select("*").eq("account_id", account.id).eq("contact_id", contactId).maybeSingle();
   const conversation = found ?? (await db.from("conversations").insert({
-    user_id: account.user_id, account_id: account.id, channel: "whatsapp", contact_id: contactId,
-    ai_enabled: agentAllowed(account.meta, contactId),
+    user_id: account.user_id, account_id: account.id, channel, contact_id: contactId,
+    ai_enabled: channel === "whatsapp" ? agentAllowed(account.meta, contactId) : true,
+    contact_name: contact.name ?? null, contact_username: contact.username ?? null,
   }).select().single()).data;
   if (!conversation) return null;
+  // O eco do Instagram também chega para o que a própria IA mandou: mesmo texto enviado há pouco não é do dono
+  if (found) {
+    const since = new Date(Date.now() - 5 * 60_000).toISOString();
+    const { data: recent } = await db.from("messages").select("id").eq("conversation_id", conversation.id).eq("direction", "out")
+      .neq("sender", "human").eq("text", message.text).gte("created_at", since).limit(1);
+    if (recent?.length) return null;
+  }
   const { error } = await db.from("messages").insert({
     user_id: account.user_id, conversation_id: conversation.id, direction: "out", sender: "human",
     text: message.text, external_id: message.externalId,
