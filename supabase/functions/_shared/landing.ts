@@ -96,6 +96,15 @@ export async function uniqueSlug(db: SupabaseClient, name: string, id: string) {
   return `${base}-${id.slice(0, 6)}`;
 }
 
+/** Mudança de status (botões do editor e pagamento confirmado): preview = link para a cliente ver (sem indexar, faixa
+ * "Prévia", vale 7 dias); published = no ar; draft = tira do ar. Rascunho ganha o endereço com o nome do cliente. */
+export async function publishPatch(db: SupabaseClient, page: { id: string; name: string; slug: string }, mode: "preview" | "published" | "draft") {
+  const patch: Record<string, unknown> = { status: mode, updated_at: new Date().toISOString() };
+  if (mode === "preview") patch.preview_until = new Date(Date.now() + 7 * 86400_000).toISOString();
+  if (mode !== "draft" && page.slug.startsWith("rascunho-")) patch.slug = await uniqueSlug(db, page.name, page.id);
+  return patch;
+}
+
 // ---------------------------------------------------------------------------
 // Dados reais do cliente: Instagram (bio + fotos dos posts) e Google Maps (horário, fotos, categoria, descrição).
 // Espaço: fotos do Google entram só como link (não expiram, não ocupam o storage); as do Instagram expiram,

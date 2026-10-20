@@ -66,6 +66,8 @@ jobs:
       META_APP_ID: ${{ vars.META_APP_ID || secrets.META_APP_ID }}
       WA_ES_CONFIG_ID: ${{ vars.WA_ES_CONFIG_ID || secrets.WA_ES_CONFIG_ID }}
       META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
+      # PáginasPro: pagou → publica (Mercado Pago → Suas integrações → Credenciais de produção → Access Token)
+      MERCADOPAGO_ACCESS_TOKEN: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1

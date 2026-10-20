@@ -42,3 +42,7 @@ verify_jwt = false
 
 [functions.oauth-youtube]
 verify_jwt = false
+
+# Avisos de pagamento do Mercado Pago (PáginasPro); o pagamento é conferido na API do Mercado Pago
+[functions.mercadopago-webhook]
+verify_jwt = false
