@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
 import { useTable } from "../lib/hooks";
-import { renderAndUploadSlides } from "../lib/publishing";
+import { renderPostMedia } from "../lib/publishing";
 import type { Platform, Post } from "../lib/types";
 import TikTokSettings, { TIKTOK_DEFAULTS, tiktokProblem, toApiOptions, useTikTokCreator, type TikTokOptions } from "../components/TikTokSettings";
 import { PageHeader, Panel, PlatformIcon, SlidePreview, toLocalInput } from "../components/bits";
@@ -304,10 +304,10 @@ export default function BulkSchedule() {
         const scheduled_at = new Date(schedule[it.id]!).toISOString();
         if (it.post) {
           const p = it.post;
-          const slides = p.slides?.length && !p.media.length ? (p.kind === "carousel" ? p.slides : p.slides.slice(0, 1)) : null;
           await api.update("posts", p.id, {
-            platforms: p.kind === "story" ? p.platforms : platforms,
-            media: slides ? await renderAndUploadSlides(slides, p.design) : p.media,
+            // Post da PáginasPro fica só no Instagram dela (nunca no TikTok/Instagram da loja)
+            platforms: p.kind === "story" || p.options?.brand === "paginaspro" ? p.platforms : platforms,
+            media: await renderPostMedia(p),
             caption,
             scheduled_at,
             status: "scheduled",
