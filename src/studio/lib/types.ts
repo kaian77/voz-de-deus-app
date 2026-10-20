@@ -19,7 +19,7 @@ export interface Slide {
   product_image?: string;
 }
 
-export type ThemeId = "marca" | "divino" | "claro" | "escuro" | "papel" | "vibrante";
+export type ThemeId = "marca" | "divino" | "claro" | "escuro" | "papel" | "vibrante" | "paginaspro";
 
 export interface CarouselDesign {
   theme?: ThemeId;
@@ -233,6 +233,10 @@ export interface BrandSettings {
   marketplace_autopublish?: boolean;
   autopilot_enabled?: boolean;
   autopilot_per_week?: number;
+  pp_autopilot_enabled?: boolean;
+  pp_autopilot_per_week?: number;
+  pp_autopilot_last_run?: string | null;
+  pp_autopilot_error?: string | null;
   autopilot_last_run?: string | null;
   autopilot_error?: string | null;
   sale_alert_phone?: string | null;

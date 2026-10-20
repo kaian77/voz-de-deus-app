@@ -13,6 +13,7 @@ import { wahaKeepAlive } from "../_shared/whatsapp.ts";
 import { runSaleAlerts } from "../_shared/sale-alerts.ts";
 import { runDailyDigest } from "../_shared/daily.ts";
 import { runDailyVideos } from "../_shared/video-autopilot.ts";
+import { runPaginasproAutopilot } from "../_shared/paginaspro-content.ts";
 import { sendPendingReviewEmails } from "../_shared/reviews.ts";
 import { runMlSync, watchNewProducts } from "../_shared/ml-sync.ts";
 import { ytAutopilot } from "../_shared/youtube.ts";
@@ -56,6 +57,10 @@ Deno.serve(async (req) => {
     const autopilot = new Date().getUTCMinutes() % 10 === 5
       ? await runAutopilot(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
       : undefined;
+    // Piloto do Instagram da PáginasPro (separado do da loja), também a cada 10 minutos
+    const ppautopilot = new Date().getUTCMinutes() % 10 === 7
+      ? await runPaginasproAutopilot(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
+      : undefined;
     // Uma vez por hora: apaga os vídeos antigos (já baixados ou publicados) para liberar espaço
     // e, uma vez por dia (4h50 de Brasília), a faxina do botão "Otimizar agora": vídeos usados com mais de 3 dias
     // e arquivos que ficaram sem registro
@@ -94,7 +99,7 @@ Deno.serve(async (req) => {
     // PáginasPro: prévias pedidas pelo atendente (a IA leva ~1 min; roda em segundo plano)
     const paginaspro = runPaginasproJobs(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(paginaspro);
-    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, cleanup, waha, mlsync, mlnew, sales, reviews, push });
+    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, mlnew, sales, reviews, push });
   } catch (err) {
     return handleError(err);
   }
