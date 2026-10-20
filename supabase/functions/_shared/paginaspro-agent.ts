@@ -42,7 +42,8 @@ const FINAL: AgentTool = {
     type: "object",
     properties: {
       reply: { type: "string", description: "Mensagem a enviar (curta, como no WhatsApp). Vazia se handoff sem mensagem." },
-      handoff: { type: "boolean", description: "true quando o Bruno precisa assumir ou ser avisado (pagou, pediu desconto, assunto que você não sabe)" },
+      ignore: { type: "boolean", description: "true para NÃO responder nada: menção em story, post/reels compartilhado, reação, figurinha, elogio solto ou assunto que não tem a ver com site/negócio" },
+      handoff: { type: "boolean", description: "true quando o Bruno precisa assumir ou ser avisado (pagou, pediu desconto, dúvida sobre o serviço que você não sabe)" },
       handoff_reason: { type: "string", description: "Motivo curto do aviso ao Bruno, ou vazio" },
     },
     required: ["reply", "handoff", "handoff_reason"],
@@ -80,7 +81,10 @@ function systemPrompt(o: Record<string, number | string>, channel: string) {
     `Senão agradeça, diga que o site entra no ar assim que o pagamento for confirmado e handoff=true com motivo "pagou".\n` +
     `- Não repita links ou perguntas que já foram mandados na conversa. Responda a tudo o que a pessoa disse numa mensagem só.\n` +
     `- Mensagens com [foto enviada] são fotos que a pessoa mandou: elas já vão para o site, agradeça e siga.\n` +
-    `- Assunto fora de site/negócio, reclamação séria ou algo que você não sabe: handoff=true com reply curto ("vou ver isso e já te respondo").`
+    `- NÃO responda (ignore=true, reply vazio, handoff=false): menção em story, post ou reels compartilhado, reação, figurinha, áudio/foto sem contexto ` +
+    `antes de a pessoa falar de site, elogio ou comentário solto, conversa pessoal, spam, propaganda e qualquer assunto que não tenha a ver com site para o negócio dela. ` +
+    `Cumprimento ("oi", "olá") de quem chegou agora você responde, porque costuma ser um cliente puxando conversa.\n` +
+    `- Reclamação séria ou dúvida sobre o serviço que você não sabe: handoff=true com reply curto ("vou ver isso e já te respondo").`
   );
 }
 
@@ -95,6 +99,10 @@ export async function paginasproReply(db: SupabaseClient, conversation: any, inb
   };
   await sleep(8000); // espera a pessoa terminar de mandar (fotos chegam em sequência)
   if (!(await isLatest())) return;
+  // Menção em story, compartilhamento, reação e afins nem passam pela IA (só foto conta: vai para o site)
+  const { data: inbound } = await db.from("messages").select("text,media_url").eq("id", inboundMessageId).maybeSingle();
+  const marker = String(inbound?.text ?? "").match(/^\[(.+) enviad[oa]\]$/)?.[1] ?? "";
+  if (/story_mention|story|share|reel|ig_reel|reaction|sticker|template|like_heart/i.test(marker) && !inbound?.media_url) return;
 
   const history = await transcript(db, conversation.id, 40);
   // O Bruno está conversando pelo app: a IA não se mete por 3 horas. A 1ª mensagem dele (a abordagem) não conta.
@@ -139,13 +147,14 @@ export async function paginasproReply(db: SupabaseClient, conversation: any, inb
   };
 
   const chat = history.map((m) => `${m.direction === "in" ? "CLIENTE" : m.sender === "human" ? "BRUNO" : "EU"}: ${m.text}`).join("\n");
-  const result = await runAgent<{ reply: string; handoff: boolean; handoff_reason: string }>(
+  const result = await runAgent<{ reply: string; ignore?: boolean; handoff: boolean; handoff_reason: string }>(
     systemPrompt(offer, conversation.channel),
     `Contato: ${conversation.contact_name ?? conversation.contact_username ?? "sem nome"}\n${state}\n\nConversa:\n${chat}\n\n` +
       `Escreva a próxima mensagem (EU). Termine com a ferramenta responder.`,
     [tool, FINAL], "medium",
   );
   if (!(await isLatest())) return;
+  if (result.ignore && !result.handoff) return; // fora do assunto: fica sem resposta
   const reply = String(result.reply ?? "").trim();
   // Rede de segurança: a resposta diz que a prévia está sendo montada, mas nada entrou na fila -> monta com o que a conversa já tem
   if (/montand|link chega|em 1 ou 2 minutos|já (estou|vou) mont/i.test(reply)) {
