@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { api, isDemo } from "../lib/api";
 import { useInvalidate, useSettings, useTable } from "../lib/hooks";
-import { renderAndUploadSlides } from "../lib/publishing";
+import { renderPostMedia } from "../lib/publishing";
 import type { Post } from "../lib/types";
 import { EmptyState, formatDateTime, KIND_LABEL, PageHeader, Panel, PlatformIcon, relativeTime, SectionLabel, SlidePreview, StatusDot } from "../components/bits";
 import { PostThumb } from "../components/PostThumb";
@@ -21,8 +21,8 @@ const fileName = (post: Post) =>
 
 /** Aprova um post: renderiza os slides (se houver) e agenda no horário sugerido; sem horário futuro vira rascunho. */
 async function approvePost(post: Post) {
-  const slides = post.slides?.length && !post.media.length ? (post.kind === "carousel" ? post.slides : post.slides.slice(0, 1)) : null;
-  const media = slides ? await renderAndUploadSlides(slides, post.design) : post.media;
+  if (post.kind === "reel" && post.slides?.length && !post.media.length) toast.info("Gravando o Reel (uns 20 segundos). Deixe esta tela aberta.");
+  const media = await renderPostMedia(post);
   const future = !!post.scheduled_at && new Date(post.scheduled_at) > new Date();
   await api.update("posts", post.id, { media, status: future ? "scheduled" : "draft" });
   return future;
@@ -31,7 +31,7 @@ async function approvePost(post: Post) {
 function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: boolean; onSelect: (v: boolean) => void }) {
   const invalidate = useInvalidate();
   const [busy, setBusy] = useState<"approve" | "reject" | "publish" | null>(null);
-  const slides = post.slides?.length && !post.media.length ? (post.kind === "carousel" ? post.slides : post.slides.slice(0, 1)) : null;
+  const slides = post.slides?.length && !post.media.length ? (["carousel", "reel"].includes(post.kind) ? post.slides : post.slides.slice(0, 1)) : null;
 
   const approve = async () => {
     setBusy("approve");
@@ -49,7 +49,8 @@ function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: bool
   const publish = async () => {
     setBusy("publish");
     try {
-      const media = slides ? await renderAndUploadSlides(slides, post.design) : post.media;
+      if (post.kind === "reel" && slides) toast.info("Gravando o Reel (uns 20 segundos). Deixe esta tela aberta.");
+      const media = await renderPostMedia(post);
       const saved = await api.update("posts", post.id, { media, status: "publishing", scheduled_at: new Date().toISOString() });
       const result = await api.publishNow(saved);
       toastPublishResult(result);

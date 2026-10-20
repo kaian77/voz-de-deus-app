@@ -10,6 +10,7 @@ import { upcomingDates } from "./content-ideas.ts";
 const Idea = z.object({
   key: z.string().describe("identificador único do tema, minúsculo com hífens, ex.: 'cliente-nao-acha-no-google'"),
   theme: z.string().describe("tema em poucas palavras"),
+  format: z.enum(["carousel", "reel"]).describe("reel = vídeo vertical curto feito dos slides (4 a 6 slides, títulos curtos e fortes); carousel = carrossel"),
   pillar: z.enum(["educa", "mostra", "prova", "oferta"]).describe(
     "educa = por que ter site / dicas; mostra = como funciona, prévia, animações do Premium; prova = bastidores e processo real; oferta = planos e chamada"),
   why: z.string().describe("1 frase: por que este post e para quem"),
@@ -84,7 +85,7 @@ export async function generatePaginasproIdeas(db: SupabaseClient, userId: string
       `Sites publicados até agora: ${sites ?? 0}${sites ? "" : " (ainda não há clientes para mostrar: não fale de clientes ou resultados)"}.\n` +
       `${opts.focus ? `Pedido do Bruno: ${opts.focus}\n` : ""}` +
       `Temas já usados (não repita): ${[...used].join(", ") || "nenhum"}.\n\n` +
-      `Crie ${count} carrosséis variados (misture os pilares educa, mostra, prova e oferta; no máximo 1 de oferta). ` +
+      `Crie ${count} posts variados (cerca de 1 em cada 3 como "reel", o resto "carousel") (misture os pilares educa, mostra, prova e oferta; no máximo 1 de oferta). ` +
       `Cada carrossel fala com um tipo de negócio ou com qualquer negócio local.`,
     "medium");
 
@@ -97,11 +98,11 @@ export async function generatePaginasproIdeas(db: SupabaseClient, userId: string
     const { data, error } = await db.from("posts").insert({
       user_id: userId,
       title: `PáginasPro: ${idea.theme}`,
-      kind: "carousel",
+      kind: idea.format === "reel" ? "reel" : "carousel",
       platforms: ["instagram"],
       caption,
       media: [],
-      slides: idea.slides.slice(0, 8).map((s) => ({ title: s.title, ...(s.body ? { body: s.body } : {}) })),
+      slides: idea.slides.slice(0, idea.format === "reel" ? 6 : 8).map((s) => ({ title: s.title, ...(s.body ? { body: s.body } : {}) })),
       design: { theme: "paginaspro", handle: `@${ig.username}` },
       scheduled_at: at[i],
       status: "pending_approval",
