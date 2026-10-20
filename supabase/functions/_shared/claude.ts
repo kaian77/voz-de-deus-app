@@ -145,7 +145,14 @@ export async function runAgent<T>(system: string, prompt: string, tools: AgentTo
     if (response.stop_reason === "refusal") throw new Error("A IA recusou este pedido.");
     const calls = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
     const done = calls.find((c) => c.name === final.name);
-    if (done) return done.input as T;
+    if (done) {
+      // A IA pode chamar uma ferramenta (ex.: montar_previa) e responder na mesma vez: roda as ferramentas antes
+      for (const call of calls) {
+        const tool = tools.find((t) => t.name === call.name);
+        if (call !== done && tool?.run) await Promise.resolve(tool.run(call.input)).catch((e) => console.error("ferramenta", call.name, e));
+      }
+      return done.input as T;
+    }
     messages.push({ role: "assistant", content: response.content });
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const call of calls) {

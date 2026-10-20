@@ -3,7 +3,8 @@
 // A prévia é montada pelo cron (runPaginasproJobs): importa Instagram, a IA escreve, publica como prévia e manda o link
 // na conversa. Regras: nada de promessa de resultado, desconto ou informação inventada; dúvida que não sabe vira handoff.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { type AgentTool, aiEnabled, runAgent } from "./claude.ts";
+import { z } from "npm:zod@4";
+import { type AgentTool, aiEnabled, generateJSON, runAgent } from "./claude.ts";
 import { importClientData, uniqueSlug, writeLanding } from "./landing.ts";
 import { sendMessage, transcript } from "./inbox.ts";
 import { notify } from "./push.ts";
@@ -146,12 +147,32 @@ export async function paginasproReply(db: SupabaseClient, conversation: any, inb
   );
   if (!(await isLatest())) return;
   const reply = String(result.reply ?? "").trim();
+  // Rede de segurança: a resposta diz que a prévia está sendo montada, mas nada entrou na fila -> monta com o que a conversa já tem
+  if (/montand|link chega|em 1 ou 2 minutos|já (estou|vou) mont/i.test(reply)) {
+    const { data: now } = await db.from("landing_pages").select("auto_status,slug").eq("conversation_id", conversation.id).maybeSingle();
+    const queued = now && (now.auto_status === "queued" || now.auto_status === "working" || !now.slug.startsWith("rascunho-"));
+    if (!queued) {
+      const fields = await generateJSON(PreviewFields,
+        "Extraia da conversa os dados do negócio do CLIENTE para montar o site. Só o que foi dito; vazio quando não foi dito.",
+        `${chat}${reply ? `\nEU: ${reply}` : ""}`, "low").catch(() => null);
+      const r = fields ? await queuePreview(db, conversation, fields as unknown as Record<string, string>) : { erro: "sem dados" };
+      if ("erro" in r) console.error("montar_previa (rede de segurança)", conversation.id, r.erro);
+    }
+  }
   if (result.handoff) {
     await db.from("conversations").update({ status: "needs_human", handoff_reason: result.handoff_reason || "Atendimento" }).eq("id", conversation.id);
     await notify(db, conversation.user_id, `🌐 PáginasPro: ${conversation.contact_name ?? "cliente"} precisa de você`, result.handoff_reason || "", "/studio/mensagens").catch(() => {});
   }
   if (reply) await sendMessage(db, conversation.id, reply, "ai");
 }
+
+const PreviewFields = z.object({
+  nome: z.string().describe("nome do negócio ou da pessoa como deve aparecer no site"),
+  ramo: z.string().describe("área/tipo de serviço"),
+  instagram: z.string(), cidade: z.string(), endereco: z.string(), horario: z.string(),
+  servicos: z.string().describe("serviços, diferenciais e tudo de real que o cliente contou"),
+  cores: z.string(), whatsapp: z.string(),
+});
 
 /** "(61) 99999-0000" -> "5561999990000"; inválido -> null. */
 function waNumber(v?: string) {
