@@ -5,7 +5,7 @@ Ferramenta interna da Brax Pins Mania (loja de pins, braxpinsmania.com.br; IG @b
 ## Onde está cada coisa
 - App (React + Vite + shadcn): `src/studio` — no ar em https://voz-de-deus-app.vercel.app/studio (Vercel publica a `main`).
 - Backend: Supabase Edge Functions (Deno) em `supabase/functions`, código comum em `_shared/`. Projeto `rrlxhnmfsmknzhqpfrhr`.
-  - Tabelas novas: o Supabase não libera mais a Data API sozinho (desde 30/10/2026); `20261009000000_default_grants.sql` repõe as permissões padrão antes das outras migrations.
+  - Tabelas novas: o Supabase não libera mais a Data API sozinho (desde 30/10/2026); `20261009000000_default_grants.sql` repõe as permissões padrão (inclusive das tabelas que já existem) antes das outras migrations, e `20991231000000_reload_api.sql` (sempre a última) recarrega a Data API. Sem isso o Studio mostra "Could not find the table ... in the schema cache".
   - Deploy: GitHub Action "Supabase deploy" (`scripts/supabase-deploy.sh`) a cada push na `main` que mexe em `supabase/**`. Ela roda TODAS as migrations de novo, então migrations precisam ser idempotentes (`if not exists`).
   - Secrets das functions vêm dos secrets do repositório no GitHub. Nunca peça token/senha no chat; o dono cadastra em Settings → Secrets and variables → Actions.
 - Cron: `publish-scheduled` (a cada minuto) publica posts, busca comentários/DMs (`instagram-poller.ts`), finaliza vídeos, roda o piloto automático (`content-ideas.ts`) e a limpeza do storage (`storage-cleanup.ts`: vídeo de post some 1 h depois de publicado; prévia do YouTube some quando o vídeo vai ao ar; Apagar/Refazer tiram os arquivos na hora; todo dia às 4h50 roda a faxina `optimizeStorage`, a mesma do botão "Otimizar agora" em Studio → Uso).
