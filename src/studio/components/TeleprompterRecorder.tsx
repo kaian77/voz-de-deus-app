@@ -127,7 +127,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: n
   ctx.roundRect(x, y, width, height, radius);
 }
 
-async function renderCaptionedVideo(source: Blob, url: string, captions: Caption[], style: CaptionStyle, emojis: boolean) {
+async function renderCaptionedVideo(url: string, captions: Caption[], style: CaptionStyle, emojis: boolean) {
   const video = document.createElement("video");
   video.src = url;
   video.playsInline = true;
@@ -303,7 +303,7 @@ export default function TeleprompterRecorder({ open, onOpenChange, script, onUse
     setSaving(true);
     setSaveError("");
     try {
-      const finalVideo = withCaptions ? await renderCaptionedVideo(recordedVideo, previewUrl, captions, captionStyle, useEmojis) : recordedVideo;
+      const finalVideo = withCaptions ? await renderCaptionedVideo(previewUrl, captions, captionStyle, useEmojis) : recordedVideo;
       await onUseRecording(finalVideo);
       onOpenChange(false);
     } catch (error) { setSaveError(error instanceof Error ? error.message : "Não consegui salvar o vídeo. Tente novamente."); }
