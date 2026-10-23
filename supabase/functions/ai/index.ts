@@ -653,11 +653,14 @@ Deno.serve(async (req) => {
         const count = Math.min(3, Math.max(1, Number(input.count) || 3));
         let research = { text: "", sources: [] as string[] };
         if (input.with_trends === true) {
-          research = await researchWeb(system,
-            `Pesquise assuntos, perguntas recorrentes e formatos de vídeo que estejam ganhando atenção recentemente no Brasil e que sejam relevantes para o segmento "${niche}". ` +
-            `Priorize fontes dos últimos 30 dias quando possível. Não invente visualizações, rankings, áudios em alta ou números. ` +
-            `Traga até 5 sinais concretos com data e URL de origem; se não houver evidência atual confiável, diga isso e sugira apenas ângulos perenes. ` +
-            `Não copie roteiros de criadores nem recomende usar áudio protegido sem verificar a biblioteca do Instagram.`, 4);
+          try {
+            research = await researchWeb(system,
+              `Pesquise brevemente assuntos, perguntas recorrentes e formatos relevantes no Brasil para o segmento "${niche}". ` +
+              `Traga até 3 sinais com fonte e URL; não invente tendências ou números. Não copie roteiros de criadores.`, 1, 12000);
+          } catch (error) {
+            // Pesquisa é complementar: uma falha ou demora não deve impedir a geração dos roteiros.
+            console.warn("Pesquisa de tendências indisponível; seguindo com ideias perenes:", error);
+          }
         }
         const generated = await generateJSON(ViralScripts, system,
           `Crie ${count} roteiros originais para Instagram Reels, em português do Brasil, para o segmento "${niche}". ` +
@@ -669,7 +672,7 @@ Deno.serve(async (req) => {
           `indicação visual simples de gravar e fala exata, legenda curta com CTA e 5 a 8 hashtags pertinentes sem #. ` +
           `O campo angle explica por que o tema conversa com o público e qual sinal atual sustenta a ideia; se não houver fonte atual, marque claramente como ideia perene. ` +
           `Evite clickbait enganoso, promessas impossíveis, copiar criadores e sugerir que viralização é garantida. Não invente estatísticas, tendências, notícias ou fatos do nicho.`,
-          "medium");
+          "low", [], 9000);
         return json({ ...generated, sources: research.sources });
       }
 

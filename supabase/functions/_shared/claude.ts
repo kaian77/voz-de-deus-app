@@ -36,6 +36,7 @@ export async function generateJSON<T extends z.ZodTypeAny>(
   prompt: string,
   effort: Effort = "medium",
   images: string[] = [],
+  maxTokens = 16000,
 ): Promise<z.infer<T>> {
   // Imagens por URL pública (ex.: fotos de produto no storage do Studio)
   prompt = wellFormed(prompt);
@@ -44,7 +45,7 @@ export async function generateJSON<T extends z.ZodTypeAny>(
     : prompt;
   const response = await anthropic().messages.parse({
     model: MODEL(),
-    max_tokens: 16000,
+    max_tokens: maxTokens,
     system: wellFormed(system),
     messages: [{ role: "user", content }],
     output_config: { effort, format: zodOutputFormat(schema) },
@@ -85,7 +86,7 @@ export function brandContext(settings: Record<string, unknown> | null): string {
  * Pesquisa na web (ferramenta de busca do próprio Claude) e devolve o texto da pesquisa + as fontes.
  * O Claude Haiku usa a versão básica da ferramenta; os demais modelos, a versão com filtragem dinâmica.
  */
-export async function researchWeb(system: string, prompt: string, maxUses = 5): Promise<{ text: string; sources: string[] }> {
+export async function researchWeb(system: string, prompt: string, maxUses = 5, timeoutMs?: number): Promise<{ text: string; sources: string[] }> {
   const model = MODEL();
   system = wellFormed(system);
   prompt = wellFormed(prompt);
@@ -93,12 +94,21 @@ export async function researchWeb(system: string, prompt: string, maxUses = 5): 
     ? { type: "web_search_20250305" as const, name: "web_search" as const, max_uses: maxUses }
     : { type: "web_search_20260209" as const, name: "web_search" as const, max_uses: maxUses };
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
-  let response = await anthropic().messages.create({ model, max_tokens: 16000, system, messages, tools: [tool] });
+  const deadline = timeoutMs ? Date.now() + timeoutMs : undefined;
+  const request = () => {
+    const remaining = deadline ? deadline - Date.now() : undefined;
+    if (remaining !== undefined && remaining <= 0) throw new Error("A pesquisa demorou demais.");
+    return anthropic().messages.create(
+      { model, max_tokens: 4000, system, messages, tools: [tool] },
+      remaining ? { signal: AbortSignal.timeout(remaining) } : undefined,
+    );
+  };
+  let response = await request();
   track("pesquisa", response);
   // pause_turn: o loop de busca do servidor parou no limite; reenviar o turno retoma de onde parou
-  for (let i = 0; i < 4 && response.stop_reason === "pause_turn"; i++) {
+  for (let i = 0; i < (deadline ? 1 : 4) && response.stop_reason === "pause_turn"; i++) {
     messages.push({ role: "assistant", content: response.content });
-    response = await anthropic().messages.create({ model, max_tokens: 16000, system, messages, tools: [tool] });
+    response = await request();
     track("pesquisa", response);
     messages.pop();
   }

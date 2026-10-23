@@ -155,6 +155,9 @@ export const api = {
       body: fn.includes("action=start") ? undefined : JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
+    if (res.status === 504 && fn === "ai") {
+      throw new Error("A geração demorou mais que o limite do servidor. Tente novamente em instantes; deixe a pesquisa de assuntos atuais desmarcada para gerar mais rápido.");
+    }
     if (!res.ok || data?.error) throw new Error(data?.error ?? `Erro ${res.status}`);
     return data as R;
   },

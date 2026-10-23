@@ -138,7 +138,10 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: n
 }
 
 async function renderCaptionedVideo(url: string, captions: Caption[], style: CaptionStyle, emojis: boolean) {
-  const video = document.createElement("video");
+  const video = document.createElement("video") as HTMLVideoElement & {
+    captureStream?: () => MediaStream;
+    webkitCaptureStream?: () => MediaStream;
+  };
   video.src = url;
   video.playsInline = true;
   video.muted = false;
@@ -147,7 +150,7 @@ async function renderCaptionedVideo(url: string, captions: Caption[], style: Cap
     video.onloadedmetadata = () => resolve();
     video.onerror = () => reject(new Error("Não consegui abrir o vídeo para aplicar as legendas."));
   });
-  if (!video.captureStream && !(video as HTMLVideoElement & { webkitCaptureStream?: () => MediaStream }).webkitCaptureStream) {
+  if (!video.captureStream && !video.webkitCaptureStream) {
     throw new Error("Este navegador não consegue exportar o vídeo com áudio e legendas. Tente no Chrome atualizado.");
   }
   const canvas = document.createElement("canvas");
@@ -156,7 +159,7 @@ async function renderCaptionedVideo(url: string, captions: Caption[], style: Cap
   const ctx = canvas.getContext("2d");
   if (!ctx || !canvas.captureStream) throw new Error("Este navegador não oferece a exportação de vídeo necessária.");
   const canvasStream = canvas.captureStream(30);
-  const sourceStream = video.captureStream?.() ?? (video as HTMLVideoElement & { webkitCaptureStream: () => MediaStream }).webkitCaptureStream();
+  const sourceStream = video.captureStream?.() ?? video.webkitCaptureStream!();
   const audioTracks = sourceStream.getAudioTracks();
   const outputStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
   const type = recordingType() || "video/webm";

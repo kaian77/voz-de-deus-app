@@ -123,7 +123,7 @@ export default function ViralScripts() {
   const [focus, setFocus] = useState("");
   const [objective, setObjective] = useState(OBJECTIVES[0]);
   const [duration, setDuration] = useState(30);
-  const [withTrends, setWithTrends] = useState(true);
+  const [withTrends, setWithTrends] = useState(false);
   const [accent, setAccent] = useState(ACCENTS[0]);
   const [result, setResult] = useState<ScriptResponse | null>(null);
   const [busy, setBusy] = useState(false);

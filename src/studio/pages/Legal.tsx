@@ -141,7 +141,7 @@ export default function Legal({ doc }: { doc: keyof typeof DOCS }) {
         if (paragraph.startsWith("Tokens de acesso emitidos")) return "Tokens de acesso emitidos pela Meta. Eles servem para agir em nome da conta profissional do Instagram conectada.";
         if (paragraph.startsWith("O Social Studio deve ser usado")) return "O PáginasPro Instagram deve ser usado apenas com contas do Instagram que você controla, seguindo os termos e as políticas da Meta.";
         if (paragraph.startsWith("As integrações dependem")) return "Os recursos dependem das APIs da Meta, que podem mudar ou ficar indisponíveis sem aviso.";
-        return paragraph.replaceAll("Social Studio", PRODUCT_NAME);
+        return paragraph.split("Social Studio").join(PRODUCT_NAME);
       }),
     }));
   return (
