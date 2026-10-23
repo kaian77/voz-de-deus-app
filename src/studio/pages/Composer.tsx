@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Bookmark, CalendarPlus, Heart, Loader2, MessageCircle, Plus, Send, Sparkles, Trash2, Upload, Wand2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Bookmark, CalendarPlus, Camera, Heart, Loader2, MessageCircle, Plus, Send, Sparkles, Trash2, Upload, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { toastPublishResult } from "@/studio/lib/publish-toast";
 import ProductPicker, { type LinkedProduct } from "../components/ProductPicker";
 import { VideoBriefDialog, type VideoBrief } from "../components/VideoBrief";
 import { IS_INSTAGRAM_PRODUCT } from "../lib/product";
+import TeleprompterRecorder from "../components/TeleprompterRecorder";
 
 const KINDS: { id: PostKind; hint: string }[] = [
   { id: "image", hint: "1 imagem · 4:5" },
@@ -77,8 +78,40 @@ export default function Composer() {
   const [videoSeconds, setVideoSeconds] = useState<number>();
   const [product, setProduct] = useState<LinkedProduct | null>(null);
   const [coverUrl, setCoverUrl] = useState("");
+  const [teleprompterOpen, setTeleprompterOpen] = useState(false);
   const onTikTok = platforms.includes("tiktok") && kind !== "story";
   const ttCreator = useTikTokCreator(onTikTok);
+
+  const teleprompterScript = useMemo(() => {
+    const notes = editing?.notes?.trim() ?? "";
+    const spokenLines = notes.split(/\r?\n/)
+      .filter((line) => /^\s*Fala:/i.test(line))
+      .map((line) => line.replace(/^\s*Fala:\s*/i, "").trim())
+      .filter(Boolean);
+    return spokenLines.length ? spokenLines.join("\n\n") : notes || caption || title;
+  }, [editing?.notes, caption, title]);
+
+  const attachRecording = async (blob: Blob) => {
+    setUploading(true);
+    try {
+      const extension = blob.type.includes("mp4") ? "mp4" : "webm";
+      const url = await api.upload(blob, `reel-teleprompter-${Date.now()}.${extension}`);
+      const video: MediaItem = { url, type: "video" };
+      setKind("reel");
+      setMode("upload");
+      setMedia([video]);
+      if (editing?.id) {
+        await api.update("posts", editing.id, { kind: "reel", media: [video] });
+        await qc.invalidateQueries({ queryKey: ["table", "posts"] });
+      }
+      toast.success("Vídeo enviado e anexado ao Reel. A capa do roteiro continua vinculada.");
+    } catch (error) {
+      toast.error((error as Error).message);
+      throw error;
+    } finally {
+      setUploading(false);
+    }
+  };
 
   // Duração do vídeo (o TikTok limita por conta)
   useEffect(() => {
@@ -369,6 +402,17 @@ export default function Composer() {
               ) : undefined
             }
           >
+            {kind === "reel" && (
+              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border bg-secondary/30 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">Grave seu Reel com teleprompter</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Use a câmera do celular, leia o roteiro e salve o vídeo neste rascunho.</p>
+                </div>
+                <Button type="button" size="sm" onClick={() => setTeleprompterOpen(true)} disabled={uploading || !!busy}>
+                  {uploading ? <Loader2 className="animate-spin" /> : <Camera />} {uploading ? "Enviando vídeo…" : "Abrir câmera"}
+                </Button>
+              </div>
+            )}
             {kind === "reel" && coverUrl && (
               <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border bg-secondary/30 p-3">
                 <img src={coverUrl} alt="Capa escolhida para o Reel" className="h-28 w-16 rounded-md border bg-black object-cover" />
@@ -572,6 +616,12 @@ export default function Composer() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <TeleprompterRecorder
+        open={teleprompterOpen}
+        onOpenChange={setTeleprompterOpen}
+        script={teleprompterScript}
+        onUseRecording={attachRecording}
+      />
     </div>
   );
 }
