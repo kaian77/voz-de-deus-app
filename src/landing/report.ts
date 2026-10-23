@@ -10,6 +10,8 @@ export type ReportData = {
   domain?: string | null;
   status: string;
   plan: string;
+  /** Painel liberado no avulso */
+  panel?: boolean;
   content?: Partial<Pick<LandingContent, "colors" | "fonts">> | null;
   support?: string | null;
   stats: Day[] | null;
@@ -62,7 +64,7 @@ export function renderReport(d: ReportData): string {
   const brand = d.logo ? `<img class="logo" src="${esc(d.logo)}" alt="${esc(d.name)}">` : `<span class="wordmark">${esc(d.name)}</span>`;
 
   let body: string;
-  if (d.plan !== "monthly" || !d.stats) {
+  if ((d.plan !== "monthly" && !d.panel) || !d.stats) {
     body = `<section class="card center"><h2>Painel indisponível</h2><p>O painel de resultados faz parte do plano mensal do site.</p>
 ${supportUrl ? `<a class="btn" href="${esc(supportUrl)}" target="_blank" rel="noopener">Falar com o suporte</a>` : ""}</section>`;
   } else {
@@ -101,7 +103,7 @@ ${supportUrl ? `<a class="btn" href="${esc(supportUrl)}" target="_blank" rel="no
 <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Visitas por dia nos últimos 30 dias" preserveAspectRatio="none">${bars}</svg>
 <div class="legend"><span><i style="background:${mix(primary, "#ffffff", 0.55)}"></i>Visitas</span><span><i style="background:${primary}"></i>Chamaram no WhatsApp</span></div></section>
 <section class="card"><h3>De onde vieram</h3>${sources || `<p class="muted">Ainda sem visitas neste período.</p>`}</section>
-${supportUrl ? `<section class="card center"><h3>Precisa mudar algo no site?</h3><p class="muted">Texto, foto, horário, serviço: é só pedir, está incluso no seu plano.</p><a class="btn" href="${esc(supportUrl)}" target="_blank" rel="noopener">Pedir alteração</a></section>` : ""}`;
+${supportUrl ? `<section class="card center"><h3>Precisa mudar algo no site?</h3><p class="muted">Texto, foto, horário, serviço: é só pedir${d.plan === "monthly" ? ", está incluso no seu plano" : ""}.</p><a class="btn" href="${esc(supportUrl)}" target="_blank" rel="noopener">Pedir alteração</a></section>` : ""}`;
   }
 
   return `<!doctype html>

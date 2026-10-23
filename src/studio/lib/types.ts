@@ -394,6 +394,7 @@ export interface LandingPage {
   domain: string | null;
   conversation_id?: string | null;
   widget?: string | null;
+  panel?: boolean;
   auto_status?: "queued" | "working" | "done" | "failed" | null;
   auto_error?: string | null;
   /** monthly = plano mensal (painel de resultados /r/<report_token> + alterações inclusas) */

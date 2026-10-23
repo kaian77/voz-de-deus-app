@@ -225,8 +225,11 @@ function waNumber(v?: string) {
 async function queuePreview(db: SupabaseClient, conversation: any, i: Record<string, string>) {
   const { data: existing } = await db.from("landing_pages").select("*").eq("conversation_id", conversation.id).maybeSingle();
   const { data: media } = await db.from("messages").select("media_url").eq("conversation_id", conversation.id).not("media_url", "is", null)
-    .order("created_at").limit(12);
-  const photos = [...new Set([...(existing?.photos ?? []), ...(media ?? []).map((m) => m.media_url as string)])].slice(0, 12);
+    .order("created_at", { ascending: false }).limit(12);
+  // Fotos novas da conversa entram na frente: no ajuste ("troca a foto") a IA vê e usa a mais recente
+  const sent = (media ?? []).map((m) => m.media_url as string); // mais nova primeiro
+  const fresh = sent.filter((u) => !(existing?.photos ?? []).includes(u));
+  const photos = [...new Set([...fresh, ...(existing?.photos ?? []), ...sent])].slice(0, 12);
   const fields = {
     name: String(i.nome ?? existing?.name ?? "").slice(0, 120), niche: String(i.ramo ?? existing?.niche ?? "").slice(0, 80),
     city: i.cidade || existing?.city || null, instagram: i.instagram || existing?.instagram || null,
@@ -236,7 +239,10 @@ async function queuePreview(db: SupabaseClient, conversation: any, i: Record<str
     tier: i.modelo === "premium" ? "premium" : (existing?.tier ?? "normal"),
     widget: i.animacao ? WIDGET_BY_NAME[i.animacao] ?? null : (existing?.widget ?? null),
     photos, conversation_id: conversation.id, auto_status: "queued", auto_error: null,
-    auto_instructions: i.ajuste ? String(i.ajuste).slice(0, 1500) : null, updated_at: new Date().toISOString(),
+    auto_instructions: i.ajuste
+      ? `${String(i.ajuste).slice(0, 1400)}${fresh.length ? `\n(O cliente mandou ${fresh.length} foto(s) nova(s): são as primeiras da lista, índice 0${fresh.length > 1 ? ` a ${fresh.length - 1}` : ""}. Use-as no lugar das antigas se o pedido for de trocar foto.)` : ""}${i.cores ? `\nCores da marca pedidas: ${i.cores}` : ""}`
+      : null,
+    updated_at: new Date().toISOString(),
   };
   if (!fields.name || !fields.niche) return { erro: "preciso do nome do negócio e do ramo" };
   if (!photos.length && !fields.instagram) return { erro: "preciso de pelo menos uma foto ou do @ do Instagram" };
