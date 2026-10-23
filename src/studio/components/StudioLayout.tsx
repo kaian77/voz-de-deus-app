@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3, Bot, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Gauge, Inbox, Globe, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Star, Store, Workflow, Target, Youtube, Scissors,
@@ -164,9 +164,19 @@ function Workspace() {
   );
 }
 
+function useLoginEmail() {
+  const [email, setEmail] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isDemo) supabase!.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
+  }, []);
+  return email;
+}
+
 function Footer({ onSignOut }: { onSignOut: () => void }) {
+  const email = useLoginEmail();
   return (
     <div className="space-y-2 border-t px-3 pt-3">
+      {email && <p className="truncate px-2.5 text-[11px] text-muted-foreground" title={email}>Conectado como {email}</p>}
       {isDemo && (
         <div className="rounded-md border border-dashed px-2.5 py-2 text-[11px] leading-snug text-muted-foreground">
           <span className="font-medium text-foreground">Modo demonstração.</span> Dados de exemplo, salvos só neste navegador.
@@ -181,11 +191,26 @@ function Footer({ onSignOut }: { onSignOut: () => void }) {
   );
 }
 
+/** Conta sem nada conectado: quase sempre é login com outro e-mail (o "Criar agora" abre um Studio novo e vazio). */
+function EmptyAccount({ onSignOut }: { onSignOut: () => void }) {
+  const email = useLoginEmail();
+  return (
+    <div className="mb-5 rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-[13px]">
+      <p className="font-medium">Este Studio está vazio{email ? ` (você entrou como ${email})` : ""}.</p>
+      <p className="mt-1 text-muted-foreground">
+        Se você já usava o Studio, seus dados estão salvos na conta do e-mail que você usava antes. Saia e entre com ele.
+        Não lembra a senha? Na tela de entrar, use "Esqueci a senha".
+      </p>
+      <Button size="sm" variant="outline" className="mt-2 h-8" onClick={onSignOut}>Sair e entrar com outro e-mail</Button>
+    </div>
+  );
+}
+
 export default function StudioLayout() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { data: accounts } = useTable("social_accounts");
+  const { data: accounts, error: loadError } = useTable("social_accounts");
   const ig = accounts?.find((a) => a.platform === "instagram" && a.meta?.brand !== "paginaspro") ?? accounts?.find((a) => a.platform === "instagram");
 
   const signOut = async () => {
@@ -230,6 +255,12 @@ export default function StudioLayout() {
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1180px] px-4 py-6 pb-24 sm:px-8 lg:py-8">
+          {loadError && (
+            <div className="mb-5 rounded-lg border border-danger/40 bg-danger/5 px-4 py-3 text-[13px] text-danger">
+              Não consegui carregar seus dados: {(loadError as Error).message}. Atualize a página; se continuar, mande um print.
+            </div>
+          )}
+          {!isDemo && accounts && accounts.length === 0 && <EmptyAccount onSignOut={signOut} />}
           <PageErrorBoundary key={location.pathname}>
             <Outlet />
           </PageErrorBoundary>
