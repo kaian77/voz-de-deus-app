@@ -11,6 +11,7 @@ import { useSettings, useTable } from "../lib/hooks";
 import { Avatar } from "./bits";
 import PageErrorBoundary from "./PageErrorBoundary";
 import { AppInstall } from "./AppInstall";
+import { INSTAGRAM_STUDIO_PATHS, IS_INSTAGRAM_PRODUCT, PRODUCT_NAME } from "../lib/product";
 
 type Item = { to: string; label: string; icon: typeof Bot; end?: boolean; count?: "approvals" | "inbox" };
 const GROUPS: { label?: string; items: Item[] }[] = [
@@ -45,7 +46,8 @@ const GROUPS: { label?: string; items: Item[] }[] = [
     label: "Crescer",
     items: [
       { to: "/studio/estrategia", label: "Estratégia", icon: Target },
-      { to: "/studio/vitrine", label: "Vitrine", icon: Store },
+      { to: "/studio/vitrine", label: "Análise do perfil", icon: Store },
+      { to: "/studio/link-bio", label: "Link na bio", icon: Link2 },
       { to: "/studio/concorrentes", label: "Concorrentes", icon: BarChart3 },
     ],
   },
@@ -68,12 +70,19 @@ const GROUPS: { label?: string; items: Item[] }[] = [
   },
 ];
 
+const visibleGroups = IS_INSTAGRAM_PRODUCT
+  ? GROUPS.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => INSTAGRAM_STUDIO_PATHS.has(item.to.replace("/studio/", "").replace("/studio", ""))),
+    })).filter((group) => group.items.length > 0)
+  : GROUPS;
+
 function useCounts() {
   const { data: posts } = useTable("posts");
   const { data: conversations } = useTable("conversations", { order: "last_message_at" });
   return {
-    approvals: posts?.filter((p) => p.status === "pending_approval").length ?? 0,
-    inbox: conversations?.filter((c) => c.status === "needs_human").length ?? 0,
+    approvals: posts?.filter((p) => p.status === "pending_approval" && (!IS_INSTAGRAM_PRODUCT || p.platforms.includes("instagram"))).length ?? 0,
+    inbox: conversations?.filter((c) => c.status === "needs_human" && (!IS_INSTAGRAM_PRODUCT || c.channel === "instagram")).length ?? 0,
   };
 }
 
@@ -113,7 +122,7 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
   const counts = useCounts();
   return (
     <nav className="flex flex-col gap-5">
-      {GROUPS.map((group, i) => (
+      {visibleGroups.map((group, i) => (
         <div key={i} className="flex flex-col gap-px">
           {group.label && <p className="mb-1 px-2.5 text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground/80">{group.label}</p>}
           {group.items.map((item) => (
@@ -150,7 +159,7 @@ function Workspace() {
   const { data: settings } = useSettings();
   const { data: accounts } = useTable("social_accounts");
   const ig = accounts?.find((a) => a.platform === "instagram" && a.meta?.brand !== "paginaspro") ?? accounts?.find((a) => a.platform === "instagram");
-  const name = settings?.brand_name || ig?.display_name || "Social Studio";
+  const name = IS_INSTAGRAM_PRODUCT ? PRODUCT_NAME : settings?.brand_name || ig?.display_name || "Social Studio";
   return (
     <div className="flex items-center gap-2.5 px-2.5">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-foreground text-[12px] font-semibold text-background">
@@ -158,7 +167,7 @@ function Workspace() {
       </span>
       <div className="min-w-0 leading-tight">
         <p className="truncate text-[13px] font-semibold">{name}</p>
-        <p className="truncate text-[11px] text-muted-foreground">{ig?.username ? `@${ig.username}` : "Social Studio"}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{ig?.username ? `@${ig.username}` : IS_INSTAGRAM_PRODUCT ? "Seu Instagram em um só lugar" : "Social Studio"}</p>
       </div>
     </div>
   );

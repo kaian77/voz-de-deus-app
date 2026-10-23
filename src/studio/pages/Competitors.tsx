@@ -11,6 +11,7 @@ import { api, isDemo } from "../lib/api";
 import { useRemoveRow, useSaveRow, useTable } from "../lib/hooks";
 import type { Competitor, CompetitorAnalysis } from "../lib/types";
 import { Avatar, EmptyState, PageHeader, PlatformIcon, relativeTime, SectionLabel } from "../components/bits";
+import { IS_INSTAGRAM_PRODUCT } from "../lib/product";
 
 function Bullets({ title, items }: { title: string; items: string[] }) {
   return (
@@ -157,7 +158,7 @@ export default function Competitors() {
         }}
       >
         <div className="inline-flex shrink-0 rounded-md border bg-secondary/60 p-0.5">
-          {(["instagram", "tiktok"] as const).map((p) => (
+          {(IS_INSTAGRAM_PRODUCT ? ["instagram"] as const : ["instagram", "tiktok"] as const).map((p) => (
             <button key={p} type="button" onClick={() => setPlatform(p)} className={cn("flex h-7 items-center gap-1.5 rounded px-2.5 text-xs font-medium", platform === p ? "bg-card shadow-sm" : "text-muted-foreground")}>
               <PlatformIcon platform={p} /> {p === "instagram" ? "Instagram" : "TikTok"}
             </button>
@@ -168,7 +169,7 @@ export default function Competitors() {
       </form>
       {competitors.length === 0 ? (
         <EmptyState icon={<BarChart3 />} title="Nenhum perfil monitorado">
-          Adicione perfis do seu nicho (Instagram ou TikTok). A IA pesquisa o perfil na web e depois compara com a sua marca.
+          {IS_INSTAGRAM_PRODUCT ? "Adicione perfis do seu nicho no Instagram. A IA pesquisa o perfil e compara os conteúdos com a sua marca." : "Adicione perfis do seu nicho (Instagram ou TikTok). A IA pesquisa o perfil na web e depois compara com a sua marca."}
         </EmptyState>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">{competitors.map((c) => <CompetitorCard key={c.id} c={c} />)}</div>

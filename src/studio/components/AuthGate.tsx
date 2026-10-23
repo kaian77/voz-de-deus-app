@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isDemo, supabase } from "../lib/api";
 import { useStudioTheme } from "./bits";
+import { IS_INSTAGRAM_PRODUCT, PRODUCT_NAME } from "../lib/product";
 
 export default function AuthGate({ children }: { children: ReactNode }) {
   useStudioTheme();
@@ -43,8 +44,8 @@ export default function AuthGate({ children }: { children: ReactNode }) {
         <CardHeader className="space-y-3">
           <span className="flex h-8 w-8 items-center justify-center rounded-md bg-foreground text-sm font-semibold text-background">S</span>
           <div>
-            <CardTitle className="text-lg">{mode === "login" ? "Entrar no Social Studio" : "Criar acesso ao Social Studio"}</CardTitle>
-            <CardDescription>Instagram, TikTok e WhatsApp num só lugar.</CardDescription>
+          <CardTitle className="text-lg">{mode === "login" ? `Entrar no ${PRODUCT_NAME}` : `Criar acesso ao ${PRODUCT_NAME}`}</CardTitle>
+          <CardDescription>{IS_INSTAGRAM_PRODUCT ? "Planeje, aprove e acompanhe seu Instagram em um só lugar." : "Instagram, TikTok e WhatsApp num só lugar."}</CardDescription>
           </div>
         </CardHeader>
         <CardContent>

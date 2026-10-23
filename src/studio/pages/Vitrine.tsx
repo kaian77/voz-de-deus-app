@@ -94,7 +94,7 @@ export default function Vitrine() {
   if (!ig) {
     return (
       <div>
-        <PageHeader title="Vitrine" description="Como seu perfil aparece para quem chega nele." />
+        <PageHeader title="Análise do perfil" description="Como seu perfil aparece para quem chega nele." />
         <EmptyState icon={<Store />} title="Conecte o Instagram primeiro">Vá em Contas e conecte sua conta profissional.</EmptyState>
       </div>
     );
@@ -112,7 +112,7 @@ export default function Vitrine() {
   return (
     <div>
       <PageHeader
-        title="Vitrine"
+        title="Análise do perfil"
         description="Seu perfil como o visitante vê, a grade com o que já está agendado e as recomendações."
         actions={
           <Button size="sm" onClick={() => audit.mutate()} disabled={audit.isPending}>

@@ -20,6 +20,7 @@ import { Avatar, KIND_LABEL, PageHeader, Panel, PlatformIcon, SectionLabel, Slid
 import { toastPublishResult } from "@/studio/lib/publish-toast";
 import ProductPicker, { type LinkedProduct } from "../components/ProductPicker";
 import { VideoBriefDialog, type VideoBrief } from "../components/VideoBrief";
+import { IS_INSTAGRAM_PRODUCT } from "../lib/product";
 
 const KINDS: { id: PostKind; hint: string }[] = [
   { id: "image", hint: "1 imagem · 4:5" },
@@ -91,7 +92,7 @@ export default function Composer() {
 
   useEffect(() => {
     if (!editing) return;
-    setPlatforms(editing.platforms);
+    setPlatforms(IS_INSTAGRAM_PRODUCT ? ["instagram"] : editing.platforms);
     setKind(editing.kind === "video" ? "reel" : editing.kind === "photos" ? "carousel" : editing.kind);
     setMedia(editing.media ?? []);
     if (editing.slides?.length) {
@@ -269,7 +270,7 @@ export default function Composer() {
     <div>
       <PageHeader
         title={editing ? "Editar post" : "Criar post"}
-        description="Monte uma vez e publique no Instagram e no TikTok."
+        description={IS_INSTAGRAM_PRODUCT ? "Crie, revise e agende conteúdo para o Instagram." : "Monte uma vez e publique no Instagram e no TikTok."}
         actions={
           <>
             {editing && <StatusBadge status={editing.status} />}
@@ -297,7 +298,7 @@ export default function Composer() {
           <Panel title="Destino e formato">
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                {(["instagram", "tiktok"] as Platform[]).map((p) => {
+                {(IS_INSTAGRAM_PRODUCT ? ["instagram"] as Platform[] : ["instagram", "tiktok"] as Platform[]).map((p) => {
                   const on = platforms.includes(p);
                   return (
                     <button
@@ -335,7 +336,7 @@ export default function Composer() {
             </div>
           </Panel>
 
-          <Panel title="Produto da loja" description="Opcional: vincule um pin e a foto dele entra no post, no carrossel ou no vídeo.">
+          {!IS_INSTAGRAM_PRODUCT && <Panel title="Produto da loja" description="Opcional: vincule um pin e a foto dele entra no post, no carrossel ou no vídeo.">
             <div className="space-y-3">
               <ProductPicker value={product} onChange={linkProduct} />
               {product && kind === "reel" && (
@@ -354,7 +355,7 @@ export default function Composer() {
                 onConfirm={productVideo}
               />
             </div>
-          </Panel>
+          </Panel>}
 
           <Panel
             title="Conteúdo"
@@ -444,7 +445,7 @@ export default function Composer() {
                   onChange={(e) => onFiles(e.target.files)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Instagram publica imagens em JPEG. Reels: MP4 vertical 9:16, até 15 min. TikTok: vídeo MP4/MOV ou até 35 fotos.
+                  {IS_INSTAGRAM_PRODUCT ? "Instagram publica imagens em JPEG. Reels: vídeo MP4 vertical 9:16, até 15 min." : "Instagram publica imagens em JPEG. Reels: MP4 vertical 9:16, até 15 min. TikTok: vídeo MP4/MOV ou até 35 fotos."}
                 </p>
               </div>
             )}

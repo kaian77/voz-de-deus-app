@@ -15,6 +15,7 @@ import { api } from "../lib/api";
 import { IgMediaTile } from "../components/IgMediaTile";
 import type { Automation } from "../lib/types";
 import { EmptyState, PageHeader, SectionLabel } from "../components/bits";
+import { IS_INSTAGRAM_PRODUCT } from "../lib/product";
 
 const blank: Partial<Automation> = {
   name: "",
@@ -260,7 +261,7 @@ export default function Automations() {
 
       <div className="mt-6 grid gap-4 text-xs text-muted-foreground sm:grid-cols-2">
         <p><span className="font-medium text-foreground">Instagram.</span> Funciona em posts, reels e lives da conta profissional conectada. O Instagram permite uma mensagem no direct por comentário, em até 7 dias.</p>
-        <p><span className="font-medium text-foreground">TikTok.</span> A API oficial não permite responder comentários automaticamente. No TikTok, o Studio agenda e publica.</p>
+        {!IS_INSTAGRAM_PRODUCT && <p><span className="font-medium text-foreground">TikTok.</span> A API oficial não permite responder comentários automaticamente. No TikTok, o Studio agenda e publica.</p>}
       </div>
 
       {editing && <AutomationDialog value={editing} onClose={() => setEditing(null)} />}

@@ -10,6 +10,7 @@ import type { MlQualityReport, Platform, SocialAccount } from "../lib/types";
 import { Avatar, formatDateTime, PageHeader, PlatformIcon, StatusDot } from "../components/bits";
 import WhatsAppConnect from "../components/WhatsAppConnect";
 import SaleAlerts from "../components/SaleAlerts";
+import { IS_INSTAGRAM_PRODUCT } from "../lib/product";
 
 const INFO: Record<Platform, { name: string; features: string; note: string }> = {
   instagram: {
@@ -73,7 +74,7 @@ export function ConnectedAccount({ account, onRemove }: { account: SocialAccount
             : account.followers_count != null ? `${account.followers_count.toLocaleString("pt-BR")} seguidores` : "Conectada"}
         </p>
       </div>
-      {(account.platform === "instagram" || account.platform === "whatsapp") && !confirming && <BrandSelect account={account} />}
+      {!IS_INSTAGRAM_PRODUCT && (account.platform === "instagram" || account.platform === "whatsapp") && !confirming && <BrandSelect account={account} />}
       {confirming ? (
         <div className="flex items-center gap-1">
           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setConfirming(false)}>Cancelar</Button>
@@ -253,6 +254,7 @@ export default function Accounts() {
   const { data: accounts = [] } = useTable("social_accounts");
   const remove = useRemoveRow("social_accounts");
   const shops = accounts.filter((a) => a.platform === "nuvemshop");
+  const platforms: Platform[] = IS_INSTAGRAM_PRODUCT ? ["instagram"] : ["instagram", "tiktok"];
   const [params, setParams] = useSearchParams();
   const [busy, setBusy] = useState<Platform | "nuvemshop" | "mercadolivre" | "shopee" | null>(null);
 
@@ -279,9 +281,9 @@ export default function Accounts() {
 
   return (
     <div>
-      <PageHeader title="Contas" description="As redes que o Studio publica, responde e acompanha." />
+      <PageHeader title="Conectar Instagram" description={IS_INSTAGRAM_PRODUCT ? "Conecte sua conta profissional para publicar, responder e acompanhar resultados." : "As redes que o Studio publica, responde e acompanha."} />
       <div className="divide-y rounded-lg border bg-card">
-        {(["instagram", "tiktok"] as Platform[]).map((platform) => {
+        {platforms.map((platform) => {
           const list = accounts.filter((a) => a.platform === platform);
           return (
             <section key={platform} className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
@@ -306,9 +308,9 @@ export default function Accounts() {
             </section>
           );
         })}
-        <WhatsAppConnect />
-        <SaleAlerts />
-        <section className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
+        {!IS_INSTAGRAM_PRODUCT && <WhatsAppConnect />}
+        {!IS_INSTAGRAM_PRODUCT && <SaleAlerts />}
+        {!IS_INSTAGRAM_PRODUCT && <section className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
           <div className="flex gap-4">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border"><PlatformIcon platform="nuvemshop" className="h-5 w-5 text-foreground" /></span>
             <div className="min-w-0">
@@ -332,8 +334,8 @@ export default function Accounts() {
               </Button>
             )}
           </div>
-        </section>
-        {MARKETPLACES.map((m) => {
+        </section>}
+        {!IS_INSTAGRAM_PRODUCT && MARKETPLACES.map((m) => {
           const list = accounts.filter((a) => a.platform === m.id);
           return (
             <section key={m.id} className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">

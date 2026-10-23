@@ -11,6 +11,7 @@ import { api, functionsBaseUrl, isDemo, randomKey, sha256Hex } from "../lib/api"
 import { useRemoveRow, useSettings, useTable } from "../lib/hooks";
 import type { ApiKey, BrandSettings } from "../lib/types";
 import { PageHeader, relativeTime } from "../components/bits";
+import { IS_INSTAGRAM_PRODUCT } from "../lib/product";
 
 const copy = (text: string, msg = "Copiado") =>
   navigator.clipboard.writeText(text).then(() => toast.success(msg), () => toast.error("Selecione o texto e copie manualmente"));
@@ -133,8 +134,8 @@ export default function ClaudeApi() {
   return (
     <div>
       <PageHeader
-        title="Claude e API"
-        description="O que o Claude e o agente de IA sabem sobre a sua marca, e como o Claude acessa o Studio."
+        title={IS_INSTAGRAM_PRODUCT ? "Marca e inteligência artificial" : "Claude e API"}
+        description={IS_INSTAGRAM_PRODUCT ? "Defina a voz da marca e as regras usadas para criar conteúdo e responder no Instagram." : "O que o Claude e o agente de IA sabem sobre a sua marca, e como o Claude acessa o Studio."}
         actions={<Button size="sm" onClick={save} disabled={saving}>Salvar alterações</Button>}
       />
 
@@ -153,7 +154,7 @@ export default function ClaudeApi() {
           <Field id="default_cta" label="Chamada para ação padrão"><Input id="default_cta" className="h-9" value={val("default_cta")} onChange={set("default_cta")} placeholder="Comente QUERO que eu te mando no direct" /></Field>
         </Row>
 
-        <Row title="Agente de mensagens" description="Responde o direct do Instagram e o WhatsApp. Quando não souber, ou a pessoa pedir um humano, passa a conversa para você.">
+        <Row title="Agente de mensagens" description={IS_INSTAGRAM_PRODUCT ? "Responde o direct do Instagram com as regras que você definir. Quando não souber, passa a conversa para você." : "Responde o direct do Instagram e o WhatsApp. Quando não souber, ou a pessoa pedir um humano, passa a conversa para você."}>
           <label htmlFor="agent_enabled" className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
             <span className="text-[13px] font-medium">Responder mensagens automaticamente</span>
             <Switch id="agent_enabled" checked={!!form.agent_enabled} onCheckedChange={(v) => setForm({ ...form, agent_enabled: v })} />
@@ -165,7 +166,7 @@ export default function ClaudeApi() {
             id="agent_knowledge"
             label="Base de conhecimento"
             hint={shop
-              ? "O agente só afirma o que estiver aqui. Produtos, preços, estoque e pedidos ele consulta ao vivo na sua loja Nuvemshop."
+              ? IS_INSTAGRAM_PRODUCT ? "O agente só afirma o que estiver aqui; use informações verificadas da sua marca e serviços." : "O agente só afirma o que estiver aqui. Produtos, preços, estoque e pedidos ele consulta ao vivo na sua loja Nuvemshop."
               : "O agente só afirma o que estiver aqui: horários, links, preços, perguntas frequentes."}
           >
             <div className="flex flex-col gap-2 sm:flex-row">

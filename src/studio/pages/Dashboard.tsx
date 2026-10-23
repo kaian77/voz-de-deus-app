@@ -8,6 +8,7 @@ import { api, isDemo } from "../lib/api";
 import type { Post, SalesSummary } from "../lib/types";
 import { formatTime, KIND_LABEL, sentence, PageHeader, Panel, PlatformIcon, relativeTime, StatusBadge, StatusDot } from "../components/bits";
 import { PostThumb } from "../components/PostThumb";
+import { IS_INSTAGRAM_PRODUCT, PRODUCT_NAME } from "../lib/product";
 
 const DAY = 24 * 3600 * 1000;
 
@@ -112,7 +113,7 @@ function Sales() {
 }
 
 export default function Dashboard() {
-  const { data: posts = [] } = useTable("posts");
+  const { data: allPosts = [] } = useTable("posts");
   const { data: automations = [] } = useTable("automations");
   const { data: comments = [] } = useTable("comment_events", { limit: 200 });
   const { data: accounts = [] } = useTable("social_accounts");
@@ -121,6 +122,7 @@ export default function Dashboard() {
   const { data: settings } = useSettings();
 
   const now = Date.now();
+  const posts = IS_INSTAGRAM_PRODUCT ? allPosts.filter((p) => p.platforms.includes("instagram")) : allPosts;
   const week = posts
     .filter((p) => ["scheduled", "pending_approval"].includes(p.status) && p.scheduled_at && new Date(p.scheduled_at).getTime() >= now && new Date(p.scheduled_at).getTime() < now + 7 * DAY)
     .sort((a, b) => a.scheduled_at!.localeCompare(b.scheduled_at!));
@@ -131,10 +133,14 @@ export default function Dashboard() {
   }, {});
   const pending = posts.filter((p) => p.status === "pending_approval");
   const failed = posts.filter((p) => p.status === "failed");
-  const waiting = conversations.filter((c) => c.status === "needs_human");
+  const waiting = conversations.filter((c) => c.status === "needs_human" && (!IS_INSTAGRAM_PRODUCT || c.channel === "instagram"));
   const replied7d = comments.filter((c) => c.status === "replied" && new Date(c.created_at).getTime() > now - 7 * DAY).length;
 
-  const steps = [
+  const steps = IS_INSTAGRAM_PRODUCT ? [
+    { done: accounts.some((a) => a.platform === "instagram"), label: "Conectar o Instagram", to: "/studio/contas" },
+    { done: Boolean(settings?.niche && settings?.tone), label: "Definir a marca e o tom de voz", to: "/studio/claude" },
+    { done: keys.length > 0, label: "Configurar a chave da IA", to: "/studio/claude" },
+  ] : [
     { done: accounts.some((a) => a.platform === "instagram"), label: "Conectar o Instagram", to: "/studio/contas" },
     { done: accounts.some((a) => a.platform === "whatsapp"), label: "Conectar o WhatsApp", to: "/studio/contas" },
     { done: Boolean(settings?.niche && settings?.tone), label: "Descrever a marca e o tom de voz", to: "/studio/claude" },
@@ -153,8 +159,8 @@ export default function Dashboard() {
   return (
     <div>
       <PageHeader
-        title="Visão geral"
-        description={sentence(today)}
+        title={IS_INSTAGRAM_PRODUCT ? PRODUCT_NAME : "Visão geral"}
+        description={IS_INSTAGRAM_PRODUCT ? `Seu conteúdo e crescimento no Instagram · ${sentence(today)}` : sentence(today)}
         actions={
           <Button asChild size="sm">
             <Link to="/studio/criar"><Plus /> Criar post</Link>
@@ -162,7 +168,7 @@ export default function Dashboard() {
         }
       />
 
-      <Sales />
+      {!IS_INSTAGRAM_PRODUCT && <Sales />}
 
       <div className="mb-6 grid grid-cols-2 overflow-hidden rounded-lg border bg-card lg:grid-cols-4">
         <Metric label="Agendados" value={week.filter((p) => p.status === "scheduled").length} hint="próximos 7 dias" to="/studio/calendario" className="border-b border-r lg:border-b-0" />

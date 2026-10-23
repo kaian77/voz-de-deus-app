@@ -15,6 +15,7 @@ import { renderPostMedia } from "../lib/publishing";
 import type { Platform, Post } from "../lib/types";
 import TikTokSettings, { TIKTOK_DEFAULTS, tiktokProblem, toApiOptions, useTikTokCreator, type TikTokOptions } from "../components/TikTokSettings";
 import { PageHeader, Panel, PlatformIcon, SlidePreview, toLocalInput } from "../components/bits";
+import { IS_INSTAGRAM_PRODUCT } from "../lib/product";
 
 type Item = {
   id: string;
@@ -132,7 +133,7 @@ export default function BulkSchedule() {
   const [params] = useSearchParams();
   const { data: posts = [], isSuccess: postsLoaded } = useTable("posts");
   const { data: accounts = [] } = useTable("social_accounts");
-  const connected = (["instagram", "tiktok"] as Platform[]).filter((p) => accounts.some((a) => a.platform === p));
+  const connected = (IS_INSTAGRAM_PRODUCT ? ["instagram"] as Platform[] : ["instagram", "tiktok"] as Platform[]).filter((p) => accounts.some((a) => a.platform === p));
   const [picked, setPlatforms] = useState<Platform[]>([]);
   // Só as redes conectadas valem (os posts de Aprovações podem citar uma rede que não está conectada)
   const platforms = picked.filter((p) => connected.includes(p));

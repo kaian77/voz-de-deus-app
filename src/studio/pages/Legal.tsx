@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useStudioTheme } from "../components/bits";
+import { IS_INSTAGRAM_PRODUCT, PRODUCT_NAME } from "../lib/product";
 
 // Páginas públicas exigidas pela Meta e pelo TikTok para publicar o app:
 // política de privacidade, termos de uso e instruções de exclusão de dados.
@@ -24,7 +25,7 @@ const DOCS: Record<"privacidade" | "termos" | "exclusao-de-dados", Doc> = {
           "Dados da conta conectada: identificador, nome de usuário, nome, foto de perfil, biografia, número de seguidores e de publicações.",
           "Conteúdo da conta: publicações e métricas públicas (curtidas, comentários), comentários recebidos e mensagens enviadas para a conta, com o nome de usuário de quem comentou ou escreveu.",
           "Tokens de acesso emitidos pela Meta, pelo TikTok ou pelo provedor de WhatsApp. Eles servem para agir em nome da conta conectada.",
-          "Conteúdo criado no próprio Studio: rascunhos, imagens, legendas, agendamentos, automações e configurações da marca.",
+          "Conteúdo criado no próprio Studio: rascunhos, imagens, legendas, agendamentos, automações, configurações da marca e links que você adiciona à página Link na bio. Se publicada, essa página e os endereços que você incluiu ficam visíveis a qualquer pessoa com o link.",
           "E-mail e senha de acesso ao Studio. A senha é guardada pelo serviço de autenticação, nunca em texto aberto.",
         ],
       },
@@ -130,19 +131,32 @@ const DOCS: Record<"privacidade" | "termos" | "exclusao-de-dados", Doc> = {
 export default function Legal({ doc }: { doc: keyof typeof DOCS }) {
   useStudioTheme();
   const d = DOCS[doc];
+  const sections = d.sections
+    .filter((section) => !IS_INSTAGRAM_PRODUCT || !section.heading.toLowerCase().includes("youtube"))
+    .map((section) => ({
+      ...section,
+      body: section.body.map((paragraph) => {
+        if (!IS_INSTAGRAM_PRODUCT) return paragraph;
+        if (paragraph.startsWith("O Social Studio é uma ferramenta")) return "O PáginasPro Instagram é uma ferramenta para planejar, publicar e acompanhar conteúdo de contas profissionais do Instagram conectadas pelo próprio titular.";
+        if (paragraph.startsWith("Tokens de acesso emitidos")) return "Tokens de acesso emitidos pela Meta. Eles servem para agir em nome da conta profissional do Instagram conectada.";
+        if (paragraph.startsWith("O Social Studio deve ser usado")) return "O PáginasPro Instagram deve ser usado apenas com contas do Instagram que você controla, seguindo os termos e as políticas da Meta.";
+        if (paragraph.startsWith("As integrações dependem")) return "Os recursos dependem das APIs da Meta, que podem mudar ou ficar indisponíveis sem aviso.";
+        return paragraph.replaceAll("Social Studio", PRODUCT_NAME);
+      }),
+    }));
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
         <div className="mx-auto flex max-w-3xl items-center gap-2.5 px-4 py-3">
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-foreground text-[12px] font-semibold text-background">S</span>
-          <Link to="/studio" className="text-[13px] font-semibold">Social Studio</Link>
+          <Link to="/studio" className="text-[13px] font-semibold">{PRODUCT_NAME}</Link>
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-10">
         <h1 className="text-2xl font-semibold tracking-tight">{d.title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">Última atualização: {UPDATED}</p>
         <div className="mt-8 space-y-8">
-          {d.sections.map((s) => (
+          {sections.map((s) => (
             <section key={s.heading}>
               <h2 className="text-base font-semibold">{s.heading}</h2>
               <div className="mt-2 space-y-2 text-[15px] leading-relaxed text-foreground/85">

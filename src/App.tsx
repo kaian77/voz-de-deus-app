@@ -29,11 +29,43 @@ import StrategyPage from "./studio/pages/Strategy";
 import Videos from "./studio/pages/Videos";
 import Review from "./studio/pages/Review";
 import Reviews from "./studio/pages/Reviews";
+import LinkBio from "./studio/pages/LinkBio";
+import { INSTAGRAM_STUDIO_PATHS, IS_INSTAGRAM_PRODUCT } from "./studio/lib/product";
 
 const queryClient = new QueryClient();
 
 // Build de demonstração hospedado como página única (VITE_HASH_ROUTER=1) usa rotas com #
 const Router = import.meta.env.VITE_HASH_ROUTER ? HashRouter : BrowserRouter;
+
+const studioRoutes = [
+  { path: "", element: <Dashboard /> },
+  { path: "criar", element: <Composer /> },
+  { path: "em-massa", element: <BulkSchedule /> },
+  { path: "videos", element: <Videos /> },
+  { path: "calendario", element: <Calendar /> },
+  { path: "aprovacoes", element: <Approvals /> },
+  { path: "automacoes", element: <Automations /> },
+  { path: "comentarios", element: <Comments /> },
+  { path: "mensagens", element: <Messages /> },
+  { path: "pedidos", element: <Orders /> },
+  { path: "avaliacoes", element: <Reviews /> },
+  { path: "produtos", element: <Products /> },
+  { path: "estrategia", element: <StrategyPage /> },
+  { path: "vitrine", element: <Vitrine /> },
+  { path: "link-bio", element: <LinkBio /> },
+  { path: "concorrentes", element: <Competitors /> },
+  { path: "leads", element: <Leads /> },
+  { path: "landing", element: <Landings /> },
+  { path: "youtube", element: <YouTube /> },
+  { path: "cortes", element: <Clips /> },
+  { path: "uso", element: <Usage /> },
+  { path: "contas", element: <Accounts /> },
+  { path: "claude", element: <ClaudeApi /> },
+];
+
+const visibleStudioRoutes = IS_INSTAGRAM_PRODUCT
+  ? studioRoutes.filter((route) => INSTAGRAM_STUDIO_PATHS.has(route.path))
+  : studioRoutes;
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -44,28 +76,10 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Navigate to="/studio" replace />} />
           <Route path="/studio" element={<AuthGate><StudioLayout /></AuthGate>}>
-            <Route index element={<Dashboard />} />
-            <Route path="criar" element={<Composer />} />
-            <Route path="em-massa" element={<BulkSchedule />} />
-            <Route path="videos" element={<Videos />} />
-            <Route path="calendario" element={<Calendar />} />
-            <Route path="aprovacoes" element={<Approvals />} />
-            <Route path="automacoes" element={<Automations />} />
-            <Route path="comentarios" element={<Comments />} />
-            <Route path="mensagens" element={<Messages />} />
-            <Route path="pedidos" element={<Orders />} />
-            <Route path="avaliacoes" element={<Reviews />} />
-            <Route path="produtos" element={<Products />} />
-            <Route path="estrategia" element={<StrategyPage />} />
-            <Route path="vitrine" element={<Vitrine />} />
-            <Route path="concorrentes" element={<Competitors />} />
-            <Route path="leads" element={<Leads />} />
-            <Route path="landing" element={<Landings />} />
-            <Route path="youtube" element={<YouTube />} />
-            <Route path="cortes" element={<Clips />} />
-            <Route path="uso" element={<Usage />} />
-            <Route path="contas" element={<Accounts />} />
-            <Route path="claude" element={<ClaudeApi />} />
+            {visibleStudioRoutes.map((route) => route.path
+              ? <Route key={route.path} path={route.path} element={route.element} />
+              : <Route key="index" index element={route.element} />)}
+            {IS_INSTAGRAM_PRODUCT && <Route path="*" element={<Navigate to="/studio" replace />} />}
           </Route>
           <Route path="/avaliar" element={<Review />} />
           <Route path="/privacidade" element={<Legal doc="privacidade" />} />

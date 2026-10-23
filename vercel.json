@@ -13,6 +13,10 @@
       "destination": "/api/landing?report=:token"
     },
     {
+      "source": "/bio/:slug",
+      "destination": "/api/bio?slug=:slug"
+    },
+    {
       "source": "/inicio",
       "has": [
         {
@@ -37,7 +41,7 @@
       "missing": [
         {
           "type": "host",
-          "value": "(.*\\.vercel\\.app|localhost.*|127\\.0\\.0\\.1.*|(www\\.)?paginaspro\\.app\\.br)"
+          "value": "(.*\\.vercel\\.app|localhost.*|127\\.0\\.0\\.1.*|(www\\.)?paginaspro\\.app\\.br|instagram\\.paginaspro\\.app\\.br)"
         }
       ],
       "destination": "/api/landing"

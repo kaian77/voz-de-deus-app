@@ -12,6 +12,7 @@ import { api, isDemo, supabase } from "../lib/api";
 import { useInvalidate, useSaveRow, useSettings, useTable } from "../lib/hooks";
 import type { Conversation, Message } from "../lib/types";
 import { Avatar, EmptyState, PageHeader, PlatformIcon, relativeTime, StatusDot } from "../components/bits";
+import { IS_INSTAGRAM_PRODUCT } from "../lib/product";
 
 const SENDER_LABEL: Record<Message["sender"], string> = { contact: "", ai: "Agente de IA", human: "Você", agent: "Claude" };
 const nameOf = (c: Conversation) => c.contact_name ?? c.contact_username ?? `+${c.contact_id.split("@")[0]}`;
@@ -276,7 +277,8 @@ export default function Messages() {
   const list = useMemo(
     () =>
       conversations
-        .filter((c) => brandOf(c) === brand)
+        .filter((c) => !IS_INSTAGRAM_PRODUCT || c.channel === "instagram")
+        .filter((c) => IS_INSTAGRAM_PRODUCT || brandOf(c) === brand)
         .filter((c) => (filter === "needs_human" ? c.status === "needs_human" : filter === "ai" ? c.ai_enabled && c.status === "open" : c.status !== "closed"))
         .filter((c) => !query || nameOf(c).toLowerCase().includes(query.toLowerCase())),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -293,7 +295,7 @@ export default function Messages() {
 
   return (
     <div>
-      <PageHeader title="Mensagens" description="Direct do Instagram e WhatsApp. O agente responde e passa para você quando precisa." />
+      <PageHeader title="Mensagens" description={IS_INSTAGRAM_PRODUCT ? "Acompanhe o direct do Instagram e assuma a conversa quando precisar." : "Direct do Instagram e WhatsApp. O agente responde e passa para você quando precisa."} />
       {settings && !settings.agent_enabled && brand === "brax" && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-3 text-[13px]">
           <span><span className="font-medium">O agente de IA está desligado.</span> <span className="text-muted-foreground">As mensagens chegam aqui, mas ninguém responde automaticamente.</span></span>
@@ -303,7 +305,7 @@ export default function Messages() {
       <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
         <div className={cn("flex flex-col overflow-hidden rounded-lg border bg-card", selectedId && "hidden lg:flex")}>
           <div className="space-y-2 border-b p-2">
-            {ppAccounts.size > 0 && (
+            {!IS_INSTAGRAM_PRODUCT && ppAccounts.size > 0 && (
               <div className="grid grid-cols-2 gap-1 rounded-md bg-secondary p-1">
                 {([["brax", "Brax Pins"], ["paginaspro", "PáginasPro"]] as const).map(([id, label]) => {
                   const n = waitingBy(id);
@@ -362,7 +364,7 @@ export default function Messages() {
             <Thread key={selected.id} conversation={selected} onBack={() => setSelectedId(null)} />
           ) : (
             <EmptyState icon={<Inbox />} title="Nenhuma conversa selecionada">
-              As mensagens chegam sozinhas quando o Instagram e o WhatsApp estão conectados.
+              {IS_INSTAGRAM_PRODUCT ? "As mensagens aparecem aqui quando sua conta profissional do Instagram estiver conectada." : "As mensagens chegam sozinhas quando o Instagram e o WhatsApp estão conectados."}
             </EmptyState>
           )}
         </div>

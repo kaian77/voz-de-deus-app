@@ -225,6 +225,7 @@ export interface BrandSettings {
   auto_post_link?: boolean;
   approval_required: boolean;
   timezone: string;
+  calendar_appearance?: { accent: string; style: "clean" | "soft" | "editorial" };
   agent_enabled?: boolean;
   agent_instructions?: string | null;
   agent_knowledge?: string | null;
@@ -406,6 +407,23 @@ export interface LandingPage {
   updated_at: string;
 }
 
+export interface BioLink {
+  id: string;
+  user_id?: string;
+  slug: string;
+  display_name: string;
+  username: string | null;
+  bio: string | null;
+  avatar_url: string | null;
+  background: string;
+  accent: string;
+  button_style: "rounded" | "pill" | "outline";
+  links: { id: string; title: string; url: string; enabled: boolean }[];
+  status: "draft" | "published";
+  created_at: string;
+  updated_at: string;
+}
+
 /** Totais por dia de uma landing page publicada (visitas, cliques no WhatsApp, rota no mapa, origem). */
 export interface LandingStat {
   page_id: string;
@@ -583,6 +601,7 @@ export interface TableMap {
   lead_searches: LeadSearch;
   leads: Lead;
   landing_pages: LandingPage;
+  bio_links: BioLink;
   landing_stats: LandingStat;
   site_stats: SiteStat;
   yt_channels: YtChannel;
