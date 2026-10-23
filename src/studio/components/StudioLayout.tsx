@@ -49,7 +49,7 @@ const GROUPS: { label?: string; items: Item[] }[] = [
       { to: "/studio/estrategia", label: "Estratégia", icon: Target },
       { to: "/studio/vitrine", label: "Análise do perfil", icon: Store },
       { to: "/studio/link-bio", label: "Link na bio", icon: Link2 },
-      { to: "/studio/concorrentes", label: "Concorrentes", icon: BarChart3 },
+      { to: "/studio/concorrentes", label: "Perfis de referência", icon: BarChart3 },
     ],
   },
   {

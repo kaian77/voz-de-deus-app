@@ -149,7 +149,7 @@ export default function Competitors() {
 
   return (
     <div>
-      <PageHeader title="Concorrentes" description="Acompanhe perfis de referência e transforme o que funciona para eles em ideias para você." />
+      <PageHeader title="Perfis de referência" description="Acompanhe perfis do seu segmento e transforme boas ideias em conteúdo para você." />
       <form
         className="mb-6 flex flex-col gap-2 rounded-lg border bg-card p-2 sm:flex-row"
         onSubmit={(e) => {
@@ -169,7 +169,7 @@ export default function Competitors() {
       </form>
       {competitors.length === 0 ? (
         <EmptyState icon={<BarChart3 />} title="Nenhum perfil monitorado">
-          {IS_INSTAGRAM_PRODUCT ? "Adicione perfis do seu nicho no Instagram. A IA pesquisa o perfil e compara os conteúdos com a sua marca." : "Adicione perfis do seu nicho (Instagram ou TikTok). A IA pesquisa o perfil na web e depois compara com a sua marca."}
+          {IS_INSTAGRAM_PRODUCT ? "Adicione perfis do seu segmento no Instagram. A IA analisa os conteúdos e sugere ideias para sua marca." : "Adicione perfis do seu segmento (Instagram ou TikTok). A IA analisa os conteúdos e sugere ideias para sua marca."}
         </EmptyState>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">{competitors.map((c) => <CompetitorCard key={c.id} c={c} />)}</div>

@@ -121,7 +121,7 @@ function PlanView({ strategy }: { strategy: Strategy }) {
           {plan.market.prices && <div><SectionLabel className="mb-1">Preços no mercado</SectionLabel><p className="text-[13px]">{plan.market.prices}</p></div>}
           {plan.market.competitors.length > 0 && (
             <div>
-              <SectionLabel className="mb-2">Concorrentes</SectionLabel>
+              <SectionLabel className="mb-2">Perfis de referência</SectionLabel>
               <div className="grid gap-2 sm:grid-cols-2">
                 {plan.market.competitors.map((c, i) => (
                   <div key={i} className="rounded-md border p-3">
@@ -219,7 +219,7 @@ function PlanView({ strategy }: { strategy: Strategy }) {
   );
 }
 
-const STEPS = ["Lendo as vendas do site, Mercado Livre e Shopee…", "Pesquisando o mercado na web (concorrentes, preços, tendências)…", "Montando a estratégia…"];
+const STEPS = ["Lendo as vendas do site, Mercado Livre e Shopee…", "Pesquisando perfis de referência, preços e tendências…", "Montando a estratégia…"];
 
 export default function StrategyPage() {
   const qc = useQueryClient();

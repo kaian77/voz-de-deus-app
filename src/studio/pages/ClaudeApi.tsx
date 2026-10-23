@@ -20,7 +20,7 @@ const EXAMPLES = [
   "Analise meu Instagram, me diga o que melhorar na vitrine e salve a auditoria no Studio.",
   "Crie 5 carrosséis para esta semana sobre o meu nicho e agende nos meus melhores horários.",
   "Crie uma automação: quem comentar QUERO recebe no direct o link do meu produto.",
-  "Adicione @perfil_x e @perfil_y como concorrentes, compare com a gente e me dê 10 ideias de reels.",
+  "Analise os perfis @perfil_x e @perfil_y como referência e me dê 10 ideias de Reels.",
   "O que está agendado para os próximos 7 dias? Tem algum dia vazio?",
   "Quais conversas estão esperando por mim? Responda as que você souber.",
 ];
