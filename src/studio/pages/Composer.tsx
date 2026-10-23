@@ -76,6 +76,7 @@ export default function Composer() {
   const [ttOpts, setTtOpts] = useState<TikTokOptions>(TIKTOK_DEFAULTS);
   const [videoSeconds, setVideoSeconds] = useState<number>();
   const [product, setProduct] = useState<LinkedProduct | null>(null);
+  const [coverUrl, setCoverUrl] = useState("");
   const onTikTok = platforms.includes("tiktok") && kind !== "story";
   const ttCreator = useTikTokCreator(onTikTok);
 
@@ -104,6 +105,8 @@ export default function Composer() {
     setTitle(editing.title ?? "");
     setWhen(toLocalInput(editing.scheduled_at));
     setTtOpts(fromApiOptions((editing.options as { tiktok?: Record<string, unknown> })?.tiktok));
+    const instagramOptions = (editing.options as { instagram?: { cover_url?: string } })?.instagram;
+    setCoverUrl(instagramOptions?.cover_url ?? "");
   }, [editing]);
 
   useEffect(() => {
@@ -209,6 +212,7 @@ export default function Composer() {
         results: {},
         options: {
           ...(editing?.options ?? {}),
+          ...(kind === "reel" ? { instagram: { ...((editing?.options as { instagram?: Record<string, unknown> })?.instagram ?? {}), cover_url: coverUrl || undefined } } : {}),
           ...(onTikTok ? { tiktok: toApiOptions(ttOpts) } : {}),
           // Produto vinculado: a automação do post manda o link dele no direct
           ...(product?.url ? { product: { id: product.id, name: product.name, url: product.url } } : {}),
@@ -365,6 +369,16 @@ export default function Composer() {
               ) : undefined
             }
           >
+            {kind === "reel" && coverUrl && (
+              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border bg-secondary/30 p-3">
+                <img src={coverUrl} alt="Capa escolhida para o Reel" className="h-28 w-16 rounded-md border bg-black object-cover" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">Capa do Reel pronta</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Ela será enviada como capa quando o Reel for publicado. Confira junto com o vídeo antes de agendar.</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setCoverUrl("")}>Remover capa</Button>
+              </div>
+            )}
             {usingDesign ? (
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">

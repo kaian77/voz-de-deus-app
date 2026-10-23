@@ -30,6 +30,7 @@ import Videos from "./studio/pages/Videos";
 import Review from "./studio/pages/Review";
 import Reviews from "./studio/pages/Reviews";
 import LinkBio from "./studio/pages/LinkBio";
+import ViralScripts from "./studio/pages/ViralScripts";
 import { INSTAGRAM_STUDIO_PATHS, IS_INSTAGRAM_PRODUCT } from "./studio/lib/product";
 
 const queryClient = new QueryClient();
@@ -53,6 +54,7 @@ const studioRoutes = [
   { path: "estrategia", element: <StrategyPage /> },
   { path: "vitrine", element: <Vitrine /> },
   { path: "link-bio", element: <LinkBio /> },
+  { path: "roteiros", element: <ViralScripts /> },
   { path: "concorrentes", element: <Competitors /> },
   { path: "leads", element: <Leads /> },
   { path: "landing", element: <Landings /> },

@@ -137,6 +137,39 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
           caption: "Leia até o fim e guarde no coração 🙏 Comente AMÉM!",
           hashtags: ["fé", "deus", "esperança", "versículo"],
         };
+      case "viral_scripts":
+        return {
+          sources: [],
+          scripts: Array.from({ length: Number(body.count ?? 3) }, (_, i) => {
+            const niche = String(body.niche ?? "seu segmento");
+            const focus = String(body.focus ?? "uma dica prática");
+            const themes = [
+              `Um erro comum em ${niche}`,
+              `O que quase ninguém mostra sobre ${niche}`,
+              `Uma dica simples de ${niche} para testar hoje`,
+            ];
+            const hooks = [
+              `Se você está começando em ${niche}, evite isso.`,
+              `Queria ter aprendido isso antes sobre ${niche}.`,
+              `Faça este teste rápido de ${niche} hoje.`,
+            ];
+            return {
+              theme: themes[i % themes.length], format: "reel", hook: hooks[i % hooks.length],
+              cover_title: [`EVITE ESTE ERRO`, `APRENDA MAIS RÁPIDO`, `TESTE HOJE`][i % 3],
+              duration_seconds: Number(body.duration ?? 30),
+              scenes: [
+                { time: "0–2s", visual: "Olhe para a câmera e mostre o resultado final.", spoken: hooks[i % hooks.length] },
+                { time: "2–10s", visual: "Mostre a situação ou o problema em um exemplo real.", spoken: `Isso acontece com muita gente que acompanha ${niche}.` },
+                { time: "10–22s", visual: "Demonstre a dica em três passos curtos.", spoken: `${focus}. Primeiro, observe o que está acontecendo; depois, faça um ajuste simples e compare.` },
+                { time: "22–30s", visual: "Mostre o resultado e convide a pessoa a interagir.", spoken: `Salve para testar depois e me conte como foi.` },
+              ],
+              caption: `Uma ideia simples de ${niche} para colocar em prática. Salve para testar depois.`,
+              hashtags: [niche.replace(/[^\p{L}\p{N}]/gu, ""), "dicas", "aprendizado", "criadores", "reels"].filter(Boolean),
+              cta: "Salve e envie para alguém que pode aproveitar essa dica.",
+              angle: "Exemplo prático com resultado visível; modelo demonstrativo do modo de teste.",
+            };
+          }),
+        };
       case "plan":
         return {
           posts: Array.from({ length: Number(body.days ?? 7) }, (_, i) => ({

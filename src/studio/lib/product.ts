@@ -13,6 +13,7 @@ export const INSTAGRAM_STUDIO_PATHS = new Set([
   "mensagens",
   "link-bio",
   "vitrine",
+  "roteiros",
   "concorrentes",
   "uso",
   "contas",

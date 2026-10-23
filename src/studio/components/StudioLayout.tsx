@@ -20,6 +20,7 @@ const GROUPS: { label?: string; items: Item[] }[] = [
     label: "Publicar",
     items: [
       { to: "/studio/criar", label: "Criar post", icon: PenLine },
+      { to: "/studio/roteiros", label: "Roteiros e capas", icon: Clapperboard },
       { to: "/studio/videos", label: "Vídeos IA", icon: Clapperboard },
       { to: "/studio/em-massa", label: "Agendar em massa", icon: CalendarPlus },
       { to: "/studio/calendario", label: "Calendário", icon: CalendarDays },

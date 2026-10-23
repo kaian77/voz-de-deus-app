@@ -1,7 +1,13 @@
 # Welcome to your Lovable project
 
-> **Social Studio**: agendamento de posts no Instagram e TikTok, respostas automáticas a comentários (estilo ManyChat), agente de IA para DMs e WhatsApp, auditoria da vitrine, concorrentes e acesso do Claude via MCP. O endereço principal abre o painel (`/studio`).
+> **PáginasPro Instagram**: produto separado para planejar e agendar conteúdo no Instagram. Inclui calendário com visual personalizável, página de links para a bio, roteiros de Reels com cenas, falas, legendas e capas editáveis, além de respostas a comentários e mensagens. O endereço principal abre o painel (`/studio`).
 > Veja o passo a passo em [SETUP_SOCIAL_STUDIO.md](SETUP_SOCIAL_STUDIO.md).
+
+## Roteiros e capas
+
+Em **Studio → Roteiros e capas**, informe o segmento, o público e o objetivo para receber três ideias de Reels. A pesquisa de assuntos atuais é opcional e pode consumir créditos adicionais da API de IA. Cada roteiro pode virar um rascunho: a capa vertical 9:16 é montada no navegador a partir de um modelo visual e pode ter o título e a cor ajustados antes do uso. No compositor, confira a capa e adicione o vídeo antes de agendar.
+
+Sem Supabase configurado, o modo de demonstração usa roteiros de exemplo e salva os rascunhos neste navegador. Para testar com contas reais, configure Supabase, as credenciais da IA e a conexão profissional do Instagram conforme o guia de setup. Sugestões de conteúdo não garantem viralização.
 
 ## Project info
 

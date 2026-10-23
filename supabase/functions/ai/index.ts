@@ -2,7 +2,7 @@
 // auditoria da vitrine e análise de concorrentes.
 import { z } from "npm:zod@4";
 import { adminClient, corsHeaders, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
-import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
+import { aiEnabled, brandContext, generateJSON, researchWeb } from "../_shared/claude.ts";
 import { readWebPage, runTool } from "../_shared/agent-tools.ts";
 import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
@@ -60,6 +60,20 @@ const CompetitorAnalysis = z.object({
   content_patterns: z.array(z.string()),
   opportunities: z.array(z.string()),
   ideas_to_adapt: z.array(z.string()),
+});
+const ViralScripts = z.object({
+  scripts: z.array(z.object({
+    theme: z.string(),
+    format: z.enum(["reel", "story"]),
+    hook: z.string(),
+    cover_title: z.string(),
+    duration_seconds: z.number(),
+    scenes: z.array(z.object({ time: z.string(), visual: z.string(), spoken: z.string() })),
+    caption: z.string(),
+    hashtags: z.array(z.string()),
+    cta: z.string(),
+    angle: z.string(),
+  })),
 });
 
 Deno.serve(async (req) => {
@@ -594,6 +608,34 @@ Deno.serve(async (req) => {
             : "") +
           `Slide 1 = capa com gancho irresistível (título até 8 palavras). Slides do meio = 1 ideia por slide, título curto + corpo até 25 palavras. ` +
           `Último slide = CTA (salvar, compartilhar, comentar palavra-chave). Também escreva a legenda e hashtags (sem #).`));
+
+      case "viral_scripts": {
+        const niche = String(input.niche ?? settings?.niche ?? "").trim().slice(0, 180);
+        if (!niche) throw new HttpError(400, "Informe o segmento da marca em Configurações ou neste formulário.");
+        const objective = String(input.objective ?? "alcance e compartilhamentos").slice(0, 120);
+        const duration = [15, 30, 45].includes(Number(input.duration)) ? Number(input.duration) : 30;
+        const count = Math.min(3, Math.max(1, Number(input.count) || 3));
+        let research = { text: "", sources: [] as string[] };
+        if (input.with_trends === true) {
+          research = await researchWeb(system,
+            `Pesquise assuntos, perguntas recorrentes e formatos de vídeo que estejam ganhando atenção recentemente no Brasil e que sejam relevantes para o segmento "${niche}". ` +
+            `Priorize fontes dos últimos 30 dias quando possível. Não invente visualizações, rankings, áudios em alta ou números. ` +
+            `Traga até 5 sinais concretos com data e URL de origem; se não houver evidência atual confiável, diga isso e sugira apenas ângulos perenes. ` +
+            `Não copie roteiros de criadores nem recomende usar áudio protegido sem verificar a biblioteca do Instagram.`, 4);
+        }
+        const generated = await generateJSON(ViralScripts, system,
+          `Crie ${count} roteiros originais para Instagram Reels, em português do Brasil, para o segmento "${niche}". ` +
+          `Objetivo: ${objective}. Duração aproximada: ${duration} segundos. ` +
+          (input.audience ? `Público: ${String(input.audience).slice(0, 180)}. ` : "") +
+          (input.focus ? `Preferência/tema do cliente: ${String(input.focus).slice(0, 300)}. ` : "") +
+          (research.text ? `\nSINAIS PESQUISADOS E FONTES (use somente o que for relevante; não trate hipótese como tendência comprovada):\n${research.text.slice(0, 12000)}\n` : `\nSem pesquisa em tempo real: use temas perenes e mecanismos criativos, sem afirmar que algo está em alta agora.\n`) +
+          `Cada roteiro deve ter um tema específico, um gancho falado/visual nos primeiros 2 segundos, um título curto para capa (2 a 6 palavras), de 4 a 7 cenas cronológicas com tempo, ` +
+          `indicação visual simples de gravar e fala exata, legenda curta com CTA e 5 a 8 hashtags pertinentes sem #. ` +
+          `O campo angle explica por que o tema conversa com o público e qual sinal atual sustenta a ideia; se não houver fonte atual, marque claramente como ideia perene. ` +
+          `Evite clickbait enganoso, promessas impossíveis, copiar criadores e sugerir que viralização é garantida. Não invente estatísticas, tendências, notícias ou fatos do nicho.`,
+          "medium");
+        return json({ ...generated, sources: research.sources });
+      }
 
       case "plan":
         return json(await generateJSON(Plan, system,
