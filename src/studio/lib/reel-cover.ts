@@ -12,6 +12,16 @@ export function suggestCoverAccent(niche: string | null | undefined) {
   return "#7c3aed";
 }
 
+function loadCoverPhoto(url: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Não consegui abrir a foto escolhida. Envie outra imagem."));
+    image.src = url;
+  });
+}
+
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const lines: string[] = [];
@@ -28,7 +38,7 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
 }
 
 /** Gera uma capa 9:16 para Reels com uma área central segura para o corte da grade. */
-export async function renderReelCover(input: { title: string; niche: string; handle?: string; accent?: string }) {
+export async function renderReelCover(input: { title: string; niche: string; handle?: string; accent?: string; photoUrl?: string }) {
   const canvas = document.createElement("canvas");
   canvas.width = REEL_COVER_SIZE.width;
   canvas.height = REEL_COVER_SIZE.height;
@@ -43,6 +53,21 @@ export async function renderReelCover(input: { title: string; niche: string; han
   background.addColorStop(1, accent);
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, width, height);
+
+  if (input.photoUrl) {
+    const photo = await loadCoverPhoto(input.photoUrl);
+    const scale = Math.max(width / photo.width, height / photo.height);
+    const photoWidth = photo.width * scale;
+    const photoHeight = photo.height * scale;
+    ctx.drawImage(photo, (width - photoWidth) / 2, (height - photoHeight) / 2, photoWidth, photoHeight);
+    const shade = ctx.createLinearGradient(0, 0, 0, height);
+    shade.addColorStop(0, "rgba(8,12,10,.12)");
+    shade.addColorStop(0.38, "rgba(8,12,10,.24)");
+    shade.addColorStop(0.64, "rgba(8,12,10,.74)");
+    shade.addColorStop(1, "rgba(8,12,10,.8)");
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, width, height);
+  }
 
   const glow = ctx.createRadialGradient(width * 0.82, height * 0.22, 5, width * 0.82, height * 0.22, 560);
   glow.addColorStop(0, `${accent}bb`);

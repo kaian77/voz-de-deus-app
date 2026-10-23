@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowRight, Check, Clapperboard, ExternalLink, Loader2, Save, Search, Sparkles, WandSparkles } from "lucide-react";
+import { ArrowRight, Check, Clapperboard, ExternalLink, ImagePlus, Loader2, Save, Search, Sparkles, WandSparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +30,7 @@ type ScriptResponse = { scripts: Script[]; sources: string[] };
 const ACCENTS = ["#7c3aed", "#2563eb", "#db2777", "#ea580c", "#059669", "#18181b"];
 const OBJECTIVES = ["Alcance e compartilhamentos", "Atrair seguidores", "Gerar conversas no direct", "Apresentar um produto ou serviço"];
 
-function ScriptCard({ script, niche, accent, handle, onUse }: { script: Script; niche: string; accent: string; handle?: string; onUse: (postId: string) => Promise<void> }) {
+function ScriptCard({ script, niche, accent, handle, photoUrl, onUse }: { script: Script; niche: string; accent: string; handle?: string; photoUrl?: string; onUse: (postId: string) => Promise<void> }) {
   const [coverTitle, setCoverTitle] = useState(script.cover_title || script.hook);
   const [busy, setBusy] = useState(false);
   const previewLines = coverTitle.toUpperCase().split(" ").reduce<string[]>((lines, word) => {
@@ -43,7 +43,7 @@ function ScriptCard({ script, niche, accent, handle, onUse }: { script: Script; 
   const useScript = async () => {
     setBusy(true);
     try {
-      const cover = await renderReelCover({ title: coverTitle, niche, handle, accent });
+      const cover = await renderReelCover({ title: coverTitle, niche, handle, accent, photoUrl });
       const coverUrl = await api.upload(cover, "capa-reel.jpg");
       const notes = [
         "ROTEIRO PARA REEL",
@@ -87,7 +87,7 @@ function ScriptCard({ script, niche, accent, handle, onUse }: { script: Script; 
       <div className="grid gap-0 md:grid-cols-[220px_minmax(0,1fr)]">
         <div className="p-5 md:border-r">
           <SectionLabel>Prévia da capa</SectionLabel>
-          <div className="mx-auto mt-3 aspect-[9/16] w-full max-w-[185px] overflow-hidden rounded-2xl border border-white/20 p-3 text-white shadow-lg" style={{ background: `radial-gradient(circle at 85% 18%, ${accent}, transparent 38%), linear-gradient(150deg, #111116 10%, #252431 63%, ${accent} 140%)` }}>
+          <div className="mx-auto mt-3 aspect-[9/16] w-full max-w-[185px] overflow-hidden rounded-2xl border border-white/20 p-3 text-white shadow-lg" style={{ background: photoUrl ? `linear-gradient(180deg, rgba(8,12,10,.15) 5%, rgba(8,12,10,.6) 48%, rgba(8,12,10,.88) 100%), url("${photoUrl}") center / cover` : `radial-gradient(circle at 85% 18%, ${accent}, transparent 38%), linear-gradient(150deg, #111116 10%, #252431 63%, ${accent} 140%)` }}>
             <div className="flex h-full flex-col justify-center rounded-xl border border-white/15 bg-black/30 p-4">
               <span className="text-[9px] font-semibold uppercase tracking-[.16em] text-white/75">{niche || "Seu segmento"}</span>
               <div className="my-4 h-1 w-10 rounded-full" style={{ background: accent }} />
@@ -128,6 +128,9 @@ export default function ViralScripts() {
   const [result, setResult] = useState<ScriptResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [savingAccent, setSavingAccent] = useState(false);
+  const [coverPhotoUrl, setCoverPhotoUrl] = useState("");
+  const [savingPhoto, setSavingPhoto] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!niche && settings?.niche) setNiche(settings.niche);
@@ -137,6 +140,10 @@ export default function ViralScripts() {
   useEffect(() => {
     if (settings) setAccent(settings.instagram_cover_accent || suggestCoverAccent(settings.niche));
   }, [settings?.instagram_cover_accent, settings?.niche]);
+
+  useEffect(() => {
+    setCoverPhotoUrl(settings?.instagram_cover_photo_url ?? "");
+  }, [settings?.instagram_cover_photo_url]);
 
   const saveAccent = async () => {
     setSavingAccent(true);
@@ -148,6 +155,39 @@ export default function ViralScripts() {
       toast.error((error as Error).message);
     } finally {
       setSavingAccent(false);
+    }
+  };
+
+  const uploadCoverPhoto = async (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("Escolha uma foto em formato de imagem.");
+    if (file.size > 8 * 1024 * 1024) return toast.error("A foto precisa ter até 8 MB.");
+    setSavingPhoto(true);
+    try {
+      const url = await api.upload(file, "foto-capa-perfil");
+      await api.saveSettings({ instagram_cover_photo_url: url });
+      setCoverPhotoUrl(url);
+      await qc.invalidateQueries({ queryKey: ["settings"] });
+      toast.success("Foto salva. Ela será usada nas próximas capas.");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setSavingPhoto(false);
+      if (photoInput.current) photoInput.current.value = "";
+    }
+  };
+
+  const removeCoverPhoto = async () => {
+    setSavingPhoto(true);
+    try {
+      await api.saveSettings({ instagram_cover_photo_url: null });
+      setCoverPhotoUrl("");
+      await qc.invalidateQueries({ queryKey: ["settings"] });
+      toast.success("Foto removida das próximas capas.");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setSavingPhoto(false);
     }
   };
 
@@ -187,6 +227,7 @@ export default function ViralScripts() {
           <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="script-objective">Objetivo principal</Label><select id="script-objective" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={objective} onChange={(event) => setObjective(event.target.value)}>{OBJECTIVES.map((item) => <option key={item}>{item}</option>)}</select></div><div><Label className="mb-2 block">Duração do Reel</Label><div className="flex gap-1 rounded-lg border bg-secondary/40 p-1">{([15, 30, 45] as const).map((seconds) => <button key={seconds} type="button" onClick={() => setDuration(seconds)} className={`flex-1 rounded-md px-2 py-2 text-xs ${duration === seconds ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}>{seconds} segundos</button>)}</div></div></div>
           <label className="flex items-start gap-3 rounded-xl border bg-secondary/20 p-3.5"><input type="checkbox" checked={withTrends} onChange={(event) => setWithTrends(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="flex items-center gap-1.5 text-[13px] font-medium"><Search className="h-3.5 w-3.5" /> Pesquisar assuntos atuais na web</span><span className="mt-1 block text-xs leading-relaxed text-muted-foreground">Quando ligado, buscamos sinais recentes e mostramos as fontes. Isso pode consumir mais créditos de IA; tendências não garantem viralização.</span></span></label>
           <div className="flex flex-wrap items-end justify-between gap-3"><div className="space-y-1.5"><div className="flex items-center gap-2"><Label className="text-xs">Cor da marca nas capas</Label><span className="text-[11px] text-muted-foreground">Sugestão pelo nicho; personalize se quiser</span></div><div className="flex items-center gap-2">{ACCENTS.map((color) => <button key={color} type="button" aria-label={`Cor da capa ${color}`} title={color} onClick={() => setAccent(color)} className={`h-6 w-6 rounded-full border-2 ${accent === color ? "border-foreground ring-2 ring-foreground/15" : "border-transparent"}`} style={{ background: color }} />)}<input aria-label="Outra cor para capa" type="color" value={accent} onChange={(event) => setAccent(event.target.value)} className="h-7 w-8 cursor-pointer rounded border p-0.5" /><Button type="button" size="sm" variant="outline" onClick={saveAccent} disabled={savingAccent}>{savingAccent ? <Loader2 className="animate-spin" /> : <Save />}Salvar cor</Button></div></div><Button onClick={generate} disabled={busy || !niche.trim()}>{busy ? <Loader2 className="animate-spin" /> : <WandSparkles />} {busy ? withTrends ? "Pesquisando e escrevendo…" : "Criando roteiros…" : "Gerar 3 roteiros + capas"}</Button></div>
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-secondary/20 p-3"><input ref={photoInput} type="file" accept="image/*" hidden onChange={(event) => void uploadCoverPhoto(event.target.files?.[0])} />{coverPhotoUrl ? <img src={coverPhotoUrl} alt="Foto que aparecerá nas capas" className="h-16 w-12 rounded-md border object-cover" /> : <div className="flex h-16 w-12 items-center justify-center rounded-md border border-dashed text-muted-foreground"><ImagePlus className="h-4 w-4" /></div>}<div className="min-w-0 flex-1"><p className="text-xs font-medium">Foto do perfil nas capas · opcional</p><p className="mt-1 text-[11px] text-muted-foreground">A foto fica salva na conta e aparece ao fundo, com contraste para manter o título legível.</p></div><Button type="button" size="sm" variant="outline" onClick={() => photoInput.current?.click()} disabled={savingPhoto}>{savingPhoto ? <Loader2 className="animate-spin" /> : <ImagePlus />}{coverPhotoUrl ? "Trocar foto" : "Enviar foto"}</Button>{coverPhotoUrl && <Button type="button" size="icon" variant="ghost" aria-label="Remover foto das capas" onClick={() => void removeCoverPhoto()} disabled={savingPhoto}><X /></Button>}</div>
           {!instagram && <p className="text-xs text-amber-700">Você pode criar os roteiros agora. Para agendar ou publicar, conecte uma conta profissional do Instagram.</p>}
         </Panel>
 
@@ -196,7 +237,7 @@ export default function ViralScripts() {
       {busy && <div className="flex items-center gap-3 rounded-xl border bg-card p-5 text-sm"><Loader2 className="h-5 w-5 animate-spin" /><div><p className="font-medium">{withTrends ? "Procurando assuntos recentes e montando suas ideias…" : "Montando seus roteiros…"}</p><p className="text-xs text-muted-foreground">Pode levar alguns instantes.</p></div></div>}
       {result && <div className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[.12em] text-muted-foreground">Sua próxima gravação começa aqui</p><h2 className="mt-1 text-xl font-semibold">3 ideias para {niche}</h2></div><Button variant="outline" size="sm" onClick={generate} disabled={busy}><WandSparkles /> Gerar outras ideias</Button></div>
         {result.sources?.length > 0 && <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-secondary/30 px-3 py-2 text-xs"><span className="font-medium">Fontes consultadas:</span>{result.sources.map((source) => <a key={source} href={source} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border bg-card px-2 py-1 text-muted-foreground hover:text-foreground">{new URL(source).hostname.replace(/^www\./, "")}<ExternalLink className="h-3 w-3" /></a>)}</div>}
-        {result.scripts.map((script, index) => <ScriptCard key={`${script.theme}-${index}`} script={script} niche={niche} accent={accent} handle={instagram?.username ?? undefined} onUse={used} />)}
+        {result.scripts.map((script, index) => <ScriptCard key={`${script.theme}-${index}`} script={script} niche={niche} accent={accent} handle={instagram?.username ?? undefined} photoUrl={coverPhotoUrl || undefined} onUse={used} />)}
       </div>}
     </div>
   );

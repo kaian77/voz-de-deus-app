@@ -227,6 +227,7 @@ export interface BrandSettings {
   timezone: string;
   calendar_appearance?: { accent: string; style: "clean" | "soft" | "editorial" };
   instagram_cover_accent?: string;
+  instagram_cover_photo_url?: string | null;
   agent_enabled?: boolean;
   agent_instructions?: string | null;
   agent_knowledge?: string | null;
