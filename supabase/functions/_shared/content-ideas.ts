@@ -1,11 +1,11 @@
 // Piloto automático de conteúdo: olha as datas comemorativas que vêm aí, os produtos da loja e o que o público
-// do Instagram curte, e cria carrosséis (e vídeos, quando fazem sentido) com os produtos do tema — ex.: Outubro Rosa
-// com o pin do laço rosa. Tudo fica em Aprovações; dali o usuário aprova, agenda em massa ou publica na hora.
+// do Instagram curte, e combina campanhas com conteúdo perene de identificação, uso e coleção. Tudo fica em
+// Aprovações; dali o usuário aprova, agenda em massa ou publica na hora.
 import { isPaginasPro } from "./brand.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4";
 import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
-import { igRecentMedia, igTokenFor } from "./instagram.ts";
+import { igMediaInsights, igRecentMedia, igTokenFor } from "./instagram.ts";
 import { nsProducts, storeFor } from "./nuvemshop.ts";
 import { dispatchRender } from "./product-video.ts";
 import { freeSlot } from "./products.ts";
@@ -228,17 +228,76 @@ export async function generateIdeas(db: SupabaseClient, userId: string, opts: { 
   const platforms = [...new Set((accounts ?? []).map((a) => a.platform as string))];
   if (!platforms.length) throw new Error("Conecte o Instagram ou o TikTok em Contas.");
   const ig = accounts?.find((a) => a.platform === "instagram");
+  const isBraxPins = /brax\s*pins\s*mania/i.test(String(settings?.brand_name ?? "")) || /braxpinsmania/i.test(String(ig?.username ?? ""));
 
   // Público: os posts que mais engajaram
-  let audience = "";
+  let audience = isBraxPins
+    ? `Referência dos Insights de @braxpinsmania enviados pelo usuário em 23/10/2026 (últimos 90 dias): ` +
+      `o post da gotinha médica com gato teve ` +
+      `44.071 visualizações, 78,8% de não seguidores, 626 compartilhamentos, 328 salvamentos e 217 seguidores; ` +
+      `o broche no contexto da Justiça teve 14.021 visualizações, 64,6% de não seguidores, 133 compartilhamentos, ` +
+      `99 salvamentos e 86 seguidores. Esses exemplos indicam que produto contextualizado com identidade profissional ` +
+      `pode converter melhor. Um Reel semelhante teve 59.370 visualizações e 44 seguidores, com dados que podem ` +
+      `incluir anúncio; não use visualizações isoladas como sinal de sucesso.`
+    : "";
   if (ig) {
     try {
-      const media = await igRecentMedia(await igTokenFor(db, ig.id), ig.external_id, 30);
-      const top = media
-        .map((m) => ({ text: String(m.caption ?? "").replace(/\s+/g, " ").slice(0, 120), score: (m.like_count ?? 0) + 3 * (m.comments_count ?? 0), type: m.media_product_type ?? m.media_type }))
-        .sort((a, b) => b.score - a.score).slice(0, 8);
-      audience = `Perfil @${ig.username}${ig.followers_count ? ` com ${ig.followers_count} seguidores` : ""}. Posts que mais engajaram (curtidas + 3x comentários):\n` +
-        top.map((m) => `- [${m.type}] ${m.score} pts: ${m.text}`).join("\n");
+      const token = await igTokenFor(db, ig.id);
+      const media = await igRecentMedia(token, ig.external_id, 30);
+      const readMetric = (items: { name: string; values?: { value?: number }[]; value?: number }[] | undefined, name: string): number | undefined => {
+        const item = items?.find((x) => x.name === name);
+        const value = item?.values?.[0]?.value ?? item?.value;
+        return value == null ? undefined : Number(value);
+      };
+      const measured: { text: string; type: string; views?: number; reach?: number; likes: number; comments: number; shares?: number; saves?: number; follows?: number; score: number }[] = [];
+      // Insights são consultados em lotes pequenos para evitar rajadas na API. Se uma mídia
+      // não tiver insights disponíveis, ela ainda pode entrar pelo engajamento público.
+      for (let i = 0; i < media.length; i += 4) {
+        const batch = await Promise.all(media.slice(i, i + 4).map(async (m) => {
+          const type = String(m.media_product_type ?? m.media_type ?? "post");
+          let metrics: { name: string; values?: { value?: number }[]; value?: number }[] = [];
+          try {
+            metrics = (await igMediaInsights(token, String(m.id))).data ?? [];
+          } catch (e) {
+            console.warn("insights da mídia", m.id, e);
+          }
+          const get = (name: string, fallback?: number) => readMetric(metrics, name) ?? fallback;
+          const reach = get("reach");
+          const likes = get("likes", Number(m.like_count ?? 0)) ?? 0;
+          const comments = get("comments", Number(m.comments_count ?? 0)) ?? 0;
+          const shares = get("shares");
+          const saves = get("saved");
+          const follows = get("follows");
+          // Com alcance disponível, compara taxas por mil contas alcançadas. Curtidas e
+          // comentários continuam como fallback quando a API não entrega Insights.
+          const score = reach > 0
+            ? (((shares ?? 0) * 5 + (saves ?? 0) * 4 + (follows ?? 0) * 10 + likes + comments * 3) / reach) * 1000
+            : likes + 3 * comments;
+          return {
+            text: String(m.caption ?? "").replace(/\s+/g, " ").slice(0, 120),
+            type,
+            views: get("views"),
+            reach,
+            likes,
+            comments,
+            shares,
+            saves,
+            follows,
+            score,
+          };
+        }));
+        measured.push(...batch);
+      }
+      const top = measured.sort((a, b) => b.score - a.score).slice(0, 8);
+      const n = (value: number) => value.toLocaleString("pt-BR");
+      const metricLabel = (value?: number) => value == null ? "n/d" : n(value);
+      audience = `Perfil @${ig.username}${ig.followers_count ? ` com ${ig.followers_count} seguidores` : ""}. ` +
+        `Posts recentes ranqueados por compartilhamentos, salvamentos e seguidores gerados por mil contas alcançadas ` +
+        `(na falta de Insights, usa curtidas + 3x comentários):\n` +
+        top.map((m) => `- [${m.type}] nota ${m.score.toFixed(1)}; alcance ${metricLabel(m.reach)}, views ${metricLabel(m.views)}, ` +
+          `compartilhamentos ${metricLabel(m.shares)}, salvamentos ${metricLabel(m.saves)}, novos seguidores ${metricLabel(m.follows)}, ` +
+          `curtidas ${n(m.likes)}, comentários ${n(m.comments)}: ${m.text}`).join("\n") +
+        (isBraxPins ? `\n\n${audience}` : "");
     } catch (e) {
       console.error("posts do instagram", e);
     }
@@ -254,11 +313,30 @@ export async function generateIdeas(db: SupabaseClient, userId: string, opts: { 
   const { dates, campaigns } = upcomingDates(new Date(), days);
   const today = new Date().toLocaleDateString("pt-BR", { timeZone, weekday: "long", day: "2-digit", month: "long", year: "numeric" });
 
+  const braxStrategy = isBraxPins
+    ? `Para a Brax Pins Mania, trate saúde/SUS e profissões como séries próprias; futebol/estaduais e fandom/cultura pop ` +
+      `também devem ficar em séries próprias. Cada publicação deve falar com um público por vez, sem misturar categorias ` +
+      `distantes no mesmo post. Os Insights recentes apontam saúde/SUS e identidade profissional como melhores temas ` +
+      `para descoberta e novos seguidores: priorize esses eixos, mostrando o broche em um contexto visual ligado à ` +
+      `profissão ou à rotina de quem o usaria. Dê uma razão concreta para acompanhar a série, sem pedir marcações ` +
+      `vazias. Para uma semana de 4 ideias, crie pelo menos 2 ideias perenes de identificação, curiosidade ou escolha ` +
+      `dentro dos eixos mais fortes; 1 ideia de produto em uso, coleção ou bastidor, variando entre carrossel e vídeo ` +
+      `quando o produto permitir; e até 1 ideia sazonal/oferta quando houver um gancho real. Se não houver uma data ` +
+      `realmente relevante, use outra ideia perene. Não conclua que Reel é melhor só por alcançar mais visualizações: ` +
+      `otimize novos seguidores, compartilhamentos e salvamentos em relação ao alcance. Ajuste as proporções quando ` +
+      `a quantidade semanal for diferente.\n\n`
+    : "";
+
   const { ideas } = await generateJSON(Ideas,
-    `Você é estrategista de conteúdo de uma loja brasileira e planeja posts para Instagram e TikTok que vendem os produtos ` +
-      `aproveitando datas comemorativas e campanhas do mês. Escreva em português do Brasil. Só use produtos da lista (pelo id) ` +
+    `Você é estrategista de conteúdo de uma loja brasileira e planeja posts para Instagram e TikTok que ajudam novas pessoas ` +
+      `a descobrir a marca, se identificar com os produtos e querer acompanhar o perfil. Combine conteúdo perene com datas ` +
+      `comemorativas e campanhas do mês; não dependa de uma data para cada ideia. Escreva em português do Brasil. ` +
+      `Só use produtos da lista (pelo id) ` +
       `e não invente características, preços ou promoções. Nas campanhas de saúde (Outubro Rosa etc.), traga informação ` +
-      `correta e respeitosa, sem promessas médicas.\n\n` +
+      `correta e respeitosa, sem promessas médicas. Favoreça ganchos claros e conteúdo que alguém queira salvar ou compartilhar ` +
+      `por identificação, utilidade ou humor; não use clickbait, urgência inventada, pedidos vazios para marcar pessoas ou ` +
+      `promessas de viralização. A legenda deve começar com um gancho e terminar com uma chamada natural.\n\n` +
+      `${braxStrategy}` +
       `Identidade visual: vermelho ${BRAND_PALETTE.primary}, preto ${BRAND_PALETTE.secondary}, dourado ${BRAND_PALETTE.accent} e branco, ` +
       `letras grossas e chamativas. Use as cores da marca por padrão; quando a campanha tem cor própria (Outubro Rosa, Novembro Azul, ` +
       `Setembro Amarelo...), use a cor do tema como principal com o preto ou o dourado da marca.\n\n${brandContext(settings)}`,
@@ -269,9 +347,11 @@ export async function generateIdeas(db: SupabaseClient, userId: string, opts: { 
       `Temas já usados (não repita): ${[...used].join(", ") || "nenhum"}.\n\n` +
       `Produtos da loja (id | nome${products.some((p) => p.description) ? " | descrição" : ""}):\n` +
       (products.length ? products.map((p) => `${p.id} | ${p.name}${p.description ? ` | ${p.description.slice(0, 80)}` : ""}`).join("\n") : "(loja não conectada)") +
-      `\n\nCrie ${count} ideias de post para as datas e campanhas que mais combinam com os produtos e com o público. ` +
-      `Prefira temas que têm produto à venda. Use "video" em cerca de 1 a cada 3 ideias, só quando um produto é a cara do tema ` +
-      `(ex.: Outubro Rosa com o pin do laço rosa). Cada ideia num dia diferente, até ${days} dias a partir de hoje.`,
+      `\n\nCrie ${count} ideias para os próximos ${days} dias, distribuindo os temas pela mistura acima. ` +
+      `Inclua datas/campanhas somente quando combinarem de verdade com o público e com os produtos. Prefira carrosséis ` +
+      `com uma ideia útil, curiosa ou identificável mesmo quando não houver um produto adequado; não force uma venda em ` +
+      `toda publicação. Use "video" em cerca de 1 a cada 3 ideias, só quando um produto é a cara do tema e as fotos ` +
+      `disponíveis dão suporte ao conceito. Cada ideia num dia diferente, até ${days} dias a partir de hoje.`,
     "medium");
 
   const cache = new Map<number, string | null>();

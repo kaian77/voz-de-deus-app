@@ -122,6 +122,28 @@ export async function igRecentMedia(token: string, igUserId: string, limit = 24)
   return data.data ?? [];
 }
 
+/** Métricas por publicação. Alguns indicadores variam conforme o formato da mídia; quando
+ * a API recusar shares/follows para um tipo específico, retorna as métricas comuns. */
+export async function igMediaInsights(token: string, mediaId: string) {
+  const preferred = "views,reach,saved,shares,total_interactions,likes,comments,follows";
+  const withShares = "views,reach,saved,shares,total_interactions,likes,comments";
+  const fallback = "views,reach,saved,total_interactions,likes,comments";
+  let lastError: unknown;
+  for (const metric of [preferred, withShares, fallback]) {
+    try {
+      return await igRequest<{ data?: { name: string; values?: { value?: number }[]; value?: number }[] }>(
+        token,
+        `${mediaId}/insights`,
+        { params: { metric } },
+      );
+    } catch (error) {
+      if (error instanceof GraphError && error.code !== 100) throw error;
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 // ---------------------------------------------------------------------------
 // Publicação (container -> status -> media_publish)
 // ---------------------------------------------------------------------------
