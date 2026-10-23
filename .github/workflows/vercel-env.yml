@@ -1,0 +1,46 @@
+name: Vercel → Supabase do Studio
+
+# Garante que o site do Studio (projeto voz-de-deus-app na Vercel) aponta para o Supabase do Studio
+# (rrlxhnmfsmknzhqpfrhr) e publica de novo. Outro projeto (ex.: o do ChatGPT) precisa ter o PRÓPRIO
+# projeto na Vercel: as variáveis deste aqui são só do Studio.
+on:
+  workflow_dispatch:
+
+jobs:
+  env:
+    runs-on: ubuntu-latest
+    env:
+      REF: rrlxhnmfsmknzhqpfrhr
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PROJECT: ${{ vars.VERCEL_PROJECT_ID || 'voz-de-deus-app' }}
+      TEAM: ${{ vars.VERCEL_TEAM_ID }}
+    steps:
+      - name: Corrigir variáveis e publicar
+        run: |
+          set -euo pipefail
+          [ -n "$VERCEL_TOKEN" ] || { echo "::error::Falta o secret VERCEL_TOKEN"; exit 1; }
+          Q=""; [ -n "$TEAM" ] && Q="teamId=$TEAM"
+          ANON=$(curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys" \
+            | jq -r '[.[] | select(.name == "anon")][0].api_key // empty')
+          [ -n "$ANON" ] || { echo "::error::Não consegui ler a chave pública do Supabase"; exit 1; }
+          echo "::add-mask::$ANON"
+          for kv in "VITE_SUPABASE_URL=https://$REF.supabase.co" "VITE_SUPABASE_ANON_KEY=$ANON"; do
+            key=${kv%%=*}; val=${kv#*=}
+            # Apaga as versões antigas dessa variável (qualquer ambiente) e cria a certa
+            for id in $(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PROJECT/env?$Q" \
+                | jq -r --arg k "$key" '.envs[] | select(.key == $k) | .id'); do
+              curl -sf -X DELETE -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PROJECT/env/$id?$Q" >/dev/null
+            done
+            curl -sf -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+              "https://api.vercel.com/v10/projects/$PROJECT/env?$Q" \
+              -d "$(jq -n --arg k "$key" --arg v "$val" '{key: $k, value: $v, type: "encrypted", target: ["production", "preview", "development"]}')" >/dev/null
+            echo "ok: $key"
+          done
+          # Variáveis de outros projetos que ficaram aqui (valor com outro Supabase) não são lidas pelo Studio
+          # quando as de cima existem, então ficam como estão.
+          REPO_ID=$(curl -sf -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$PROJECT?$Q" | jq -r '.link.repoId')
+          curl -sf -X POST -H "Authorization: Bearer $VERCEL_TOKEN" -H "Content-Type: application/json" \
+            "https://api.vercel.com/v13/deployments?$Q" \
+            -d "$(jq -n --arg p "$PROJECT" --arg r "$REPO_ID" '{name: $p, project: $p, target: "production", gitSource: {type: "github", repoId: $r, ref: "main"}}')" \
+            | jq -r '"publicando: https://" + .url'
