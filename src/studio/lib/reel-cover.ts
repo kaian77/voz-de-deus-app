@@ -1,5 +1,17 @@
 export const REEL_COVER_SIZE = { width: 1080, height: 1920 };
 
+/** Sugere uma cor inicial para a capa a partir do nicho; a marca pode escolher e salvar outra. */
+export function suggestCoverAccent(niche: string | null | undefined) {
+  const value = (niche ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/nutri|saude|fitness|bem-estar|esport|terapia|sustent|natureza/.test(value)) return "#16875d";
+  if (/beleza|estetica|moda|maqui|cabelo|unha/.test(value)) return "#db2777";
+  if (/gastr|culin|confeit|restaurante|comida|chef/.test(value)) return "#ea580c";
+  if (/financ|invest|contabil|negocio|empreend/.test(value)) return "#0f766e";
+  if (/educa|ensino|professor|idioma|curso/.test(value)) return "#2563eb";
+  if (/tecnolog|marketing|design|criador|social media/.test(value)) return "#7c3aed";
+  return "#7c3aed";
+}
+
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const lines: string[] = [];

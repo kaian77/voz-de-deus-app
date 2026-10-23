@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowRight, Check, Clapperboard, ExternalLink, Loader2, Search, Sparkles, WandSparkles } from "lucide-react";
+import { ArrowRight, Check, Clapperboard, ExternalLink, Loader2, Save, Search, Sparkles, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "../lib/api";
 import { useSettings, useTable } from "../lib/hooks";
-import { renderReelCover } from "../lib/reel-cover";
+import { renderReelCover, suggestCoverAccent } from "../lib/reel-cover";
 import type { Post } from "../lib/types";
 import { PageHeader, Panel, SectionLabel } from "../components/bits";
 
@@ -30,7 +30,7 @@ type ScriptResponse = { scripts: Script[]; sources: string[] };
 const ACCENTS = ["#7c3aed", "#2563eb", "#db2777", "#ea580c", "#059669", "#18181b"];
 const OBJECTIVES = ["Alcance e compartilhamentos", "Atrair seguidores", "Gerar conversas no direct", "Apresentar um produto ou serviço"];
 
-function ScriptCard({ script, niche, accent, onUse }: { script: Script; niche: string; accent: string; onUse: (postId: string) => Promise<void> }) {
+function ScriptCard({ script, niche, accent, handle, onUse }: { script: Script; niche: string; accent: string; handle?: string; onUse: (postId: string) => Promise<void> }) {
   const [coverTitle, setCoverTitle] = useState(script.cover_title || script.hook);
   const [busy, setBusy] = useState(false);
   const previewLines = coverTitle.toUpperCase().split(" ").reduce<string[]>((lines, word) => {
@@ -43,7 +43,7 @@ function ScriptCard({ script, niche, accent, onUse }: { script: Script; niche: s
   const useScript = async () => {
     setBusy(true);
     try {
-      const cover = await renderReelCover({ title: coverTitle, niche, handle: "seuperfil", accent });
+      const cover = await renderReelCover({ title: coverTitle, niche, handle, accent });
       const coverUrl = await api.upload(cover, "capa-reel.jpg");
       const notes = [
         "ROTEIRO PARA REEL",
@@ -127,11 +127,29 @@ export default function ViralScripts() {
   const [accent, setAccent] = useState(ACCENTS[0]);
   const [result, setResult] = useState<ScriptResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [savingAccent, setSavingAccent] = useState(false);
 
   useEffect(() => {
     if (!niche && settings?.niche) setNiche(settings.niche);
     if (!audience && settings?.audience) setAudience(settings.audience);
   }, [settings?.niche, settings?.audience, niche, audience]);
+
+  useEffect(() => {
+    if (settings) setAccent(settings.instagram_cover_accent || suggestCoverAccent(settings.niche));
+  }, [settings?.instagram_cover_accent, settings?.niche]);
+
+  const saveAccent = async () => {
+    setSavingAccent(true);
+    try {
+      await api.saveSettings({ instagram_cover_accent: accent });
+      await qc.invalidateQueries({ queryKey: ["settings"] });
+      toast.success("Cor da marca salva para as próximas capas.");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setSavingAccent(false);
+    }
+  };
 
   const generate = async () => {
     if (!niche.trim()) return toast.error("Escreva o segmento da marca para personalizar os roteiros.");
@@ -164,11 +182,11 @@ export default function ViralScripts() {
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_310px]">
         <Panel title="Monte seus roteiros" description="A IA usa o segmento e o público da marca para adaptar as ideias." bodyClassName="space-y-4 p-5">
-          <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="script-niche">Segmento / nicho</Label><Input id="script-niche" value={niche} onChange={(event) => setNiche(event.target.value)} placeholder="Ex.: confeitaria artesanal" /></div><div className="space-y-1.5"><Label htmlFor="script-audience">Público que você quer atrair</Label><Input id="script-audience" value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Ex.: pessoas que gostam de doces caseiros" /></div></div>
+          <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="script-niche">Segmento / nicho</Label><Input id="script-niche" value={niche} onChange={(event) => { setNiche(event.target.value); if (!settings?.instagram_cover_accent) setAccent(suggestCoverAccent(event.target.value)); }} placeholder="Ex.: confeitaria artesanal" /></div><div className="space-y-1.5"><Label htmlFor="script-audience">Público que você quer atrair</Label><Input id="script-audience" value={audience} onChange={(event) => setAudience(event.target.value)} placeholder="Ex.: pessoas que gostam de doces caseiros" /></div></div>
           <div className="space-y-1.5"><Label htmlFor="script-focus">Tema ou produto que quer destacar · opcional</Label><Textarea id="script-focus" rows={2} value={focus} onChange={(event) => setFocus(event.target.value)} placeholder="Ex.: erros comuns, bastidores, uma dúvida que sempre aparece…" /></div>
           <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="script-objective">Objetivo principal</Label><select id="script-objective" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={objective} onChange={(event) => setObjective(event.target.value)}>{OBJECTIVES.map((item) => <option key={item}>{item}</option>)}</select></div><div><Label className="mb-2 block">Duração do Reel</Label><div className="flex gap-1 rounded-lg border bg-secondary/40 p-1">{([15, 30, 45] as const).map((seconds) => <button key={seconds} type="button" onClick={() => setDuration(seconds)} className={`flex-1 rounded-md px-2 py-2 text-xs ${duration === seconds ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}>{seconds} segundos</button>)}</div></div></div>
           <label className="flex items-start gap-3 rounded-xl border bg-secondary/20 p-3.5"><input type="checkbox" checked={withTrends} onChange={(event) => setWithTrends(event.target.checked)} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="flex items-center gap-1.5 text-[13px] font-medium"><Search className="h-3.5 w-3.5" /> Pesquisar assuntos atuais na web</span><span className="mt-1 block text-xs leading-relaxed text-muted-foreground">Quando ligado, buscamos sinais recentes e mostramos as fontes. Isso pode consumir mais créditos de IA; tendências não garantem viralização.</span></span></label>
-          <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Label className="text-xs">Cor da capa</Label>{ACCENTS.map((color) => <button key={color} type="button" aria-label={`Cor da capa ${color}`} onClick={() => setAccent(color)} className={`h-6 w-6 rounded-full border-2 ${accent === color ? "border-foreground ring-2 ring-foreground/15" : "border-transparent"}`} style={{ background: color }} />)}<input aria-label="Outra cor para capa" type="color" value={accent} onChange={(event) => setAccent(event.target.value)} className="h-7 w-8 cursor-pointer rounded border p-0.5" /></div><Button onClick={generate} disabled={busy || !niche.trim()}>{busy ? <Loader2 className="animate-spin" /> : <WandSparkles />} {busy ? withTrends ? "Pesquisando e escrevendo…" : "Criando roteiros…" : "Gerar 3 roteiros + capas"}</Button></div>
+          <div className="flex flex-wrap items-end justify-between gap-3"><div className="space-y-1.5"><div className="flex items-center gap-2"><Label className="text-xs">Cor da marca nas capas</Label><span className="text-[11px] text-muted-foreground">Sugestão pelo nicho; personalize se quiser</span></div><div className="flex items-center gap-2">{ACCENTS.map((color) => <button key={color} type="button" aria-label={`Cor da capa ${color}`} title={color} onClick={() => setAccent(color)} className={`h-6 w-6 rounded-full border-2 ${accent === color ? "border-foreground ring-2 ring-foreground/15" : "border-transparent"}`} style={{ background: color }} />)}<input aria-label="Outra cor para capa" type="color" value={accent} onChange={(event) => setAccent(event.target.value)} className="h-7 w-8 cursor-pointer rounded border p-0.5" /><Button type="button" size="sm" variant="outline" onClick={saveAccent} disabled={savingAccent}>{savingAccent ? <Loader2 className="animate-spin" /> : <Save />}Salvar cor</Button></div></div><Button onClick={generate} disabled={busy || !niche.trim()}>{busy ? <Loader2 className="animate-spin" /> : <WandSparkles />} {busy ? withTrends ? "Pesquisando e escrevendo…" : "Criando roteiros…" : "Gerar 3 roteiros + capas"}</Button></div>
           {!instagram && <p className="text-xs text-amber-700">Você pode criar os roteiros agora. Para agendar ou publicar, conecte uma conta profissional do Instagram.</p>}
         </Panel>
 
@@ -178,7 +196,7 @@ export default function ViralScripts() {
       {busy && <div className="flex items-center gap-3 rounded-xl border bg-card p-5 text-sm"><Loader2 className="h-5 w-5 animate-spin" /><div><p className="font-medium">{withTrends ? "Procurando assuntos recentes e montando suas ideias…" : "Montando seus roteiros…"}</p><p className="text-xs text-muted-foreground">Pode levar alguns instantes.</p></div></div>}
       {result && <div className="space-y-4"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[11px] font-semibold uppercase tracking-[.12em] text-muted-foreground">Sua próxima gravação começa aqui</p><h2 className="mt-1 text-xl font-semibold">3 ideias para {niche}</h2></div><Button variant="outline" size="sm" onClick={generate} disabled={busy}><WandSparkles /> Gerar outras ideias</Button></div>
         {result.sources?.length > 0 && <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-secondary/30 px-3 py-2 text-xs"><span className="font-medium">Fontes consultadas:</span>{result.sources.map((source) => <a key={source} href={source} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-full border bg-card px-2 py-1 text-muted-foreground hover:text-foreground">{new URL(source).hostname.replace(/^www\./, "")}<ExternalLink className="h-3 w-3" /></a>)}</div>}
-        {result.scripts.map((script, index) => <ScriptCard key={`${script.theme}-${index}`} script={script} niche={niche} accent={accent} onUse={used} />)}
+        {result.scripts.map((script, index) => <ScriptCard key={`${script.theme}-${index}`} script={script} niche={niche} accent={accent} handle={instagram?.username ?? undefined} onUse={used} />)}
       </div>}
     </div>
   );

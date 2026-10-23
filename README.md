@@ -5,7 +5,7 @@
 
 ## Roteiros e capas
 
-Em **Studio → Roteiros e capas**, informe o segmento, o público e o objetivo para receber três ideias de Reels. A pesquisa de assuntos atuais é opcional e pode consumir créditos adicionais da API de IA. Cada roteiro pode virar um rascunho: a capa vertical 9:16 é montada no navegador a partir de um modelo visual e pode ter o título e a cor ajustados antes do uso. No compositor, confira a capa e adicione o vídeo antes de agendar.
+Em **Studio → Roteiros e capas**, informe o segmento, o público e o objetivo para receber três ideias de Reels. A pesquisa de assuntos atuais é opcional e pode consumir créditos adicionais da API de IA. O segmento sugere uma cor inicial para a capa; a marca pode escolher outra e salvar sua cor para os próximos posts. Cada roteiro pode virar um rascunho: a capa vertical 9:16 é montada no navegador a partir de um modelo visual e pode ter o título e a cor ajustados antes do uso. No compositor, confira a capa e adicione o vídeo antes de agendar.
 
 Sem Supabase configurado, o modo de demonstração usa roteiros de exemplo e salva os rascunhos neste navegador. Para testar com contas reais, configure Supabase, as credenciais da IA e a conexão profissional do Instagram conforme o guia de setup. Sugestões de conteúdo não garantem viralização.
 
