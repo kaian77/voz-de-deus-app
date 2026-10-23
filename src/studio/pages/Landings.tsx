@@ -139,6 +139,19 @@ function PlanPanel({ page, onChange }: { page: LandingPage; onChange: (p: Landin
       setBusy(false);
     }
   };
+  const togglePanel = async () => {
+    setBusy(true);
+    try {
+      const token = page.report_token ?? [...crypto.getRandomValues(new Uint8Array(18))].map((b) => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
+      onChange(await api.update("landing_pages", page.id, { panel: !page.panel, report_token: token }));
+      toast.success(page.panel ? "Painel bloqueado" : "Painel liberado para o cliente");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const panelOn = page.plan === "monthly" || !!page.panel;
   const sendReport = () => {
     const n = String(page.whatsapp ?? "").replace(/\D/g, "");
     const text = `Oi! Este é o painel do site de vocês: ${reportUrl}\n\nSalva nos favoritos: ali você vê quantas pessoas visitaram o site e quantas te chamaram no WhatsApp por ele, atualizado na hora. Precisando mudar algo no site, é só tocar em "Pedir alteração".`;
@@ -148,7 +161,7 @@ function PlanPanel({ page, onChange }: { page: LandingPage; onChange: (p: Landin
   return (
     <Panel
       title="Plano do cliente"
-      description={page.plan === "monthly" ? `Mensal (R$ ${page.tier === "premium" ? OFFER.premiumMonthly : OFFER.monthly}/mês): painel de resultados + alterações inclusas.` : `Avulso: alterações cobradas à parte (R$ ${OFFER.change}); painel bloqueado (opcional por + R$ ${OFFER.panelAddon}/mês: ligue o mensal).`}
+      description={page.plan === "monthly" ? `Mensal (R$ ${page.tier === "premium" ? OFFER.premiumMonthly : OFFER.monthly}/mês): painel de resultados + alterações inclusas.` : `Avulso: alterações cobradas à parte (R$ ${OFFER.change}); painel ${page.panel ? "liberado" : `bloqueado (libere abaixo, cobrando + R$ ${OFFER.panelAddon}/mês ou de cortesia)`}.`}
       action={<Button size="sm" variant={page.plan === "monthly" ? "outline" : "default"} onClick={toggle} disabled={busy}>{page.plan === "monthly" ? "Desligar mensal" : "Ligar plano mensal"}</Button>}
     >
       <div className="grid grid-cols-3 gap-2 text-center">
@@ -159,7 +172,12 @@ function PlanPanel({ page, onChange }: { page: LandingPage; onChange: (p: Landin
           </div>
         ))}
       </div>
-      {page.plan === "monthly" && reportUrl && (
+      {page.plan !== "monthly" && (
+        <Button size="sm" variant={page.panel ? "outline" : "secondary"} className="mt-3 w-full" onClick={togglePanel} disabled={busy}>
+          {page.panel ? "Bloquear o painel" : "Liberar o painel (avulso)"}
+        </Button>
+      )}
+      {panelOn && reportUrl && (
         <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(reportUrl).then(() => toast.success("Link do painel copiado"))}><Copy className="mr-1.5 h-4 w-4" />Link do painel</Button>
           <Button size="sm" variant="outline" asChild><a href={reportUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Ver painel</a></Button>
@@ -381,6 +399,28 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
     }
   };
 
+  // Foto do topo / do "Sobre": troca na hora, sem passar pela IA
+  const setPhotoRole = async (role: "hero_photo" | "about_photo", index: number) => {
+    if (!current.content) return;
+    const content = { ...current.content, [role]: index };
+    setCurrent({ ...current, content });
+    try {
+      await api.update("landing_pages", current.id, { content });
+      toast.success(role === "hero_photo" ? "Foto do topo trocada" : "Foto do Sobre trocada");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  const QUICK_ASKS = [
+    "Usar as cores da marca do cliente: ",
+    "Deixar o título mais direto",
+    "Tirar o serviço: ",
+    "Acrescentar o serviço: ",
+    "Mudar o horário para: ",
+    "Texto mais acolhedor e simples",
+  ];
+
+
   return (
     <div>
       <button type="button" onClick={onBack} className="mb-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
@@ -510,7 +550,30 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
           {busy === "generate" && <p className="text-center text-xs text-muted-foreground">A IA está olhando as fotos e escrevendo… leva cerca de 1 minuto.</p>}
 
           {current.content && (
-            <Panel title="Pedir mudança à IA" description="Escreva o que você quer mudar ou cole aqui o que a cliente pediu no WhatsApp. O link continua o mesmo.">
+            <Panel title="O que mudar" description="Escolha a foto do topo e do Sobre, ajuste as cores ou peça mudança de texto à IA. O link continua o mesmo.">
+              {form.photos.length > 0 && (
+                <div className="mb-4">
+                  <p className="mb-1.5 text-xs font-medium">Fotos: toque em "Topo" ou "Sobre"</p>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {form.photos.map((url, i) => (
+                      <div key={url} className="overflow-hidden rounded-md border">
+                        <img src={url} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+                        <div className="grid grid-cols-2 text-[11px]">
+                          <button type="button" onClick={() => setPhotoRole("hero_photo", i)} className={cn("py-1", current.content!.hero_photo === i ? "bg-foreground text-background" : "hover:bg-secondary")}>Topo</button>
+                          <button type="button" onClick={() => setPhotoRole("about_photo", i)} className={cn("border-l py-1", current.content!.about_photo === i ? "bg-foreground text-background" : "hover:bg-secondary")}>Sobre</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">Foto nova: envie em "Fotos" acima e depois escolha aqui.</p>
+                </div>
+              )}
+              <p className="mb-1.5 text-xs font-medium">Pedir à IA</p>
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {QUICK_ASKS.map((q) => (
+                  <button key={q} type="button" onClick={() => setAsk((a) => (a.trim() ? `${a.trim()}\n${q}` : q))} className="rounded-full border px-2.5 py-1 text-[11px] hover:bg-secondary">{q.replace(/: $/, "…")}</button>
+                ))}
+              </div>
               <Textarea rows={4} value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Ex.: a cliente quer o título mais direto, tirar o serviço de gestantes, cor mais clara e tom mais acolhedor." />
               <Button className="mt-2 w-full" variant="outline" onClick={() => generate(ask)} disabled={busy !== null || !ask.trim()}>{busy === "generate" ? "Ajustando…" : "Fazer a mudança"}</Button>
               <div className="mt-4 flex items-center gap-4">
@@ -524,7 +587,7 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
               </div>
             </Panel>
           )}
-          {current.status === "published" && <PlanPanel page={current} onChange={setCurrent} />}
+          {current.status !== "draft" && <PlanPanel page={current} onChange={setCurrent} />}
           {current.status === "published" && <DomainPanel page={current} onChange={(domain) => setCurrent({ ...current, domain })} />}
           {current.status !== "draft" && (
             <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => publish("draft")}>Tirar do ar</button>
