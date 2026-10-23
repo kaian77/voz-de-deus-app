@@ -30,6 +30,16 @@ function recordingType() {
     .find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }
 
+function mediaProblem(error: unknown, device: "camera" | "microphone") {
+  const name = error instanceof DOMException ? error.name : "";
+  const label = device === "camera" ? "câmera" : "microfone";
+  if (name === "NotAllowedError" || name === "SecurityError") return `O navegador ou o sistema bloqueou o ${label}. Confira a permissão deste site e tente novamente.`;
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") return `Não encontrei um ${label} conectado a este aparelho.`;
+  if (name === "NotReadableError" || name === "AbortError") return `O ${label} está ocupado por outro aplicativo. Feche Zoom, Teams, WhatsApp ou o app Câmera e tente novamente.`;
+  if (name === "OverconstrainedError") return `O navegador não conseguiu usar esta configuração de ${label}. Tente a câmera padrão do aparelho.`;
+  return `Não consegui iniciar o ${label}. Confira se está conectado e se nenhum outro aplicativo está usando o dispositivo.`;
+}
+
 function emojiFor(text: string) {
   const t = text.toLocaleLowerCase("pt-BR");
   if (/amor|gosta|apaixon|linda|lindo|incr[ií]vel/.test(t)) return "😍";
@@ -190,6 +200,8 @@ export default function TeleprompterRecorder({ open, onOpenChange, script, onUse
   const cameraRef = useRef<HTMLVideoElement>(null);
   const promptRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const microphoneStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const discardRef = useRef(false);
@@ -198,6 +210,8 @@ export default function TeleprompterRecorder({ open, onOpenChange, script, onUse
   const previewUrlRef = useRef<string | null>(null);
   const [facing, setFacing] = useState<"user" | "environment">("user");
   const [cameraError, setCameraError] = useState("");
+  const [microphoneError, setMicrophoneError] = useState("");
+  const [microphoneLoading, setMicrophoneLoading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordedVideo, setRecordedVideo] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -215,6 +229,8 @@ export default function TeleprompterRecorder({ open, onOpenChange, script, onUse
     if (!open) return;
     let cancelled = false;
     setCameraError("");
+    setMicrophoneError("");
+    setMicrophoneLoading(true);
     setRecordedVideo(null);
     setCaptions([]);
     setPreviewUrl("");
@@ -223,21 +239,47 @@ export default function TeleprompterRecorder({ open, onOpenChange, script, onUse
       setCameraError("Este navegador não liberou acesso à câmera. Abra o app no Chrome ou Safari atualizado e permita o uso da câmera.");
       return;
     }
-    void navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: { ideal: facing }, width: { ideal: 720 }, height: { ideal: 1280 } } })
-      .then((stream) => {
-        if (cancelled) { stream.getTracks().forEach((track) => track.stop()); return; }
-        streamRef.current = stream;
-        if (cameraRef.current) { cameraRef.current.srcObject = stream; void cameraRef.current.play().catch(() => undefined); }
-      }).catch((error: unknown) => {
-        const name = error instanceof DOMException ? error.name : "";
-        setCameraError(name === "NotAllowedError" ? "Permita o acesso à câmera e ao microfone nas configurações do navegador e tente novamente." : name === "NotFoundError" ? "Não encontrei uma câmera ou um microfone neste aparelho." : "Não consegui abrir a câmera. Confira as permissões do navegador e tente novamente.");
-      });
+    const startDevices = async () => {
+      try {
+        // Abrir cada dispositivo separadamente evita que uma falha no microfone esconda
+        // uma câmera que já está funcionando, e ajuda a pessoa a corrigir a permissão certa.
+        let cameraStream: MediaStream;
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 720 }, height: { ideal: 1280 } }, audio: false });
+        } catch (error) {
+          const name = error instanceof DOMException ? error.name : "";
+          if (["NotAllowedError", "NotFoundError", "NotReadableError", "SecurityError"].includes(name)) throw error;
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+        if (cancelled) { cameraStream.getTracks().forEach((track) => track.stop()); return; }
+        cameraStreamRef.current = cameraStream;
+        if (cameraRef.current) { cameraRef.current.srcObject = cameraStream; void cameraRef.current.play().catch(() => undefined); }
+
+        try {
+          const microphoneStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+          if (cancelled) { microphoneStream.getTracks().forEach((track) => track.stop()); return; }
+          microphoneStreamRef.current = microphoneStream;
+          streamRef.current = new MediaStream([...cameraStream.getVideoTracks(), ...microphoneStream.getAudioTracks()]);
+          setMicrophoneError("");
+        } catch (error) {
+          streamRef.current = new MediaStream(cameraStream.getVideoTracks());
+          setMicrophoneError(mediaProblem(error, "microphone"));
+        }
+      } catch (error) {
+        setCameraError(mediaProblem(error, "camera"));
+      } finally {
+        if (!cancelled) setMicrophoneLoading(false);
+      }
+    };
+    void startDevices();
     return () => {
       cancelled = true;
       if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
       if (recorderRef.current?.state === "recording") { discardRef.current = true; recorderRef.current.stop(); }
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      for (const stream of [streamRef.current, cameraStreamRef.current, microphoneStreamRef.current]) stream?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+      cameraStreamRef.current = null;
+      microphoneStreamRef.current = null;
       if (cameraRef.current) cameraRef.current.srcObject = null;
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;
@@ -261,6 +303,7 @@ export default function TeleprompterRecorder({ open, onOpenChange, script, onUse
   const startRecording = () => {
     const stream = streamRef.current;
     if (!stream) return;
+    if (!stream.getAudioTracks().length) { setMicrophoneError("O microfone não está conectado. Ative o microfone e toque em Tentar microfone antes de gravar."); return; }
     if (typeof MediaRecorder === "undefined") { setCameraError("Este navegador não oferece gravação de vídeo. Atualize o Chrome ou Safari e tente novamente."); return; }
     try {
       const mimeType = recordingType();
@@ -324,9 +367,22 @@ export default function TeleprompterRecorder({ open, onOpenChange, script, onUse
   };
   const switchCamera = () => {
     if (recording || saving) return;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+    for (const stream of [streamRef.current, cameraStreamRef.current, microphoneStreamRef.current]) stream?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    cameraStreamRef.current = null;
+    microphoneStreamRef.current = null;
     setFacing((value) => value === "user" ? "environment" : "user");
+  };
+  const retryMicrophone = async () => {
+    setMicrophoneLoading(true);
+    setMicrophoneError("");
+    try {
+      const microphoneStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+      microphoneStreamRef.current = microphoneStream;
+      streamRef.current = new MediaStream([...(cameraStreamRef.current?.getVideoTracks() ?? []), ...microphoneStream.getAudioTracks()]);
+    } catch (error) {
+      setMicrophoneError(mediaProblem(error, "microphone"));
+    } finally { setMicrophoneLoading(false); }
   };
   const formattedTime = `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
 
@@ -349,6 +405,7 @@ export default function TeleprompterRecorder({ open, onOpenChange, script, onUse
               </>}
             </div>
             <div className="space-y-4">
+              {microphoneError && <div role="alert" className="space-y-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs"><p><strong>A câmera abriu, mas o microfone não.</strong> {microphoneError}</p><Button type="button" variant="outline" size="sm" className="w-full" onClick={retryMicrophone} disabled={microphoneLoading}>{microphoneLoading ? <Loader2 className="animate-spin" /> : null} Tentar microfone novamente</Button></div>}
               {!previewUrl && <>
                 <div className="space-y-2"><div className="flex justify-between"><Label htmlFor="teleprompter-speed">Velocidade</Label><span className="text-xs text-muted-foreground">{speed}</span></div><Slider id="teleprompter-speed" min={10} max={70} step={2} value={[speed]} onValueChange={(value) => setSpeed(value[0] ?? 32)} /><p className="text-xs text-muted-foreground">Ajuste para acompanhar sua fala.</p></div>
                 <div className="space-y-2"><div className="flex justify-between"><Label htmlFor="teleprompter-size">Tamanho do texto</Label><span className="text-xs text-muted-foreground">{fontSize}px</span></div><Slider id="teleprompter-size" min={18} max={38} step={1} value={[fontSize]} onValueChange={(value) => setFontSize(value[0] ?? 25)} /></div>
@@ -366,7 +423,7 @@ export default function TeleprompterRecorder({ open, onOpenChange, script, onUse
               </div>}
 
               <div className="flex flex-wrap gap-2">
-                {!previewUrl && !recording && <Button type="button" className="min-h-12 flex-1" onClick={startRecording}><Circle className="fill-red-500 text-red-500" /> Gravar</Button>}
+                {!previewUrl && !recording && <Button type="button" className="min-h-12 flex-1" onClick={startRecording} disabled={microphoneLoading || !streamRef.current?.getAudioTracks().length}><Circle className="fill-red-500 text-red-500" /> {microphoneLoading ? "Conectando microfone…" : "Gravar"}</Button>}
                 {!previewUrl && recording && <Button type="button" variant="destructive" className="min-h-12 flex-1" onClick={stopRecording}><Square className="fill-current" /> Parar</Button>}
                 {previewUrl && <>
                   <Button asChild type="button" variant="outline" className="flex-1" disabled={saving || transcribing}><a href={previewUrl} download={`reel-${Date.now()}.${recordedVideo?.type.includes("mp4") ? "mp4" : "webm"}`}><Download /> Baixar vídeo</a></Button>

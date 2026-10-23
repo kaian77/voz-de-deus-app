@@ -198,7 +198,8 @@ export default function Composer() {
     try {
       const added: MediaItem[] = [];
       for (const file of Array.from(files)) {
-        added.push({ url: await api.upload(file, file.name), type: file.type.startsWith("video") ? "video" : "image" });
+        const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|webm|m4v)$/i.test(file.name);
+        added.push({ url: await api.upload(file, file.name), type: isVideo ? "video" : "image" });
       }
       setMedia((m) => [...m, ...added]);
     } catch (e) {
@@ -499,7 +500,7 @@ export default function Composer() {
                   type="file"
                   hidden
                   multiple={kind === "carousel"}
-                  accept={kind === "reel" ? "video/mp4,video/quicktime" : "image/jpeg,image/png,video/mp4"}
+                  accept={kind === "reel" ? "video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" : "image/jpeg,image/png,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"}
                   onChange={(e) => onFiles(e.target.files)}
                 />
                 <p className="text-xs text-muted-foreground">

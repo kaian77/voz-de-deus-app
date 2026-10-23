@@ -202,8 +202,20 @@ export const api = {
       });
     }
     const path = `${await userId()}/${crypto.randomUUID()}-${name.replace(/[^\w.-]/g, "_")}`;
-    const { error } = await supabase!.storage.from("media").upload(path, file, { contentType: file.type || undefined });
-    fail(error);
+    // Browsers often append codec parameters (for example, `video/webm;codecs=vp8,opus`).
+    // Supabase bucket MIME allowlists match the media type without those parameters.
+    const contentType = file.type.split(";")[0]?.trim().toLowerCase() || undefined;
+    const { error } = await supabase!.storage.from("media").upload(path, file, { contentType });
+    if (error) {
+      const message = error.message.toLowerCase();
+      if (message.includes("mime type") || message.includes("content type") || message.includes("not supported")) {
+        throw new Error("Este formato de vídeo não foi aceito pelo armazenamento. Atualize a página e tente MP4, MOV ou WebM.");
+      }
+      if (message.includes("maximum allowed") || message.includes("file size") || message.includes("too large")) {
+        throw new Error("O vídeo é grande demais para enviar. Tente um vídeo menor ou reduza a duração/qualidade.");
+      }
+      throw new Error(`Não consegui enviar o arquivo: ${error.message}`);
+    }
     return supabase!.storage.from("media").getPublicUrl(path).data.publicUrl;
   },
 };
