@@ -159,6 +159,25 @@ export const api = {
     return data as R;
   },
 
+  async transcribeVideo(file: Blob): Promise<{ text: string; words: { word: string; start: number; end: number }[]; duration: number }> {
+    if (isDemo) throw new Error("A transcrição automática precisa do Supabase conectado.");
+    const { data: session } = await supabase!.auth.getSession();
+    const form = new FormData();
+    form.append("action", "transcribe_video");
+    form.append("file", file, `reel.${file.type.includes("mp4") ? "mp4" : "webm"}`);
+    const res = await fetch(`${functionsBaseUrl}/ai`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.session?.access_token ?? SUPABASE_ANON_KEY}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.error) throw new Error(data?.error ?? `Erro ${res.status}`);
+    return data as { text: string; words: { word: string; start: number; end: number }[]; duration: number };
+  },
+
   async publishNow(post: Post): Promise<Post> {
     if (isDemo) {
       return api.update("posts", post.id, {

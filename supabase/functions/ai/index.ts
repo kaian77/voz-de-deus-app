@@ -82,7 +82,43 @@ Deno.serve(async (req) => {
     const userId = await requireUser(req);
     const db = adminClient();
     const ctx = { db, userId };
-    const { action, ...input } = await req.json();
+    let action: string;
+    let input: Record<string, unknown>;
+    if (req.headers.get("content-type")?.includes("multipart/form-data")) {
+      const form = await req.formData();
+      action = String(form.get("action") ?? "");
+      input = {};
+      if (action === "transcribe_video") {
+        const file = form.get("file");
+        if (!(file instanceof File)) throw new HttpError(400, "Envie um arquivo de vídeo para criar as legendas.");
+        if (file.size > 25 * 1024 * 1024) throw new HttpError(413, "O vídeo passou de 25 MB. Grave em qualidade menor ou escolha um trecho mais curto.");
+        const apiKey = Deno.env.get("OPENAI_API_KEY");
+        if (!apiKey) throw new HttpError(503, "A transcrição ainda não está configurada. Adicione OPENAI_API_KEY nos secrets das Edge Functions do Supabase.");
+
+        const transcriptionForm = new FormData();
+        transcriptionForm.append("file", file, file.name || "reel.webm");
+        transcriptionForm.append("model", "whisper-1");
+        transcriptionForm.append("response_format", "verbose_json");
+        transcriptionForm.append("timestamp_granularities[]", "word");
+        transcriptionForm.append("language", "pt");
+        const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}` },
+          body: transcriptionForm,
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const message = typeof result?.error?.message === "string" ? result.error.message : "Não consegui transcrever o vídeo.";
+          throw new HttpError(response.status === 401 ? 503 : 502, message);
+        }
+        return json({ text: result.text ?? "", words: result.words ?? [], duration: result.duration ?? 0 });
+      }
+    } else {
+      const body = await req.json();
+      action = body.action;
+      const { action: _action, ...rest } = body;
+      input = rest;
+    }
 
     // Ações sem IA (dados ao vivo do Instagram)
     if (action === "sync_competitor") return json(await runTool(ctx, "sync_competitor", input));
