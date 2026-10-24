@@ -432,6 +432,10 @@ export interface TourProject {
   name: string;
   edit_token: string;
   created_at: string;
+  demo_until: string | null;
+  paid: boolean;
+  views: number;
+  last_view_at: string | null;
 }
 
 /** Canal do YouTube conectado (Renda extra → YouTube). Um canal por idioma. */

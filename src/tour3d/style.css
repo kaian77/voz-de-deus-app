@@ -24,6 +24,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .t3-brand span { font-size: 12px; opacity: 0.8; letter-spacing: 0.04em; }
 .t3-back { width: 36px; height: 36px; border-radius: 50%; background: rgba(255, 255, 255, 0.15); font-size: 18px; flex: none; }
 .t3-demo {
+  text-decoration: none; white-space: nowrap;
   flex: none; font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; padding: 6px 10px; border-radius: 999px;
   background: #ffd36b; color: #2b2b1f;
 }
@@ -168,3 +169,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .t3-setst button.on { opacity: 1; outline: 3px solid var(--pd); outline-offset: 1px; }
 .t3-edit { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: #fff3cf; font-size: 13px; }
 .editing .t3-demo::after { content: " · edição"; }
+.t3-expired { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--pd); color: #fff; text-align: center; }
+.t3-expired > div { max-width: 420px; }
+.t3-expired h1 { font-family: var(--serif); font-weight: 400; font-size: 30px; line-height: 1.15; margin: 8px 0 12px; }
+.t3-expired p { opacity: 0.85; line-height: 1.5; }
+.t3-exp-k { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #ffd36b; opacity: 1 !important; }
+@media (max-width: 420px) { .t3-demo { font-size: 10px; letter-spacing: 0.06em; padding: 6px 8px; } }

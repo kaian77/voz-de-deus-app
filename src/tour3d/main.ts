@@ -47,7 +47,7 @@ app.innerHTML = `
 <header class="t3-top">
   <button class="t3-back" id="back" hidden aria-label="Voltar ao condomínio">←</button>
   <div class="t3-brand"><b>${esc(project.name)}</b><span>${esc(project.city)}</span></div>
-  <span class="t3-demo">Demonstração</span>
+  <a class="t3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">Demonstração · PáginasPro</a>
 </header>
 <div class="t3-hint" id="hint"></div>
 <div class="t3-sun" id="sun">
@@ -136,8 +136,25 @@ const rest = (path: string, init?: RequestInit) =>
     ...init,
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json", ...(init?.headers ?? {}) },
   });
+/** Demonstração vencida: no lugar do tour, um aviso com o WhatsApp da PáginasPro. */
+function showExpired() {
+  const msg = encodeURIComponent(`Olá! Vi a demonstração do Tour 3D do ${project.name} e quero saber como deixar oficial.`);
+  app.innerHTML = `<div class="t3-expired"><div>
+    <p class="t3-exp-k">Tour 3D · PáginasPro</p>
+    <h1>A demonstração do ${esc(project.name)} terminou</h1>
+    <p>Quer o tour 3D oficial, com as plantas, o lazer e o mapa de unidades atualizado pela sua equipe?</p>
+    <a class="t3-btn wa" href="https://wa.me/5561992372216?text=${msg}" target="_blank" rel="noopener">${WA_ICON} Falar com a PáginasPro</a>
+  </div></div>`;
+}
 async function loadUnits() {
   if (!SUPABASE_URL) return;
+  try {
+    const r = await rest("rpc/tour_open", { method: "POST", body: JSON.stringify({ p_slug: project.slug, p_count: !editToken }) });
+    const info = r.ok ? await r.json() : null;
+    if (info?.expired) return showExpired();
+  } catch {
+    /* sem conexão: segue com o tour */
+  }
   try {
     const r = await rest(`tour_units?slug=eq.${encodeURIComponent(project.slug)}&select=block,unit,status`);
     const rows = r.ok ? ((await r.json()) as { block: string; unit: number; status: Status }[]) : [];
