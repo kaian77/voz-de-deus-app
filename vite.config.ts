@@ -22,4 +22,10 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // tour3d.html = Tour 3D da PáginasPro (/3d/<slug>, rewrite no vercel.json), página separada do Studio.
+  build: {
+    rollupOptions: {
+      input: { main: path.resolve(__dirname, "index.html"), tour3d: path.resolve(__dirname, "tour3d.html") },
+    },
+  },
 }));
