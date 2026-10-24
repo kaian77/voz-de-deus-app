@@ -8,6 +8,8 @@ import type { RaceEvent } from "./types";
 
 export const HALF = 2.6; // meia largura da pista
 const SUN_DIR = new THREE.Vector3(500, 260, 220);
+/** Palco do pódio: altura do piso e dos degraus (x relativo ao centro do pódio da arena). */
+export const PODIUM = { deck: 0.15, steps: [{ x: 0, h: 0.45 }, { x: -0.9, h: 0.32 }, { x: 0.9, h: 0.22 }] };
 
 /** Altura do terreno (unidades). O Eixo desce para o leste, com ondulações. */
 export function height(x: number, z: number) {
@@ -37,7 +39,13 @@ function textTexture(lines: string[], w: number, h: number, bg: string, fg: stri
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.font = font;
-  lines.forEach((l, i) => g.fillText(l, w / 2, (h / (lines.length + 1)) * (i + 1)));
+  const size = Number(/(\d+)px/.exec(font)?.[1] ?? 64);
+  lines.forEach((l, i) => {
+    g.font = font;
+    const fit = Math.min(1, (w * 0.9) / g.measureText(l).width);
+    g.font = font.replace(/\d+px/, `${Math.floor(size * fit)}px`);
+    g.fillText(l, w / 2, (h / (lines.length + 1)) * (i + 1));
+  });
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
@@ -340,11 +348,19 @@ export function buildWorld(ev: RaceEvent): World {
     if (s.id === "podio") {
       const g = new THREE.Group();
       g.position.set(s.x, height(s.x, s.z), s.z);
-      box(g, 3, 2.2, 3, 0xffc72c, 0, 0, 0);
-      box(g, 3, 1.5, 3, 0xd7dbe0, -3, 0, 0);
-      box(g, 3, 1, 3, 0xcd8a4e, 3, 0, 0);
-      const back = sign(g, ["PÓDIO"], 12, 3, "#0f2238", "#ffffff");
-      back.position.set(0, 4.5, -2.6);
+      // palco + degraus em escala de gente (1º no meio, 2º à esquerda, 3º à direita de quem olha)
+      box(g, 7, PODIUM.deck, 4.2, 0x6b7787, 0, 0, 0.4);
+      const [first, second, third] = PODIUM.steps;
+      box(g, 0.9, first.h, 0.8, 0xffc72c, first.x, PODIUM.deck, 0);
+      box(g, 0.9, second.h, 0.8, 0xd7dbe0, second.x, PODIUM.deck, 0);
+      box(g, 0.9, third.h, 0.8, 0xcd8a4e, third.x, PODIUM.deck, 0);
+      for (const [n, st, bg] of [["1", first, "#ffc72c"], ["2", second, "#d7dbe0"], ["3", third, "#cd8a4e"]] as const) {
+        const num = sign(g, [n], 0.5, 0.3, bg, "#0f2238", false);
+        num.position.set(st.x, PODIUM.deck + st.h / 2, 0.41);
+      }
+      const back = sign(g, ["PÓDIO", ev.name.toUpperCase()], 5.6, 2.4, ev.colors.dark, "#ffffff");
+      back.position.set(0, 2.1, -0.9);
+      for (const sx of [-2.8, 2.8]) cyl(g, 0.06, 3.3, 0xcfd4da, sx, 0, -0.92, 6);
       arena.add(g);
       return;
     }
