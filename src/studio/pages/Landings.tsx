@@ -12,7 +12,7 @@ import { renderLanding } from "@/landing/render";
 import { WIDGET_LABEL, widgetFor, type WidgetKind } from "@/landing/widgets";
 import { api } from "../lib/api";
 import { useInvalidate, useOffer, useTable } from "../lib/hooks";
-import type { LandingPage, LandingStat, SiteStat } from "../lib/types";
+import type { LandingPage, LandingStat, SiteStat, TourProject } from "../lib/types";
 import type { Offer } from "../lib/offer";
 import { EmptyState, PageHeader, Panel, relativeTime } from "../components/bits";
 
@@ -111,6 +111,37 @@ function MySitePanel() {
         </div>
       </div>
       {editing && <PricesPanel onClose={() => setEditing(false)} />}
+    </Panel>
+  );
+}
+
+/** Tours 3D: link público e link de edição das unidades (para a construtora marcar vendido/reservado). */
+function ToursPanel() {
+  const { data = [] } = useTable("tour_projects", { order: "created_at" });
+  const tours = data as TourProject[];
+  if (!tours.length) return null;
+  const copy = (url: string, msg: string) => navigator.clipboard.writeText(url).then(() => toast.success(msg));
+  return (
+    <Panel title="Tours 3D" description="Mande o link de edição só para a equipe de vendas: nele eles tocam na unidade e marcam Disponível, Reservado ou Vendido." className="mb-4">
+      <div className="space-y-2">
+        {tours.map((t) => {
+          const url = `${LANDING_HOST}/3d/${t.slug}`;
+          const edit = `${url}?editar=${t.edit_token}`;
+          return (
+            <div key={t.slug} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{t.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{url.replace("https://", "")}</p>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                <Button size="sm" variant="outline" onClick={() => copy(url, "Link do tour copiado")}><Copy className="mr-1.5 h-4 w-4" />Link</Button>
+                <Button size="sm" variant="outline" onClick={() => copy(edit, "Link de edição copiado (só para a equipe de vendas)")}><Link2 className="mr-1.5 h-4 w-4" />Link de edição</Button>
+                <Button size="sm" variant="outline" asChild><a href={edit} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Editar unidades</a></Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </Panel>
   );
 }
@@ -689,6 +720,7 @@ export default function Landings() {
         actions={<Button onClick={() => create()} disabled={creating}>{creating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}Nova página</Button>}
       />
       <MySitePanel />
+      <ToursPanel />
       {pages.length === 0 ? (
         <EmptyState icon={<Globe className="h-5 w-5" />} title="Nenhuma página ainda" action={<Button variant="outline" onClick={() => navigate("/studio/leads")}>Ver meus leads</Button>}>
           Crie do zero ou, na tela Leads, toque em "Landing" num lead para já vir com os dados dele.
