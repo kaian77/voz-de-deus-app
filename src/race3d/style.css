@@ -154,3 +154,6 @@ button.r3-lab { pointer-events: auto; }
 .r3-done.win { background: linear-gradient(160deg, #fff7d1, #fff 55%); }
 .r3-done i { font-style: normal; font-size: 54px; line-height: 1; }
 .r3-done .r3-btn { flex: 1; }
+.r3-medal { width: 96px; height: 96px; margin: -54px auto 0; display: block; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.3)); animation: medal 1s ease-out both; }
+@keyframes medal { 0% { transform: translateY(-30px) rotateY(180deg) scale(0.6); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.r3-done { overflow: visible; }

@@ -4,7 +4,7 @@ import "./style.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { buildWorld, height, HALF, PODIUM } from "./world";
-import { Crowd, Pose, SKIN } from "./crowd";
+import { BODY, Crowd, Pose, SKIN } from "./crowd";
 import { exemplo } from "./events/exemplo";
 import type { Distance, RaceEvent } from "./types";
 
@@ -648,6 +648,7 @@ function launchMe(d: Distance) {
   if (dist !== d) setDist(d);
   meCrowd.paint(0, me.shirt, SKIN[1], 0x111111);
   meLabel.el.textContent = meName().toUpperCase();
+  refreshMedals();
   const mates = runners.filter((r) => r.d === d);
   const ahead = me.champ ? 0 : mates.filter((r) => r.pace < me.pace).length;
   const row = Math.floor(ahead / 7);
@@ -847,29 +848,120 @@ async function shareMe(win: boolean) {
 }
 
 // ---------- cerimônia do pódio: staff entrega bronze, prata e ouro; o campeão ergue os braços com a medalha
-const GOLD = 0xffc72c, SILVER = 0xd7dbe0, BRONZE = 0xcd8a4e;
-function makeMedal(color: number) {
+type Tone = "ouro" | "prata" | "bronze";
+const TONES: Record<Tone, { metal: number; light: string; mid: string; dark: string }> = {
+  ouro: { metal: 0xffc72c, light: "#fff1a8", mid: "#f2b81f", dark: "#a8740b" },
+  prata: { metal: 0xd7dbe0, light: "#ffffff", mid: "#c9ced6", dark: "#7d8590" },
+  bronze: { metal: 0xcd8a4e, light: "#ffd2a6", mid: "#cd8a4e", dark: "#7c4a22" },
+};
+/** Arte da medalha (enquanto não tem a foto da medalha de verdade do evento). */
+function medalCanvas(d: Distance, tone: Tone) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 512;
+  const g = c.getContext("2d")!;
+  const T = TONES[tone];
+  const rg = g.createRadialGradient(200, 170, 30, 256, 256, 256);
+  rg.addColorStop(0, T.light);
+  rg.addColorStop(0.55, T.mid);
+  rg.addColorStop(1, T.dark);
+  g.fillStyle = rg;
+  g.beginPath();
+  g.arc(256, 256, 254, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = T.dark;
+  g.lineWidth = 10;
+  g.beginPath();
+  g.arc(256, 256, 214, 0, Math.PI * 2);
+  g.stroke();
+  g.strokeStyle = T.light;
+  g.lineWidth = 3;
+  g.beginPath();
+  g.arc(256, 256, 200, 0, Math.PI * 2);
+  g.stroke();
+  // nome do evento em volta
+  g.fillStyle = T.dark;
+  g.font = "600 34px Jost, sans-serif";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  const name = ev.name.toUpperCase();
+  const arc = Math.min(Math.PI * 1.1, name.length * 0.17);
+  [...name].forEach((ch, i) => {
+    const a = -Math.PI / 2 - arc / 2 + (arc * (i + 0.5)) / name.length;
+    g.save();
+    g.translate(256 + Math.cos(a) * 234, 256 + Math.sin(a) * 234);
+    g.rotate(a + Math.PI / 2);
+    g.fillText(ch, 0, 0);
+    g.restore();
+  });
+  // corredor estilizado + distância
+  g.fillStyle = T.dark;
+  g.font = "700 150px Jost, sans-serif";
+  g.fillText(d.label, 256, 270);
+  g.font = "600 38px Jost, sans-serif";
+  g.fillText(tone === "ouro" && me.champ ? "CAMPEÃO" : tone === "ouro" ? "FINISHER" : tone === "prata" ? "2º LUGAR" : "3º LUGAR", 256, 368);
+  g.font = "500 30px Jost, sans-serif";
+  g.fillText("★ " + ev.subtitle.split("·").pop()!.trim().toUpperCase() + " ★", 256, 150);
+  return c;
+}
+const loader = new THREE.TextureLoader();
+function medalFace(d: Distance, tone: Tone) {
+  if (ev.medal && tone === "ouro") {
+    const tex = loader.load(ev.medal);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+  const tex = new THREE.CanvasTexture(medalCanvas(d, tone));
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+function makeMedal(tone: Tone) {
   const g = new THREE.Group();
-  const ribbon = new THREE.MeshStandardMaterial({ color: new THREE.Color(ev.colors.primary), roughness: 0.6 });
+  const ribbon = new THREE.MeshStandardMaterial({ map: ribbonTexture(), roughness: 0.6 });
   for (const sx of [-1, 1]) {
-    const r = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.02), ribbon);
-    r.position.set(sx * 0.09, 0.2, -0.02);
-    r.rotation.z = sx * 0.42;
+    const r = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.36, 0.006), ribbon);
+    r.position.set(sx * 0.05, 0.19, -0.025);
+    r.rotation.set(-0.12, 0, -sx * 0.22);
     g.add(r);
   }
-  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 20).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color, metalness: 0.75, roughness: 0.28, emissive: color, emissiveIntensity: 0.18 }));
+  const metal = new THREE.MeshStandardMaterial({ color: TONES[tone].metal, metalness: 0.8, roughness: 0.3 });
+  const face = new THREE.MeshStandardMaterial({ map: medalFace(me.d, tone), metalness: 0.55, roughness: 0.35, emissive: 0xffffff, emissiveIntensity: 0.08 });
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.018, 32).rotateX(Math.PI / 2), [metal, face, metal]);
   g.add(disc);
+  g.userData = { tone, face };
   g.visible = false;
   scene.add(g);
   return g;
 }
-const medals = { me: makeMedal(GOLD), second: makeMedal(SILVER), third: makeMedal(BRONZE) };
+function ribbonTexture() {
+  const c = document.createElement("canvas");
+  c.width = 32;
+  c.height = 4;
+  const g = c.getContext("2d")!;
+  g.fillStyle = ev.colors.primary;
+  g.fillRect(0, 0, 32, 4);
+  g.fillStyle = ev.colors.dark;
+  g.fillRect(12, 0, 8, 4);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const medals = { me: makeMedal("ouro"), second: makeMedal("prata"), third: makeMedal("bronze") };
+/** Refaz a arte das medalhas para a distância de quem correu. */
+function refreshMedals() {
+  for (const md of Object.values(medals)) {
+    const face = md.userData.face as THREE.MeshStandardMaterial;
+    face.map?.dispose();
+    face.map = medalFace(me.d, md.userData.tone as Tone);
+    face.needsUpdate = true;
+  }
+}
+const MEDAL = 1; // medidas da medalha já estão no tamanho do boneco (um pouco maior que a real)
 /** Medalha no peito de quem está em (x, y, z) olhando para yaw. */
-const MEDAL = 1.5; // um pouco maior que o real, para aparecer
 function wearMedal(m: THREE.Group, x: number, y: number, z: number, yaw: number, s: number, swing: number) {
   m.visible = true;
   m.scale.setScalar(s * MEDAL);
-  m.position.set(x + Math.sin(yaw) * 0.24 * s, y + 1.12 * s, z + Math.cos(yaw) * 0.24 * s);
+  const f = (BODY.chestFront + 0.035) * s;
+  m.position.set(x + Math.sin(yaw) * f, y + (BODY.chest - 0.1) * s, z + Math.cos(yaw) * f);
   m.rotation.set(swing, yaw, 0);
 }
 const podiumCrowd = new Crowd(3);
@@ -934,7 +1026,7 @@ function stepCeremony(dt: number, now: number) {
       const h = i === 0 ? steps[1].h : i === 1 ? steps[0].h : top;
       m.visible = true;
       m.scale.setScalar(S * MEDAL);
-      m.position.set(x, lerp(gy + PODIUM.deck + 0.4, gy + h + 1.12 * S, k) + Math.sin(k * Math.PI) * 0.25, lerp(front - 0.15, pz + 0.24 * S, k));
+      m.position.set(x, lerp(gy + PODIUM.deck + 0.4, gy + h + (BODY.chest - 0.1) * S, k) + Math.sin(k * Math.PI) * 0.25, lerp(front - 0.15, pz + (BODY.chestFront + 0.035) * S, k));
       m.rotation.set(0, 0, 0);
     }
   }
@@ -951,12 +1043,14 @@ function stepCeremony(dt: number, now: number) {
     const done = $("done");
     done.hidden = false;
     done.classList.add("win");
-    done.innerHTML = `<i>🥇</i><b>${esc(meName())}, campeão dos ${me.d.label}!</b><span>${fmt(me.fin)} · ${ev.name}</span>
+    done.innerHTML = `${medalImg()}<b>${esc(meName())}, campeão dos ${me.d.label}!</b><span>${fmt(me.fin)} · ${ev.name}</span>
       <div><button class="r3-btn hot" id="share2">Compartilhar</button><button class="r3-btn" id="doneX2">Fechar</button></div>`;
     $("share2").addEventListener("click", () => shareMe(true));
     $("doneX2").addEventListener("click", () => (done.hidden = true));
   }
 }
+
+const medalImg = () => `<img class="r3-medal" alt="Medalha" src="${ev.medal ?? medalCanvas(me.d, "ouro").toDataURL()}">`;
 
 function finished() {
   const mates = runners.filter((r) => r.d === me.d);
@@ -967,10 +1061,10 @@ function finished() {
   const win = pos === 1;
   done.classList.toggle("win", win);
   done.innerHTML = win
-    ? `<i>🥇</i><b>${who} venceu os ${me.d.label}!</b><span>${fmt(me.fin)} · 1º de ${mates.length + 1} · ${ev.name}</span>
+    ? `${medalImg()}<b>${who} venceu os ${me.d.label}!</b><span>${fmt(me.fin)} · 1º de ${mates.length + 1} · ${ev.name}</span>
       <div><button class="r3-btn hot" id="podiumGo">🏆 Subir no pódio</button><button class="r3-btn" id="share">Compartilhar</button></div>
       <div><button class="r3-btn" id="doneSign">Quero me inscrever</button><button class="r3-btn" id="doneX">Fechar</button></div>`
-    : `<b>🏅 ${who} completou os ${me.d.label}!</b><span>${fmt(me.fin)} · ${pos}º de ${mates.length + 1} (simulação)</span>
+    : `${medalImg()}<b>${who} completou os ${me.d.label}!</b><span>${fmt(me.fin)} · ${pos}º de ${mates.length + 1} (simulação)</span>
       <div><button class="r3-btn hot" id="doneSign">Quero me inscrever</button><button class="r3-btn" id="share">Compartilhar</button></div>
       <div><button class="r3-btn" id="doneX">Fechar</button></div>`;
   confetti(win ? 700 : 250);

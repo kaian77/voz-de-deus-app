@@ -35,6 +35,8 @@ export type RaceEvent = {
   lots: { name: string; price: string; status: "esgotado" | "aberto" | "em breve" }[];
   kit: string[];
   signup: string;
+  /** Foto da frente da medalha de verdade (PNG quadrado com fundo transparente), em public/race3d/<slug>/. */
+  medal?: string;
   whatsapp: string;
   demo: boolean;
 };
