@@ -208,37 +208,98 @@ const RULES_ES =
   `Escreva narration, title, description, tags, thumbnail_text, topic, angle e label em espanhol latino-americano neutro e natural ` +
   `(cite os versículos no formato espanhol, ex.: Éxodo 14:21; use a Reina-Valera como referência).`;
 
+// ------------------------------------------------------------------ bonequinhos (canal de explicações, estilo stickman)
+// O vídeo é desenhado por código (video/stickman.py): o roteiro diz a pose do boneco e o que aparece no quadro.
+
+const POSES = ["idle", "explain", "point", "think", "idea", "shock", "happy", "celebrate", "sad", "shrug", "facepalm", "scared", "angry", "walk", "run", "sleep"] as const;
+const ICONS = [
+  "money", "coin", "clock", "brain", "heart", "phone", "house", "car", "lightbulb", "question", "exclamation", "check", "cross", "fire",
+  "water", "sun", "moon", "food", "coffee", "chart_up", "chart_down", "globe", "book", "gift", "warning", "battery_low", "battery_full",
+  "person", "bank", "calendar", "target", "lock", "trophy", "arrow_up", "arrow_down", "plane", "pill", "dumbbell", "bed", "bomb", "star", "eye",
+] as const;
+
+const StickScene = z.object({
+  narration: z.string().describe("O que a voz fala nesta cena: UMA frase curta e falada, no idioma do canal"),
+  pose: z.enum(POSES).describe("Pose do boneco que combina com a frase (varie: não repita a mesma pose em cenas seguidas)"),
+  board: z.enum(["icons", "text", "compare", "chart_up", "chart_down", "none"]).describe(
+    "O que aparece no quadro: icons = 1 a 3 desenhos; text = número ou palavra-chave grande; compare = 2 ícones lado a lado com VS; " +
+      "chart_up/chart_down = gráfico subindo/caindo (pode ter text junto); none = só o boneco (use pouco)",
+  ),
+  icons: z.array(z.enum(ICONS)).describe("Até 3 ícones da lista (compare usa exatamente 2; text pode ter 1 ícone junto); vazio se não usar"),
+  text: z.string().describe("Texto do quadro: número ou palavra-chave curta, até 16 caracteres (ex.: '$1,825', '8 HOURS', '70%'); vazio se não usar"),
+  friend: z.enum(["none", ...POSES]).describe("Amigo azul que reage ou pergunta: pose dele, ou none. Use em 2 a 4 cenas por vídeo, não seguidas"),
+  chapter: z.string().nullable().describe("Só em vídeo longo: título do capítulo quando um novo capítulo começa nesta cena; senão null"),
+});
+
+const StickScript = z.object({
+  title: z.string().describe("Título com curiosidade real e forte, até 70 caracteres, sem mentira nem exagero"),
+  description: z.string().describe("Descrição de 2 a 4 parágrafos curtos; termine com 3 a 5 hashtags"),
+  tags: z.array(z.string()).describe("8 a 15 tags de busca no idioma do canal"),
+  thumbnail_text: z.string().describe("2 a 5 palavras em MAIÚSCULAS para a capa (pode ter número), que geram curiosidade"),
+  thumbnail_pose: z.enum(POSES).describe("Pose do boneco na capa (shock, scared ou idea costumam funcionar)"),
+  thumbnail_icons: z.array(z.enum(ICONS)).describe("1 ícone da lista que aparece na capa"),
+  scenes: z.array(StickScene),
+  references: z.array(z.string()).describe("Fontes conhecidas e verificáveis dos números citados (ex.: 'CDC', 'Harvard Health'); vazio se não citar números"),
+});
+
+const RULES_STICK =
+  `Você é roteirista de um canal do YouTube de vídeos explicativos com bonequinhos de palito, sobre "${"{niche}"}". ` +
+  `Escreve como um bom professor de YouTube: falado, simples, rápido, com exemplos do dia a dia e uma pitada de humor.\n` +
+  `Regras de conteúdo:\n` +
+  `- Só fatos verdadeiros e conhecidos; números arredondados e corretos. Nunca invente estudo, pesquisa ou estatística. ` +
+  `Quando for estimativa, diga "cerca de" ou "estudos sugerem".\n` +
+  `- Nada de conselho pessoal de saúde, investimento ou direito (explique como funciona, sem mandar a pessoa fazer); sem promessa de ganho.\n` +
+  `- Conteúdo original: as referências mostram só que o TEMA dá audiência; nunca copie título, roteiro ou frases de outro canal.\n` +
+  `- Cada vídeo entrega algo útil e concreto (YouTube não monetiza conteúdo repetitivo em massa).\n` +
+  `Visual (desenhado por código): em cada cena escolha a pose do boneco, o que aparece no quadro (ícones da lista, um número ou ` +
+  `palavra-chave, comparação ou gráfico) e, às vezes, o amigo azul reagindo. O quadro mostra o NÚMERO ou a IDEIA da frase, não repete a frase. ` +
+  `Varie poses e quadros de uma cena para outra.`;
+
+const LANG_STICK: Record<string, string> = {
+  en: `\n\nIMPORTANTE: este canal é EM INGLÊS para o público dos Estados Unidos: narration, title, description, tags, thumbnail_text, text, topic e angle em inglês americano natural (valores em dólar).`,
+  es: `\n\nIMPORTANTE: este canal é EM ESPANHOL para a América Latina: narration, title, description, tags, thumbnail_text, text, topic e angle em espanhol latino-americano neutro.`,
+  pt: `\n\nEscreva tudo em português do Brasil (valores em reais quando fizer sentido).`,
+};
+
+export type StickScriptT = z.infer<typeof StickScript>;
+
 const rules = (niche: string, language: string, style = "") =>
+  style === "stickman" ? RULES_STICK.replace("{niche}", niche) + (LANG_STICK[language] ?? LANG_STICK.pt) :
   (language === "en" ? RULES_EN : language === "es" ? RULES_ES : RULES_PT).replace("{niche}", niche) +
   (style === "cinematic" ? CINEMATIC : style === "collage" ? COLLAGE : "");
 
-export async function planTopics(niche: string, trends: Trend[], recent: string[], kinds: ("short" | "long")[], language = "pt") {
+export async function planTopics(niche: string, trends: Trend[], recent: string[], kinds: ("short" | "long")[], language = "pt", style = "") {
   const out = await generateJSON(Plan,
-    rules(niche, language) +
+    rules(niche, language, style) +
       `\n\nAgora você é o editor do canal: escolha os temas dos próximos vídeos com base no que está dando audiência.`,
     `Vídeos do nicho que mais crescem (título · visualizações por dia · formato · id):\n` +
       (trends.length ? trends.map((t) => `- ${t.title} · ${t.per_day}/dia · ${t.kind} · ${t.id}`).join("\n") : "(sem dados agora; use temas clássicos que sempre dão audiência)") +
       `\n\nTemas que o canal já fez (não repita):\n${recent.length ? recent.map((r) => `- ${r}`).join("\n") : "(nenhum)"}` +
       `\n\nEscolha exatamente ${kinds.length} temas, nesta ordem de formato: ${kinds.join(", ")}. ` +
-      `Shorts: um único fato surpreendente e rápido. Longo: tema com várias curiosidades para 6 a 8 minutos.`,
+      `Shorts: um único fato surpreendente e rápido. Longo: tema com várias curiosidades para 6 a 8 minutos.` +
+      (style === "stickman" ? ` Temas no formato "o que acontece se...", "por que...", "como funciona..." ou "X vs Y", fáceis de mostrar com desenhos simples.` : ""),
     "low");
   return out.items.slice(0, kinds.length).map((it, i) => ({ ...it, kind: kinds[i] }));
 }
 
-export async function writeScript(niche: string, video: { kind: string; topic: string; angle?: string | null; redo_note?: string | null }, language = "pt", style = ""): Promise<YtScript> {
+export async function writeScript(niche: string, video: { kind: string; topic: string; angle?: string | null; redo_note?: string | null }, language = "pt", style = ""): Promise<YtScript | StickScriptT> {
   const short = video.kind === "short";
   const en = language === "en";
+  const stick = style === "stickman";
+  const cta = stick
+    ? (en ? `"follow for more"` : language === "es" ? `"sígueme para más"` : `"me segue para mais"`)
+    : (en ? `"subscribe for more Bible secrets"` : language === "es" ? `"suscríbete para más secretos de la Biblia"` : `"se inscreve para mais curiosidades da Bíblia"`);
   const shape = short
     ? `Formato: YouTube Shorts vertical de 45 a 55 segundos (130 a 150 palavras faladas no total), 14 a 18 cenas de UMA frase curta cada ` +
       `(no máximo 12 palavras; a imagem troca a cada 2 a 4 segundos, ritmo rápido de vídeo viral). ` +
       `A primeira frase é o gancho (pergunta ou fato chocante) e prende nos 2 primeiros segundos. ` +
-      `Termine com uma pergunta para comentarem e ${en ? `"subscribe for more Bible secrets"` : language === "es" ? `"suscríbete para más secretos de la Biblia"` : `"se inscreve para mais curiosidades da Bíblia"`}. Sem capítulos (chapter = null). ` +
+      `Termine com uma pergunta para comentarem e ${cta}. Sem capítulos (chapter = null). ` +
       `Inclua #shorts nas hashtags.`
     : `Formato: vídeo horizontal de 6 a 8 minutos (900 a 1150 palavras faladas), 55 a 75 cenas de UMA frase cada (a imagem troca a cada 5 a 8 segundos). ` +
       `Abertura com gancho forte nos primeiros 15 segundos e a promessa do vídeo; depois 5 a 7 capítulos (curiosidades), ` +
       `cada um começando numa cena com chapter preenchido (a primeira cena tem chapter "${en ? "Introduction" : language === "es" ? "Introducción" : "Introdução"}"); ` +
       `fechamento com uma lição e chamada para se inscrever e comentar.`;
-  return await generateJSON(Script,
+  return await generateJSON(stick ? StickScript : Script,
     rules(niche, language, style),
     `${shape}\n\nTema: ${video.topic}\nGancho: ${video.angle ?? "(escolha o melhor)"}` +
       (video.redo_note ? `\n\nO dono pediu para refazer este vídeo assim: ${video.redo_note}` : ""),
@@ -279,7 +340,7 @@ export async function planDay(db: SupabaseClient, channel: any, date: string, on
     : [...Array(Math.max(0, Math.min(3, channel.shorts_per_day))).fill("short"), ...(longDays(channel.long_per_week).has(weekday) ? ["long" as const] : [])];
   if (!kinds.length) return 0;
   const { data: past } = await db.from("yt_videos").select("topic").eq("channel_ref", channel.id).order("created_at", { ascending: false }).limit(80);
-  const items = await planTopics(channel.niche, trends, (past ?? []).map((p) => p.topic).filter(Boolean), kinds, channel.language);
+  const items = await planTopics(channel.niche, trends, (past ?? []).map((p) => p.topic).filter(Boolean), kinds, channel.language, channel.style ?? "");
   // Canal em inglês publica no fim da tarde/noite dos EUA
   // Horário de Brasília. EN: almoço e noite em Nova York. ES: 13h e 20h na Cidade do México (UTC-6) = 16h e 23h aqui
   const times = channel.language === "en" ? { short: ["14:00", "21:00", "11:00"], long: "21:30" }
