@@ -5,6 +5,10 @@
       "destination": "/tour3d.html"
     },
     {
+      "source": "/corrida/:slug",
+      "destination": "/corrida.html"
+    },
+    {
       "source": "/media/:path*",
       "destination": "https://rrlxhnmfsmknzhqpfrhr.supabase.co/storage/v1/object/public/media/:path*"
     },
@@ -67,6 +71,15 @@
     },
     {
       "source": "/3d/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/corrida/(.*)",
       "headers": [
         {
           "key": "X-Robots-Tag",
