@@ -160,6 +160,15 @@ export default function Dashboard() {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+  // Pins de verdade da Nuvemshop para a parede da loja no Mundo Brax
+  const { data: products } = useQuery({
+    queryKey: ["world-products"],
+    queryFn: () => api.invoke<{ name: string; image: string | null; url: string }[]>("ai", { action: "store_products" }),
+    enabled: !isDemo,
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+  });
+  const nextPost = week.find((p) => p.status === "scheduled");
 
   return (
     <div>
@@ -180,6 +189,9 @@ export default function Dashboard() {
             className="h-[260px] w-full sm:h-[340px]"
             stats={{
               ordersToday: sales?.total.today.orders ?? 0,
+              revenueToday: sales?.total.today.revenue ?? 0,
+              nextPost: nextPost ? { title: nextPost.title || nextPost.caption.split("\n")[0] || "Post", at: nextPost.scheduled_at! } : null,
+              products: products ?? [],
               toShip: sales?.total.to_ship ?? 0,
               waiting: waiting.length,
               scheduled: week.filter((p) => p.status === "scheduled").length,
@@ -188,7 +200,7 @@ export default function Dashboard() {
           />
         </Suspense>
         <p className="pointer-events-none absolute left-3 top-2 text-xs font-semibold uppercase tracking-wider text-foreground/60">Mundo Brax</p>
-        <p className="pointer-events-none absolute bottom-2 right-3 text-[11px] text-foreground/50">Toque num prédio para abrir</p>
+        <p className="pointer-events-none absolute bottom-2 right-3 text-[11px] text-foreground/50">Toque num prédio · entre na loja</p>
       </div>
 
       <Sales />
