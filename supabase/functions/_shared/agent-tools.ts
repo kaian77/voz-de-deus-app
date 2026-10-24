@@ -2,7 +2,7 @@
 // Expostas por REST (/agent/tools/<nome>) e por MCP (/agent/mcp) na função "agent".
 import { z } from "npm:zod@4";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { businessDiscoveryEnabled, igBusinessDiscovery, igProfile, igRecentMedia, igSubscribedFields, igSubscribeWebhooks, igTokenFor } from "./instagram.ts";
+import { businessDiscoveryEnabled, igBusinessDiscovery, igMediaInsights, igProfile, igRecentMedia, igSubscribedFields, igSubscribeWebhooks, igTokenFor } from "./instagram.ts";
 import { advancePost, validatePost } from "./publisher.ts";
 import { assertPublicHttpsUrl } from "./util.ts";
 import { sendMessage, transcript } from "./inbox.ts";
@@ -461,6 +461,24 @@ const tools = {
       const [profile, media] = await Promise.all([igProfile(token), igRecentMedia(token, account.external_id, input.media_limit ?? 24)]);
       const brand = await settings(ctx);
       return { profile, media, best_times: bestTimes(media, brand?.timezone ?? "America/Sao_Paulo") };
+    },
+  },
+
+  get_post_insights: {
+    description: "Insights dos últimos posts do Instagram (visualizações, alcance, compartilhamentos, salvamentos, seguidores) — o mesmo que o piloto automático usa. " +
+      "Se vier erro de permissão, o app da Meta ainda não tem instagram_business_manage_insights liberado para a conta.",
+    input: z.object({ account_id: z.string().uuid().optional(), limit: z.number().int().min(1).max(10).optional() }),
+    run: async (ctx: Ctx, input: { account_id?: string; limit?: number }) => {
+      const account = await instagramAccount(ctx, input.account_id);
+      const token = await igTokenFor(ctx.db, account.id);
+      const media = await igRecentMedia(token, account.external_id, input.limit ?? 5);
+      return Promise.all(media.map(async (m) => {
+        try {
+          return { id: m.id, caption: String(m.caption ?? "").slice(0, 80), insights: (await igMediaInsights(token, String(m.id))).data };
+        } catch (e) {
+          return { id: m.id, caption: String(m.caption ?? "").slice(0, 80), error: (e as Error).message };
+        }
+      }));
     },
   },
 

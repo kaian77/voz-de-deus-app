@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Check, ChevronRight, Package, Plus, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -121,6 +121,7 @@ export default function Dashboard() {
   const { data: conversations = [] } = useTable("conversations", { order: "last_message_at" });
   const { data: keys = [] } = useTable("api_keys");
   const { data: settings } = useSettings();
+  const navigate = useNavigate();
 
   const now = Date.now();
   const week = posts
@@ -175,6 +176,7 @@ export default function Dashboard() {
       <div className="relative mb-6 overflow-hidden rounded-lg border bg-gradient-to-b from-sky-100 to-emerald-50 dark:from-slate-800 dark:to-slate-900">
         <Suspense fallback={<div className="h-[260px] sm:h-[340px]" />}>
           <World3D
+            onOpen={navigate}
             className="h-[260px] w-full sm:h-[340px]"
             stats={{
               ordersToday: sales?.total.today.orders ?? 0,
@@ -186,6 +188,7 @@ export default function Dashboard() {
           />
         </Suspense>
         <p className="pointer-events-none absolute left-3 top-2 text-xs font-semibold uppercase tracking-wider text-foreground/60">Mundo Brax</p>
+        <p className="pointer-events-none absolute bottom-2 right-3 text-[11px] text-foreground/50">Toque num prédio para abrir</p>
       </div>
 
       <Sales />
