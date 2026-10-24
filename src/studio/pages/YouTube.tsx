@@ -33,6 +33,12 @@ const VOICES: Record<YtChannel["language"], { id: string; label: string }[]> = {
   ],
 };
 const NICHE = { pt: "Curiosidades da Bíblia", en: "Bible curiosities", es: "Curiosidades de la Biblia" };
+// Canal de bonequinhos (explicações): nicho padrão ao transformar um canal de cortes
+const STICK_NICHE = {
+  pt: "Dinheiro, corpo humano, psicologia e como as coisas funcionam",
+  en: "Money, the human body, psychology and how things work",
+  es: "Dinero, el cuerpo humano, psicología y cómo funcionan las cosas",
+};
 const LANG_LABEL = { pt: "Português", en: "English", es: "Español" };
 
 const STATUS: Record<YtVideo["status"], { label: string; tone: string }> = {
@@ -83,6 +89,12 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
     return (
       <Panel title={<span className="flex items-center gap-2"><Avatar name={ch.title ?? "Canal"} src={ch.thumbnail} className="h-6 w-6" />{ch.title ?? ch.channel_id}<span className="rounded border px-1.5 text-[10px] font-medium uppercase text-muted-foreground">Cortes</span></span>}>
         <p className="text-[13px] text-muted-foreground">Canal de cortes: as campanhas e os cortes ficam em <Link to="/studio/cortes" className="font-medium text-foreground underline">Renda extra → Cortes</Link>.</p>
+        <Button size="sm" variant="outline" className="mt-3" disabled={busy !== null}
+          onClick={() => confirm("Transformar este canal em canal de bonequinhos (vídeos explicativos)? Os cortes já postados continuam no YouTube.") &&
+            run("stick", () => api.update("yt_channels", ch.id, { mode: "bible", style: "stickman", niche: STICK_NICHE[form.language], enabled: false }),
+              "Pronto: agora é canal de bonequinhos. Ligue o piloto automático quando quiser.")}>
+          {busy === "stick" && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Transformar em canal de bonequinhos
+        </Button>
         <div className="mt-3 flex items-center gap-3">
           <Label className="text-xs text-muted-foreground">Idioma dos títulos</Label>
           <Select value={form.language} onValueChange={(v) => run("lang", () => api.update("yt_channels", ch.id, { language: v as YtChannel["language"] }), "Salvo")}>
@@ -152,6 +164,7 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
               <SelectItem value="parallax">Animação 2.5D (personagem se mexe sobre o fundo)</SelectItem>
               <SelectItem value="whiteboard">Desenho à mão (mão desenha, papel amassa)</SelectItem>
               <SelectItem value="classic">Clássico (zoom nas imagens)</SelectItem>
+              <SelectItem value="stickman">Bonequinhos (explicações com boneco de palito, sem imagem de IA)</SelectItem>
             </SelectContent>
           </Select>
         </div>
