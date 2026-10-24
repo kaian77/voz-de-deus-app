@@ -270,7 +270,7 @@ export async function generateIdeas(db: SupabaseClient, userId: string, opts: { 
           const follows = get("follows");
           // Com alcance disponível, compara taxas por mil contas alcançadas. Curtidas e
           // comentários continuam como fallback quando a API não entrega Insights.
-          const score = reach > 0
+          const score = reach && reach > 0
             ? (((shares ?? 0) * 5 + (saves ?? 0) * 4 + (follows ?? 0) * 10 + likes + comments * 3) / reach) * 1000
             : likes + 3 * comments;
           return {

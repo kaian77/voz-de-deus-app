@@ -7,6 +7,15 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 export type WorldStats = { ordersToday: number; toShip: number; waiting: number; scheduled: number; pending: number };
 
+/** Para onde cada parte do mundo leva ao clicar. */
+export const WORLD_LINKS = {
+  loja: "/studio/pedidos",
+  armazem: "/studio/pedidos",
+  pin: "/studio/aprovacoes",
+  instagram: "/studio/mensagens",
+  ml: "/studio/contas",
+} as const;
+
 const RED = 0xe3262e, BLACK = 0x161616, GOLD = 0xffc72c, WHITE = 0xf5f2ea;
 
 const mat = (color: number, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) =>
@@ -171,8 +180,10 @@ function tree(x: number, z: number, s = 1) {
   return g;
 }
 
-export default function World3D({ stats, className }: { stats: WorldStats; className?: string }) {
+export default function World3D({ stats, className, onOpen }: { stats: WorldStats; className?: string; onOpen?: (to: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const openRef = useRef(onOpen);
+  openRef.current = onOpen;
 
   useEffect(() => {
     const host = ref.current;
@@ -232,10 +243,22 @@ export default function World3D({ stats, className }: { stats: WorldStats; class
     scene.add(ml);
     [[4.6, 1.6], [3.8, 3.6], [-0.4, -4.4], [0.9, 4.6], [-4.8, 0.1], [4.4, -4.2], [-2, 4.4]].forEach(([x, z], i) => scene.add(tree(x, z, 0.8 + (i % 3) * 0.15)));
 
+    // Cada prédio (e a etiqueta dele) leva a uma tela do Studio
+    const clickable: THREE.Object3D[] = [];
+    const link = (obj: THREE.Object3D, to: string) => {
+      obj.userData.to = to;
+      clickable.push(obj);
+    };
+    link(store, WORLD_LINKS.loja);
+    link(wh, WORLD_LINKS.armazem);
+    link(pinGroup, stats.pending ? WORLD_LINKS.pin : "/studio/calendario");
+    link(kiosk, WORLD_LINKS.instagram);
+    link(ml, WORLD_LINKS.ml);
     const lbl = (text: string, obj: THREE.Object3D, y: number, color?: string) => {
       const s = label(text, color);
       s.position.set(obj.position.x, y, obj.position.z);
       scene.add(s);
+      link(s, obj.userData.to);
     };
     lbl(`${stats.ordersToday} ${stats.ordersToday === 1 ? "venda" : "vendas"} hoje`, store, 3.5, "#E3262E");
     lbl(`${stats.toShip} para enviar`, wh, 3.3);
@@ -249,6 +272,7 @@ export default function World3D({ stats, className }: { stats: WorldStats; class
       return v;
     });
     const parked = stats.ordersToday === 0;
+    vans.forEach((v) => link(v, WORLD_LINKS.loja));
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -259,12 +283,51 @@ export default function World3D({ stats, className }: { stats: WorldStats; class
     controls.autoRotate = !reduce;
     controls.autoRotateSpeed = 0.6;
     controls.target.set(0, 0.2, 0);
-    // Celular: só gira sozinho (arrastar na tela tem que rolar a página)
-    if (window.innerWidth < 768) {
+    // Celular: não arrasta para girar (o dedo tem que rolar a página), mas o toque abre o prédio
+    const touch = window.innerWidth < 768;
+    if (touch) {
       controls.enabled = false;
       renderer.domElement.style.touchAction = "pan-y";
-      renderer.domElement.style.pointerEvents = "none";
     }
+
+    const ray = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const hit = (e: PointerEvent): THREE.Object3D | null => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+      ray.setFromCamera(pointer, camera);
+      for (const h of ray.intersectObjects(clickable, true)) {
+        let o: THREE.Object3D | null = h.object;
+        while (o && !o.userData.to) o = o.parent;
+        if (o) return o;
+      }
+      return null;
+    };
+    let down: { x: number; y: number; t: number } | null = null;
+    let hovered: THREE.Object3D | null = null;
+    const onDown = (e: PointerEvent) => (down = { x: e.clientX, y: e.clientY, t: performance.now() });
+    const onUp = (e: PointerEvent) => {
+      // Clique/toque (não arrasto): abre a tela do prédio
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 8 && performance.now() - down.t < 600) {
+        const o = hit(e);
+        if (o) openRef.current?.(o.userData.to);
+      }
+      down = null;
+    };
+    const onMove = (e: PointerEvent) => {
+      if (touch || e.pointerType !== "mouse") return;
+      const o = hit(e);
+      if (o === hovered) return;
+      if (hovered && !(hovered instanceof THREE.Sprite)) hovered.scale.setScalar(1);
+      hovered = o;
+      if (o && !(o instanceof THREE.Sprite)) o.scale.setScalar(1.06);
+      renderer.domElement.style.cursor = o ? "pointer" : "grab";
+      controls.autoRotate = !reduce && !o;
+    };
+    const el = renderer.domElement;
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointermove", onMove);
 
     const resize = () => {
       const w = host.clientWidth, h = host.clientHeight;
@@ -310,6 +373,9 @@ export default function World3D({ stats, className }: { stats: WorldStats; class
 
     return () => {
       cancelAnimationFrame(frame);
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointermove", onMove);
       ro.disconnect();
       io.disconnect();
       controls.dispose();
