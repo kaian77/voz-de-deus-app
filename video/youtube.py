@@ -30,7 +30,6 @@ import urllib.parse
 import urllib.request
 
 from worker import KEY, URL, http, rest
-import stickman
 import yt_styles
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -547,6 +546,8 @@ def render(video, work, channel=None):
     cine = style == "cinematic"
     collage = style == "collage"
     stick = style == "stickman"  # bonequinhos desenhados por código: sem imagem de IA
+    if stick:
+        import stickman  # aqui e não no topo: o "--check" do workflow roda antes de instalar o Pillow
     look = CINEMATIC if cine else None
 
     def look_for(sc):
