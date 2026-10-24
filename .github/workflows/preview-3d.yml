@@ -1,0 +1,114 @@
+# Prévia do estilo 3D low poly ("por dentro das coisas"): narra o roteiro de exemplo, renderiza no Blender
+# dividido em 4 jobs (cada quadro leva ~1 s na CPU) e publica previews/3d.mp4 na branch "previews".
+name: Prévia 3D
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Roteiro de exemplo (video/lowpoly/*.json)"
+        default: video/lowpoly/sample_airplane.json
+      language:
+        description: "Idioma da narração (pt, en, es)"
+        default: pt
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      frames: ${{ steps.meta.outputs.frames }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependências
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0"
+      - name: Voz, tempos e plano 3D
+        run: cd video && python3 youtube3d.py prepare "../${{ inputs.script }}" ../work3d "${{ inputs.language }}"
+      - id: meta
+        run: echo "frames=$(python3 -c 'import json;print(json.load(open("work3d/meta.json"))["frames"])')" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: work3d
+          path: work3d/
+          retention-days: 1
+
+  render:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        part: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/workflows/preview-3d.yml
+      - name: Blender (pacote bpy)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxxf86vm1 libxfixes3 libxi6 libxkbcommon0 libsm6 libgl1 libxrender1
+          pip install -q "bpy==4.2.0" "numpy==1.26.4"
+      - uses: actions/download-artifact@v4
+        with:
+          name: work3d
+          path: work3d
+      - name: Renderizar a parte ${{ matrix.part }}
+        run: |
+          N=${{ needs.prepare.outputs.frames }}
+          PER=$(( (N + 3) / 4 ))
+          A=$(( ${{ matrix.part }} * PER + 1 )); B=$(( A + PER - 1 )); [ $B -gt $N ] && B=$N
+          echo "quadros $A a $B de $N"
+          python video/lowpoly/scene.py work3d/plan.json frames $A $B 2>&1 | grep -vE "^Fra:" | tail -20
+          ls frames | wc -l
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frames-${{ matrix.part }}
+          path: frames/
+          retention-days: 1
+
+  assemble:
+    needs: render
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependências
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q "pillow>=10" "numpy>=1.26"
+          mkdir -p ~/.fonts && cp video/engine/assets/fonts/*.ttf ~/.fonts/ && fc-cache -f >/dev/null
+      - uses: actions/download-artifact@v4
+        with:
+          name: work3d
+          path: work3d
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: frames-*
+          path: frames
+          merge-multiple: true
+      - name: Montar o vídeo
+        run: |
+          mkdir -p previews
+          cd video && python3 youtube3d.py assemble ../work3d ../frames ../previews/3d.mp4
+      - name: Publicar na branch previews
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan previews-tmp
+          git rm -rf --cached . -q
+          git add -f previews/3d.mp4 previews/3d.jpg
+          git commit -qm "Prévia 3D"
+          git push -fq origin HEAD:previews

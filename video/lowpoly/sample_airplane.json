@@ -1,0 +1,583 @@
+{
+ "title": "Como um avião de 400 toneladas consegue voar?",
+ "thumbnail_text": "COMO ISSO VOA?",
+ "scenes": [
+  {
+   "narration": "Como um avião de quatrocentas toneladas consegue voar?",
+   "label": "400 TONELADAS",
+   "set": "sky",
+   "objects": [
+    {
+     "id": "plane",
+     "kind": "airplane",
+     "pos": [
+      0,
+      0,
+      0
+     ]
+    }
+   ],
+   "anim": [
+    {
+     "id": "plane",
+     "do": "move",
+     "to": [
+      24,
+      0,
+      1.5
+     ]
+    }
+   ],
+   "camera": {
+    "pos": [
+     -12,
+     -16,
+     4
+    ],
+    "look": [
+     0,
+     0,
+     0
+    ],
+    "move": "follow",
+    "follow": "plane"
+   }
+  },
+  {
+   "narration": "O segredo está no formato da asa.",
+   "label": "",
+   "set": "sky",
+   "objects": [
+    {
+     "id": "plane",
+     "kind": "airplane",
+     "pos": [
+      0,
+      0,
+      0
+     ]
+    }
+   ],
+   "anim": [
+    {
+     "id": "plane",
+     "do": "bob"
+    }
+   ],
+   "camera": {
+    "pos": [
+     3,
+     -12,
+     3.5
+    ],
+    "look": [
+     0.3,
+     -3,
+     -0.3
+    ],
+    "move": "push"
+   }
+  },
+  {
+   "narration": "Vista de lado, a asa é curvada por cima e quase reta por baixo.",
+   "label": "",
+   "set": "sky",
+   "objects": [
+    {
+     "id": "wing",
+     "kind": "wing_section",
+     "pos": [
+      0,
+      0,
+      2.2
+     ],
+     "scale": 1.8
+    }
+   ],
+   "anim": [
+    {
+     "id": "wing",
+     "do": "pop"
+    }
+   ],
+   "camera": {
+    "pos": [
+     0,
+     -11,
+     2.6
+    ],
+    "look": [
+     0,
+     0,
+     2.2
+    ],
+    "move": "push"
+   }
+  },
+  {
+   "narration": "Quando o avião acelera, o ar passa pelos dois lados da asa.",
+   "label": "",
+   "set": "sky",
+   "objects": [
+    {
+     "id": "wing",
+     "kind": "wing_section",
+     "pos": [
+      0,
+      0,
+      2.2
+     ],
+     "scale": 1.8
+    },
+    {
+     "id": "air1",
+     "kind": "arrow",
+     "pos": [
+      -5,
+      0,
+      3.9
+     ],
+     "color": "white",
+     "scale": 1.5
+    },
+    {
+     "id": "air2",
+     "kind": "arrow",
+     "pos": [
+      -5,
+      0,
+      1.1
+     ],
+     "color": "white",
+     "scale": 1.5
+    }
+   ],
+   "anim": [
+    {
+     "id": "air1",
+     "do": "flow",
+     "to": [
+      10,
+      0,
+      0
+     ],
+     "count": 4,
+     "period": 1.4
+    },
+    {
+     "id": "air2",
+     "do": "flow",
+     "to": [
+      10,
+      0,
+      0
+     ],
+     "count": 4,
+     "period": 1.4
+    }
+   ],
+   "camera": {
+    "pos": [
+     0,
+     -13,
+     2.6
+    ],
+    "look": [
+     0,
+     0,
+     2.4
+    ],
+    "move": "static"
+   }
+  },
+  {
+   "narration": "Por cima, o ar acelera e a pressão cai.",
+   "label": "PRESSÃO BAIXA",
+   "set": "sky",
+   "objects": [
+    {
+     "id": "wing",
+     "kind": "wing_section",
+     "pos": [
+      0,
+      0,
+      2.2
+     ],
+     "scale": 1.8
+    },
+    {
+     "id": "air1",
+     "kind": "arrow",
+     "pos": [
+      -5,
+      0,
+      3.9
+     ],
+     "color": "yellow",
+     "scale": 1.5
+    }
+   ],
+   "anim": [
+    {
+     "id": "air1",
+     "do": "flow",
+     "to": [
+      10,
+      0,
+      0
+     ],
+     "count": 5,
+     "period": 0.7
+    }
+   ],
+   "camera": {
+    "pos": [
+     0,
+     -13,
+     3.2
+    ],
+    "look": [
+     0,
+     0,
+     2.8
+    ],
+    "move": "push"
+   }
+  },
+  {
+   "narration": "Por baixo, a pressão fica maior e empurra a asa para cima.",
+   "label": "PRESSÃO ALTA",
+   "set": "sky",
+   "objects": [
+    {
+     "id": "wing",
+     "kind": "wing_section",
+     "pos": [
+      0,
+      0,
+      2.2
+     ],
+     "scale": 1.8
+    },
+    {
+     "id": "push",
+     "kind": "arrow",
+     "pos": [
+      0,
+      -0.6,
+      -1.2
+     ],
+     "rot": [
+      0,
+      -90,
+      0
+     ],
+     "scale": 1.6,
+     "color": "green"
+    }
+   ],
+   "anim": [
+    {
+     "id": "push",
+     "do": "grow",
+     "axis": "x",
+     "end": 0.5
+    },
+    {
+     "id": "wing",
+     "do": "move",
+     "to": [
+      0,
+      0,
+      2.5
+     ],
+     "at": 0.4
+    }
+   ],
+   "camera": {
+    "pos": [
+     0,
+     -11,
+     1.6
+    ],
+    "look": [
+     0,
+     0,
+     1.9
+    ],
+    "move": "push"
+   }
+  },
+  {
+   "narration": "Essa força tem nome: sustentação.",
+   "label": "SUSTENTAÇÃO",
+   "set": "sky",
+   "objects": [
+    {
+     "id": "wing",
+     "kind": "wing_section",
+     "pos": [
+      0,
+      0,
+      2.2
+     ],
+     "scale": 1.8
+    },
+    {
+     "id": "lift",
+     "kind": "arrow",
+     "pos": [
+      0,
+      -0.6,
+      3.6
+     ],
+     "rot": [
+      0,
+      -90,
+      0
+     ],
+     "scale": 1.8,
+     "color": "orange"
+    }
+   ],
+   "anim": [
+    {
+     "id": "lift",
+     "do": "pop"
+    },
+    {
+     "id": "lift",
+     "do": "bob",
+     "at": 0.3
+    }
+   ],
+   "camera": {
+    "pos": [
+     0,
+     -11,
+     3.2
+    ],
+    "look": [
+     0,
+     0,
+     3.0
+    ],
+    "move": "orbit",
+    "angle": 30
+   }
+  },
+  {
+   "narration": "Os motores empurram o avião para a frente, e quanto mais rápido, mais sustentação.",
+   "label": "",
+   "set": "runway",
+   "objects": [
+    {
+     "id": "plane",
+     "kind": "airplane",
+     "pos": [
+      -24,
+      0,
+      1.4
+     ]
+    }
+   ],
+   "anim": [
+    {
+     "id": "plane",
+     "do": "move",
+     "to": [
+      6,
+      0,
+      1.4
+     ]
+    }
+   ],
+   "camera": {
+    "pos": [
+     -32,
+     -13,
+     3.5
+    ],
+    "look": [
+     -22,
+     0,
+     1.6
+    ],
+    "move": "follow",
+    "follow": "plane"
+   }
+  },
+  {
+   "narration": "Por volta de duzentos e noventa quilômetros por hora, a sustentação vence o peso.",
+   "label": "290 KM/H",
+   "set": "runway",
+   "objects": [
+    {
+     "id": "plane",
+     "kind": "airplane",
+     "pos": [
+      -6,
+      0,
+      1.4
+     ]
+    }
+   ],
+   "anim": [
+    {
+     "id": "plane",
+     "do": "move",
+     "to": [
+      26,
+      0,
+      8
+     ]
+    },
+    {
+     "id": "plane",
+     "do": "rotate",
+     "to": [
+      0,
+      -12,
+      0
+     ],
+     "end": 0.4
+    }
+   ],
+   "camera": {
+    "pos": [
+     6,
+     -26,
+     3
+    ],
+    "look": [
+     8,
+     0,
+     4
+    ],
+    "move": "pan"
+   }
+  },
+  {
+   "narration": "E o avião decola.",
+   "label": "",
+   "set": "sky",
+   "objects": [
+    {
+     "id": "plane",
+     "kind": "airplane",
+     "pos": [
+      0,
+      0,
+      0
+     ],
+     "rot": [
+      0,
+      -10,
+      0
+     ]
+    }
+   ],
+   "anim": [
+    {
+     "id": "plane",
+     "do": "move",
+     "to": [
+      16,
+      0,
+      4
+     ]
+    }
+   ],
+   "camera": {
+    "pos": [
+     -16,
+     -9,
+     -3
+    ],
+    "look": [
+     0,
+     0,
+     0
+    ],
+    "move": "follow",
+    "follow": "plane"
+   }
+  },
+  {
+   "narration": "Lá em cima, ele voa a cerca de novecentos quilômetros por hora.",
+   "label": "900 KM/H",
+   "set": "sky",
+   "objects": [
+    {
+     "id": "plane",
+     "kind": "airplane",
+     "pos": [
+      0,
+      0,
+      0
+     ]
+    }
+   ],
+   "anim": [
+    {
+     "id": "plane",
+     "do": "bob"
+    }
+   ],
+   "camera": {
+    "pos": [
+     4,
+     -20,
+     3
+    ],
+    "look": [
+     0,
+     0,
+     0
+    ],
+    "move": "orbit",
+    "angle": 70
+   }
+  },
+  {
+   "narration": "E você, tem medo de avião? Comenta aqui.",
+   "label": "",
+   "set": "sky",
+   "objects": [
+    {
+     "id": "plane",
+     "kind": "airplane",
+     "pos": [
+      -30,
+      0,
+      -1
+     ]
+    }
+   ],
+   "anim": [
+    {
+     "id": "plane",
+     "do": "move",
+     "to": [
+      36,
+      0,
+      3
+     ]
+    }
+   ],
+   "camera": {
+    "pos": [
+     6,
+     -16,
+     0
+    ],
+    "look": [
+     0,
+     0,
+     0
+    ],
+    "move": "static"
+   }
+  }
+ ]
+}
