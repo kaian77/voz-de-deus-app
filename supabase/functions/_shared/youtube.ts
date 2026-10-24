@@ -96,11 +96,11 @@ const seconds = (iso: string) => {
 export type Trend = { id: string; title: string; channel: string; views: number; per_day: number; published_at: string; kind: "short" | "long" };
 
 /** Os vídeos que mais deram audiência no nicho nos últimos 90 dias (em português), ordenados por visualizações por dia. */
-export async function ytResearch(token: string, niche: string, language = "pt"): Promise<Trend[]> {
+export async function ytResearch(token: string, niche: string, language = "pt", extra: string[] = []): Promise<Trend[]> {
   const en = language === "en";
   const after = new Date(Date.now() - 90 * 86400000).toISOString();
   const ids = new Set<string>();
-  for (const q of [niche, `${niche} shorts`]) {
+  for (const q of [niche, `${niche} shorts`, ...extra]) {
     const data = await yt(token, "search", {
       part: "id", type: "video", q, order: "viewCount", publishedAfter: after, regionCode: en ? "US" : language === "es" ? "MX" : "BR",
       relevanceLanguage: ["en", "es"].includes(language) ? language : "pt", maxResults: "25",
@@ -261,6 +261,12 @@ const LANG_STICK: Record<string, string> = {
   pt: `\n\nEscreva tudo em português do Brasil (valores em reais quando fizer sentido).`,
 };
 
+const STICK_TRENDS: Record<string, string[]> = {
+  en: ["what happens if you", "explained stick figure animation", "why do we"],
+  pt: ["o que acontece se você", "por que a gente", "como funciona explicado"],
+  es: ["qué pasa si", "por qué los humanos", "cómo funciona explicado"],
+};
+
 export type StickScriptT = z.infer<typeof StickScript>;
 
 const rules = (niche: string, language: string, style = "") =>
@@ -328,7 +334,9 @@ export async function planDay(db: SupabaseClient, channel: any, date: string, on
   let trends: Trend[] = channel.trends ?? [];
   if (!channel.trends_at || Date.now() - new Date(channel.trends_at).getTime() > 20 * 3600000) {
     try {
-      trends = await ytResearch(await ytToken(db, channel.id), channel.niche, channel.language);
+      // Bonequinhos: além do nicho, o que está em alta nos vídeos explicativos em geral
+      const extra = channel.style === "stickman" ? STICK_TRENDS[channel.language] ?? STICK_TRENDS.en : [];
+      trends = await ytResearch(await ytToken(db, channel.id), channel.niche, channel.language, extra);
       await db.from("yt_channels").update({ trends, trends_at: new Date().toISOString(), error: null }).eq("id", channel.id);
     } catch (e) {
       await db.from("yt_channels").update({ error: `Pesquisa: ${(e as Error).message}` }).eq("id", channel.id);

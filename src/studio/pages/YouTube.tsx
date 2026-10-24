@@ -91,7 +91,7 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
         <p className="text-[13px] text-muted-foreground">Canal de cortes: as campanhas e os cortes ficam em <Link to="/studio/cortes" className="font-medium text-foreground underline">Renda extra → Cortes</Link>.</p>
         <Button size="sm" variant="outline" className="mt-3" disabled={busy !== null}
           onClick={() => confirm("Transformar este canal em canal de bonequinhos (vídeos explicativos)? Os cortes já postados continuam no YouTube.") &&
-            run("stick", () => api.update("yt_channels", ch.id, { mode: "bible", style: "stickman", niche: STICK_NICHE[form.language], enabled: false }),
+            run("stick", () => api.update("yt_channels", ch.id, { mode: "bible", style: "stickman", niche: STICK_NICHE[form.language], enabled: false, trends_at: null }),
               "Pronto: agora é canal de bonequinhos. Ligue o piloto automático quando quiser.")}>
           {busy === "stick" && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Transformar em canal de bonequinhos
         </Button>
