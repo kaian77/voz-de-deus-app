@@ -141,7 +141,10 @@ async function record(canvas: HTMLCanvasElement, type: string, total: number, dr
   let audio: AudioContext | null = null;
   let audioStart = 0;
   // "video/mp4" sem codecs (Safari) também grava o som em AAC
-  if (cues && (type.includes("mp4a") || type === "video/mp4") && typeof AudioContext !== "undefined") {
+  if (cues && !(type.includes("mp4a") || type === "video/mp4")) {
+    throw new Error("Este navegador não grava o som do Reel. Aprove pelo Chrome atualizado ou pelo Safari do iPhone.");
+  }
+  if (cues && typeof AudioContext !== "undefined") {
     try {
       audio = sharedAudio ?? (sharedAudio = new AudioContext());
       await Promise.race([audio.resume(), new Promise((r) => setTimeout(r, 800))]);
@@ -151,7 +154,9 @@ async function record(canvas: HTMLCanvasElement, type: string, total: number, dr
       scheduleReelAudio(audio, dest, total, cues, audioStart);
       dest.stream.getAudioTracks().forEach((tr) => stream.addTrack(tr));
     } catch {
-      audio = null;
+      // Nunca grava mudo: pede um toque para liberar o som e tentar de novo
+      stream.getTracks().forEach((tr) => tr.stop());
+      throw new Error("O navegador bloqueou o som do Reel. Toque em Aprovar de novo (com esta tela aberta) para gravar com som.");
     }
   }
   const recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 6_000_000 });
