@@ -3,7 +3,7 @@
 import "./style.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { buildWorld, height, HALF } from "./world";
+import { buildWorld, height, HALF, PODIUM } from "./world";
 import { Crowd, Pose, SKIN } from "./crowd";
 import { exemplo } from "./events/exemplo";
 import type { Distance, RaceEvent } from "./types";
@@ -86,7 +86,7 @@ const unitsPerKm = (d: Distance) => pathOf(d).length / d.km;
 // ---------- corredores
 type Runner = {
   d: Distance; di: number; pace: number; lat: number; s0: number; s: number; t0: number;
-  fin: number; phase: number; ax: number; az: number; x: number; z: number; yaw: number; wob: number;
+  fin: number; phase: number; ax: number; az: number; x: number; z: number; yaw: number; wob: number; away?: boolean;
 };
 let seed = 11;
 const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -129,7 +129,14 @@ fans.forEach((_, i) => fanCrowd.paint(i, [0xe3735e, 0x4e5a40, 0xf2c14e, 0x5b8fb9
 scene.add(fanCrowd.group);
 
 // "Você"
-const me = { on: false, pace: 6, d: ev.distances[0], s: 0, s0: 0, t0: 0, fin: -1, phase: 0, x: 0, z: 0, yaw: 0, lat: 0 };
+const qs = new URLSearchParams(location.search);
+const me = {
+  on: false, pace: 6, d: ev.distances.find((d) => d.id === qs.get("d")) ?? ev.distances[0], s: 0, s0: 0, t0: 0, fin: -1, phase: 0, x: 0, z: 0, yaw: 0, lat: 0,
+  name: (qs.get("nome") ?? "").slice(0, 18), shirt: 0xffd400, champ: qs.get("campeao") === "1", podium: false, passed: false, medal: false,
+};
+const SHIRTS = [0xffd400, 0xff5a1f, 0x2f8cff, 0x14a37f, 0xe04e8a, 0x111111];
+const esc = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const meName = () => me.name.trim() || "Você";
 const meCrowd = new Crowd(1, 0.33);
 meCrowd.paint(0, 0xffd400, SKIN[1], 0x111111);
 meCrowd.hide(0);
@@ -147,6 +154,13 @@ let speed = 60;
 const P = { x: 0, z: 0, dx: 1, dz: 0 };
 
 /** Velocidade (unidades/s de prova) no ponto s: ritmo base, mais lento na subida e mais rápido na descida. */
+/** Ritmo de campeão: um pouco atrás do líder até 70% da prova e depois arranca para vencer. */
+function champPace(d: Distance, s: number) {
+  const fastest = Math.min(...runners.filter((r) => r.d === d).map((r) => r.pace));
+  return s < pathOf(d).length * 0.7 ? fastest + 0.04 : fastest - 0.45;
+}
+const myPace = (s: number) => (me.champ ? champPace(me.d, s) : me.pace);
+
 function vel(d: Distance, pace: number, s: number) {
   const p = pathOf(d);
   const a = p.at(s - 2), ax = a.x, az = a.z;
@@ -197,6 +211,14 @@ function resetRace() {
   }
   me.fin = -1;
   me.s = me.s0;
+  me.podium = false;
+  me.passed = false;
+  me.medal = false;
+  cer.on = false;
+  for (const r of runners) r.away = false;
+  for (let i = 0; i < 3; i++) podiumCrowd.hide(i);
+  podiumCrowd.commit();
+  medals.me.visible = medals.second.visible = medals.third.visible = false;
   $("done").hidden = true;
   $("race").textContent = "antes da largada";
   $("clock").textContent = clockAt(0);
@@ -214,6 +236,7 @@ function waitShift(di: number) {
 function stepRunners(dt: number, dtReal: number, now: number) {
   const racing = state === "race";
   runners.forEach((r, i) => {
+    if (r.away) return crowd.hide(i);
     const path = pathOf(r.d);
     const L = path.length;
     if (r.fin < 0) {
@@ -268,26 +291,42 @@ function stepRunners(dt: number, dtReal: number, now: number) {
     if (me.fin < 0 && racing && T >= me.t0) {
       if (me.s === me.s0) me.s += waitShift(ev.distances.indexOf(me.d));
       const ramp = Math.min(1, (T - me.t0) / 8);
-      me.s += vel(me.d, me.pace, me.s) * dt * (0.35 + 0.65 * ramp);
+      me.s += vel(me.d, myPace(me.s), me.s) * dt * (0.35 + 0.65 * ramp);
+      if (me.champ && !me.passed && me.s > pathOf(me.d).length * 0.72) {
+        const lead = runners.filter((r) => r.d === me.d).reduce((m, r) => Math.max(m, r.s), 0);
+        if (me.s > lead) {
+          me.passed = true;
+          hint(`🔥 ${meName()} passou o líder! Faltam ${kmTxt(me.d, pathOf(me.d).length - me.s)} km`, 3500);
+          beep(990, 0.12);
+        }
+      }
       pose = Pose.Run;
       me.phase += dtReal * 14;
       if (me.s >= L) {
         me.s = L + 4;
         me.fin = T - me.t0;
+        me.medal = true;
         finished();
       }
     } else me.phase += dtReal * 2;
     const p = place(path, me.fin >= 0 ? L + 4 : me.s + (T < me.t0 ? waitShift(ev.distances.indexOf(me.d)) : 0), me.lat);
     me.x = p.x; me.z = p.z; me.yaw = p.yaw;
+    let lift = 0;
+    if (me.podium && podium) {
+      me.x = podium.x; me.z = podium.z; me.yaw = 0;
+      lift = PODIUM.deck + PODIUM.steps[0].h;
+    }
     if (me.fin >= 0) {
-      pose = Math.sin(now * 2) > -0.2 ? Pose.Cheer : Pose.Stand;
+      pose = me.podium && !me.medal ? Pose.Stand : Math.sin(now * 2) > -0.2 ? Pose.Cheer : Pose.Stand;
       me.phase += dtReal * 6;
     }
-    meCrowd.pose(0, me.x, height(me.x, me.z), me.z, me.yaw, me.phase, pose);
+    meCrowd.pose(0, me.x, height(me.x, me.z) + lift, me.z, me.yaw, me.phase, pose);
     meCrowd.commit();
-    ring.visible = true;
-    ring.position.set(me.x, height(me.x, me.z) + 0.08, me.z);
+    ring.visible = !me.podium;
+    ring.position.set(me.x, height(me.x, me.z) + lift + 0.08, me.z);
     ring.scale.setScalar(1 + Math.sin(now * 5) * 0.12);
+    if (me.medal) wearMedal(medals.me, me.x, height(me.x, me.z) + lift, me.z, me.yaw, 0.33, Math.sin(now * 4) * 0.2);
+    else if (!cer.on) medals.me.visible = false;
   }
 }
 
@@ -310,7 +349,8 @@ for (const m of world.marks) {
   const spot = ev.arena.find((a) => a.id === m.id);
   addLabel(m.name, m.pos, m.kind, far, m.dist, spot ? () => focusSpot(spot.id) : undefined);
 }
-const meLabel = addLabel("VOCÊ", new THREE.Vector3(), "me", 1e9);
+const meLabel = addLabel(meName().toUpperCase(), new THREE.Vector3(), "me", 1e9);
+const podium = ev.arena.find((a) => a.id === "podio");
 const leadLabels = ev.distances.map((d) => addLabel(`Líder ${d.label}`, new THREE.Vector3(), "leader", 900, d.id));
 const v3 = new THREE.Vector3();
 function drawLabels() {
@@ -320,6 +360,7 @@ function drawLabels() {
     if (l.dist && l.dist !== dist.id) show = false;
     if (l === meLabel) show = me.on;
     if (l.kind === "land" && cam === "seguir") show = false;
+    if (cer.on && l.kind !== "me") show = false;
     const d = camera.position.distanceTo(l.pos);
     if (d > l.far) show = false;
     if (show) {
@@ -486,7 +527,57 @@ function startRace() {
   tick();
 }
 
+// confete
+const CONF = 900;
+const confGeo = new THREE.BufferGeometry();
+const confPos = new Float32Array(CONF * 3), confVel = new Float32Array(CONF * 3), confCol = new Float32Array(CONF * 3);
+const confLife = new Float32Array(CONF), confSpread = new Float32Array(CONF).fill(1);
+confGeo.setAttribute("position", new THREE.BufferAttribute(confPos, 3));
+confGeo.setAttribute("color", new THREE.BufferAttribute(confCol, 3));
+const confPts = new THREE.Points(confGeo, new THREE.PointsMaterial({ size: 0.16, vertexColors: true, transparent: true, depthWrite: false }));
+confPts.frustumCulled = false;
+scene.add(confPts);
+let confNext = 0;
+function confetti(n: number, at?: THREE.Vector3, spread = 1) {
+  const o = at ?? new THREE.Vector3(startPt.x + 2, height(startPt.x, startPt.z) + 10, startPt.z);
+  const c = new THREE.Color();
+  confPts.material.size = spread < 1 ? 0.045 : 0.16;
+  for (let k = 0; k < n; k++) {
+    const i = confNext++ % CONF;
+    confPos.set([o.x + (rand() - 0.5) * 4 * spread, o.y, o.z + (rand() - 0.5) * 6 * spread], i * 3);
+    confVel.set([(rand() - 0.5) * 9 * spread, (2 + rand() * 7) * spread, (rand() - 0.5) * 9 * spread], i * 3);
+    c.setHSL(rand(), 0.9, 0.6);
+    confCol.set([c.r, c.g, c.b], i * 3);
+    confLife[i] = 4 + rand() * 3;
+    confSpread[i] = spread;
+  }
+  confGeo.attributes.color.needsUpdate = true;
+}
+function stepConfetti(dt: number) {
+  let any = false;
+  for (let i = 0; i < CONF; i++) {
+    if (confLife[i] <= 0) {
+      confPos[i * 3 + 1] = -999;
+      continue;
+    }
+    any = true;
+    confLife[i] -= dt;
+    confVel[i * 3 + 1] = Math.max(-2.2 * confSpread[i], confVel[i * 3 + 1] - dt * 6 * confSpread[i]);
+    confVel[i * 3] *= 1 - dt * 0.8;
+    confVel[i * 3 + 2] *= 1 - dt * 0.8;
+    confPos[i * 3] += (confVel[i * 3] + Math.sin(confLife[i] * 5 + i) * 0.8 * confSpread[i]) * dt;
+    confPos[i * 3 + 1] += confVel[i * 3 + 1] * dt;
+    confPos[i * 3 + 2] += confVel[i * 3 + 2] * dt;
+  }
+  confPts.visible = any;
+  if (any) confGeo.attributes.position.needsUpdate = true;
+}
+
 $("go").addEventListener("click", () => {
+  if (state === "idle" && me.name && !me.on) {
+    launchMe(me.d);
+    return;
+  }
   if (state === "idle") {
     if (cam === "geral" && !fly) {
       const s = pathOf(ev.distances[0]).at(-8);
@@ -534,6 +625,41 @@ function stats(d: Distance) {
   return { min: Math.round(min), max: Math.round(max), gain: Math.round(gain) };
 }
 
+function predictChamp(d: Distance) {
+  const L = pathOf(d).length, per = unitsPerKm(d), splits: number[] = [];
+  let s = 0, t = 0, next = per;
+  while (s < L) {
+    s += vel(d, champPace(d, s), s) * 2;
+    t += 2;
+    if (s >= next) {
+      splits.push(t);
+      next += per;
+    }
+  }
+  return { total: t, splits };
+}
+
+/** Coloca o bonequinho do corredor no pelotão certo e dá a largada seguindo ele. */
+function launchMe(d: Distance) {
+  me.on = true;
+  me.d = d;
+  me.podium = false;
+  me.passed = false;
+  if (dist !== d) setDist(d);
+  meCrowd.paint(0, me.shirt, SKIN[1], 0x111111);
+  meLabel.el.textContent = meName().toUpperCase();
+  const mates = runners.filter((r) => r.d === d);
+  const ahead = me.champ ? 0 : mates.filter((r) => r.pace < me.pace).length;
+  const row = Math.floor(ahead / 7);
+  me.s0 = mates[0].s0 - row * 0.6 + (me.champ ? 0.5 : -0.3);
+  me.lat = me.champ ? 0 : 0.3;
+  me.t0 = d.wave * 60 + row * 1.6;
+  closeSheet();
+  speedTo(30);
+  setCam("seguir");
+  startRace();
+}
+
 function renderSheet() {
   document.querySelectorAll<HTMLButtonElement>("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === tab));
   sheet.hidden = !tab;
@@ -563,13 +689,31 @@ function renderSheet() {
     });
     drawProfile();
   } else if (tab === "simular") {
-    const pr = predict(dist, me.pace);
+    const pr = me.champ ? predictChamp(dist) : predict(dist, me.pace);
     body.innerHTML = `<h3>Simule a sua prova</h3>${distChips()}
-      <label class="r3-pace">Seu ritmo <b id="paceV">${fmtPace(me.pace)} /km</b><input type="range" id="pace" min="3" max="10" step="0.05" value="${me.pace}"></label>
+      <div class="r3-me"><input id="meName" maxlength="18" placeholder="Seu nome" value="${esc(me.name)}" autocomplete="given-name">
+        <div class="r3-shirts">${SHIRTS.map((c) => `<button data-shirt="${c}" class="${c === me.shirt ? "on" : ""}" style="--c:#${c.toString(16).padStart(6, "0")}" aria-label="Cor da camiseta"></button>`).join("")}</div></div>
+      <label class="r3-champ"><input type="checkbox" id="champ" ${me.champ ? "checked" : ""}><span><b>🏆 Quero chegar em 1º</b><small>Seu bonequinho vem atrás do líder e arranca no fim.</small></span></label>
+      <label class="r3-pace${me.champ ? " off" : ""}" id="paceBox">Seu ritmo <b id="paceV">${fmtPace(me.pace)} /km</b><input type="range" id="pace" min="3" max="10" step="0.05" value="${me.pace}"></label>
       <div class="r3-facts"><div><b id="predT">${fmt(pr.total)}</b><span>tempo previsto</span></div><div><b id="predC">${clockAt(dist.wave * 60 + pr.total)}</b><span>você chega</span></div></div>
       <div class="r3-splits" id="splits">${pr.splits.map((t, i) => `<span>km ${i + 1}<b>${fmt(t)}</b></span>`).join("")}</div>
       <p class="r3-small">Já conta as subidas e descidas do percurso. Seu bonequinho larga no pelotão do seu ritmo.</p>
-      <button class="r3-btn hot" id="runMe">▶ Correr com o meu ritmo</button>`;
+      <button class="r3-btn hot" id="runMe">▶ ${me.champ ? "Correr para vencer" : "Correr com o meu ritmo"}</button>`;
+    $<HTMLInputElement>("meName").addEventListener("input", (e) => {
+      me.name = (e.target as HTMLInputElement).value.slice(0, 18);
+      meLabel.el.textContent = meName().toUpperCase();
+    });
+    body.querySelectorAll<HTMLButtonElement>("[data-shirt]").forEach((b) =>
+      b.addEventListener("click", () => {
+        me.shirt = Number(b.dataset.shirt);
+        meCrowd.paint(0, me.shirt, SKIN[1], 0x111111);
+        body.querySelectorAll("[data-shirt]").forEach((x) => x.classList.toggle("on", x === b));
+      }),
+    );
+    $<HTMLInputElement>("champ").addEventListener("change", (e) => {
+      me.champ = (e.target as HTMLInputElement).checked;
+      renderSheet();
+    });
     const pace = $<HTMLInputElement>("pace");
     pace.addEventListener("input", () => {
       me.pace = Number(pace.value);
@@ -579,21 +723,7 @@ function renderSheet() {
       $("predC").textContent = clockAt(dist.wave * 60 + p.total);
       $("splits").innerHTML = p.splits.map((t, i) => `<span>km ${i + 1}<b>${fmt(t)}</b></span>`).join("");
     });
-    $("runMe").addEventListener("click", () => {
-      me.on = true;
-      me.d = dist;
-      const mates = runners.filter((r) => r.d === dist);
-      const ahead = mates.filter((r) => r.pace < me.pace).length;
-      const row = Math.floor(ahead / 7);
-      const first = mates[0];
-      me.s0 = first.s0 - row * 0.6 - 0.3;
-      me.lat = 0.3;
-      me.t0 = dist.wave * 60 + row * 1.6;
-      closeSheet();
-      speedTo(30);
-      setCam("seguir");
-      startRace();
-    });
+    $("runMe").addEventListener("click", () => launchMe(dist));
   } else if (tab === "arena") {
     body.innerHTML = `<h3>Arena</h3><div class="r3-list">${ev.arena
       .map((a) => `<button data-a="${a.id}"><i>${a.icon}</i><span><b>${a.name}</b><small>${a.info}</small></span></button>`)
@@ -697,13 +827,164 @@ function drawProfile() {
   if (me.on && me.d === dist) dot(me.s, "#ffd400");
 }
 
+async function shareMe(win: boolean) {
+  const url = new URL(location.href);
+  url.search = "";
+  url.searchParams.set("nome", meName());
+  url.searchParams.set("d", me.d.id);
+  if (me.champ) url.searchParams.set("campeao", "1");
+  if (!location.pathname.startsWith("/corrida/")) url.searchParams.set("e", ev.slug);
+  const text = win ? `${meName()} venceu os ${me.d.label} da ${ev.name} e ganhou medalha de ouro! Veja a corrida:` : `${meName()} fez os ${me.d.label} da ${ev.name} em ${fmt(me.fin)}. Veja:`;
+  try {
+    if (navigator.share) await navigator.share({ title: ev.name, text, url: url.toString() });
+    else {
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      hint("Link copiado. É só colar no WhatsApp.");
+    }
+  } catch {
+    /* cancelou */
+  }
+}
+
+// ---------- cerimônia do pódio: staff entrega bronze, prata e ouro; o campeão ergue os braços com a medalha
+const GOLD = 0xffc72c, SILVER = 0xd7dbe0, BRONZE = 0xcd8a4e;
+function makeMedal(color: number) {
+  const g = new THREE.Group();
+  const ribbon = new THREE.MeshStandardMaterial({ color: new THREE.Color(ev.colors.primary), roughness: 0.6 });
+  for (const sx of [-1, 1]) {
+    const r = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.02), ribbon);
+    r.position.set(sx * 0.09, 0.2, -0.02);
+    r.rotation.z = sx * 0.42;
+    g.add(r);
+  }
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 20).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color, metalness: 0.75, roughness: 0.28, emissive: color, emissiveIntensity: 0.18 }));
+  g.add(disc);
+  g.visible = false;
+  scene.add(g);
+  return g;
+}
+const medals = { me: makeMedal(GOLD), second: makeMedal(SILVER), third: makeMedal(BRONZE) };
+/** Medalha no peito de quem está em (x, y, z) olhando para yaw. */
+const MEDAL = 1.5; // um pouco maior que o real, para aparecer
+function wearMedal(m: THREE.Group, x: number, y: number, z: number, yaw: number, s: number, swing: number) {
+  m.visible = true;
+  m.scale.setScalar(s * MEDAL);
+  m.position.set(x + Math.sin(yaw) * 0.24 * s, y + 1.12 * s, z + Math.cos(yaw) * 0.24 * s);
+  m.rotation.set(swing, yaw, 0);
+}
+const podiumCrowd = new Crowd(3);
+scene.add(podiumCrowd.group);
+for (let i = 0; i < 3; i++) podiumCrowd.hide(i);
+podiumCrowd.commit();
+const cer = { on: false, t: 0, others: [] as Runner[] };
+function startCeremony() {
+  if (!podium) return;
+  me.podium = true;
+  me.medal = false;
+  cer.on = true;
+  cer.t = 0;
+  const mates = runners.filter((r) => r.d === me.d);
+  cer.others = mates.sort((a, b) => (a.fin < 0 ? 1e9 - a.s : a.fin) - (b.fin < 0 ? 1e9 - b.s : b.fin)).slice(0, 2);
+  cer.others.forEach((r, i) => {
+    r.away = true;
+    podiumCrowd.paint(i, new THREE.Color(r.d.color).getHex(), SKIN[(i + 2) % 4], 0x1f2733);
+  });
+  podiumCrowd.paint(2, 0x0f2238, SKIN[0], 0x0f2238);
+  medals.second.visible = medals.third.visible = medals.me.visible = false;
+  setCam("geral");
+  fly = null;
+  flyTo(new THREE.Vector3(podium.x, height(podium.x, podium.z) + 0.85, podium.z), new THREE.Vector3(0.9, 0.75, 5.2));
+  hint(`Cerimônia de premiação dos ${me.d.label}`, 3000);
+}
+const lerp = (a: number, b: number, k: number) => a + (b - a) * Math.max(0, Math.min(1, k));
+function stepCeremony(dt: number, now: number) {
+  if (!cer.on || !podium) return;
+  cer.t += dt;
+  const t = cer.t, px = podium.x, pz = podium.z, gy = height(px, pz), S = 0.3;
+  // degraus: 2º à esquerda (1,5), 3º à direita (1,0), 1º no meio (2,2)
+  const top = PODIUM.deck + PODIUM.steps[0].h;
+  const steps = [PODIUM.steps[1], PODIUM.steps[2]].map((st) => ({ x: px + st.x, h: PODIUM.deck + st.h }));
+  const gave = [t > 6, t > 3.4]; // prata, bronze
+  steps.forEach((st, i) => {
+    const cheer = gave[i] && t < (i ? 5 : 7.6);
+    podiumCrowd.pose(i, st.x, gy + st.h, pz, 0, now * 8 + i, cheer ? Pose.Cheer : Pose.Stand);
+    const m = i ? medals.third : medals.second;
+    if (gave[i]) wearMedal(m, st.x, gy + st.h, pz, 0, S, Math.sin(now * 3 + i) * 0.15);
+  });
+  // staff: entra pela direita, para na frente do 3º, do 2º e do 1º
+  const front = pz + 0.95;
+  const stops: [number, number, number][] = [[2.2, steps[1].x, 3.4], [5, steps[0].x, 6], [7, px, 8.4]];
+  const legs: [number, number, number, number][] = [[0, 2.2, px + 4, steps[1].x], [3.4, 5, steps[1].x, steps[0].x], [6, 7, steps[0].x, px], [8.8, 11.2, px, px - 5]];
+  let ox = px + 4, walking = false, yaw = Math.PI;
+  for (const [t0, t1, x0, x1] of legs) {
+    if (t >= t0) ox = lerp(x0, x1, (t - t0) / (t1 - t0));
+    if (t >= t0 && t < t1) {
+      walking = true;
+      yaw = x1 > x0 ? Math.PI / 2 : -Math.PI / 2;
+    }
+  }
+  if (t < 11.2) podiumCrowd.pose(2, ox, gy + PODIUM.deck, front, yaw, now * 9, walking ? Pose.Walk : Pose.Stand);
+  else podiumCrowd.hide(2);
+  podiumCrowd.commit();
+  // medalha voando da mão do staff para o pescoço
+  for (const [i, [, x, at]] of stops.entries()) {
+    const m = i === 0 ? medals.third : i === 1 ? medals.second : medals.me;
+    const k = (t - (at - 0.7)) / 0.7;
+    if (k > 0 && k < 1) {
+      const h = i === 0 ? steps[1].h : i === 1 ? steps[0].h : top;
+      m.visible = true;
+      m.scale.setScalar(S * MEDAL);
+      m.position.set(x, lerp(gy + PODIUM.deck + 0.4, gy + h + 1.12 * S, k) + Math.sin(k * Math.PI) * 0.25, lerp(front - 0.15, pz + 0.24 * S, k));
+      m.rotation.set(0, 0, 0);
+    }
+  }
+  if (t > 8.4 && !me.medal) {
+    me.medal = true;
+    confetti(500, new THREE.Vector3(px, gy + 2.2, pz - 0.3), 0.22);
+    beep(523, 0.18);
+    window.setTimeout(() => beep(659, 0.18), 180);
+    window.setTimeout(() => beep(784, 0.18), 360);
+    window.setTimeout(() => beep(1047, 0.7), 540);
+    hint(`🥇 Medalha de ouro para ${meName()}!`, 4000);
+  }
+  if (t > 11 && t - dt <= 11) {
+    const done = $("done");
+    done.hidden = false;
+    done.classList.add("win");
+    done.innerHTML = `<i>🥇</i><b>${esc(meName())}, campeão dos ${me.d.label}!</b><span>${fmt(me.fin)} · ${ev.name}</span>
+      <div><button class="r3-btn hot" id="share2">Compartilhar</button><button class="r3-btn" id="doneX2">Fechar</button></div>`;
+    $("share2").addEventListener("click", () => shareMe(true));
+    $("doneX2").addEventListener("click", () => (done.hidden = true));
+  }
+}
+
 function finished() {
   const mates = runners.filter((r) => r.d === me.d);
   const pos = mates.filter((r) => r.fin >= 0 && r.fin < me.fin).length + 1;
   const done = $("done");
   done.hidden = false;
-  done.innerHTML = `<b>🏅 Você completou os ${me.d.label}!</b><span>${fmt(me.fin)} · ${pos}º de ${mates.length + 1} (simulação)</span>
-    <div><button class="r3-btn hot" id="doneSign">Quero me inscrever</button><button class="r3-btn" id="doneX">Fechar</button></div>`;
+  const who = esc(meName());
+  const win = pos === 1;
+  done.classList.toggle("win", win);
+  done.innerHTML = win
+    ? `<i>🥇</i><b>${who} venceu os ${me.d.label}!</b><span>${fmt(me.fin)} · 1º de ${mates.length + 1} · ${ev.name}</span>
+      <div><button class="r3-btn hot" id="podiumGo">🏆 Subir no pódio</button><button class="r3-btn" id="share">Compartilhar</button></div>
+      <div><button class="r3-btn" id="doneSign">Quero me inscrever</button><button class="r3-btn" id="doneX">Fechar</button></div>`
+    : `<b>🏅 ${who} completou os ${me.d.label}!</b><span>${fmt(me.fin)} · ${pos}º de ${mates.length + 1} (simulação)</span>
+      <div><button class="r3-btn hot" id="doneSign">Quero me inscrever</button><button class="r3-btn" id="share">Compartilhar</button></div>
+      <div><button class="r3-btn" id="doneX">Fechar</button></div>`;
+  confetti(win ? 700 : 250);
+  if (win) {
+    beep(523, 0.18);
+    window.setTimeout(() => beep(659, 0.18), 180);
+    window.setTimeout(() => beep(784, 0.18), 360);
+    window.setTimeout(() => beep(1047, 0.5), 540);
+  }
+  document.getElementById("podiumGo")?.addEventListener("click", () => {
+    done.hidden = true;
+    startCeremony();
+  });
+  $("share").addEventListener("click", () => shareMe(win));
   beep(880, 0.15);
   window.setTimeout(() => beep(1175, 0.3), 160);
   $("doneSign").addEventListener("click", () => {
@@ -731,7 +1012,7 @@ function hud() {
   if (me.on) {
     const mates = runners.filter((r) => r.d === me.d);
     const ahead = mates.filter((r) => (r.fin >= 0 && (me.fin < 0 || r.fin < me.fin)) || (r.fin < 0 && me.fin < 0 && r.s > me.s)).length;
-    parts.unshift(`<span class="me">Você · ${me.fin >= 0 ? `chegou em ${fmt(me.fin)}` : `km ${kmTxt(me.d, me.s)}`} · ${ahead + 1}º</span>`);
+    parts.unshift(`<span class="me">${esc(meName())} · ${me.fin >= 0 ? `chegou em ${fmt(me.fin)}` : `km ${kmTxt(me.d, me.s)}`} · ${ahead + 1}º</span>`);
   }
   $("lead").innerHTML = parts.join("");
 }
@@ -752,7 +1033,9 @@ function frame() {
     if (best && state === "race") l.pos.set(best.x, height(best.x, best.z) + 1.4, best.z);
     else l.pos.set(0, -999, 0);
   }
-  if (me.on) meLabel.pos.set(me.x, height(me.x, me.z) + 1, me.z);
+  if (me.on) meLabel.pos.set(me.x, height(me.x, me.z) + (me.podium ? PODIUM.deck + PODIUM.steps[0].h + 0.8 : 1), me.z);
+  stepConfetti(dtReal);
+  stepCeremony(dtReal, now);
   updateCamera(dtReal, now);
   focus.copy(controls.target);
   world.setFar(camera.position.distanceTo(controls.target) > 220);
@@ -776,4 +1059,7 @@ controls.target.set(s0.x + 10, height(s0.x, s0.z), s0.z + 8);
 camera.position.set(s0.x - 70, 45, s0.z + 95);
 flyTo(new THREE.Vector3(s0.x + 10, height(s0.x, s0.z), s0.z + 8), new THREE.Vector3(-46, 24, 58));
 frame();
-window.setTimeout(() => hint("Toque em ▶ Dar a largada. Arraste para girar, pinça para zoom.", 4500), 900);
+if (me.name) {
+  $("go").textContent = `▶ Ver ${meName()} correr`;
+  window.setTimeout(() => hint(`${meName()} está no pelotão dos ${me.d.label}. Toque para ver a corrida!`, 4500), 900);
+} else window.setTimeout(() => hint("Toque em ▶ Dar a largada. Arraste para girar, pinça para zoom.", 4500), 900);
