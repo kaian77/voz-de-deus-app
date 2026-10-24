@@ -214,6 +214,7 @@ function resetRace() {
   me.podium = false;
   me.passed = false;
   me.medal = false;
+  winHint = "";
   cer.on = false;
   for (const r of runners) r.away = false;
   for (let i = 0; i < 3; i++) podiumCrowd.hide(i);
@@ -423,15 +424,27 @@ function overview() {
   flyTo(c, new THREE.Vector3(-dd * 0.18, dd * 0.62, dd * 0.78));
 }
 /** Ponto seguido: você, ou o líder da distância escolhida, ou o pelotão antes da largada. */
+/** Quem venceu a distância (o primeiro a cruzar a chegada), ou null. */
+function winner(d: Distance) {
+  let w: Runner | null = null;
+  for (const r of runners) if (r.d === d && r.fin >= 0 && (!w || r.fin < w.fin)) w = r;
+  return w;
+}
+let winHint = "";
 function followPoint() {
   if (me.on && me.d === dist) {
     pathOf(me.d).at(Math.min(me.s, pathOf(me.d).length), P);
     return followTarget.set(me.x, height(me.x, me.z) + 0.6, me.z);
   }
-  let best: Runner | null = null;
-  for (const r of runners) if (r.d === dist && r.fin < 0 && (!best || r.s > best.s)) best = r;
+  // depois que alguém chega, a câmera fica com o vencedor (antes ela pulava de corredor em corredor na chegada)
+  let best: Runner | null = winner(dist);
+  if (best && cam === "seguir" && winHint !== dist.id) {
+    winHint = dist.id;
+    hint(`🏆 O vencedor dos ${dist.label} chegou em ${fmt(best.fin)}! Toque em Geral para ver o resto da prova.`, 4500);
+  }
+  if (!best) for (const r of runners) if (r.d === dist && r.fin < 0 && (!best || r.s > best.s)) best = r;
   if (!best) best = runners.find((r) => r.d === dist) ?? runners[0];
-  pathOf(best.d).at(best.s, P);
+  pathOf(best.d).at(Math.min(best.s, pathOf(best.d).length), P);
   return followTarget.set(best.x, height(best.x, best.z) + 0.6, best.z);
 }
 
@@ -1101,7 +1114,8 @@ function hud() {
     const fin = mates.filter((r) => r.fin >= 0).length;
     if (state !== "race" || T < d.wave * 60) parts.push(`<span style="--c:${d.color}">${d.label} ${state === "race" ? `larga em ${fmt(d.wave * 60 - T)}` : "no pelotão"}</span>`);
     else if (fin === mates.length) parts.push(`<span style="--c:${d.color}">${d.label} · todos chegaram</span>`);
-    else parts.push(`<span style="--c:${d.color}">${d.label} líder km ${kmTxt(d, lead)}${fin ? ` · ${fin} chegaram` : ""}</span>`);
+    else if (fin) parts.push(`<span style="--c:${d.color}">${d.label} · 1º em ${fmt(winner(d)!.fin)} · ${fin} de ${mates.length} chegaram</span>`);
+    else parts.push(`<span style="--c:${d.color}">${d.label} líder km ${kmTxt(d, lead)}</span>`);
   }
   if (me.on) {
     const mates = runners.filter((r) => r.d === me.d);
@@ -1121,9 +1135,11 @@ function frame() {
   T += dt;
   stepRunners(dt, dtReal, now);
   for (const [i, d] of ev.distances.entries()) {
-    let best: Runner | null = null;
-    for (const r of runners) if (r.d === d && r.fin < 0 && r.s > 0 && (!best || r.s > best.s)) best = r;
+    let best: Runner | null = winner(d);
     const l = leadLabels[i];
+    const txt = best ? `🏆 1º ${d.label}` : `Líder ${d.label}`;
+    if (l.el.textContent !== txt) l.el.textContent = txt;
+    if (!best) for (const r of runners) if (r.d === d && r.fin < 0 && r.s > 0 && (!best || r.s > best.s)) best = r;
     if (best && state === "race") l.pos.set(best.x, height(best.x, best.z) + 1.4, best.z);
     else l.pos.set(0, -999, 0);
   }

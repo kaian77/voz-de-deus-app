@@ -85,6 +85,20 @@ function ribbon(path: Path, half: number, offset: number, lift: number, material
   return m;
 }
 
+/** Retângulo no chão que acompanha o terreno (senão os bonecos afundam onde o chão sobe). */
+function drape(w: number, d: number, cx: number, cz: number, material: THREE.Material) {
+  const geo = new THREE.PlaneGeometry(w, d, Math.ceil(w / 4), Math.ceil(d / 4)).rotateX(-Math.PI / 2);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i) + cx, z = p.getZ(i) + cz;
+    p.setXYZ(i, x, height(x, z) + 0.05, z);
+  }
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, material);
+  m.receiveShadow = true;
+  return m;
+}
+
 function layered(color: number, layer: number, opts: { opacity?: number } = {}) {
   return new THREE.MeshStandardMaterial({
     color, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -layer, polygonOffsetUnits: -layer * 2,
@@ -337,9 +351,7 @@ export function buildWorld(ev: RaceEvent): World {
   // arena
   const arena = new THREE.Group();
   scene.add(arena);
-  const field = new THREE.Mesh(new THREE.PlaneGeometry(150, 46).rotateX(-Math.PI / 2), layered(0xb7cf86, 1));
-  field.position.set(8, height(8, 46) + 0.05, 46);
-  field.receiveShadow = true;
+  const field = drape(150, 46, 8, 46, layered(0xb7cf86, 1));
   arena.add(field);
   const colors = [0xff5a1f, 0x2f8cff, 0x14a37f, 0xffb21f, 0x9b59d0, 0x2f8cff];
   ev.arena.forEach((s, i) => {
@@ -365,8 +377,7 @@ export function buildWorld(ev: RaceEvent): World {
       return;
     }
     if (s.id === "estac") {
-      const lot = new THREE.Mesh(new THREE.PlaneGeometry(90, 34).rotateX(-Math.PI / 2), layered(0x8d9095, 1));
-      lot.position.set(s.x, height(s.x, s.z) + 0.06, s.z);
+      const lot = drape(90, 34, s.x, s.z, layered(0x8d9095, 1));
       arena.add(lot);
       for (let k = 0; k < 26; k++) {
         const cx = s.x - 40 + (k % 13) * 6.5, cz = s.z + (k < 13 ? -7 : 7);
