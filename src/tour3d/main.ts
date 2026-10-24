@@ -7,6 +7,7 @@ import { bernadette } from "./projects/bernadette";
 import { buildCondo } from "./condo";
 import { buildApartment, collide, type Apartment, type RoomInfo } from "./plan3d";
 import type { FeatureKind, Plan, Project, Status } from "./types";
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/studio/lib/config";
 
 const PROJECTS: Record<string, Project> = { [bernadette.slug]: bernadette };
 
@@ -125,7 +126,58 @@ const apts = new Map<string, Apartment>();
 // ---------------- unidades (exemplo)
 const FINAL_PLAN: Record<number, string> = { 1: "2q", 2: "3q", 3: "3q", 4: "4q" };
 const planOfUnit = (floor: number, final: number, floors: number) => (floor > floors ? "cob" : FINAL_PLAN[final]);
+// Situação real (tabela tour_units, gravada pela construtora no link de edição). Sem nenhuma linha = exemplo.
+const unitStatus = new Map<string, Status>();
+let realStatus = false;
+const editToken = new URLSearchParams(location.search).get("editar");
+let canEdit = false;
+const rest = (path: string, init?: RequestInit) =>
+  fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...init,
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  });
+async function loadUnits() {
+  if (!SUPABASE_URL) return;
+  try {
+    const r = await rest(`tour_units?slug=eq.${encodeURIComponent(project.slug)}&select=block,unit,status`);
+    const rows = r.ok ? ((await r.json()) as { block: string; unit: number; status: Status }[]) : [];
+    unitStatus.clear();
+    for (const u of rows) unitStatus.set(`${u.block}:${u.unit}`, u.status);
+    realStatus = rows.length > 0;
+  } catch {
+    /* sem conexão: fica o exemplo */
+  }
+  if (editToken) {
+    try {
+      const r = await rest("rpc/tour_check", { method: "POST", body: JSON.stringify({ p_slug: project.slug, p_token: editToken }) });
+      canEdit = r.ok && (await r.json()) === true;
+    } catch {
+      canEdit = false;
+    }
+    document.body.classList.toggle("editing", canEdit);
+    hint(canEdit ? "Modo edição: em Unidades, toque numa unidade e escolha Disponível, Reservado ou Vendido." : "Link de edição inválido.");
+  }
+  if (!sheet.hidden && sheet.dataset.tab === "unidades") openUnits();
+}
+async function saveUnits(units: { block: string; unit: number; status: Status }[]) {
+  const r = await rest("rpc/tour_set_units", { method: "POST", body: JSON.stringify({ p_slug: project.slug, p_token: editToken, p_units: units }) });
+  if (!r.ok) {
+    hint("Não consegui salvar. Confira a internet e tente de novo.");
+    return false;
+  }
+  // primeira gravação: as outras unidades deixam de ser "exemplo" e ficam disponíveis
+  if (!realStatus) unitStatus.clear();
+  for (const u of units) unitStatus.set(`${u.block}:${u.unit}`, u.status);
+  realStatus = true;
+  return true;
+}
+function allUnits(status: Status) {
+  return condo.blocks.flatMap((b) =>
+    Array.from({ length: b.floors + 1 }, (_, i) => i + 1).flatMap((f) => (f > b.floors ? [1, 2] : [1, 2, 3, 4]).map((n) => ({ block: b.id, unit: f * 100 + n, status }))),
+  );
+}
 function statusOf(block: string, n: number): Status {
+  if (realStatus) return unitStatus.get(`${block}:${n}`) ?? "disponivel";
   let h = 2166136261;
   for (const ch of block + n) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
   const v = (h >>> 0) % 20;
@@ -621,6 +673,7 @@ renderer.domElement.addEventListener("pointerup", (e) => {
 const sheet = $("sheet"), body = $("sheetBody");
 function openSheet(html: string, tab?: string) {
   body.innerHTML = html;
+  sheet.dataset.tab = tab ?? "";
   sheet.hidden = false;
   sheet.scrollTop = 0;
   setTab(tab ?? "");
@@ -650,6 +703,16 @@ body.addEventListener("click", (e) => {
     const [b, f, n] = u.dataset.unit!.split(":");
     return pickUnit(b, +f, +n);
   }
+  const setst = t.closest<HTMLElement>("[data-setst]");
+  if (setst && state.unit && canEdit) {
+    const { block, floor, final } = state.unit;
+    saveUnits([{ block, unit: floor * 100 + final, status: setst.dataset.setst as Status }]).then((ok) => ok && openUnits(block));
+    return;
+  }
+  if (t.closest("[data-reset]") && canEdit) {
+    if (confirm("Marcar todas as unidades de todos os blocos como disponíveis?")) saveUnits(allUnits("disponivel")).then((ok) => ok && openUnits());
+    return;
+  }
   const see = t.closest<HTMLElement>("[data-see]");
   if (see && state.unit) {
     const { block, floor, final } = state.unit;
@@ -671,7 +734,7 @@ function openBlock(id: string) {
     .filter((s) => s === "disponivel").length;
   openSheet(`
     <h2>Bloco ${id}</h2>
-    <p class="t3-sub">${b.floors} andares + cobertura · ${total} unidades · <b>${free} disponíveis</b> <small>(exemplo)</small></p>
+    <p class="t3-sub">${b.floors} andares + cobertura · ${total} unidades · <b>${free} disponíveis</b>${realStatus ? "" : " <small>(exemplo)</small>"}</p>
     <h3>Entrar num apartamento</h3>
     <div class="t3-grid">${project.plans.map((p) => planCard(p)).join("")}</div>
     <button class="t3-btn" data-blocktab="${id}">Ver mapa de unidades do Bloco ${id}</button>`, "condo");
@@ -715,7 +778,8 @@ function openUnits(block = state.unit?.block ?? condo.blocks[0].id) {
         <button class="t3-btn" data-plan="${plan.id}" data-mode="andar">Ver por dentro</button>
         <button class="t3-btn ghost" data-see="1">Ver no prédio</button>
       </div>
-      ${st !== "vendido" ? `<a class="t3-btn wa" target="_blank" rel="noopener" href="${wa(`Olá! Vi o tour 3D do ${project.name} e tenho interesse no apto ${num} do Bloco ${u.block} (${plan.short}).`)}">${WA_ICON} Tenho interesse</a>` : ""}
+      ${canEdit ? `<div class="t3-setst">${(["disponivel", "reservado", "vendido"] as Status[]).map((s) => `<button data-setst="${s}" class="${s}${s === st ? " on" : ""}">${STATUS_TXT[s]}</button>`).join("")}</div>` : ""}
+      ${st !== "vendido" && !canEdit ? `<a class="t3-btn wa" target="_blank" rel="noopener" href="${wa(`Olá! Vi o tour 3D do ${project.name} e tenho interesse no apto ${num} do Bloco ${u.block} (${plan.short}).`)}">${WA_ICON} Tenho interesse</a>` : ""}
     </div>`;
   }
   openSheet(`
@@ -723,7 +787,9 @@ function openUnits(block = state.unit?.block ?? condo.blocks[0].id) {
     <div class="t3-blocks">${condo.blocks.map((x) => `<button data-blocktab="${x.id}" class="${x.id === block ? "on" : ""}">Bloco ${x.id}</button>`).join("")}</div>
     <div class="t3-legend"><i class="disponivel"></i>Disponível <i class="reservado"></i>Reservado <i class="vendido"></i>Vendido</div>
     <div class="t3-map">${rows}</div>
-    <p class="t3-note">Situação das unidades de exemplo, só para a demonstração.</p>
+    ${canEdit ? `<p class="t3-edit">✏️ Modo edição: toque numa unidade e escolha a situação. Salva na hora para todo mundo.</p>` : ""}
+    <p class="t3-note">${realStatus ? "Situação atualizada pela equipe de vendas." : "Situação das unidades de exemplo, só para a demonstração."}</p>
+    ${canEdit ? `<button class="t3-btn ghost" data-reset="1">Marcar todas como disponíveis</button>` : ""}
     ${card}`, "unidades");
 }
 
@@ -911,6 +977,7 @@ camera.position.copy(CONDO_HOME.pos).multiplyScalar(1.3);
 controls.target.copy(CONDO_HOME.target);
 showCondo();
 applyHour(9.5);
+loadUnits();
 requestAnimationFrame(() => {
   frame();
   setTimeout(() => $("loading").classList.add("off"), 250);

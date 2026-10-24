@@ -100,6 +100,7 @@ export function demoSeed(): { [K in TableName]: TableMap[K][] } {
     landing_pages: [],
     landing_stats: [],
     site_stats: [],
+    tour_projects: [],
     yt_channels: [],
     yt_videos: [],
     clip_sources: [],

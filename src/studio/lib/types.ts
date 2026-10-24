@@ -426,6 +426,14 @@ export interface SiteStat {
   sources: Record<string, number>;
 }
 
+/** Tour 3D (paginaspro.app.br/3d/<slug>); edit_token = link de edição das unidades para a construtora. */
+export interface TourProject {
+  slug: string;
+  name: string;
+  edit_token: string;
+  created_at: string;
+}
+
 /** Canal do YouTube conectado (Renda extra → YouTube). Um canal por idioma. */
 export interface YtChannel {
   id: string;
@@ -586,6 +594,7 @@ export interface TableMap {
   landing_pages: LandingPage;
   landing_stats: LandingStat;
   site_stats: SiteStat;
+  tour_projects: TourProject;
   yt_channels: YtChannel;
   yt_videos: YtVideo;
   clip_sources: ClipSource;

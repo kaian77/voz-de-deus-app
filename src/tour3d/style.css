@@ -162,3 +162,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   .t3-wa { padding: 12px; }
   .t3-sun input { width: 84px; }
 }
+.t3-setst { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
+.t3-setst button { padding: 11px 4px; border-radius: 12px; font-weight: 600; font-size: 13px; color: #fff; opacity: 0.55; }
+.t3-setst button.vendido { color: #4a4740; }
+.t3-setst button.on { opacity: 1; outline: 3px solid var(--pd); outline-offset: 1px; }
+.t3-edit { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: #fff3cf; font-size: 13px; }
+.editing .t3-demo::after { content: " · edição"; }
