@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       style:
-        description: "Estilo (collage, cinematic, parallax, whiteboard, classic)"
+        description: "Estilo (collage, cinematic, parallax, whiteboard, classic, stickman)"
         default: collage
       language:
         description: "Idioma da narração (pt, en, es)"

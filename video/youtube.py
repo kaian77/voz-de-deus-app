@@ -30,6 +30,7 @@ import urllib.parse
 import urllib.request
 
 from worker import KEY, URL, http, rest
+import stickman
 import yt_styles
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -243,6 +244,14 @@ def sfx_impact():
     return ((boom + hit) / 1.3).astype(np.float32)
 
 
+def sfx_pop():
+    """"Pop" curtinho de quando um desenho aparece (síntese)."""
+    import numpy as np
+
+    t = np.arange(int(0.12 * SR)) / SR
+    return (np.sin(2 * np.pi * (380 + 900 * np.exp(-t * 40)) * t) * np.exp(-t * 35)).astype(np.float32)
+
+
 def particles(w, h, out, seconds=4.0, fps=15):
     """Camada de partículas de luz/poeira subindo (loop de 4 s, com transparência) para dar vida às cenas."""
     import numpy as np
@@ -426,10 +435,11 @@ def ass_time(s):
     return f"{int(s // 3600)}:{int(s % 3600 // 60):02d}:{s % 60:05.2f}"
 
 
-def captions(words, short, w, h, path, hook=None):
+def captions(words, short, w, h, path, hook=None, low=False):
     """Legendas .ass: blocos curtos com a palavra falada destacada em amarelo."""
-    # Short: um pouco abaixo do meio (fora da área dos botões do app); longo: embaixo
-    size, per, align, margin = (92, 3, 2, int(h * 0.30)) if short else (54, 6, 2, 70)
+    # Short: um pouco abaixo do meio (fora da área dos botões do app); longo: embaixo.
+    # low (bonequinhos): logo abaixo dos pés do boneco, ainda acima dos botões do app
+    size, per, align, margin = (92, 3, 2, int(h * (0.24 if low else 0.30))) if short else (54, 6, 2, 70)
     head = (
         "[Script Info]\nScriptType: v4.00+\nWrapStyle: 0\n"
         f"PlayResX: {w}\nPlayResY: {h}\n\n"
@@ -536,6 +546,7 @@ def render(video, work, channel=None):
     base_seed = random.randint(1, 10_000_000)
     cine = style == "cinematic"
     collage = style == "collage"
+    stick = style == "stickman"  # bonequinhos desenhados por código: sem imagem de IA
     look = CINEMATIC if cine else None
 
     def look_for(sc):
@@ -554,12 +565,15 @@ def render(video, work, channel=None):
         lead = 0.12
         length = lead + a_len + PAUSE + XF  # XF a mais: some na transição
         img = os.path.join(work, f"i{i}.jpg")
-        prompt = hero(sc["image"], script) if cine else sc["image"]
-        # Cinemático: mesma semente em todas as cenas ajuda o rosto do protagonista a sair parecido
-        if not image(prompt, w, h, img, base_seed if cine else base_seed + i, style=look_for(sc)):
-            missing.append((i, prompt))
-        clips.append({"img": img, "length": length, "advance": length - XF, "motion": sc.get("motion") or "zoom_in",
-                      "layout": sc.get("layout") or "photo", "label": sc.get("label") or ""})
+        if stick:
+            clips.append({**sc, "start": t, "length": length, "advance": length - XF})
+        else:
+            prompt = hero(sc["image"], script) if cine else sc["image"]
+            # Cinemático: mesma semente em todas as cenas ajuda o rosto do protagonista a sair parecido
+            if not image(prompt, w, h, img, base_seed if cine else base_seed + i, style=look_for(sc)):
+                missing.append((i, prompt))
+            clips.append({"img": img, "length": length, "advance": length - XF, "motion": sc.get("motion") or "zoom_in",
+                          "layout": sc.get("layout") or "photo", "label": sc.get("label") or ""})
         lens.append(length)
         voices.append((t + lead, audio))
         words += [{**x, "t": x["t"] + t + lead} for x in ws]
@@ -578,7 +592,7 @@ def render(video, work, channel=None):
     if len(missing) > len(scenes) * 0.3:
         # Vídeo com metade das cenas repetidas não vale publicar: volta para a fila e tenta mais tarde
         raise RuntimeError(f"os geradores de imagem falharam em {len(missing)} de {len(scenes)} cenas")
-    ok = [c["img"] for j, c in enumerate(clips) if j not in {i for i, _ in missing}]
+    ok = [c["img"] for j, c in enumerate(clips) if j not in {i for i, _ in missing}] if missing else []
     for n, (i, _) in enumerate(missing):
         # Reaproveita uma imagem boa que não é a vizinha, espelhada e noutro recorte
         far = [p for p in ok if abs(int(os.path.basename(p)[1:-4]) - i) > 1] or ok
@@ -586,7 +600,10 @@ def render(video, work, channel=None):
 
     silent = os.path.join(work, "video.mp4")
     log(f"  montando ({style})…")
-    if style == "whiteboard":
+    pops = []
+    if stick:
+        pops = stickman.video(clips, words, w, h, silent)
+    elif style == "whiteboard":
         yt_styles.whiteboard_video(clips, w, h, silent, hand=hand_asset(work))
     elif collage:
         for i, c in enumerate(clips):  # personagem recortado vira adesivo
@@ -643,7 +660,12 @@ def render(video, work, channel=None):
         for st in starts[1:]:
             i0 = max(0, int((st - XF * 0.6) * SR))
             seg = wh[: max(0, len(mixl) - i0)]
-            mixl[i0:i0 + len(seg)] += seg * (0.22 if short else 0.12)
+            mixl[i0:i0 + len(seg)] += seg * (0.12 if stick else 0.22 if short else 0.12)
+        pop = sfx_pop()
+        for st in pops:  # "pop" quando um desenho aparece no quadro
+            i0 = int(st * SR)
+            seg = pop[: max(0, len(mixl) - i0)]
+            mixl[i0:i0 + len(seg)] += seg * 0.3
     mixl = np.clip(mixl / max(1e-6, np.abs(mixl).max()) * 0.95, -1, 1)
     wav = os.path.join(work, "audio.wav")
     import wave
@@ -655,10 +677,11 @@ def render(video, work, channel=None):
         f.writeframes((mixl * 32767).astype(np.int16).tobytes())
 
     ass = os.path.join(work, "cap.ass")
-    captions(words, short, w, h, ass, hook=script.get("thumbnail_text"))
+    # Bonequinhos: o quadro da 1ª cena já é o gancho (o texto por cima embolava)
+    captions(words, short, w, h, ass, hook=None if stick else script.get("thumbnail_text"), low=stick)
     final = os.path.join(work, "final.mp4")
     args = ["ffmpeg", "-v", "error", "-y", "-i", silent, "-i", wav]
-    if style == "whiteboard":  # papel limpo: sem vinheta, grão nem partículas
+    if style in ("whiteboard", "stickman"):  # papel limpo: sem vinheta, grão nem partículas
         fc = f"[0:v]subtitles={ass}:fontsdir={FONTS}[s]"
         bar = 2
     elif collage:  # papel com grão de filme, sem partículas
@@ -685,11 +708,15 @@ def render(video, work, channel=None):
     subprocess.run(args, check=True)
 
     # Capa
+    thumb = os.path.join(work, "thumb.jpg")
+    if stick:
+        stickman.thumbnail({"pose": script.get("thumbnail_pose") or "shock", "icons": script.get("thumbnail_icons") or []},
+                           script["thumbnail_text"], thumb)
+        return final, thumb, total, chapters, lang
     thumb_src = os.path.join(work, "thumb_src.jpg")
     thumb_prompt = hero(script["thumbnail_image"], script) if cine else script["thumbnail_image"]
     if not image(thumb_prompt, 1280, 720, thumb_src, base_seed if cine else base_seed + 999, style=COLLAGE if collage else look):
         shutil.copy(os.path.join(work, "i0.jpg"), thumb_src)
-    thumb = os.path.join(work, "thumb.jpg")
     thumbnail(thumb_src, script["thumbnail_text"], thumb)
     return final, thumb, total, chapters, lang
 
@@ -803,9 +830,34 @@ SAMPLE = {
 }
 
 
+# Exemplo dos bonequinhos (canal de explicações em inglês)
+SAMPLE_STICK = {
+    "title": "What happens if you save $5 a day?",
+    "thumbnail_text": "$5 A DAY = $172K",
+    "thumbnail_pose": "shock",
+    "thumbnail_icons": ["money"],
+    "scenes": [
+        {"narration": "What happens if you save just five dollars a day?", "pose": "think", "board": "text", "text": "$5 / DAY", "icons": [], "friend": "none"},
+        {"narration": "Most people think five dollars is nothing.", "pose": "shrug", "board": "none", "text": "", "icons": [], "friend": "shrug"},
+        {"narration": "It's one coffee. One snack. Gone.", "pose": "explain", "board": "icons", "text": "", "icons": ["coffee", "food"], "friend": "none"},
+        {"narration": "But in one year, that's eighteen hundred and twenty-five dollars.", "pose": "point", "board": "text", "text": "$1,825", "icons": [], "friend": "none"},
+        {"narration": "Now put it in a simple index fund.", "pose": "walk", "board": "icons", "text": "", "icons": ["bank"], "friend": "none"},
+        {"narration": "Historically, the market grew about seven percent a year.", "pose": "point", "board": "chart_up", "text": "~7% / YEAR", "icons": [], "friend": "none"},
+        {"narration": "Your money starts making money by itself.", "pose": "happy", "board": "icons", "text": "", "icons": ["money", "money", "money"], "friend": "none"},
+        {"narration": "That's called compound interest.", "pose": "idea", "board": "text", "text": "COMPOUND INTEREST", "icons": [], "friend": "none"},
+        {"narration": "After ten years, you'd have about twenty-five thousand.", "pose": "explain", "board": "text", "text": "$25,000", "icons": ["calendar"], "friend": "none"},
+        {"narration": "After thirty years? Over one hundred seventy thousand dollars.", "pose": "shock", "board": "text", "text": "$172,000", "icons": [], "friend": "shock"},
+        {"narration": "From the same five dollars you were about to spend.", "pose": "facepalm", "board": "compare", "text": "", "icons": ["coffee", "money"], "friend": "none"},
+        {"narration": "The secret isn't earning more. It's starting early.", "pose": "explain", "board": "icons", "text": "", "icons": ["clock"], "friend": "none"},
+        {"narration": "Every year you wait costs you thousands.", "pose": "scared", "board": "chart_down", "text": "", "icons": [], "friend": "none"},
+        {"narration": "So what would you cut to save five dollars today? Follow for more.", "pose": "celebrate", "board": "icons", "text": "", "icons": ["question"], "friend": "happy"},
+    ],
+}
+
+
 def preview(style, lang="pt"):
     """Renderiza o roteiro de exemplo no estilo pedido e salva em previews/ (o workflow publica na branch previews)."""
-    video = {"script": SAMPLE, "kind": "short"}
+    video = {"script": SAMPLE_STICK if style == "stickman" else SAMPLE, "kind": "short"}
     channel = {"style": style, "language": lang, "voice": None}
     os.makedirs(os.path.join(HERE, "..", "previews"), exist_ok=True)
     with tempfile.TemporaryDirectory() as work:
