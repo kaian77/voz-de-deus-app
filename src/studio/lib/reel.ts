@@ -19,6 +19,21 @@ function mp4Type() {
 
 export const reelSupported = () => !!mp4Type();
 
+// O navegador só libera o som logo depois de um toque do usuário. Um AudioContext único, destravado no
+// clique de aprovar, serve para todos os Reels gravados em sequência (antes só o 1º saía com som).
+let sharedAudio: AudioContext | null = null;
+
+/** Chame no clique (antes de qualquer await) para destravar o som dos Reels. */
+export function unlockReelAudio() {
+  if (typeof AudioContext === "undefined") return;
+  try {
+    sharedAudio ??= new AudioContext();
+    void sharedAudio.resume();
+  } catch {
+    sharedAudio = null;
+  }
+}
+
 /** Grava o Reel dos slides e devolve o MP4 (leva o tempo do vídeo: ~3 s por slide; a aba precisa ficar aberta). */
 export async function renderReel(slides: Slide[], design: CarouselDesign = {}, scene?: ReelScene): Promise<Blob> {
   const type = mp4Type();
@@ -125,10 +140,12 @@ async function record(canvas: HTMLCanvasElement, type: string, total: number, dr
   // Som: trilha + efeitos sintetizados, gravados junto com o vídeo
   let audio: AudioContext | null = null;
   let audioStart = 0;
-  if (cues && type.includes("mp4a") && typeof AudioContext !== "undefined") {
+  // "video/mp4" sem codecs (Safari) também grava o som em AAC
+  if (cues && (type.includes("mp4a") || type === "video/mp4") && typeof AudioContext !== "undefined") {
     try {
-      audio = new AudioContext();
-      await audio.resume();
+      audio = sharedAudio ?? (sharedAudio = new AudioContext());
+      await Promise.race([audio.resume(), new Promise((r) => setTimeout(r, 800))]);
+      if (audio.state !== "running") throw new Error("som bloqueado pelo navegador");
       const dest = audio.createMediaStreamDestination();
       audioStart = audio.currentTime + 0.15;
       scheduleReelAudio(audio, dest, total, cues, audioStart);
@@ -159,6 +176,5 @@ async function record(canvas: HTMLCanvasElement, type: string, total: number, dr
   recorder.stop();
   stream.getTracks().forEach((tr) => tr.stop());
   const blob = await done;
-  await audio?.close().catch(() => undefined);
-  return blob;
+  return blob; // o AudioContext fica aberto para o próximo Reel
 }

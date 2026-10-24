@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { api, isDemo } from "../lib/api";
 import { useInvalidate, useSettings, useTable } from "../lib/hooks";
 import { renderPostMedia } from "../lib/publishing";
+import { unlockReelAudio } from "../lib/reel";
 import type { Post } from "../lib/types";
 import { EmptyState, formatDateTime, KIND_LABEL, PageHeader, Panel, PlatformIcon, relativeTime, SectionLabel, SlidePreview, StatusDot } from "../components/bits";
 import { PostThumb } from "../components/PostThumb";
@@ -32,11 +33,20 @@ function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: bool
   const invalidate = useInvalidate();
   const [busy, setBusy] = useState<"approve" | "reject" | "publish" | null>(null);
   const slides = post.slides?.length && !post.media.length ? (["carousel", "reel"].includes(post.kind) ? post.slides : post.slides.slice(0, 1)) : null;
+  // Reel da PáginasPro ainda não gravado: escolhe a animação aqui mesmo, antes de aprovar
+  const ppReel = post.kind === "reel" && !!slides && post.design?.theme === "paginaspro";
+  const [scene, setScene] = useState(String(post.options?.reel_scene ?? "auto"));
+  const withScene = (p: Post): Post => ppReel ? { ...p, options: { ...p.options, reel_scene: scene === "auto" ? undefined : scene } } : p;
+  const pickScene = async (v: string) => {
+    setScene(v);
+    await api.update("posts", post.id, { options: { ...post.options, reel_scene: v === "auto" ? undefined : v } }).catch((e) => toast.error(e.message));
+  };
 
   const approve = async () => {
+    unlockReelAudio();
     setBusy("approve");
     try {
-      const future = await approvePost(post);
+      const future = await approvePost(withScene(post));
       toast.success(future ? `Aprovado. Sai ${formatDateTime(post.scheduled_at)}.` : "Aprovado como rascunho. Defina um horário para agendar.");
       invalidate("posts");
     } catch (e) {
@@ -47,10 +57,11 @@ function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: bool
   };
 
   const publish = async () => {
+    unlockReelAudio();
     setBusy("publish");
     try {
       if (post.kind === "reel" && slides) toast.info("Gravando o Reel (uns 20 segundos). Deixe esta tela aberta.");
-      const media = await renderPostMedia(post);
+      const media = await renderPostMedia(withScene(post));
       const saved = await api.update("posts", post.id, { media, status: "publishing", scheduled_at: new Date().toISOString() });
       const result = await api.publishNow(saved);
       toastPublishResult(result);
@@ -99,6 +110,15 @@ function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: bool
             <SectionLabel className="mb-1">Legenda</SectionLabel>
             <p className="max-h-44 overflow-y-auto whitespace-pre-line text-[13px] leading-relaxed">{post.caption}</p>
           </div>
+          {ppReel && (
+            <div>
+              <SectionLabel className="mb-1">Animação do Reel</SectionLabel>
+              <Select value={scene} onValueChange={pickScene}>
+                <SelectTrigger className="h-8 w-[230px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>{REEL_SCENES.map(([id, label]) => <SelectItem key={id} value={id}>{label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="mt-auto flex flex-wrap gap-2">
             <Button size="sm" onClick={approve} disabled={!!busy}>
               {busy === "approve" ? <Loader2 className="animate-spin" /> : <Check />} Aprovar
@@ -374,6 +394,7 @@ export default function Approvals() {
   const invalidate = useInvalidate();
   const [approving, setApproving] = useState<number | null>(null);
   const approveSelected = async () => {
+    unlockReelAudio();
     const list = pending.filter((p) => chosen.includes(p.id));
     let ok = 0;
     let drafts = 0;
