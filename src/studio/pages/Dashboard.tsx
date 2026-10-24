@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, Check, ChevronRight, Package, Plus, Target } from "lucide-react";
@@ -10,6 +11,7 @@ import { formatTime, KIND_LABEL, sentence, PageHeader, Panel, PlatformIcon, rela
 import { PostThumb } from "../components/PostThumb";
 
 const DAY = 24 * 3600 * 1000;
+const World3D = lazy(() => import("../components/World3D"));
 
 function Metric({ label, value, hint, to, className }: { label: string; value: number; hint: string; to: string; className?: string }) {
   return (
@@ -149,6 +151,14 @@ export default function Dashboard() {
   ].filter((a) => a.count > 0);
 
   const today = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+  // Mesmos números do painel de Vendas (a consulta é compartilhada pelo cache)
+  const { data: sales } = useQuery({
+    queryKey: ["sales-summary"],
+    queryFn: () => api.invoke<SalesSummary>("ai", { action: "sales_summary" }),
+    enabled: !isDemo,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 
   return (
     <div>
@@ -161,6 +171,22 @@ export default function Dashboard() {
           </Button>
         }
       />
+
+      <div className="relative mb-6 overflow-hidden rounded-lg border bg-gradient-to-b from-sky-100 to-emerald-50 dark:from-slate-800 dark:to-slate-900">
+        <Suspense fallback={<div className="h-[260px] sm:h-[340px]" />}>
+          <World3D
+            className="h-[260px] w-full sm:h-[340px]"
+            stats={{
+              ordersToday: sales?.total.today.orders ?? 0,
+              toShip: sales?.total.to_ship ?? 0,
+              waiting: waiting.length,
+              scheduled: week.filter((p) => p.status === "scheduled").length,
+              pending: pending.length,
+            }}
+          />
+        </Suspense>
+        <p className="pointer-events-none absolute left-3 top-2 text-xs font-semibold uppercase tracking-wider text-foreground/60">Mundo Brax</p>
+      </div>
 
       <Sales />
 
