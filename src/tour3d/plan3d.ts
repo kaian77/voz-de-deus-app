@@ -14,6 +14,8 @@ export type Apartment = {
   group: THREE.Group;
   ceiling: THREE.Group;
   roof: THREE.Group;
+  /** Pisos (para o toque no chão levar até o ponto). */
+  floors: THREE.Mesh[];
   colliders: Collider[];
   rooms: RoomInfo[];
   size: { w: number; d: number };
@@ -60,6 +62,35 @@ function texture(kind: string): THREE.Texture {
   return t;
 }
 
+/** Textura leve de massa corrida (sem ela a parede vira um branco chapado de perto). */
+let wallTex: THREE.Texture | null = null;
+function wallTexture() {
+  if (wallTex) return wallTex;
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#fff";
+  g.fillRect(0, 0, 128, 128);
+  let s = 3;
+  for (let i = 0; i < 900; i++) {
+    s = (s * 16807) % 2147483647;
+    const x = s % 128;
+    s = (s * 16807) % 2147483647;
+    const y = s % 128;
+    g.fillStyle = `rgba(120,100,80,${0.03 + (s % 5) / 100})`;
+    g.fillRect(x, y, 2, 2);
+  }
+  const grad = g.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0, "rgba(0,0,0,0)");
+  grad.addColorStop(1, "rgba(90,70,50,.06)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  wallTex = new THREE.CanvasTexture(c);
+  wallTex.colorSpace = THREE.SRGBColorSpace;
+  wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
+  return wallTex;
+}
+
 const floorKind = (k: Room["kind"]) =>
   k === "quarto" || k === "suite" ? "wood" : k === "varanda" || k === "terraco" ? "deck" : k === "banho" || k === "servico" ? "bath" : k === "tecnico" ? "tech" : "porcelain";
 /** Metros de piso por repetição da textura. */
@@ -72,6 +103,7 @@ export function buildApartment(plan: Plan, colors: { primary: string; accent: st
   const ceiling = new THREE.Group();
   const roof = new THREE.Group();
   const colliders: Collider[] = [];
+  const floors: THREE.Mesh[] = [];
   const rooms = plan.rooms;
 
   let maxX = 0, maxY = 0;
@@ -100,13 +132,14 @@ export function buildApartment(plan: Plan, colors: { primary: string; accent: st
     plan.openings.find((o) => o.dir === dir && Math.abs(o.at - line) <= 12 && pos >= o.a && pos < o.b);
 
   // ---- paredes
-  const wallMat = [mat(0xf3f0e9), mat(0xf3f0e9), mat(0x3a3a36), mat(0xf3f0e9), mat(0xf3f0e9), mat(0xf3f0e9)];
+  const plaster = new THREE.MeshStandardMaterial({ color: 0xefe9df, map: wallTexture(), roughness: 0.92 });
+  const wallMat = [plaster, plaster, mat(0x3a3a36), plaster, plaster, plaster];
   const extMat = [mat(0xf6f4ef), mat(0xf6f4ef), mat(0x3a3a36), mat(0xf6f4ef), mat(0xf6f4ef), mat(0xf6f4ef)];
   const glass = mat(0xa9d6e6, { opacity: 0.28, rough: 0.05, metal: 0.1 });
   const frame = mat(0x2d2d2b, { rough: 0.5 });
-  const leafMat = mat(0xe9dfcf);
   const entryMat = mat(new THREE.Color(colors.primary).getHex(), { rough: 0.6 });
   const geo = new THREE.BoxGeometry(1, 1, 1);
+  const skirt = mat(0xcfc6b6); // rodapé
 
   /** Peça de parede entre y0 e y1 (altura) ao longo do trecho. */
   const piece = (horiz: boolean, line: number, a: number, b: number, t: number, y0: number, y1: number, m: THREE.Material | THREE.Material[], collide: boolean) => {
@@ -133,25 +166,30 @@ export function buildApartment(plan: Plan, colors: { primary: string; accent: st
     const t = base === "ext" || base === "rail" ? T_EXT : T_INT;
     const m = base === "ext" ? extMat : wallMat;
     const pad = t / 2;
-    if (seg === "int" || seg === "ext") piece(horiz, line, a - pad, b + pad, t, 0, WALL_H, m, true);
+    if (seg === "int" || seg === "ext") {
+      piece(horiz, line, a - pad, b + pad, t, 0, WALL_H, m, true);
+      piece(horiz, line, a - pad, b + pad, t + 0.025, 0, 0.09, skirt, false);
+    }
     else if (seg === "rail") {
       piece(horiz, line, a, b, 0.12, 0, 0.35, extMat, true);
       piece(horiz, line, a, b, 0.02, 0.35, 1.05, glass, false);
       piece(horiz, line, a, b, 0.06, 1.05, 1.1, frame, false);
     } else if (seg === "door" || seg === "entry") {
       piece(horiz, line, a, b, t, 2.1, WALL_H, m, false);
-      // folha aberta a 90°, presa na ponta "a"
+      // só a porta de entrada tem folha (aberta a 90°); nas internas ficam só os batentes, para não tapar a vista
       const L = b - a;
-      const leaf = new THREE.Mesh(geo, seg === "entry" ? entryMat : leafMat);
-      leaf.scale.set(0.04, 2.08, L - 0.04);
-      const side = (L / 2) * (seg === "entry" ? -1 : 1);
-      if (horiz) leaf.position.set(a + 0.02, 1.04, line + side);
-      else {
-        leaf.position.set(line + side, 1.04, a + 0.02);
-        leaf.rotation.y = Math.PI / 2;
+      if (seg === "entry") {
+        const leaf = new THREE.Mesh(geo, entryMat);
+        leaf.scale.set(0.04, 2.08, L - 0.04);
+        const side = -L / 2;
+        if (horiz) leaf.position.set(a + 0.02, 1.04, line + side);
+        else {
+          leaf.position.set(line + side, 1.04, a + 0.02);
+          leaf.rotation.y = Math.PI / 2;
+        }
+        leaf.castShadow = true;
+        group.add(leaf);
       }
-      leaf.castShadow = true;
-      group.add(leaf);
       // batente
       piece(horiz, line, a - 0.03, a, t + 0.02, 0, 2.1, frame, false);
       piece(horiz, line, b, b + 0.03, t + 0.02, 0, 2.1, frame, false);
@@ -231,6 +269,7 @@ export function buildApartment(plan: Plan, colors: { primary: string; accent: st
       f.position.set(x0 + w / 2, outdoor(r) ? -0.01 : 0.005, y0 + d / 2);
       f.receiveShadow = true;
       group.add(f);
+      floors.push(f);
       const s = new THREE.Mesh(geo, slab);
       s.scale.set(w, 0.2, d);
       s.position.set(x0 + w / 2, -0.1, y0 + d / 2);
@@ -241,6 +280,11 @@ export function buildApartment(plan: Plan, colors: { primary: string; accent: st
         c.rotation.x = Math.PI / 2;
         c.position.set(x0 + w / 2, WALL_H, y0 + d / 2);
         ceiling.add(c);
+        // luminária embutida (acende o ambiente quando se anda por dentro)
+        const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), mat(0xfff4d6, { emissive: 0xfff0c8 }));
+        lamp.rotation.x = Math.PI / 2;
+        lamp.position.set(x0 + w / 2, WALL_H - 0.005, y0 + d / 2);
+        ceiling.add(lamp);
         const top = new THREE.Mesh(geo, mat(0xe9e6df));
         top.scale.set(w + 0.12, 0.18, d + 0.12);
         top.position.set(x0 + w / 2, WALL_H + 0.09, y0 + d / 2);
@@ -287,7 +331,7 @@ export function buildApartment(plan: Plan, colors: { primary: string; accent: st
 
   group.add(ceiling);
   group.add(roof);
-  return { group, ceiling, roof, colliders, rooms: infos, size: { w: maxX / 100, d: maxY / 100 }, entry: entryPos };
+  return { group, ceiling, roof, floors, colliders, rooms: infos, size: { w: maxX / 100, d: maxY / 100 }, entry: entryPos };
 }
 
 /** Empurra o ponto (x,z) para fora das paredes (raio r). */

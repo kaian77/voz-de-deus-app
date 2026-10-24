@@ -33,7 +33,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   padding: 9px 14px; border-radius: 12px; background: rgba(35, 39, 31, 0.82); color: #fff; font-size: 13px; text-align: center;
   opacity: 0; transition: 0.3s; pointer-events: none; z-index: 4;
 }
-.walking .t3-hint { bottom: auto; top: calc(max(10px, env(safe-area-inset-top)) + 150px); }
+.walking .t3-hint { bottom: calc(max(10px, env(safe-area-inset-bottom)) + 220px); }
 .t3-hint.on { opacity: 1; transform: translate(-50%, 0); }
 
 .t3-sun {
@@ -56,12 +56,16 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .t3-modes button { box-shadow: none; background: none; }
 .t3-rooms { position: absolute; left: 0; right: 0; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 118px); padding: 2px 12px; z-index: 3; }
 
-.t3-joy {
-  position: absolute; left: 22px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 168px); width: 112px; height: 112px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35); border: 2px solid rgba(255, 255, 255, 0.8); backdrop-filter: blur(4px); z-index: 4; touch-action: none;
+.t3-mini {
+  position: absolute; right: 10px; top: calc(max(10px, env(safe-area-inset-top)) + 150px); border-radius: 12px; background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18); z-index: 4; touch-action: manipulation;
 }
-.t3-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; background: var(--p); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25); pointer-events: none; }
-
+.t3-auto {
+  position: absolute; left: 12px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 164px); z-index: 4; padding: 10px 16px; border-radius: 999px;
+  background: var(--p); color: #fff; font-weight: 600; font-size: 14px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+.t3-fade { position: fixed; inset: 0; background: #f5f3ec; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 2; }
+.t3-fade.on { opacity: 1; }
 .t3-tabs {
   position: absolute; left: 10px; right: 10px; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 18px); display: flex; gap: 4px; padding: 4px;
   background: rgba(255, 255, 255, 0.95); border-radius: 16px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15); z-index: 6; max-width: 560px; margin: 0 auto;

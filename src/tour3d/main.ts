@@ -61,7 +61,9 @@ app.innerHTML = `
   </div>
 </div>
 <nav class="t3-rooms" id="rooms" hidden></nav>
-<div class="t3-joy" id="joy" hidden><div class="t3-knob" id="knob"></div></div>
+<canvas class="t3-mini" id="mini" hidden aria-label="Planta: toque para ir até o ponto"></canvas>
+<button class="t3-auto" id="auto" hidden>▶ Passeio automático</button>
+<div class="t3-fade" id="fade"></div>
 <a class="t3-wa" id="wa" target="_blank" rel="noopener">${WA_ICON}<span>Falar com vendas</span></a>
 <nav class="t3-tabs" id="tabs">
   <button data-t="condo" class="on">Condomínio</button><button data-t="plantas">Plantas</button><button data-t="unidades">Unidades</button><button data-t="lazer">Lazer</button>
@@ -221,6 +223,10 @@ function enterApt(planId: string, mode: Mode = "boneca") {
       if (!open) el.classList.add("open");
     }, 7);
   }
+  stopAuto();
+  buildMarkers();
+  buildMini();
+  lastHere = "";
   renderRooms();
   renderPlans();
   setMode(mode, true);
@@ -234,6 +240,8 @@ function setMode(m: Mode, reset = false) {
   const a = state.apt;
   a.roof.visible = m === "fora";
   a.ceiling.visible = m !== "fora";
+  markers.visible = m === "andar";
+  tapRing.visible = m === "andar";
   const { w, d } = a.size;
   const c = new THREE.Vector3(w / 2, 0, d / 2);
   const R = Math.max(w, d);
@@ -244,15 +252,19 @@ function setMode(m: Mode, reset = false) {
   if (m === "andar") {
     controls.enabled = false;
     camera.near = 0.05;
-    camera.fov = 70;
+    camera.fov = walkFov();
     camera.updateProjectionMatrix();
-    walk.x = a.entry.x;
-    walk.z = a.entry.z;
-    walk.yaw = a.entry.yaw;
-    walk.pitch = 0;
+    if (prev !== "andar" || reset) {
+      walk.x = a.entry.x;
+      walk.z = a.entry.z;
+      walk.yaw = a.entry.yaw;
+      walk.pitch = -0.3;
+      walkTo = null;
+    }
     fly = null;
-    hint("Use o controle para andar e arraste a tela para olhar. Toque num cômodo para ir até ele.");
+    hint("Toque no chão ou nos círculos para andar. Arraste para olhar em volta.");
   } else {
+    stopAuto();
     controls.enabled = true;
     camera.near = 0.1;
     camera.fov = 50;
@@ -273,75 +285,197 @@ function setMode(m: Mode, reset = false) {
   syncUi();
 }
 
-/** Ponto para ficar no cômodo: logo depois da porta, olhando para o centro. */
+/** Tamanho no chão (cm) de cada móvel, para a câmera não parar em cima dele. */
+const FOOT: Record<string, [number, number]> = {
+  bed2: [175, 215], bed1: [100, 205], wardrobe: [0, 60], sofa: [0, 95], armchair: [80, 80], table: [0, 0], counter: [0, 62], fridge: [72, 68],
+  bancada: [0, 52], bar: [0, 0], desk: [0, 90], tv: [0, 42], hidro: [0, 0], lounger: [70, 195], bistro: [140, 140], toilet: [45, 60], basin: [0, 48],
+  washer: [62, 62], tanque: [58, 52], grill: [66, 56], night: [48, 42], plant: [50, 50], shower: [0, 0], pergola: [0, 0],
+};
+function occupied(xcm: number, ycm: number, pad = 30) {
+  return state.plan.items.some((it) => {
+    const f = FOOT[it.t];
+    if (!f) return false;
+    let w = f[0] || it.w || 60, d = f[1] || it.d || 60;
+    if (it.t === "table") { w = (it.w ?? 140) + 100; d = (it.d ?? 90) + 100; }
+    if (it.f === "E" || it.f === "W") [w, d] = [d, w];
+    return Math.abs(xcm - it.x) < w / 2 + pad && Math.abs(ycm - it.y) < d / 2 + pad;
+  });
+}
+
+/** Ponto de "foto de imobiliária": num canto livre do cômodo (o mais perto da porta), olhando na diagonal. */
 function spot(r: RoomInfo) {
-  const plan = state.plan;
-  for (const o of plan.openings) {
+  const [x0, y0, x1, y1] = r.room.rects.reduce((a, b) => ((b[2] - b[0]) * (b[3] - b[1]) > (a[2] - a[0]) * (a[3] - a[1]) ? b : a));
+  // porta do cômodo (para preferir o canto por onde se entra)
+  let door: [number, number] | null = null;
+  for (const o of state.plan.openings) {
     if (o.kind === "window") continue;
-    for (const [x0, y0, x1, y1] of r.room.rects) {
-      const mid = (o.a + o.b) / 2;
-      let px: number | null = null, pz: number | null = null;
-      if (o.dir === "h" && mid > x0 && mid < x1 && (Math.abs(o.at - y0) < 12 || Math.abs(o.at - y1) < 12)) {
-        px = mid / 100;
-        pz = (o.at + (Math.abs(o.at - y0) < 12 ? 70 : -70)) / 100;
-      } else if (o.dir === "v" && mid > y0 && mid < y1 && (Math.abs(o.at - x0) < 12 || Math.abs(o.at - x1) < 12)) {
-        pz = mid / 100;
-        px = (o.at + (Math.abs(o.at - x0) < 12 ? 70 : -70)) / 100;
-      }
-      if (px !== null && pz !== null) return { x: px, z: pz, yaw: Math.atan2(-(r.x - px), -(r.z - pz)) };
-    }
+    const mid = (o.a + o.b) / 2;
+    if (o.dir === "h" && mid > x0 && mid < x1 && (Math.abs(o.at - y0) < 12 || Math.abs(o.at - y1) < 12)) door = [mid, o.at];
+    else if (o.dir === "v" && mid > y0 && mid < y1 && (Math.abs(o.at - x0) < 12 || Math.abs(o.at - x1) < 12)) door = [o.at, mid];
+    if (door) break;
   }
-  return { x: r.x, z: r.z + 0.3, yaw: 0 };
+  const inset = Math.min(45, (x1 - x0) / 4, (y1 - y0) / 4);
+  const corners: [number, number, number, number][] = [
+    [x0 + inset, y0 + inset, x1, y1], [x1 - inset, y0 + inset, x0, y1], [x0 + inset, y1 - inset, x1, y0], [x1 - inset, y1 - inset, x0, y0],
+  ];
+  const ref = door ?? [(x0 + x1) / 2, (y0 + y1) / 2];
+  corners.sort((p, q) => Math.hypot(p[0] - ref[0], p[1] - ref[1]) - Math.hypot(q[0] - ref[0], q[1] - ref[1]));
+  let pick = corners.find((c) => !occupied(c[0], c[1], 30)) ?? corners.find((c) => !occupied(c[0], c[1], 8));
+  if (!pick) {
+    // cantos ocupados: entra pela porta e olha para o lado mais comprido do cômodo
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const px = door ? cx + (door[0] - cx) * 0.6 : cx, py = door ? cy + (door[1] - cy) * 0.6 : cy;
+    pick = x1 - x0 >= y1 - y0 ? [px, py, px - cx > 0 ? x0 : x1, py] : [px, py, px, py - cy > 0 ? y0 : y1];
+  }
+  const [px, py, tx, ty] = pick;
+  const x = px / 100, z = py / 100;
+  return { x, z, yaw: Math.atan2(-(tx / 100 - x), -(ty / 100 - z)) };
 }
 
 function goRoom(r: RoomInfo) {
   const s = spot(r);
   if (state.mode !== "andar") setMode("andar");
-  walkTo = { x0: walk.x, z0: walk.z, y0: walk.yaw, x1: s.x, z1: s.z, y1: s.yaw, k: 0 };
-  $("rooms").querySelectorAll("button").forEach((b) => b.classList.toggle("on", (b as HTMLElement).dataset.r === r.room.id));
+  moveTo(s.x, s.z, s.yaw);
+  markRoom(r.room.id);
+}
+function markRoom(id: string) {
+  $("rooms").querySelectorAll<HTMLElement>("button").forEach((b) => {
+    const on = b.dataset.r === id;
+    b.classList.toggle("on", on);
+    if (on) b.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  });
 }
 
-// ---------------- andar por dentro
-const walk = { x: 0, z: 0, yaw: 0, pitch: 0, jx: 0, jy: 0, keys: new Set<string>() };
-let walkTo: null | { x0: number; z0: number; y0: number; x1: number; z1: number; y1: number; k: number } = null;
-const joy = $("joy"), knob = $("knob");
-let joyId: number | null = null;
-joy.addEventListener("pointerdown", (e) => {
-  joyId = e.pointerId;
-  joy.setPointerCapture(e.pointerId);
-  moveJoy(e);
-});
-joy.addEventListener("pointermove", (e) => { if (e.pointerId === joyId) moveJoy(e); });
-const endJoy = (e: PointerEvent) => {
-  if (e.pointerId !== joyId) return;
-  joyId = null;
-  walk.jx = walk.jy = 0;
-  knob.style.transform = "";
-};
-joy.addEventListener("pointerup", endJoy);
-joy.addEventListener("pointercancel", endJoy);
-function moveJoy(e: PointerEvent) {
-  const r = joy.getBoundingClientRect();
-  let dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
-  let dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
-  const l = Math.hypot(dx, dy);
-  if (l > 1) { dx /= l; dy /= l; }
-  walk.jx = dx;
-  walk.jy = dy;
-  knob.style.transform = `translate(${dx * 34}px, ${dy * 34}px)`;
-  walkTo = null;
+// ---------------- andar por dentro: toque no chão (ou nos círculos) para ir, arrastar para olhar
+const EYE = 1.45;
+const walk = { x: 0, z: 0, yaw: 0, pitch: -0.3, keys: new Set<string>() };
+let walkTo: null | { x0: number; z0: number; y0: number; x1: number; z1: number; y1: number; k: number; dur: number } = null;
+let fading = false;
+const fadeEl = $("fade");
+
+/** Lente de "foto de imobiliária": uns 64° na largura, também com o celular em pé. */
+function walkFov() {
+  const v = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(32)) / camera.aspect));
+  return THREE.MathUtils.clamp(v, 72, 104);
 }
+
+/** Tem parede no caminho reto entre os dois pontos? */
+function blocked(x0: number, z0: number, x1: number, z1: number) {
+  const cols = state.apt!.colliders;
+  const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 0.12);
+  for (let i = 1; i < n; i++) {
+    const px = x0 + ((x1 - x0) * i) / n, pz = z0 + ((z1 - z0) * i) / n;
+    const p = collide(cols, px, pz, 0.1);
+    if (Math.hypot(p.x - px, p.z - pz) > 0.02) return true;
+  }
+  return false;
+}
+
+/** Vai até o ponto: desliza se o caminho está livre; atrás de parede, esmaece e aparece lá. */
+function moveTo(x: number, z: number, yaw?: number) {
+  const a = state.apt!;
+  const p = collide(a.colliders, x, z, 0.3);
+  x = THREE.MathUtils.clamp(p.x, 0.25, a.size.w - 0.25);
+  z = THREE.MathUtils.clamp(p.z, 0.25, a.size.d - 0.25);
+  const y1 = yaw ?? walk.yaw;
+  if (blocked(walk.x, walk.z, x, z)) {
+    walkTo = null;
+    fading = true;
+    fadeEl.classList.add("on");
+    setTimeout(() => {
+      walk.x = x;
+      walk.z = z;
+      walk.yaw = y1;
+      walk.pitch = -0.3;
+      fadeEl.classList.remove("on");
+      setTimeout(() => (fading = false), 220);
+    }, 220);
+    return;
+  }
+  const L = Math.hypot(x - walk.x, z - walk.z);
+  walkTo = { x0: walk.x, z0: walk.z, y0: walk.yaw, x1: x, z1: z, y1, k: 0, dur: THREE.MathUtils.clamp(L / 2.2, 0.35, 1.5) };
+}
+
+/** Em que cômodo fica o ponto (metros). */
+function roomAt(x: number, z: number) {
+  return state.apt?.rooms.find((r) => r.room.rects.some(([x0, y0, x1, y1]) => x * 100 >= x0 && x * 100 < x1 && z * 100 >= y0 && z * 100 < y1));
+}
+
+// círculos no chão de cada cômodo + anel do toque
+const markers = new THREE.Group();
+aptScene.add(markers);
+const ringGeo = new THREE.RingGeometry(0.22, 0.3, 32);
+const dotGeo = new THREE.CircleGeometry(0.07, 16);
+const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false });
+function buildMarkers() {
+  markers.clear();
+  for (const r of state.apt!.rooms) {
+    if (r.room.nav === false) continue;
+    const s = spot(r);
+    const g = new THREE.Group();
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    const dot = new THREE.Mesh(dotGeo, ringMat);
+    for (const m of [ring, dot]) {
+      m.rotation.x = -Math.PI / 2;
+      m.userData.room = r.room.id;
+      g.add(m);
+    }
+    // área de toque maior que o desenho
+    const hit = new THREE.Mesh(new THREE.CircleGeometry(0.45, 12), new THREE.MeshBasicMaterial({ visible: false }));
+    hit.rotation.x = -Math.PI / 2;
+    hit.userData.room = r.room.id;
+    g.add(hit);
+    g.position.set(s.x, 0.03, s.z);
+    markers.add(g);
+  }
+}
+const tapRing = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: project.colors.accent, transparent: true, opacity: 0, depthWrite: false }));
+tapRing.rotation.x = -Math.PI / 2;
+aptScene.add(tapRing);
+let tapT = 9;
+
+// passeio automático: visita os cômodos em ordem, olhando em volta
+let auto: null | { i: number; t: number; base: number; list: RoomInfo[] } = null;
+function startAuto() {
+  const list = state.apt!.rooms.filter((r) => r.room.nav !== false);
+  auto = { i: 0, t: 0, base: 0, list };
+  $("auto").textContent = "❚❚ Parar passeio";
+  goRoom(list[0]);
+}
+function stopAuto() {
+  if (!auto) return;
+  auto = null;
+  $("auto").textContent = "▶ Passeio automático";
+}
+$("auto").addEventListener("click", () => (auto ? stopAuto() : startAuto()));
+function stepAuto(dt: number) {
+  if (!auto || walkTo || fading) return;
+  if (auto.t === 0) auto.base = walk.yaw;
+  auto.t += dt;
+  walk.yaw = auto.base + Math.sin(auto.t * 0.75) * 0.55;
+  if (auto.t > 5) {
+    auto.i++;
+    auto.t = 0;
+    if (auto.i >= auto.list.length) return stopAuto();
+    goRoom(auto.list[auto.i]);
+  }
+}
+
+// arrastar para olhar
 let look: null | { id: number; x: number; y: number } = null;
 renderer.domElement.addEventListener("pointerdown", (e) => {
-  if (state.view === "apt" && state.mode === "andar") look = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  if (state.view === "apt" && state.mode === "andar") {
+    look = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    stopAuto();
+  }
 });
 addEventListener("pointermove", (e) => {
   if (!look || e.pointerId !== look.id) return;
-  walk.yaw -= (e.clientX - look.x) * 0.0045;
-  walk.pitch = THREE.MathUtils.clamp(walk.pitch - (e.clientY - look.y) * 0.0035, -1.1, 1.1);
+  walk.yaw += (e.clientX - look.x) * 0.005;
+  walk.pitch = THREE.MathUtils.clamp(walk.pitch + (e.clientY - look.y) * 0.004, -0.9, 0.6);
   look.x = e.clientX;
   look.y = e.clientY;
-  walkTo = null;
+  if (walkTo) walkTo.y1 = walkTo.y0 = walk.yaw;
 });
 addEventListener("pointerup", (e) => { if (look?.id === e.pointerId) look = null; });
 addEventListener("keydown", (e) => walk.keys.add(e.key.toLowerCase()));
@@ -350,7 +484,7 @@ addEventListener("keyup", (e) => walk.keys.delete(e.key.toLowerCase()));
 function stepWalk(dt: number) {
   const a = state.apt!;
   if (walkTo) {
-    walkTo.k = Math.min(1, walkTo.k + dt / 0.7);
+    walkTo.k = Math.min(1, walkTo.k + dt / walkTo.dur);
     const e = walkTo.k < 0.5 ? 2 * walkTo.k * walkTo.k : 1 - (-2 * walkTo.k + 2) ** 2 / 2;
     walk.x = walkTo.x0 + (walkTo.x1 - walkTo.x0) * e;
     walk.z = walkTo.z0 + (walkTo.z1 - walkTo.z0) * e;
@@ -359,7 +493,8 @@ function stepWalk(dt: number) {
     walk.yaw = walkTo.y0 + dy * e;
     if (walkTo.k >= 1) walkTo = null;
   } else {
-    let f = -walk.jy, s = walk.jx;
+    // teclado (computador): W/S anda, A/D de lado, setas giram
+    let f = 0, s = 0;
     const k = walk.keys;
     if (k.has("w") || k.has("arrowup")) f += 1;
     if (k.has("s") || k.has("arrowdown")) f -= 1;
@@ -367,22 +502,95 @@ function stepWalk(dt: number) {
     if (k.has("d")) s += 1;
     if (k.has("arrowleft")) walk.yaw += dt * 1.8;
     if (k.has("arrowright")) walk.yaw -= dt * 1.8;
-    const speed = 1.6;
-    const sin = Math.sin(walk.yaw), cos = Math.cos(walk.yaw);
-    let nx = walk.x + (-sin * f + cos * s) * speed * dt;
-    let nz = walk.z + (-cos * f - sin * s) * speed * dt;
-    const p = collide(a.colliders, nx, nz);
-    nx = THREE.MathUtils.clamp(p.x, 0.2, a.size.w - 0.2);
-    nz = THREE.MathUtils.clamp(p.z, 0.2, a.size.d - 0.2);
-    walk.x = nx;
-    walk.z = nz;
+    if (f || s) {
+      stopAuto();
+      const sin = Math.sin(walk.yaw), cos = Math.cos(walk.yaw);
+      const p = collide(a.colliders, walk.x + (-sin * f + cos * s) * 1.6 * dt, walk.z + (-cos * f - sin * s) * 1.6 * dt);
+      walk.x = THREE.MathUtils.clamp(p.x, 0.2, a.size.w - 0.2);
+      walk.z = THREE.MathUtils.clamp(p.z, 0.2, a.size.d - 0.2);
+    }
   }
-  camera.position.set(walk.x, 1.6, walk.z);
+  stepAuto(dt);
+  camera.position.set(walk.x, EYE, walk.z);
   camera.rotation.set(walk.pitch, walk.yaw, 0, "YXZ");
   fill.position.set(walk.x, 2.2, walk.z);
+  // círculos: some o do lugar onde você está, os outros pulsam
+  const here = roomAt(walk.x, walk.z)?.room.id;
+  for (const g of markers.children) {
+    const d = Math.hypot(g.position.x - walk.x, g.position.z - walk.z);
+    g.visible = d > 0.8;
+    g.scale.setScalar(1 + Math.sin(performance.now() / 300) * 0.06);
+  }
+  if (here && !auto) markRoomQuiet(here);
+  tapT += dt;
+  (tapRing.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.9 - tapT * 1.4);
+  tapRing.scale.setScalar(1 + tapT * 1.2);
+  drawMini();
+}
+let lastHere = "";
+function markRoomQuiet(id: string) {
+  if (id === lastHere) return;
+  lastHere = id;
+  $("rooms").querySelectorAll<HTMLElement>("button").forEach((b) => b.classList.toggle("on", b.dataset.r === id));
 }
 
-// ---------------- toque no condomínio (blocos)
+// minimapa: a planta vista de cima com você nela; toque para ir até o ponto
+const mini = $<HTMLCanvasElement>("mini");
+const miniCtx = mini.getContext("2d")!;
+const miniPad = 6;
+let miniScale = 1;
+function buildMini() {
+  const { w, d } = state.apt!.size;
+  const W = 132;
+  miniScale = (W - miniPad * 2) / w;
+  const H = Math.round(d * miniScale + miniPad * 2);
+  const dpr = Math.min(devicePixelRatio, 2);
+  mini.width = W * dpr;
+  mini.height = H * dpr;
+  mini.style.width = `${W}px`;
+  mini.style.height = `${H}px`;
+  miniCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function drawMini() {
+  if (mini.hidden || !state.apt) return;
+  const g = miniCtx, s = miniScale, P = miniPad;
+  g.clearRect(0, 0, mini.width, mini.height);
+  const here = roomAt(walk.x, walk.z)?.room.id;
+  for (const r of state.apt.rooms) {
+    const out = r.room.kind === "varanda" || r.room.kind === "terraco";
+    g.fillStyle = r.room.id === here ? project.colors.accent : out ? "#d8cbb4" : "#f4f1ea";
+    for (const [x0, y0, x1, y1] of r.room.rects) g.fillRect(P + (x0 / 100) * s, P + (y0 / 100) * s, ((x1 - x0) / 100) * s, ((y1 - y0) / 100) * s);
+  }
+  g.fillStyle = "#3a3a36";
+  for (const c of state.apt.colliders) g.fillRect(P + c.x0 * s, P + c.z0 * s, Math.max(1, (c.x1 - c.x0) * s), Math.max(1, (c.z1 - c.z0) * s));
+  // você: ponto + cone de visão
+  const cx = P + walk.x * s, cz = P + walk.z * s;
+  const ang = -walk.yaw - Math.PI / 2;
+  g.fillStyle = "rgba(78,90,64,.35)";
+  g.beginPath();
+  g.moveTo(cx, cz);
+  g.arc(cx, cz, 22, ang - 0.6, ang + 0.6);
+  g.closePath();
+  g.fill();
+  g.fillStyle = project.colors.primary;
+  g.beginPath();
+  g.arc(cx, cz, 4.5, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = "#fff";
+  g.lineWidth = 1.5;
+  g.stroke();
+}
+mini.addEventListener("click", (e) => {
+  const r = mini.getBoundingClientRect();
+  const x = (e.clientX - r.left - miniPad) / miniScale, z = (e.clientY - r.top - miniPad) / miniScale;
+  const room = roomAt(x, z);
+  if (!room) return;
+  stopAuto();
+  const dx = x - walk.x, dz = z - walk.z;
+  moveTo(x, z, Math.hypot(dx, dz) > 0.3 ? Math.atan2(-dx, -dz) : undefined);
+});
+
+// ---------------- toques: blocos no condomínio, chão/círculos no apartamento
 const ray = new THREE.Raycaster();
 let down: null | { x: number; y: number; t: number } = null;
 renderer.domElement.addEventListener("pointerdown", (e) => {
@@ -391,9 +599,20 @@ renderer.domElement.addEventListener("pointerdown", (e) => {
 });
 renderer.domElement.addEventListener("pointerup", (e) => {
   if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || performance.now() - down.t > 500) return;
-  if (state.view !== "condo") return;
   const r = renderer.domElement.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  if (state.view === "apt") {
+    if (state.mode !== "andar" || !state.apt) return;
+    const m = ray.intersectObjects(markers.children, true).find((h) => h.object.parent?.visible);
+    const room = m && state.apt.rooms.find((x) => x.room.id === m.object.userData.room);
+    if (room) return goRoom(room);
+    const hit = ray.intersectObjects(state.apt.floors, false)[0];
+    if (!hit) return;
+    tapRing.position.set(hit.point.x, 0.04, hit.point.z);
+    tapT = 0;
+    moveTo(hit.point.x, hit.point.z);
+    return;
+  }
   const hit = ray.intersectObjects(condo.blocks.flatMap((b) => b.pick), false)[0];
   if (hit) openBlock(hit.object.userData.block);
 });
@@ -535,6 +754,7 @@ function showAmenity(id: string) {
 $("photo").addEventListener("click", () => ($("photo").hidden = true));
 
 function showCondo() {
+  stopAuto();
   state.view = "condo";
   if (state.apt) aptScene.remove(state.apt.group);
   controls.enabled = true;
@@ -582,7 +802,10 @@ function renderRooms() {
 $("rooms").addEventListener("click", (e) => {
   const id = (e.target as HTMLElement).closest<HTMLElement>("[data-r]")?.dataset.r;
   const r = state.apt?.rooms.find((x) => x.room.id === id);
-  if (r) goRoom(r);
+  if (r) {
+    stopAuto();
+    goRoom(r);
+  }
 });
 
 function syncUi() {
@@ -590,7 +813,8 @@ function syncUi() {
   $("back").hidden = !apt;
   $("aptbar").hidden = !apt;
   $("rooms").hidden = !apt;
-  $("joy").hidden = !(apt && state.mode === "andar");
+  $("mini").hidden = !(apt && state.mode === "andar");
+  $("auto").hidden = !(apt && state.mode === "andar");
   $("sun").hidden = apt;
   document.body.classList.toggle("walking", apt && state.mode === "andar");
   const msg = state.unit
@@ -639,6 +863,7 @@ function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h);
   camera.aspect = w / h;
+  if (state.view === "apt" && state.mode === "andar") camera.fov = walkFov();
   camera.updateProjectionMatrix();
 }
 addEventListener("resize", resize);
@@ -673,7 +898,7 @@ function frame() {
     renderer.render(condo.scene, camera);
   } else {
     fill.intensity = state.mode === "andar" ? 0.9 : 0;
-    aptHemi.intensity = state.mode === "andar" ? 1.5 : 1.1;
+    aptHemi.intensity = state.mode === "andar" ? 1.05 : 1.1;
     if (state.mode === "andar") stepWalk(dt);
     else controls.update();
     renderer.render(aptScene, camera);
