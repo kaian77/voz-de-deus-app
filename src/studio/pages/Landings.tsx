@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { renderLanding } from "@/landing/render";
 import { WIDGET_LABEL, widgetFor, type WidgetKind } from "@/landing/widgets";
-import { api } from "../lib/api";
+import { api, supabase } from "../lib/api";
 import { useInvalidate, useOffer, useTable } from "../lib/hooks";
 import type { LandingPage, LandingStat, SiteStat, TourProject } from "../lib/types";
 import type { Offer } from "../lib/offer";
@@ -118,9 +118,22 @@ function MySitePanel() {
 /** Tours 3D: link público e link de edição das unidades (para a construtora marcar vendido/reservado). */
 function ToursPanel() {
   const { data = [] } = useTable("tour_projects", { order: "created_at" });
+  const invalidate = useInvalidate();
   const tours = data as TourProject[];
   if (!tours.length) return null;
   const copy = (url: string, msg: string) => navigator.clipboard.writeText(url).then(() => toast.success(msg));
+  const update = async (slug: string, patch: Partial<TourProject>, msg: string) => {
+    const { error } = await supabase!.from("tour_projects").update(patch).eq("slug", slug);
+    if (error) return toast.error(error.message);
+    toast.success(msg);
+    invalidate("tour_projects");
+  };
+  const status = (t: TourProject) => {
+    if (t.paid) return "Pago · sem prazo";
+    if (!t.demo_until) return "Demonstração sem prazo";
+    const d = new Date(t.demo_until);
+    return d < new Date() ? "Demonstração vencida" : `Demonstração até ${d.toLocaleDateString("pt-BR")}`;
+  };
   return (
     <Panel title="Tours 3D" description="Mande o link de edição só para a equipe de vendas: nele eles tocam na unidade e marcam Disponível, Reservado ou Vendido." className="mb-4">
       <div className="space-y-2">
@@ -132,11 +145,21 @@ function ToursPanel() {
               <div className="min-w-0">
                 <p className="truncate font-medium">{t.name}</p>
                 <p className="truncate text-xs text-muted-foreground">{url.replace("https://", "")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {status(t)} · {t.views} {t.views === 1 ? "visita" : "visitas"}{t.last_view_at ? `, última ${relativeTime(t.last_view_at)}` : ""}
+                </p>
               </div>
               <div className="flex flex-wrap gap-1">
                 <Button size="sm" variant="outline" onClick={() => copy(url, "Link do tour copiado")}><Copy className="mr-1.5 h-4 w-4" />Link</Button>
                 <Button size="sm" variant="outline" onClick={() => copy(edit, "Link de edição copiado (só para a equipe de vendas)")}><Link2 className="mr-1.5 h-4 w-4" />Link de edição</Button>
                 <Button size="sm" variant="outline" asChild><a href={edit} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Editar unidades</a></Button>
+                {!t.paid && (
+                  <Button size="sm" variant="outline" onClick={() => update(t.slug, { demo_until: new Date(Math.max(Date.now(), t.demo_until ? Date.parse(t.demo_until) : 0) + 7 * 86400_000).toISOString() }, "Demonstração renovada por mais 7 dias")}>
+                    <RefreshCw className="mr-1.5 h-4 w-4" />+7 dias
+                  </Button>
+                )}
+                {!t.paid && <Button size="sm" variant="outline" onClick={() => update(t.slug, { demo_until: new Date(Date.now() - 60_000).toISOString() }, "Demonstração encerrada")}>Encerrar</Button>}
+                <Button size="sm" variant={t.paid ? "ghost" : "default"} onClick={() => update(t.slug, { paid: !t.paid }, t.paid ? "Voltou a ser demonstração" : "Marcado como pago: o tour não vence mais")}>{t.paid ? "Desmarcar pago" : "Pagou"}</Button>
               </div>
             </div>
           );
