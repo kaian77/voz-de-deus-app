@@ -92,7 +92,8 @@ export default function Leads() {
     setSending(true);
     try {
       const r = await api.invoke<LeadSearch & { started: boolean }>("ai", { action: "leads_search", query, place, wanted: Number(wanted) });
-      toast.success(r.started ? "Buscando! Leva de 5 a 20 minutos; pode sair da tela." : "Na fila: o robô roda em até 4 horas.");
+      if (r.started) toast.success("Buscando! Leva de 5 a 20 minutos; pode sair da tela.");
+      else toast.error("Não consegui ligar o robô agora. Toque em \"Buscar agora\" na busca daqui a pouco.");
       setQuery("");
       invalidate("lead_searches");
     } catch (e) {
@@ -104,8 +105,9 @@ export default function Leads() {
 
   const retry = async (s: LeadSearch) => {
     try {
-      await api.invoke("ai", { action: "leads_search", retry_id: s.id });
-      toast.success("Buscando de novo");
+      const r = await api.invoke<{ started: boolean }>("ai", { action: "leads_search", retry_id: s.id });
+      if (r.started) toast.success("Buscando! Leva de 5 a 20 minutos.");
+      else toast.error("O robô não ligou. Tente de novo em 1 minuto.");
       invalidate("lead_searches");
     } catch (e) {
       toast.error((e as Error).message);
@@ -192,8 +194,10 @@ export default function Leads() {
                       </span>
                       {(s.status === "queued" || s.status === "running") && <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-muted-foreground" />}
                     </button>
-                    {s.status === "failed" && (
-                      <button type="button" onClick={() => retry(s)} className="mb-2 ml-9 text-xs font-medium hover:underline">Tentar de novo</button>
+                    {(s.status === "failed" || (s.status === "queued" && Date.now() - new Date(s.updated_at ?? s.created_at).getTime() > 3 * 60_000)) && (
+                      <button type="button" onClick={() => retry(s)} className="mb-2 ml-9 text-xs font-medium hover:underline">
+                        {s.status === "failed" ? "Tentar de novo" : "Buscar agora"}
+                      </button>
                     )}
                   </li>
                 ))}

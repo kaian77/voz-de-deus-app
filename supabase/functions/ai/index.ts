@@ -316,10 +316,11 @@ Deno.serve(async (req) => {
       return json(data);
     }
     if (action === "leads_search") {
-      // Prospecção: entra na fila do workflow "Leads do Google Maps" (empresas sem site e com WhatsApp)
+      // Prospecção: liga na hora o workflow "Leads do Google Maps" (empresas sem site e com WhatsApp).
+      // Não tem busca automática: o robô só roda quando o dono pede (ou toca em "Buscar agora").
       if (input.retry_id) {
         const { data, error } = await db.from("lead_searches").update({ status: "queued", error: null, updated_at: new Date().toISOString() })
-          .eq("id", String(input.retry_id)).eq("user_id", userId).eq("status", "failed").select().single();
+          .eq("id", String(input.retry_id)).eq("user_id", userId).in("status", ["failed", "queued"]).select().single();
         if (error || !data) throw new HttpError(404, "Busca não encontrada");
         return json({ ...data, started: await dispatchRender("leads.yml") });
       }
