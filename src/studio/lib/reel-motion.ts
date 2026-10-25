@@ -449,7 +449,168 @@ function sceneCounter(ctx: CanvasRenderingContext2D, lt: number) {
   ctx.restore();
 }
 
-export type ReelScene = "compare" | "persona" | "counter" | "cards";
+const MONO = "'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace";
+
+/** Moldura de "painel de controle": cantos, rótulos em fonte mono e o relógio do vídeo correndo. */
+function hud(ctx: CanvasRenderingContext2D, t: number, left: string, right: string) {
+  ctx.save();
+  ctx.strokeStyle = "rgba(243,241,234,0.55)";
+  ctx.lineWidth = 4;
+  const m = 40;
+  const k = 70;
+  for (const [x, y, dx, dy] of [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]]) {
+    ctx.beginPath();
+    ctx.moveTo(x + dx * k, y);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x, y + dy * k);
+    ctx.stroke();
+  }
+  ctx.font = `500 26px ${MONO}`;
+  ctx.fillStyle = "rgba(243,241,234,0.6)";
+  ctx.textAlign = "left";
+  ctx.fillText(left, 92, 205);
+  ctx.textAlign = "right";
+  ctx.fillText(right, W - 92, 205);
+  const s = Math.floor(t);
+  const f = Math.floor((t % 1) * 30);
+  ctx.fillText(`00:00:${String(s).padStart(2, "0")}:${String(f).padStart(2, "0")}`, W - 92, H - 70);
+  ctx.textAlign = "left";
+  rr(ctx, 92, H - 104, 52, 40, 4, Math.floor(t * 2) % 2 ? LIME : "rgba(212,255,63,0.35)");
+  ctx.fillStyle = INK;
+  ctx.font = `700 22px ${MONO}`;
+  ctx.fillText("ON", 100, H - 76);
+  ctx.fillStyle = "rgba(243,241,234,0.6)";
+  ctx.font = `500 26px ${MONO}`;
+  ctx.fillText("SITE 1/1 ONLINE", 160, H - 76);
+  ctx.restore();
+}
+
+/** Piso em perspectiva (linhas de grade fugindo para o horizonte), como palco de TV. */
+function floorGrid(ctx: CanvasRenderingContext2D, t: number) {
+  ctx.save();
+  const hy = H * 0.56;
+  const g = ctx.createRadialGradient(W / 2, hy, 0, W / 2, hy, 900);
+  g.addColorStop(0, "rgba(23,59,44,0.9)");
+  g.addColorStop(1, "rgba(17,17,16,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(212,255,63,0.16)";
+  ctx.lineWidth = 2;
+  for (let i = -10; i <= 10; i++) {
+    ctx.beginPath();
+    ctx.moveTo(W / 2 + i * 30, hy);
+    ctx.lineTo(W / 2 + i * 260, H);
+    ctx.stroke();
+  }
+  const off = (t * 0.6) % 1;
+  for (let j = 0; j < 9; j++) {
+    const z = (j + off) / 9;
+    const y = hy + (H - hy) * z * z;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Título em duas partes: linha menor clara + palavra gigante colorida com brilho, entrando com impacto. */
+function bigTitle(ctx: CanvasRenderingContext2D, small: string, big: string, color: string, p: number) {
+  if (p <= 0) return;
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.globalAlpha = clamp(p * 1.5);
+  ctx.fillStyle = PAPER;
+  ctx.font = `800 76px ${SANS}`;
+  ctx.fillText(small.toUpperCase(), W / 2, 330);
+  const s = 0.7 + 0.3 * back(p);
+  ctx.translate(W / 2, 500);
+  ctx.scale(s, s);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 40;
+  ctx.fillStyle = color;
+  let size = 190;
+  ctx.font = `900 ${size}px ${SANS}`;
+  while (ctx.measureText(big.toUpperCase()).width > W - 120 && size > 80) {
+    size -= 10;
+    ctx.font = `900 ${size}px ${SANS}`;
+  }
+  ctx.fillText(big.toUpperCase(), 0, 0);
+  ctx.restore();
+}
+
+/** Notificação na tela de bloqueio. */
+function notif(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, app: string, title: string, body: string, color: string, letter: string, p: number) {
+  if (p <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = clamp(p * 1.4);
+  ctx.translate(0, (1 - back(p)) * -60);
+  rr(ctx, x, y, w, 150, 18, "#161614");
+  ctx.strokeStyle = "rgba(243,241,234,0.55)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, 150, 18);
+  ctx.stroke();
+  rr(ctx, x + 22, y + 26, 64, 64, 12, color);
+  ctx.fillStyle = color === LIME ? INK : PAPER;
+  ctx.font = `900 40px ${SANS}`;
+  ctx.textAlign = "center";
+  ctx.fillText(letter, x + 54, y + 72);
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(243,241,234,0.55)";
+  ctx.font = `500 20px ${MONO}`;
+  ctx.fillText(`${app.toUpperCase()} · AGORA`, x + 106, y + 40);
+  ctx.fillStyle = PAPER;
+  ctx.font = `800 32px ${SANS}`;
+  ctx.fillText(title, x + 106, y + 80);
+  ctx.fillStyle = "rgba(243,241,234,0.8)";
+  ctx.font = `400 26px ${SANS}`;
+  ctx.fillText(body, x + 106, y + 120, w - 130);
+  ctx.restore();
+}
+
+/** Cena da madrugada: o site trabalhando enquanto o dono dorme (celular com o relógio correndo e notificações). */
+function sceneNight(ctx: CanvasRenderingContext2D, lt: number) {
+  floorGrid(ctx, lt);
+  const part = lt < 2.6 ? 0 : 1;
+  bigTitle(ctx, part ? "e o site trabalhando" : "3 da manhã. você", part ? "24 horas" : "dormindo", part ? LIME : RED, part ? (lt - 2.6) / 0.45 : lt / 0.45);
+  const pw = 600;
+  const ph = 940;
+  const px = (W - pw) / 2;
+  const py = 700;
+  const pin = easeOut((lt - 0.2) / 0.5);
+  ctx.save();
+  ctx.globalAlpha = pin;
+  ctx.translate(0, (1 - pin) * 200);
+  rr(ctx, px, py, pw, ph, 50, "#0b0b0a");
+  ctx.strokeStyle = PAPER;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.roundRect(px, py, pw, ph, 50);
+  ctx.stroke();
+  rr(ctx, px + pw / 2 - 70, py + 26, 140, 34, 17, PAPER);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(243,241,234,0.75)";
+  ctx.font = `500 26px ${MONO}`;
+  ctx.fillText("QUARTA, 3 DA MANHÃ", W / 2, py + 130);
+  const min = Math.min(59, 2 + Math.floor(lt * 2.2));
+  ctx.fillStyle = PAPER;
+  ctx.font = `900 150px ${SANS}`;
+  ctx.fillText(`03:${String(min).padStart(2, "0")}`, W / 2, py + 290);
+  const nx = px + 30;
+  const nw = pw - 60;
+  notif(ctx, nx, py + 340, nw, "Google", "“dentista perto de mim”", "Seu site apareceu na busca", "#4285f4", "G", (lt - 1.0) / 0.35);
+  notif(ctx, nx, py + 510, nw, "Seu site", "1 visita nova", "Viu serviços e endereço", LIME, "P", (lt - 2.2) / 0.35);
+  notif(ctx, nx, py + 680, nw, "WhatsApp", "Mensagem nova", "“Vi seu site, quero agendar!”", WA, "W", (lt - 3.4) / 0.35);
+  ctx.restore();
+  ctx.fillStyle = "rgba(243,241,234,0.45)";
+  ctx.font = `500 24px ${SANS}`;
+  ctx.textAlign = "center";
+  ctx.fillText("exemplo ilustrativo", W / 2, py + ph + 40);
+  hud(ctx, lt, "ATENDIMENTO // 24/7", "PAGINASPRO.HQ");
+}
+
+export type ReelScene = "compare" | "persona" | "counter" | "cards" | "night";
 
 /** Monta a linha do tempo do Reel a partir dos slides: [duração total, desenhar(t)]. */
 export function paginasproReel(slides: Slide[], scene: ReelScene = "compare") {
@@ -457,7 +618,7 @@ export function paginasproReel(slides: Slide[], scene: ReelScene = "compare") {
   const middle = slides.slice(1, -1).slice(0, 4);
   const last = slides.length > 1 ? slides[slides.length - 1] : { title: "Prévia *grátis* em 24 h", body: "Me chama no direct." };
   const T_HOOK = 3.2;
-  const T_CMP = scene === "persona" ? 6.6 : scene === "counter" ? 5.8 : scene === "cards" ? 0 : 5.2;
+  const T_CMP = scene === "persona" ? 6.6 : scene === "counter" ? 5.8 : scene === "night" ? 5.6 : scene === "cards" ? 0 : 5.2;
   const T_CARD = 2.4;
   const T_END = 3.8;
   const tCards = T_HOOK + T_CMP;
@@ -486,6 +647,7 @@ export function paginasproReel(slides: Slide[], scene: ReelScene = "compare") {
         ctx.save();
         ctx.globalAlpha = 1 - out;
         if (scene === "persona") scenePersona(ctx, lt);
+        else if (scene === "night") sceneNight(ctx, lt);
         else sceneCounter(ctx, lt);
         ctx.restore();
       } else {
@@ -623,6 +785,9 @@ export function paginasproReel(slides: Slide[], scene: ReelScene = "compare") {
     cues.push({ t: s0 - 0.25, kind: "whoosh" });
     if (scene === "compare") cues.push({ t: s0 + 0.8, kind: "sad" }, { t: s0 + 1.4, kind: "whoosh" }, { t: s0 + 2.4, kind: "ding" });
     if (scene === "persona") cues.push({ t: s0 + 1.0, kind: "sad" }, { t: s0 + 2.4, kind: "whoosh" }, { t: s0 + 3.7, kind: "pop" }, { t: s0 + 4.4, kind: "ding" });
+    if (scene === "night") {
+      cues.push({ t: s0 + 0.05, kind: "pop" }, { t: s0 + 1.0, kind: "ding" }, { t: s0 + 2.2, kind: "ding" }, { t: s0 + 2.6, kind: "whoosh" }, { t: s0 + 3.4, kind: "ding" });
+    }
     if (scene === "counter") {
       cues.push({ t: s0 + 1.4, kind: "whoosh" }, { t: s0 + 2.0, kind: "ding" });
       for (let x = 0.4; x < 3.6; x += 0.12) cues.push({ t: s0 + x, kind: "tick" });
