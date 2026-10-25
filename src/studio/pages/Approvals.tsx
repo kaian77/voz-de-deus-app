@@ -300,6 +300,7 @@ const REEL_SCENES = [
   ["compare", "Celulares: sem site × com site"],
   ["persona", "Bonequinho no celular"],
   ["counter", "Contadores subindo/descendo"],
+  ["night", "Madrugada: celular com notificações"],
   ["cards", "Só cards"],
 ] as const;
 
