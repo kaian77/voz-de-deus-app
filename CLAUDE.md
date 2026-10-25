@@ -18,7 +18,7 @@ Ferramenta interna da Brax Pins Mania (loja de pins, braxpinsmania.com.br; IG @b
 - Commits/PRs sem identificador de modelo.
 
 ## Estado das integrações
-- Instagram: app da Meta publicado (Live), empresa verificada; webhooks de comentários/DMs funcionando para testadores. Análise do app (instagram_business_basic, _manage_comments, _manage_messages) em envio pelo dono.
+- Instagram: app da Meta publicado (Live), empresa verificada; análise do app aprovada em 25/10/2026 (instagram_business_basic, _manage_comments, _manage_messages): comentários e DMs valem para qualquer conta, não só testadores.
 - TikTok: app não auditado — postagem direta só em conta privada; o publisher manda para a caixa de entrada do app do TikTok (`ttUploadToInbox`).
 - Nuvemshop conectada. API não grava dados fiscais (NCM etc.) → fluxo de planilha CSV (`src/studio/lib/fiscal-csv.ts`).
 - Mercado Livre conectado. Sincronização da loja em fila (`ml-sync.ts`, 3 produtos/min no cron); produto novo na loja entra na fila sozinho a cada 10 min (`watchNewProducts`, liga/desliga: `brand_settings.marketplace_autopublish`). Kits e combos entram com o preço que o cliente paga no site + a regra, formato "Kit" e a quantidade de pins; caixa surpresa fica de fora (proibida no ML). Fotos: workflow `ml-photos.yml` (`video/ml_photos.py`, rembg) deixa cada foto em 1200x1200 com fundo branco (tabela `ml_photos`); a sincronização espera as fotos ficarem prontas (até 2h) e troca as do anúncio. Produto com menos de 3 fotos ganha fotos geradas da capa (`detail` = close, `angle` = de lado), porque o ML pede no mínimo 3.
