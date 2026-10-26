@@ -995,8 +995,13 @@ function makeMedal(tone: Tone) {
   }
   const metal = new THREE.MeshStandardMaterial({ color: TONES[tone].metal, metalness: 0.8, roughness: 0.3 });
   const face = new THREE.MeshStandardMaterial({ map: medalFace(me.d, tone), metalness: 0.55, roughness: 0.35, emissive: 0xffffff, emissiveIntensity: 0.08 });
-  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.018, 32).rotateX(Math.PI / 2), [metal, face, metal]);
-  g.add(disc);
+  if (ev.medal && tone === "ouro") {
+    // foto da medalha de verdade (recortada, fundo transparente): placa no formato dela, frente e verso
+    face.alphaTest = 0.5;
+    face.side = THREE.DoubleSide;
+    face.metalness = 0.3;
+    g.add(new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), face));
+  } else g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.018, 32).rotateX(Math.PI / 2), [metal, face, metal]));
   g.userData = { tone, face };
   g.visible = false;
   scene.add(g);

@@ -61,6 +61,7 @@ export const zombieRun: RaceEvent = {
   ],
   kit: ["Camisa oficial", "Número de peito", "Chip de cronometragem", "Lanterna de cabeça", "Medalha", "Hidratação pós-prova"],
   signup: "https://www.thezombierun.com.br/",
+  medal: "/race3d/zombie-run/medalha.png",
   routeNote: "Traçado aproximado do mapa divulgado pelo evento (5K = 1 volta, 10K = 2 voltas). Postos de água de exemplo.",
   lotsNote: "Kits e valores do post do evento; confira na inscrição oficial.",
   whatsapp: "5561992372216",
