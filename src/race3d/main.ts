@@ -123,12 +123,16 @@ ev.distances.forEach((d, di) => {
     });
   });
 });
-const crowd = new Crowd(runners.length, 0.3, { lamps: ev.night });
+// bonecos um pouco maiores que a escala real para aparecerem bem no celular (no pódio voltam ao tamanho do palco)
+const RUN_SCALE = 0.42;
+const gore = ev.distances.some((d) => d.zombie);
+const crowd = new Crowd(runners.length, RUN_SCALE, { lamps: ev.night, gore });
 runners.forEach((r, i) => {
   const base = new THREE.Color(r.d.color).getHex();
   const shirt = r.d.shirts ? r.d.shirts[i % r.d.shirts.length] : rand() < 0.75 ? base : SHIRT_ALT[i % SHIRT_ALT.length];
   crowd.paint(i, shirt, (r.d.zombie ? ZOMBIE_SKIN : SKIN)[i % 4], [0x1f2733, 0x2d2d2d, 0x3a4a5e][i % 3]);
   crowd.lamp(i, !r.d.zombie);
+  crowd.zombie(i, !!r.d.zombie);
 });
 /** Pose de corrida: zumbi corre de braços esticados. */
 const runPose = (d: Distance) => (d.zombie ? Pose.Zombie : Pose.Run);
@@ -146,7 +150,7 @@ for (let s = auto ? -44 : -64; s <= (auto ? 24 : 38); s += 1.3) for (const side 
   fans.push({ x: p.x, y: 0, z: p.z, yaw: side > 0 ? Math.atan2(P.dz, -P.dx) : Math.atan2(-P.dz, P.dx), ph: rand() * 6 });
 }
 for (const st of world.seats) fans.push({ x: st.x, y: st.y - height(st.x, st.z), z: st.z, yaw: st.yaw, ph: rand() * 6 });
-const fanCrowd = new Crowd(fans.length);
+const fanCrowd = new Crowd(fans.length, RUN_SCALE);
 fans.forEach((_, i) => fanCrowd.paint(i, [0xe3735e, 0x4e5a40, 0xf2c14e, 0x5b8fb9, 0xf5f3ec, 0xc96f9e, 0x7fb069][i % 7], SKIN[(i * 3) % 4], [0x2f3a4a, 0x4a3f35, 0x6c757d][i % 3]));
 scene.add(fanCrowd.group);
 
@@ -159,10 +163,12 @@ const me = {
 const SHIRTS = [0xffd400, 0xff5a1f, 0x2f8cff, 0x14a37f, 0xe04e8a, 0x111111];
 const esc = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const meName = () => me.name.trim() || "Você";
-const meCrowd = new Crowd(1, 0.33, { lamps: ev.night });
+const ME_SCALE = RUN_SCALE * 1.1;
+const meCrowd = new Crowd(1, ME_SCALE, { lamps: ev.night, gore });
 const paintMe = () => {
   meCrowd.paint(0, me.shirt, me.d.zombie ? ZOMBIE_SKIN[1] : SKIN[1], 0x111111);
   meCrowd.lamp(0, !me.d.zombie);
+  meCrowd.zombie(0, !!me.d.zombie);
 };
 meCrowd.paint(0, 0xffd400, SKIN[1], 0x111111);
 meCrowd.hide(0);
@@ -269,9 +275,11 @@ function stepRunners(dt: number, dtReal: number, now: number) {
       if (racing && T >= r.t0) {
         if (r.s === r.s0) r.s += waitShift(r.di);
         const ramp = Math.min(1, (T - r.t0) / 8);
-        r.s += vel(r.d, r.pace, r.s) * dt * (0.35 + 0.65 * ramp);
+        // zumbi anda aos trancos (acelera e freia, mas na média vai no ritmo dele)
+        const lurch = r.d.zombie ? 1 + 0.3 * Math.sin(T * 0.9 + r.wob * 3) : 1;
+        r.s += vel(r.d, r.pace, r.s) * dt * (0.35 + 0.65 * ramp) * lurch;
         if (r.s >= L) r.fin = T - r.d.wave * 60;
-        const lat = r.lat * (r.s < 30 ? 1 : 0.9) + Math.sin(r.s * 0.05 + r.wob) * 0.25;
+        const lat = r.lat * (r.s < 30 ? 1 : 0.9) + Math.sin(r.s * 0.05 + r.wob) * (r.d.zombie ? 0.5 : 0.25);
         const p = place(path, r.s, lat);
         r.x = p.x; r.z = p.z; r.yaw = p.yaw;
         r.phase += dtReal * 14;
@@ -348,12 +356,13 @@ function stepRunners(dt: number, dtReal: number, now: number) {
       if (me.d.zombie && !me.podium) pose = Pose.Zombie;
       me.phase += dtReal * 6;
     }
+    meCrowd.scale = me.podium ? 0.33 : ME_SCALE;
     meCrowd.pose(0, me.x, height(me.x, me.z) + lift, me.z, me.yaw, me.phase, pose);
     meCrowd.commit();
     ring.visible = !me.podium;
     ring.position.set(me.x, height(me.x, me.z) + lift + 0.08, me.z);
     ring.scale.setScalar(1 + Math.sin(now * 5) * 0.12);
-    if (me.medal) wearMedal(medals.me, me.x, height(me.x, me.z) + lift, me.z, me.yaw, 0.33, Math.sin(now * 4) * 0.2);
+    if (me.medal) wearMedal(medals.me, me.x, height(me.x, me.z) + lift, me.z, me.yaw, meCrowd.scale, Math.sin(now * 4) * 0.2);
     else if (!cer.on) medals.me.visible = false;
   }
 }
@@ -426,7 +435,7 @@ function setCam(c: Cam) {
   }
   if (c === "seguir") {
     const t = followPoint();
-    const off = new THREE.Vector3(-P.dx * 8, 3.6, -P.dz * 8);
+    const off = new THREE.Vector3(-P.dx * 6.5, 3, -P.dz * 6.5);
     flyTo(t, off);
     hint(me.on ? "Seguindo você. Arraste para girar em volta." : `Seguindo o líder do ${dist.label}. Arraste para girar.`);
   }
@@ -487,7 +496,7 @@ function updateCamera(dtReal: number, now: number) {
     if (cam === "seguir") {
       const t = followPoint();
       fly.tTo.copy(t);
-      fly.to.copy(t).add(new THREE.Vector3(-P.dx * 8, 3.6, -P.dz * 8));
+      fly.to.copy(t).add(new THREE.Vector3(-P.dx * 6.5, 3, -P.dz * 6.5));
     }
     camera.position.lerpVectors(fly.from, fly.to, k);
     controls.target.lerpVectors(fly.tFrom, fly.tTo, k);
@@ -500,7 +509,7 @@ function updateCamera(dtReal: number, now: number) {
     camera.position.add(delta);
     if (now - lastTouch > 1.6) {
       // volta devagar para trás do corredor
-      const want = t.clone().add(new THREE.Vector3(-P.dx * 8, 3.6, -P.dz * 8));
+      const want = t.clone().add(new THREE.Vector3(-P.dx * 6.5, 3, -P.dz * 6.5));
       camera.position.lerp(want, 1 - Math.exp(-dtReal * 1.6));
     }
   } else if (cam === "voo") {
@@ -1202,10 +1211,10 @@ function frame() {
     const txt = best ? `🏆 1º ${d.label}` : `Líder ${d.label}`;
     if (l.el.textContent !== txt) l.el.textContent = txt;
     if (!best) for (const r of runners) if (r.d === d && r.fin < 0 && r.s > 0 && (!best || r.s > best.s)) best = r;
-    if (best && state === "race") l.pos.set(best.x, height(best.x, best.z) + 1.4, best.z);
+    if (best && state === "race") l.pos.set(best.x, height(best.x, best.z) + 1.6, best.z);
     else l.pos.set(0, -999, 0);
   }
-  if (me.on) meLabel.pos.set(me.x, height(me.x, me.z) + (me.podium ? PODIUM.deck + PODIUM.steps[0].h + 0.8 : 1), me.z);
+  if (me.on) meLabel.pos.set(me.x, height(me.x, me.z) + (me.podium ? PODIUM.deck + PODIUM.steps[0].h + 0.8 : 1.2), me.z);
   stepConfetti(dtReal);
   stepCeremony(dtReal, now);
   updateCamera(dtReal, now);
