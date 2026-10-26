@@ -1,7 +1,7 @@
 // Automação automática por post: quando sai um post novo no Instagram (pelo Studio ou direto no app),
 // cria uma automação só daquele post que responde a chamada da legenda (ex.: "comente EU QUERO")
 // e manda no direct o link do produto do post.
-import { isPaginasPro } from "./brand.ts";
+import { isBrax } from "./brand.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4";
 import { igRecentMedia, igTokenFor } from "./instagram.ts";
@@ -61,7 +61,7 @@ export async function autoLinkPosts(db: SupabaseClient) {
   const report = [];
   for (const account of accounts ?? []) {
     const meta = account.meta ?? {};
-    if (isPaginasPro(meta)) continue; // link de produto no direct é coisa da loja
+    if (!isBrax(meta)) continue; // link de produto no direct é coisa da loja
     if (meta.autolink_at && Date.now() - new Date(meta.autolink_at).getTime() < EVERY_MS) continue;
     const { data: settings } = await db.from("brand_settings").select("auto_post_link").eq("user_id", account.user_id).maybeSingle();
     if (settings?.auto_post_link === false) continue;

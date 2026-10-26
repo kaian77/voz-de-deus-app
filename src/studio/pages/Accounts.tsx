@@ -32,11 +32,13 @@ function BrandSelect({ account }: { account: SocialAccount }) {
     const who = account.username ? `@${account.username}` : account.display_name;
     if (!window.confirm(brand === "paginaspro"
       ? `Marcar ${who} como PáginasPro? As mensagens dessa conta passam a ser atendidas pela IA de sites (não a da loja).`
+      : brand === "canal"
+      ? `Marcar ${who} como conta de canal? Ela só recebe os vídeos dos canais do YouTube (fica fora dos posts e do piloto da loja).`
       : `Marcar ${who} como Brax Pins? As mensagens dessa conta passam a ser atendidas pela IA da loja.`)) return;
     try {
       await api.invoke("inbox", { action: "account_brand", account_id: account.id, brand });
       await qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
-      toast.success(brand === "paginaspro" ? "Conta marcada como PáginasPro" : "Conta marcada como Brax Pins");
+      toast.success(brand === "paginaspro" ? "Conta marcada como PáginasPro" : brand === "canal" ? "Conta marcada como canal" : "Conta marcada como Brax Pins");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -44,12 +46,13 @@ function BrandSelect({ account }: { account: SocialAccount }) {
   return (
     <select
       aria-label="Marca da conta"
-      value={account.meta.brand === "paginaspro" ? "paginaspro" : "brax"}
+      value={account.meta.brand === "paginaspro" || account.meta.brand === "canal" ? account.meta.brand : "brax"}
       onChange={(e) => change(e.target.value)}
       className="h-7 rounded-md border bg-background px-1.5 text-xs"
     >
       <option value="brax">Brax Pins</option>
       <option value="paginaspro">PáginasPro</option>
+      <option value="canal">Canal (vídeos do YouTube)</option>
     </select>
   );
 }
@@ -73,7 +76,7 @@ export function ConnectedAccount({ account, onRemove }: { account: SocialAccount
             : account.followers_count != null ? `${account.followers_count.toLocaleString("pt-BR")} seguidores` : "Conectada"}
         </p>
       </div>
-      {(account.platform === "instagram" || account.platform === "whatsapp") && !confirming && <BrandSelect account={account} />}
+      {["instagram", "whatsapp", "tiktok"].includes(account.platform) && !confirming && <BrandSelect account={account} />}
       {confirming ? (
         <div className="flex items-center gap-1">
           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setConfirming(false)}>Cancelar</Button>

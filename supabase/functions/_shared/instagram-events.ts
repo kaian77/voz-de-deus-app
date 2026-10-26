@@ -1,5 +1,5 @@
 // Tratamento de comentários e DMs do Instagram, usado pelo webhook e pela busca periódica (poller).
-import { isPaginasPro } from "./brand.ts";
+import { isBrax, isPaginasPro } from "./brand.ts";
 import { storeClientPhoto } from "./paginaspro-agent.ts";
 import { adminClient } from "./util.ts";
 import { igPrivateReply, igReplyToComment, igRequest, igTokenFor } from "./instagram.ts";
@@ -23,7 +23,7 @@ export async function handleComment(igUserId: string, value: CommentValue) {
   const { data: account } = await db.from("social_accounts").select("*").eq("platform", "instagram").eq("external_id", igUserId).maybeSingle();
   if (!account) return;
   if (!value.id || value.from?.id === igUserId) return; // ignora comentários da própria conta (evita loop)
-  if (isPaginasPro(account.meta)) return; // automações de comentário são da Brax Pins
+  if (!isBrax(account.meta)) return; // automações de comentário são da Brax Pins
 
   const { data: event, error } = await db.from("comment_events").insert({
     user_id: account.user_id,

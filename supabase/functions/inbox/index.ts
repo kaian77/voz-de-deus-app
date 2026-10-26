@@ -7,7 +7,7 @@
 //   { action: "whatsapp_settings", account_id, agent?, agent_numbers?, agent_prompt? } -> onde e como a IA responde no número
 //   { action: "wa_signup_config" }                  -> dados públicos do botão "Conectar com Facebook" (coexistência)
 //   { action: "connect_whatsapp_signup", code, phone_number_id, waba_id } -> conecta o WhatsApp Business da PáginasPro (app + API)
-//   { action: "account_brand", account_id, brand }  -> conta da Brax Pins ou da PáginasPro
+//   { action: "account_brand", account_id, brand }  -> conta da Brax Pins, da PáginasPro ou de canal (vídeos do YouTube)
 // Nos dois: label ("Loja", "Pessoal"...) e agent (a IA responde sozinha nesse número?). Dá para ter vários números.
 import { adminClient, assertPublicHttpsUrl, corsHeaders, functionsUrl, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { autoReply, draftReply, sendMessage } from "../_shared/inbox.ts";
@@ -109,8 +109,8 @@ Deno.serve(async (req) => {
       }
       case "account_brand": {
         // Marca da conta: a da PáginasPro não recebe automações, piloto automático nem atendente da loja
-        const brand = body.brand === "paginaspro" ? "paginaspro" : "brax";
-        const { data: acc } = await db.from("social_accounts").select("*").eq("id", body.account_id).eq("user_id", userId).in("platform", ["instagram", "whatsapp"]).maybeSingle();
+        const brand = ["paginaspro", "canal"].includes(body.brand) ? body.brand : "brax";
+        const { data: acc } = await db.from("social_accounts").select("*").eq("id", body.account_id).eq("user_id", userId).in("platform", ["instagram", "whatsapp", "tiktok"]).maybeSingle();
         if (!acc) throw new HttpError(404, "Conta não encontrada");
         const meta = { ...acc.meta, brand };
         const { error } = await db.from("social_accounts").update({ meta }).eq("id", acc.id);

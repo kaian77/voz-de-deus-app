@@ -804,6 +804,34 @@ def process(video):
         except Exception as e:
             log(f"  prévia: {e}")
         log(f"  ✓ https://youtu.be/{up['id']} ({total:.0f}s)")
+        if short:
+            try:  # à parte: falha no TikTok não desfaz o vídeo que já está no YouTube
+                to_tiktok(video, final, work, publish_at)
+            except Exception as e:
+                log(f"  tiktok: {e}")
+
+
+def to_tiktok(video, final, work, publish_at):
+    """Canal ligado a um TikTok: cria um post só de TikTok com o mesmo vídeo; o publisher manda para a caixa de
+    entrada do app no horário do YouTube (o dono só toca em Publicar). O arquivo some do storage 1 h depois."""
+    ch = (rest("GET", f"yt_channels?id=eq.{video['channel_ref']}&select=tiktok_account") or [{}])[0]
+    account = ch.get("tiktok_account")
+    if not account:
+        return
+    small = os.path.join(work, "tiktok.mp4")  # cópia mais leve (limite de 50 MB por arquivo no storage)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", final, "-c:v", "libx264", "-preset", "veryfast", "-crf", "24",
+                    "-maxrate", "6M", "-bufsize", "12M", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", small], check=True)
+    url = storage_upload(small, f"{video['user_id']}/youtube/{video['id']}-tiktok.mp4", "video/mp4")
+    script = video["script"]
+    tags = [t for t in re.findall(r"#\w+", script.get("description", "")) if t.lower() != "#shorts"][:5]
+    caption = (script["title"] + ("\n\n" + " ".join(tags) if tags else ""))[:2000]
+    when = publish_at or dt.datetime.now(dt.timezone.utc).isoformat()
+    rest("POST", "posts", {
+        "user_id": video["user_id"], "title": script["title"][:120], "caption": caption, "kind": "video", "platforms": ["tiktok"],
+        "media": [{"url": url, "type": "video"}], "scheduled_at": when, "status": "scheduled", "created_by": "agent",
+        "options": {"account_ids": {"tiktok": account}, "tiktok": {"mode": "inbox"}, "source": "youtube", "yt_video": video["id"]},
+    })
+    log(f"  → TikTok (caixa de entrada às {when})")
 
 
 # Roteiro fixo para ver um estilo novo antes de ligar no canal (workflow "Prévia de estilo")

@@ -5,7 +5,7 @@
 //    avulsos (autopost = false), que ficam só para baixar.
 // Com o secret VIDEO_DISPATCH_TOKEN (token do GitHub com permissão de Actions), a renderização começa na hora;
 // sem ele, o workflow roda de hora em hora.
-import { isPaginasPro } from "./brand.ts";
+import { isBrax } from "./brand.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4";
 import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
@@ -70,7 +70,7 @@ export async function dispatchRender(workflow = "product-videos.yml"): Promise<b
 async function writeBrief(db: SupabaseClient, userId: string, product: ProductInfo, images: string[], instructions?: string) {
   const { data: settings } = await db.from("brand_settings").select("*").eq("user_id", userId).maybeSingle();
   const { data: igs } = await db.from("social_accounts").select("username, meta").eq("user_id", userId).eq("platform", "instagram").order("connected_at");
-  const ig = (igs ?? []).find((a) => !isPaginasPro(a.meta)) ?? null;
+  const ig = (igs ?? []).find((a) => isBrax(a.meta)) ?? null;
   let brief: Record<string, unknown> = { hook: `Chegou *${product.name}*`, hook_sub: "Novidade na loja", cta: "Garanta o seu", features: [] };
   if (aiEnabled()) {
     brief = await generateJSON(Brief,
