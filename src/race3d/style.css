@@ -18,7 +18,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   padding: max(10px, env(safe-area-inset-top)) 14px 10px; background: linear-gradient(var(--d), rgba(15, 34, 56, 0.86)); color: #fff;
 }
 .r3-brand { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.r3-brand b { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r3-brand b { font-family: var(--brand, var(--font)); font-size: 19px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .r3-brand span { font-size: 12px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .r3-demo {
   text-decoration: none; white-space: nowrap; flex: none; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
@@ -123,6 +123,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .r3-lots .aberto em { background: var(--p); color: #fff; }
 .r3-lots .esgotado { opacity: 0.55; }
 .r3-lots .esgotado b { text-decoration: line-through; }
+.r3-lots small { grid-column: 1 / -1; font-size: 12px; color: #5b6470; line-height: 1.35; margin-top: -4px; }
 .r3-pitch { margin-top: 16px; padding: 14px; border-radius: 14px; background: var(--d); color: #fff; display: flex; flex-direction: column; gap: 8px; }
 .r3-pitch span { font-size: 13px; opacity: 0.85; }
 
@@ -157,3 +158,34 @@ button.r3-lab { pointer-events: auto; }
 .r3-medal { width: 96px; height: 96px; margin: -54px auto 0; display: block; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.3)); animation: medal 1s ease-out both; }
 @keyframes medal { 0% { transform: translateY(-30px) rotateY(180deg) scale(0.6); opacity: 0; } 100% { transform: none; opacity: 1; } }
 .r3-done { overflow: visible; }
+
+/* prova à noite (ex.: The Zombie Run): painéis escuros */
+body.night { background: #0b0508; color: #f2e6d0; }
+.night .r3-top { background: linear-gradient(var(--d), rgba(20, 10, 11, 0.82)); }
+.night .r3-brand b { font-size: 23px; font-weight: 400; letter-spacing: 0.03em; color: var(--p); }
+.night .r3-clock, .night .r3-hint { background: rgba(20, 10, 11, 0.9); }
+.night .r3-lead span { background: rgba(20, 10, 11, 0.86); color: #f2e6d0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
+.night .r3-lead span.me { background: #ffd400; color: #140a0b; }
+.night .r3-seg { background: rgba(20, 10, 11, 0.9); color: #f2e6d0; }
+.night .r3-seg button.on { background: var(--p); }
+.night .r3-go { box-shadow: 0 8px 28px rgba(227, 38, 46, 0.55); }
+.night .r3-count { color: var(--p); font-family: var(--brand, var(--font)); font-weight: 400; text-shadow: 0 8px 40px rgba(0, 0, 0, 0.6); }
+.night .r3-tabs, .night .r3-sheet, .night .r3-done { background: #161012; color: #f2e6d0; }
+.night .r3-tabs button span { color: #b9a9a6; }
+.night .r3-tabs button.on { background: #2a1f21; }
+.night .r3-tabs button.on span { color: #f2e6d0; }
+.night .r3-x, .night .r3-btn { background: #2a1f21; color: #f2e6d0; }
+.night .r3-btn.hot { background: var(--p); color: #fff; }
+.night .r3-btn.wa { background: #1fa855; color: #fff; }
+.night .r3-facts div, .night .r3-splits span, .night .r3-list button, .night .r3-lots div { background: #241a1c; }
+.night .r3-facts span, .night .r3-small, .night .r3-list small, .night .r3-splits span, .night .r3-lots small, .night .r3-done span { color: #b9a9a6; }
+.night .r3-splits b { color: #f2e6d0; }
+.night .r3-lots em { background: #3a2c2e; }
+.night .r3-chips button.on { color: #140a0b; }
+.night .r3-me input { background: #241a1c; border-color: #3a2c2e; color: #f2e6d0; }
+.night .r3-champ { background: #2e2412; }
+.night .r3-champ small { color: #d9c48a; }
+.night .r3-done.win { background: linear-gradient(160deg, #3a2a10, #161012 55%); }
+.night .r3-pitch { background: #2a0d10; }
+.night .r3-lab { color: #140a0b; }
+.night .r3-lab.land, .night .r3-lab.leader, .night .r3-lab.water { color: #fff; }

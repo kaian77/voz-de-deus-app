@@ -4,11 +4,12 @@ import "./style.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { buildWorld, height, HALF, PODIUM } from "./world";
-import { BODY, Crowd, Pose, SKIN } from "./crowd";
+import { BODY, Crowd, Pose, SKIN, ZOMBIE_SKIN } from "./crowd";
 import { exemplo } from "./events/exemplo";
+import { zombieRun } from "./events/zombie-run";
 import type { Distance, RaceEvent } from "./types";
 
-const EVENTS: Record<string, RaceEvent> = { exemplo };
+const EVENTS: Record<string, RaceEvent> = { exemplo, "zombie-run": zombieRun };
 const slug = location.pathname.split("/").filter(Boolean)[1] || new URLSearchParams(location.search).get("e") || "exemplo";
 const ev = EVENTS[slug] ?? exemplo;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -18,20 +19,30 @@ const root = document.documentElement.style;
 root.setProperty("--p", ev.colors.primary);
 root.setProperty("--d", ev.colors.dark);
 root.setProperty("--a", ev.colors.accent);
+document.body.classList.toggle("night", !!ev.night);
+if (ev.font) {
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(ev.font)}&display=swap`;
+  document.head.appendChild(link);
+  root.setProperty("--brand", `"${ev.font}", var(--font)`);
+}
+const startTxt = `${Math.floor(ev.start)}h${ev.start % 1 ? String(Math.round((ev.start % 1) * 60)).padStart(2, "0") : ""}`;
+const distName = (d: Distance) => (d.name ? `${d.label} · ${d.name}` : d.label);
 
 $("app").innerHTML = `
 <div class="r3-canvas" id="canvas"></div>
 <div class="r3-labels" id="labels"></div>
 <header class="r3-top">
-  <div class="r3-brand"><b>${ev.name}</b><span>${ev.subtitle} · ${ev.date}, ${ev.start}h</span></div>
+  <div class="r3-brand"><b>${ev.name}</b><span>${ev.subtitle} · ${ev.date}, ${startTxt}</span></div>
   ${ev.demo ? `<a class="r3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">Demonstração<small>PáginasPro</small></a>` : ""}
 </header>
 <div class="r3-hud">
-  <div class="r3-clock"><b id="clock">${String(ev.start).padStart(2, "0")}:00</b><span id="race">antes da largada</span></div>
+  <div class="r3-clock"><b id="clock">--:--</b><span id="race">antes da largada</span></div>
   <div class="r3-lead" id="lead"></div>
 </div>
 <div class="r3-cams">
-  <div class="r3-seg" id="cams"><button data-c="geral" class="on">Geral</button><button data-c="seguir">Seguir</button><button data-c="voo">Sobrevoo</button></div>
+  <div class="r3-seg" id="cams"><button data-c="seguir">🎥 Seguir</button><button data-c="voo">✈️ Sobrevoo</button></div>
   <div class="r3-seg" id="speeds"><button data-s="10">10x</button><button data-s="30">30x</button><button data-s="60" class="on">60x</button><button data-s="120">120x</button></div>
 </div>
 <div class="r3-count" id="count" hidden></div>
@@ -82,6 +93,7 @@ resize();
 let dist: Distance = ev.distances[0];
 const pathOf = (d: Distance) => world.paths.get(d.id)!;
 const unitsPerKm = (d: Distance) => pathOf(d).length / d.km;
+const P = { x: 0, z: 0, dx: 1, dz: 0 };
 
 // ---------- corredores
 type Runner = {
@@ -92,6 +104,9 @@ let seed = 11;
 const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 const runners: Runner[] = [];
 const SHIRT_ALT = [0xffffff, 0x1b1b1b, 0xffc72c, 0x14a37f, 0xe04e8a];
+// depois da chegada os corredores ficam juntos nesta área (pós-prova)
+const after = ev.after ?? [27, 32.5];
+const [afterW, afterD] = ev.after ? [20, 6] : [46, 11];
 ev.distances.forEach((d, di) => {
   const list: number[] = [];
   for (let i = 0; i < d.runners; i++) {
@@ -104,26 +119,33 @@ ev.distances.forEach((d, di) => {
     const row = Math.floor(i / 7), colI = i % 7;
     runners.push({
       d, di, pace, lat: -2.1 + colI * 0.7 + (rand() - 0.5) * 0.3, s0: corral - row * 0.6 - rand() * 0.2, s: 0, t0: d.wave * 60 + row * 1.6,
-      fin: -1, phase: rand() * 6, ax: 4 + rand() * 46, az: 27 + rand() * 11, x: 0, z: 0, yaw: 0, wob: rand() * 6,
+      fin: -1, phase: rand() * 6, ax: after[0] + (rand() - 0.5) * afterW, az: after[1] + (rand() - 0.5) * afterD, x: 0, z: 0, yaw: 0, wob: rand() * 6,
     });
   });
 });
-const crowd = new Crowd(runners.length);
+const crowd = new Crowd(runners.length, 0.3, { lamps: ev.night });
 runners.forEach((r, i) => {
   const base = new THREE.Color(r.d.color).getHex();
-  crowd.paint(i, rand() < 0.75 ? base : SHIRT_ALT[i % SHIRT_ALT.length], SKIN[i % 4], [0x1f2733, 0x2d2d2d, 0x3a4a5e][i % 3]);
+  const shirt = r.d.shirts ? r.d.shirts[i % r.d.shirts.length] : rand() < 0.75 ? base : SHIRT_ALT[i % SHIRT_ALT.length];
+  crowd.paint(i, shirt, (r.d.zombie ? ZOMBIE_SKIN : SKIN)[i % 4], [0x1f2733, 0x2d2d2d, 0x3a4a5e][i % 3]);
+  crowd.lamp(i, !r.d.zombie);
 });
+/** Pose de corrida: zumbi corre de braços esticados. */
+const runPose = (d: Distance) => (d.zombie ? Pose.Zombie : Pose.Run);
 scene.add(crowd.group);
 
 // torcida nas grades da largada/chegada
-type Fan = { x: number; z: number; yaw: number; ph: number };
+type Fan = { x: number; y: number; z: number; yaw: number; ph: number };
 const fans: Fan[] = [];
 const startPt = pathOf(ev.distances[0]).at(0);
-for (let x = -64; x <= 38; x += 1.3) for (const s of [-1, 1]) {
-  if (rand() < 0.35) continue;
-  const z = startPt.z + s * (HALF + 1.1 + rand() * 1.6);
-  fans.push({ x: x + rand() * 0.6, z, yaw: s > 0 ? Math.PI : 0, ph: rand() * 6 });
+const auto = ev.venue === "autodromo";
+for (let s = auto ? -44 : -64; s <= (auto ? 24 : 38); s += 1.3) for (const side of [-1, 1]) {
+  if (rand() < (auto ? 0.55 : 0.35)) continue;
+  const p = place(pathOf(ev.distances[0]), s + rand() * 0.6, side * (HALF + 1.1 + rand() * 1.6));
+  // de frente para a pista
+  fans.push({ x: p.x, y: 0, z: p.z, yaw: side > 0 ? Math.atan2(P.dz, -P.dx) : Math.atan2(-P.dz, P.dx), ph: rand() * 6 });
 }
+for (const st of world.seats) fans.push({ x: st.x, y: st.y - height(st.x, st.z), z: st.z, yaw: st.yaw, ph: rand() * 6 });
 const fanCrowd = new Crowd(fans.length);
 fans.forEach((_, i) => fanCrowd.paint(i, [0xe3735e, 0x4e5a40, 0xf2c14e, 0x5b8fb9, 0xf5f3ec, 0xc96f9e, 0x7fb069][i % 7], SKIN[(i * 3) % 4], [0x2f3a4a, 0x4a3f35, 0x6c757d][i % 3]));
 scene.add(fanCrowd.group);
@@ -137,7 +159,11 @@ const me = {
 const SHIRTS = [0xffd400, 0xff5a1f, 0x2f8cff, 0x14a37f, 0xe04e8a, 0x111111];
 const esc = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const meName = () => me.name.trim() || "Você";
-const meCrowd = new Crowd(1, 0.33);
+const meCrowd = new Crowd(1, 0.33, { lamps: ev.night });
+const paintMe = () => {
+  meCrowd.paint(0, me.shirt, me.d.zombie ? ZOMBIE_SKIN[1] : SKIN[1], 0x111111);
+  meCrowd.lamp(0, !me.d.zombie);
+};
 meCrowd.paint(0, 0xffd400, SKIN[1], 0x111111);
 meCrowd.hide(0);
 meCrowd.commit();
@@ -151,7 +177,6 @@ type State = "idle" | "count" | "race";
 let state: State = "idle";
 let T = 0; // segundos de prova
 let speed = 60;
-const P = { x: 0, z: 0, dx: 1, dz: 0 };
 
 /** Velocidade (unidades/s de prova) no ponto s: ritmo base, mais lento na subida e mais rápido na descida. */
 /** Ritmo de campeão: um pouco atrás do líder até 70% da prova e depois arranca para vencer. */
@@ -250,7 +275,7 @@ function stepRunners(dt: number, dtReal: number, now: number) {
         const p = place(path, r.s, lat);
         r.x = p.x; r.z = p.z; r.yaw = p.yaw;
         r.phase += dtReal * 14;
-        crowd.pose(i, r.x, height(r.x, r.z), r.z, r.yaw, r.phase, Pose.Run);
+        crowd.pose(i, r.x, height(r.x, r.z), r.z, r.yaw, r.phase, runPose(r.d));
       } else {
         // esperando no pelotão: o 5K anda até a faixa depois que o 10K sai
         const moved = waitShift(r.di);
@@ -258,7 +283,7 @@ function stepRunners(dt: number, dtReal: number, now: number) {
         r.x = p.x; r.z = p.z; r.yaw = p.yaw;
         const walking = moved > 0 && moved < shiftMax[r.di] - 0.01;
         r.phase += dtReal * (walking ? 6 : 2);
-        crowd.pose(i, r.x, height(r.x, r.z), r.z, r.yaw, r.phase, walking ? Pose.Walk : Pose.Stand);
+        crowd.pose(i, r.x, height(r.x, r.z), r.z, r.yaw, r.phase, r.d.zombie ? Pose.Zombie : walking ? Pose.Walk : Pose.Stand);
       }
     } else {
       // depois da chegada: anda até a área de pós-prova e fica por lá
@@ -269,10 +294,11 @@ function stepRunners(dt: number, dtReal: number, now: number) {
         r.z += (dz / l) * step;
         r.yaw = Math.atan2(dx, dz);
         r.phase += dtReal * 7;
-        crowd.pose(i, r.x, height(r.x, r.z), r.z, r.yaw, r.phase, Pose.Walk);
+        crowd.pose(i, r.x, height(r.x, r.z), r.z, r.yaw, r.phase, r.d.zombie ? Pose.Zombie : Pose.Walk);
       } else {
         r.phase += dtReal * 3;
-        crowd.pose(i, r.x, height(r.x, r.z), r.z, r.yaw + Math.sin(now * 0.3 + i) * 0.6, r.phase, (i + Math.floor(now / 3)) % 9 === 0 ? Pose.Cheer : Pose.Stand);
+        const cheer = !r.d.zombie && (i + Math.floor(now / 3)) % 9 === 0;
+        crowd.pose(i, r.x, height(r.x, r.z), r.z, r.yaw + Math.sin(now * 0.3 + i) * 0.6, r.d.zombie ? r.phase * 0.3 : r.phase, r.d.zombie ? Pose.Zombie : cheer ? Pose.Cheer : Pose.Stand);
       }
     }
   });
@@ -282,7 +308,7 @@ function stepRunners(dt: number, dtReal: number, now: number) {
   const busy = racing;
   fans.forEach((f, i) => {
     f.ph += dtReal * (busy ? 9 : 2);
-    fanCrowd.pose(i, f.x, height(f.x, f.z), f.z, f.yaw, f.ph, busy && (i + Math.floor(now * 0.7)) % 3 !== 0 ? Pose.Cheer : Pose.Stand);
+    fanCrowd.pose(i, f.x, height(f.x, f.z) + f.y, f.z, f.yaw, f.ph, busy && (i + Math.floor(now * 0.7)) % 3 !== 0 ? Pose.Cheer : Pose.Stand);
   });
   fanCrowd.commit();
 
@@ -301,7 +327,7 @@ function stepRunners(dt: number, dtReal: number, now: number) {
           beep(990, 0.12);
         }
       }
-      pose = Pose.Run;
+      pose = runPose(me.d);
       me.phase += dtReal * 14;
       if (me.s >= L) {
         me.s = L + 4;
@@ -319,6 +345,7 @@ function stepRunners(dt: number, dtReal: number, now: number) {
     }
     if (me.fin >= 0) {
       pose = me.podium && !me.medal ? Pose.Stand : Math.sin(now * 2) > -0.2 ? Pose.Cheer : Pose.Stand;
+      if (me.d.zombie && !me.podium) pose = Pose.Zombie;
       me.phase += dtReal * 6;
     }
     meCrowd.pose(0, me.x, height(me.x, me.z) + lift, me.z, me.yaw, me.phase, pose);
@@ -415,6 +442,11 @@ function overview() {
   const c = box3.getCenter(new THREE.Vector3()), size = box3.getSize(new THREE.Vector3());
   const hf = 2 * Math.atan(Math.tan((camera.fov * Math.PI) / 360) * camera.aspect);
   const L = Math.max(size.x, size.z);
+  if (camera.aspect < 1 && auto) {
+    // pista fechada: de cima e um pouco de frente, para caber a volta inteira
+    flyTo(c, new THREE.Vector3(0, L * 1.1, L * 0.75));
+    return;
+  }
   if (camera.aspect < 1) {
     // celular em pé: olha ao longo do percurso, de trás da ponta oeste
     flyTo(c, new THREE.Vector3(-L * 0.62, L * 0.34, L * 0.2));
@@ -440,7 +472,7 @@ function followPoint() {
   let best: Runner | null = winner(dist);
   if (best && cam === "seguir" && winHint !== dist.id) {
     winHint = dist.id;
-    hint(`🏆 O vencedor dos ${dist.label} chegou em ${fmt(best.fin)}! Toque em Geral para ver o resto da prova.`, 4500);
+    hint(`🏆 O vencedor dos ${dist.label} chegou em ${fmt(best.fin)}! Toque em Sobrevoo para ver o percurso.`, 4500);
   }
   if (!best) for (const r of runners) if (r.d === dist && r.fin < 0 && (!best || r.s > best.s)) best = r;
   if (!best) best = runners.find((r) => r.d === dist) ?? runners[0];
@@ -510,6 +542,30 @@ function beep(freq: number, dur: number, vol = 0.18, type: OscillatorType = "sin
   }
 }
 
+/** Rosnado da horda (som sintetizado, grave e tremido). */
+function growl() {
+  try {
+    audio ??= new AudioContext();
+    const t = audio.currentTime, o = audio.createOscillator(), lfo = audio.createOscillator(), lg = audio.createGain(), g = audio.createGain();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.exponentialRampToValueAtTime(55, t + 1.6);
+    lfo.frequency.value = 18;
+    lg.gain.value = 25;
+    lfo.connect(lg).connect(o.frequency);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.2, t + 0.25);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+    o.connect(g).connect(audio.destination);
+    o.start(t + 0.5);
+    lfo.start(t + 0.5);
+    o.stop(t + 2.3);
+    lfo.stop(t + 2.3);
+  } catch {
+    /* sem som */
+  }
+}
+
 function startRace() {
   resetRace();
   state = "count";
@@ -526,12 +582,13 @@ function startRace() {
       n--;
       window.setTimeout(tick, 800);
     } else {
-      el.textContent = "VAI!";
+      el.textContent = ev.go ?? "VAI!";
       el.classList.remove("pop");
       void el.offsetWidth;
       el.classList.add("pop");
       beep(330, 0.9, 0.22, "sawtooth");
       beep(495, 0.9, 0.12, "square");
+      if (ev.distances.some((d) => d.zombie)) growl();
       state = "race";
       $("go").textContent = "⟲ Reiniciar";
       window.setTimeout(() => (el.hidden = true), 900);
@@ -592,11 +649,9 @@ $("go").addEventListener("click", () => {
     return;
   }
   if (state === "idle") {
-    if (cam === "geral" && !fly) {
-      const s = pathOf(ev.distances[0]).at(-8);
-      flyTo(new THREE.Vector3(s.x + 6, height(s.x, s.z) + 1, s.z), new THREE.Vector3(-26, 13, 30));
-    }
+    // ao dar a largada a câmera já acompanha a prova
     startRace();
+    setCam("seguir");
   } else {
     resetRace();
     hint("Pronto para uma nova largada.");
@@ -624,7 +679,7 @@ function setDist(d: Distance) {
 let tab = "";
 const sheet = $("sheet"), body = $("sheetBody");
 const distChips = () =>
-  `<div class="r3-chips">${ev.distances.map((d) => `<button data-d="${d.id}" class="${d === dist ? "on" : ""}" style="--c:${d.color}">${d.label}</button>`).join("")}</div>`;
+  `<div class="r3-chips">${ev.distances.map((d) => `<button data-d="${d.id}" class="${d === dist ? "on" : ""}" style="--c:${d.color}">${distName(d)}</button>`).join("")}</div>`;
 function stats(d: Distance) {
   const p = pathOf(d);
   let min = Infinity, max = -Infinity, gain = 0, prev = 0;
@@ -659,7 +714,7 @@ function launchMe(d: Distance) {
   me.podium = false;
   me.passed = false;
   if (dist !== d) setDist(d);
-  meCrowd.paint(0, me.shirt, SKIN[1], 0x111111);
+  paintMe();
   meLabel.el.textContent = meName().toUpperCase();
   refreshMedals();
   const mates = runners.filter((r) => r.d === d);
@@ -684,12 +739,12 @@ function renderSheet() {
     body.innerHTML = `<h3>Percurso</h3>${distChips()}
       <div class="r3-facts"><div><b>${dist.km} km</b><span>distância</span></div><div><b>${st.max - st.min} m</b><span>desnível</span></div><div><b>+${st.gain} m</b><span>subida total</span></div><div><b>${dist.water.length}</b><span>postos de água</span></div></div>
       <canvas class="r3-prof" id="prof"></canvas>
-      <p class="r3-small">Toque no gráfico para ver aquele trecho. Água no km ${dist.water.map((w) => String(w).replace(".", ",")).join(" · ")}. Largada ${dist.wave ? `${dist.wave} min depois do ${ev.distances[0].label}` : `às ${ev.start}h`}.</p>
+      <p class="r3-small">Toque no gráfico para ver aquele trecho. Água no km ${dist.water.map((w) => String(w).replace(".", ",")).join(" · ")}. Largada ${dist.wave ? `${dist.wave} min depois do ${ev.distances[0].label}` : `às ${startTxt}`}.${ev.routeNote ? ` ${ev.routeNote}` : ""}</p>
       <button class="r3-btn" id="sobrevoo">✈️ Sobrevoar o percurso</button>`;
     $("sobrevoo").addEventListener("click", () => {
       setCam("voo");
       closeSheet();
-      hint(`Sobrevoando o ${dist.label}. Toque em Geral para sair.`);
+      hint(`Sobrevoando o ${dist.label}. Toque em Seguir para voltar à prova.`);
     });
     const prof = $<HTMLCanvasElement>("prof");
     prof.addEventListener("click", (e) => {
@@ -720,7 +775,7 @@ function renderSheet() {
     body.querySelectorAll<HTMLButtonElement>("[data-shirt]").forEach((b) =>
       b.addEventListener("click", () => {
         me.shirt = Number(b.dataset.shirt);
-        meCrowd.paint(0, me.shirt, SKIN[1], 0x111111);
+        paintMe();
         body.querySelectorAll("[data-shirt]").forEach((x) => x.classList.toggle("on", x === b));
       }),
     );
@@ -745,10 +800,10 @@ function renderSheet() {
     body.querySelectorAll<HTMLButtonElement>("[data-a]").forEach((b) => b.addEventListener("click", () => focusSpot(b.dataset.a!)));
   } else if (tab === "inscricao") {
     body.innerHTML = `<h3>Inscrição</h3>
-      <div class="r3-lots">${ev.lots.map((l) => `<div class="${l.status.replace(" ", "")}"><span>${l.name}</span><b>${l.price}</b><em>${l.status}</em></div>`).join("")}</div>
-      <p class="r3-small">Kit: ${ev.kit.join(" · ")}.${ev.demo ? " Valores de exemplo." : ""}</p>
+      <div class="r3-lots">${ev.lots.map((l) => `<div class="${l.status.replace(" ", "")}"><span>${l.name}</span><b>${l.price}</b><em>${l.status}</em>${l.items ? `<small>${l.items}</small>` : ""}</div>`).join("")}</div>
+      <p class="r3-small">Kit: ${ev.kit.join(" · ")}.${ev.lotsNote ? ` ${ev.lotsNote}` : ev.demo ? " Valores de exemplo." : ""}</p>
       <button class="r3-btn hot" id="signup">Inscreva-se</button>
-      ${ev.demo ? `<div class="r3-pitch"><b>Quer isso no seu evento?</b><span>Percurso real, seus lotes, link de inscrição e a marca dos patrocinadores.</span><a class="r3-btn wa" target="_blank" rel="noopener" href="https://wa.me/${ev.whatsapp}?text=${encodeURIComponent("Olá, Bruno! Vi o percurso 3D de corrida (demonstração) e quero para o meu evento.")}">Falar com a PáginasPro no WhatsApp</a></div>` : ""}`;
+      ${ev.demo ? `<div class="r3-pitch"><b>Quer isso no seu evento?</b><span>Percurso real, seus lotes, link de inscrição e a marca dos patrocinadores.</span><a class="r3-btn wa" target="_blank" rel="noopener" href="https://wa.me/${ev.whatsapp}?text=${encodeURIComponent(`Olá, Bruno! Vi o percurso 3D (demonstração) da ${ev.name} e quero saber mais.`)}">Falar com a PáginasPro no WhatsApp</a></div>` : ""}`;
     $("signup").addEventListener("click", () => {
       if (ev.signup) window.open(ev.signup, "_blank", "noopener");
       else hint("Na versão do seu evento, este botão abre a página de inscrição (Ticket Sports, Sympla…).", 4200);
@@ -911,9 +966,11 @@ function medalCanvas(d: Distance, tone: Tone) {
   g.font = "700 150px Jost, sans-serif";
   g.fillText(d.label, 256, 270);
   g.font = "600 38px Jost, sans-serif";
-  g.fillText(tone === "ouro" && me.champ ? "CAMPEÃO" : tone === "ouro" ? "FINISHER" : tone === "prata" ? "2º LUGAR" : "3º LUGAR", 256, 368);
+  g.fillText(tone === "ouro" && me.champ ? "CAMPEÃO" : tone === "ouro" ? d.title ?? "FINISHER" : tone === "prata" ? "2º LUGAR" : "3º LUGAR", 256, 368);
+  const top = "★ " + ev.subtitle.split("·").pop()!.trim().toUpperCase() + " ★";
   g.font = "500 30px Jost, sans-serif";
-  g.fillText("★ " + ev.subtitle.split("·").pop()!.trim().toUpperCase() + " ★", 256, 150);
+  g.font = `500 ${Math.min(30, Math.floor((30 * 330) / g.measureText(top).width))}px Jost, sans-serif`;
+  g.fillText(top, 256, 150);
   return c;
 }
 const loader = new THREE.TextureLoader();
@@ -992,7 +1049,7 @@ function startCeremony() {
   cer.others = mates.sort((a, b) => (a.fin < 0 ? 1e9 - a.s : a.fin) - (b.fin < 0 ? 1e9 - b.s : b.fin)).slice(0, 2);
   cer.others.forEach((r, i) => {
     r.away = true;
-    podiumCrowd.paint(i, new THREE.Color(r.d.color).getHex(), SKIN[(i + 2) % 4], 0x1f2733);
+    podiumCrowd.paint(i, r.d.shirts?.[0] ?? new THREE.Color(r.d.color).getHex(), (r.d.zombie ? ZOMBIE_SKIN : SKIN)[(i + 2) % 4], 0x1f2733);
   });
   podiumCrowd.paint(2, 0x0f2238, SKIN[0], 0x0f2238);
   medals.second.visible = medals.third.visible = medals.me.visible = false;
