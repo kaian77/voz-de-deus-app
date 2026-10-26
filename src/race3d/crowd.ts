@@ -2,6 +2,7 @@
 // Boneco com proporção de gente, virado para +z: coxa/canela com joelho, braço/antebraço com cotovelo,
 // tênis, short, regata com número de peito e cabelo. Pose: correndo, parado, torcendo, andando ou zumbi.
 // Em prova à noite cada um pode ter lanterna de cabeça (ponto aceso + facho de luz).
+// Com `gore`: respingos de sangue na camiseta e, nos zumbis, rasgos mostrando a pele, olhos vermelhos e passo mancando.
 import * as THREE from "three";
 
 export const SKIN = [0xf1c7a5, 0xd9a47c, 0xa86f4c, 0x7a4a2f];
@@ -23,7 +24,6 @@ const limb = (r: number, len: number) => new THREE.CapsuleGeometry(r, len - 2 * 
 export class Crowd {
   readonly group = new THREE.Group();
   readonly n: number;
-  private scale: number;
   private head: THREE.InstancedMesh;
   private hair: THREE.InstancedMesh;
   private torso: THREE.InstancedMesh;
@@ -38,9 +38,15 @@ export class Crowd {
   private lampDot?: THREE.InstancedMesh;
   private beam?: THREE.InstancedMesh;
   private lampOn: Uint8Array;
+  private blood?: THREE.InstancedMesh;
+  private rips?: THREE.InstancedMesh;
+  private eyes?: THREE.InstancedMesh;
+  private zomb: Uint8Array;
   private all: THREE.InstancedMesh[];
+  /** Escala do boneco (pode mudar, ex.: menor no pódio). */
+  scale: number;
 
-  constructor(n: number, scale = 0.3, opts: { lamps?: boolean } = {}) {
+  constructor(n: number, scale = 0.3, opts: { lamps?: boolean; gore?: boolean } = {}) {
     this.n = n;
     this.scale = scale;
     const std = (rough = 0.75) => new THREE.MeshStandardMaterial({ roughness: rough });
@@ -74,6 +80,15 @@ export class Crowd {
       this.beam = mk(beamGeo, n, beamMat);
       this.all.push(this.lampDot, this.beam);
     }
+    this.zomb = new Uint8Array(n);
+    if (opts.gore) {
+      // camadas por cima da camiseta (mesma forma, um pouco maior), recortadas pela textura
+      const torsoGeo = () => new THREE.CapsuleGeometry(0.152, 0.262, 4, 12).scale(1.19, 1, 0.75);
+      this.blood = mk(torsoGeo(), n, new THREE.MeshStandardMaterial({ color: 0x7a0c0c, roughness: 0.4, map: splatTexture(11, 26, "blood"), alphaTest: 0.5 }));
+      this.rips = mk(torsoGeo().scale(1.01, 1.01, 1.01), n, new THREE.MeshStandardMaterial({ roughness: 0.8, map: splatTexture(5, 9, "rips"), alphaTest: 0.5 }));
+      this.eyes = mk(new THREE.SphereGeometry(0.016, 6, 4), n * 2, new THREE.MeshBasicMaterial({ color: 0xff2a1a }));
+      this.all.push(this.blood, this.rips, this.eyes);
+    }
     for (let i = 0; i < n; i++) this.paint(i, 0xffffff, SKIN[i % 4], 0x222a33);
   }
 
@@ -83,6 +98,7 @@ export class Crowd {
     set(this.head, i, skin);
     set(this.hair, i, hair);
     set(this.shorts, i, shorts);
+    if (this.rips) set(this.rips, i, skin);
     for (const s of [0, 1]) {
       const k = i * 2 + s;
       set(this.thigh, k, skin);
@@ -92,6 +108,12 @@ export class Crowd {
       set(this.shoe, k, shoe);
     }
     for (const im of this.all) if (im.instanceColor) im.instanceColor.needsUpdate = true;
+  }
+
+  /** Marca o boneco i como zumbi (rasgos, olhos acesos, sem lanterna). */
+  zombie(i: number, on: boolean) {
+    this.zomb[i] = on ? 1 : 0;
+    if (on) this.lampOn[i] = 0;
   }
 
   /** Liga ou desliga a lanterna do boneco i (zumbi não usa). */
@@ -114,8 +136,13 @@ export class Crowd {
     q.setFromAxisAngle(up, yaw);
     base.compose(v.set(x, y + bob * s, z), q, sc.set(s, s, s));
     if (lean) base.multiply(tmp.makeRotationX(lean));
+    const zg = kind === Pose.Zombie;
+    // zumbi: tronco gingando para o lado da perna que arrasta
+    if (zg) base.multiply(tmp.makeRotationZ(0.1 * Math.sin(phase) + 0.06 * Math.sin(i * 2.3)));
 
     this.torso.setMatrixAt(i, m.copy(base).multiply(t.makeTranslation(0, BODY.chest, 0)));
+    this.blood?.setMatrixAt(i, m);
+    this.rips?.setMatrixAt(i, this.zomb[i] ? m : pm.makeScale(0, 0, 0));
     this.bib.setMatrixAt(i, m.copy(base).multiply(t.makeTranslation(0, BODY.chest - 0.02, BODY.chestFront)));
     this.shorts.setMatrixAt(i, m.copy(base).multiply(t.makeTranslation(0, 0.97, 0)));
     const nod = kind === Pose.Run ? -0.08 : kind === Pose.Cheer ? -0.25 : kind === Pose.Zombie ? 0.3 : 0;
@@ -123,6 +150,7 @@ export class Crowd {
     if (kind === Pose.Zombie) m.multiply(tmp.makeRotationZ(0.32 * Math.sin(i * 1.7) + 0.1 * Math.sin(phase * 0.5)));
     this.head.setMatrixAt(i, part(m, 0, 0.09, 0.005));
     this.hair.setMatrixAt(i, part(m, 0, 0.11, -0.012));
+    if (this.eyes) for (const sx of [-1, 1]) this.eyes.setMatrixAt(i * 2 + (sx > 0 ? 1 : 0), this.zomb[i] ? part(m, sx * 0.04, 0.1, 0.098) : pm.makeScale(0, 0, 0));
     if (this.lampDot && this.beam) {
       if (this.lampOn[i]) {
         this.lampDot.setMatrixAt(i, part(m, 0, 0.14, 0.1));
@@ -145,12 +173,14 @@ export class Crowd {
         fa = -1.45 + 0.25 * Math.sin(p);
         spread = 0.14;
       } else if (kind === Pose.Zombie) {
-        // passo arrastado, braços esticados para a frente
-        hip = 0.5 * Math.sin(p);
-        knee = 0.2 + 0.8 * Math.max(0, Math.cos(p)) ** 1.4;
-        ua = -1.35 + 0.12 * Math.sin(p + side);
-        fa = -0.15 + 0.1 * Math.sin(phase * 0.7 + side);
-        spread = 0.08;
+        // manca: uma perna dá o passo, a outra arrasta quase dura; um braço esticado e o outro caído (varia por boneco)
+        const drag = side === i % 2;
+        hip = (drag ? 0.22 : 0.55) * Math.sin(p);
+        knee = drag ? 0.08 + 0.2 * Math.max(0, Math.cos(p)) : 0.25 + 0.9 * Math.max(0, Math.cos(p)) ** 1.4;
+        const reach = i % 3 === 0 || side !== i % 2;
+        ua = reach ? -1.3 + 0.12 * Math.sin(phase * 0.8 + side) : 0.12 + 0.18 * Math.sin(phase * 0.5 + side);
+        fa = reach ? -0.12 + 0.12 * Math.sin(phase * 0.7 + side) : -0.05;
+        spread = reach ? 0.06 : 0.18;
       } else if (kind === Pose.Walk) {
         hip = 0.38 * Math.sin(p);
         knee = 0.08 + 0.55 * Math.max(0, Math.cos(p));
@@ -180,8 +210,9 @@ export class Crowd {
 
   hide(i: number) {
     m.makeScale(0, 0, 0);
-    for (const im of [this.head, this.hair, this.torso, this.bib, this.shorts, this.blob, this.lampDot, this.beam]) im?.setMatrixAt(i, m);
-    for (const im of [this.thigh, this.shin, this.shoe, this.upper, this.fore]) {
+    for (const im of [this.head, this.hair, this.torso, this.bib, this.shorts, this.blob, this.lampDot, this.beam, this.blood, this.rips]) im?.setMatrixAt(i, m);
+    for (const im of [this.thigh, this.shin, this.shoe, this.upper, this.fore, this.eyes]) {
+      if (!im) continue;
       im.setMatrixAt(i * 2, m);
       im.setMatrixAt(i * 2 + 1, m);
     }
@@ -215,4 +246,31 @@ function bibTexture() {
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
+}
+
+/** Manchas recortadas (alphaTest): sangue respingado ou rasgos de pano. Sempre as mesmas (semente fixa). */
+function splatTexture(seed: number, count: number, kind: "blood" | "rips") {
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d")!;
+  let s = seed;
+  const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  g.fillStyle = "#ffffff";
+  for (let k = 0; k < count; k++) {
+    const x = r() * 128, y = 20 + r() * 96, big = kind === "rips" ? 7 + r() * 8 : 2 + r() * 7;
+    g.beginPath();
+    // borda irregular
+    for (let a = 0; a <= 12; a++) {
+      const ang = (a / 12) * Math.PI * 2, rr = big * (0.55 + r() * 0.7);
+      const px = x + Math.cos(ang) * rr * (kind === "rips" ? 0.6 : 1), py = y + Math.sin(ang) * rr * (kind === "rips" ? 1.5 : 1);
+      if (a) g.lineTo(px, py);
+      else g.moveTo(px, py);
+    }
+    g.fill();
+    // escorrido
+    if (kind === "blood" && r() < 0.5) g.fillRect(x - 1, y, 2.2, 6 + r() * 16);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
