@@ -60,7 +60,7 @@ export const zombieRun: RaceEvent = {
     { name: "Kit 3", price: "R$ 199,90 + taxas", status: "aberto", items: "Tudo do Kit 2 + jaqueta corta-vento" },
   ],
   kit: ["Camisa oficial", "Número de peito", "Chip de cronometragem", "Lanterna de cabeça", "Medalha", "Hidratação pós-prova"],
-  signup: "https://www.instagram.com/thezombierundf/",
+  signup: "https://www.thezombierun.com.br/",
   routeNote: "Traçado aproximado do mapa divulgado pelo evento (5K = 1 volta, 10K = 2 voltas). Postos de água de exemplo.",
   lotsNote: "Kits e valores do post do evento; confira na inscrição oficial.",
   whatsapp: "5561992372216",
