@@ -52,6 +52,48 @@ const STATUS: Record<YtVideo["status"], { label: string; tone: string }> = {
   deleted: { label: "Apagado", tone: "text-muted-foreground" },
 };
 
+/** Também manda os vídeos verticais do canal para um TikTok (caixa de entrada do app; você só toca em Publicar). */
+function TikTokLink({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }) {
+  const { data: accounts = [] } = useTable("social_accounts");
+  const tiktoks = accounts.filter((a) => a.platform === "tiktok");
+  const [saving, setSaving] = useState(false);
+  const change = async (v: string) => {
+    setSaving(true);
+    try {
+      const id = v === "none" ? null : v;
+      // A conta escolhida vira "canal": fica fora dos posts e do piloto automático da loja
+      if (id) await api.invoke("inbox", { action: "account_brand", account_id: id, brand: "canal" });
+      await api.update("yt_channels", ch.id, { tiktok_account: id });
+      toast.success(id ? "Os próximos vídeos também vão para a caixa de entrada desse TikTok" : "Não manda mais para o TikTok");
+      onChanged();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  if (!tiktoks.length) {
+    return (
+      <p className="mt-3 text-xs text-muted-foreground">
+        Quer os vídeos também no TikTok? Conecte a conta em <Link to="/studio/contas" className="font-medium text-foreground underline">Contas → TikTok</Link>.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3 space-y-1.5">
+      <Label className="text-xs text-muted-foreground">Mandar também para o TikTok</Label>
+      <Select value={ch.tiktok_account ?? "none"} onValueChange={change} disabled={saving}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Não mandar</SelectItem>
+          {tiktoks.map((a) => <SelectItem key={a.id} value={a.id}>@{a.username ?? a.display_name}{a.meta?.brand === "canal" ? "" : " (vira conta do canal)"}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {ch.tiktok_account && <p className="text-xs text-muted-foreground">Os Shorts saem com 1 a 1,5 min (o mínimo para o TikTok pagar) e chegam na caixa de entrada do TikTok no horário do YouTube: abra o app e toque em Publicar.</p>}
+    </div>
+  );
+}
+
 function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }) {
   const [form, setForm] = useState(ch);
   const [busy, setBusy] = useState<string | null>(null);
@@ -176,6 +218,7 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
           </Select>
         </div>
       </div>
+      <TikTokLink ch={ch} onChanged={onChanged} />
       {dirty && <Button className="mt-3 w-full" onClick={save} disabled={busy !== null}>{busy === "save" && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}Salvar</Button>}
       {ch.error && <p className="mt-3 text-xs text-danger">{ch.error}</p>}
 

@@ -288,15 +288,17 @@ export async function planTopics(niche: string, trends: Trend[], recent: string[
   return out.items.slice(0, kinds.length).map((it, i) => ({ ...it, kind: kinds[i] }));
 }
 
-export async function writeScript(niche: string, video: { kind: string; topic: string; angle?: string | null; redo_note?: string | null }, language = "pt", style = ""): Promise<YtScript | StickScriptT> {
+export async function writeScript(niche: string, video: { kind: string; topic: string; angle?: string | null; redo_note?: string | null }, language = "pt", style = "", tiktok = false): Promise<YtScript | StickScriptT> {
   const short = video.kind === "short";
   const en = language === "en";
   const stick = style === "stickman";
   const cta = stick
     ? (en ? `"follow for more"` : language === "es" ? `"sígueme para más"` : `"me segue para mais"`)
     : (en ? `"subscribe for more Bible secrets"` : language === "es" ? `"suscríbete para más secretos de la Biblia"` : `"se inscreve para mais curiosidades da Bíblia"`);
+  // Canal que também posta no TikTok: o TikTok só paga vídeo com mais de 1 minuto
+  const length = tiktok ? "65 a 85 segundos (180 a 230 palavras faladas no total), 20 a 26 cenas" : "45 a 55 segundos (130 a 150 palavras faladas no total), 14 a 18 cenas";
   const shape = short
-    ? `Formato: YouTube Shorts vertical de 45 a 55 segundos (130 a 150 palavras faladas no total), 14 a 18 cenas de UMA frase curta cada ` +
+    ? `Formato: vídeo curto vertical (YouTube Shorts${tiktok ? " e TikTok" : ""}) de ${length} de UMA frase curta cada ` +
       `(no máximo 12 palavras; a imagem troca a cada 2 a 4 segundos, ritmo rápido de vídeo viral). ` +
       `A primeira frase é o gancho (pergunta ou fato chocante) e prende nos 2 primeiros segundos. ` +
       `Termine com uma pergunta para comentarem e ${cta}. Sem capítulos (chapter = null). ` +
@@ -391,13 +393,13 @@ export async function ytAutopilot(db: SupabaseClient) {
 
   // Roteiro travado (função caiu no meio) volta para a fila depois de 10 min
   await db.from("yt_videos").update({ status: "draft" }).eq("status", "scripting").lt("updated_at", new Date(Date.now() - 10 * 60000).toISOString());
-  const { data: next } = await db.from("yt_videos").select("*, yt_channels(niche, language, style)").eq("status", "draft").order("publish_at").limit(1).maybeSingle();
+  const { data: next } = await db.from("yt_videos").select("*, yt_channels(niche, language, style, tiktok_account)").eq("status", "draft").order("publish_at").limit(1).maybeSingle();
   if (next) {
     const { data: claimed } = await db.from("yt_videos").update({ status: "scripting", updated_at: new Date().toISOString() })
       .eq("id", next.id).eq("status", "draft").select("id").maybeSingle();
     if (claimed) {
       try {
-        const script = await writeScript(next.yt_channels?.niche ?? "Curiosidades da Bíblia", next, next.yt_channels?.language ?? "pt", next.yt_channels?.style ?? "");
+        const script = await writeScript(next.yt_channels?.niche ?? "Curiosidades da Bíblia", next, next.yt_channels?.language ?? "pt", next.yt_channels?.style ?? "", !!next.yt_channels?.tiktok_account);
         await db.from("yt_videos").update({ status: "queued", script, title: script.title, error: null, updated_at: new Date().toISOString() }).eq("id", next.id);
         result.scripted = next.id;
         result.dispatched = await dispatchRender("youtube.yml");

@@ -85,10 +85,12 @@ export async function cleanupStorage(db: SupabaseClient) {
     await db.from("yt_videos").update({ preview_url: null }).eq("id", v.id);
   }
 
-  // 2) Vídeos enviados para posts já publicados
+  // 2) Vídeos enviados para posts já publicados (e cópias do YouTube para o TikTok que falharam há 2 dias)
   const { data: published } = await db.from("posts").select("id,media").eq("status", "published").lt("published_at", hoursAgo(1))
     .contains("media", [{ type: "video" }]).limit(BATCH);
-  for (const p of published ?? []) {
+  const { data: failedYt } = await db.from("posts").select("id,media").eq("status", "failed").eq("options->>source", "youtube")
+    .lt("updated_at", ago(2)).contains("media", [{ type: "video" }]).limit(BATCH);
+  for (const p of [...(published ?? []), ...(failedYt ?? [])]) {
     let changed = false;
     const media = [];
     for (const m of p.media ?? []) {

@@ -7,7 +7,7 @@ import { type AgentTool, aiEnabled, brandContext, generateJSON, runAgent } from 
 import { sleep } from "./util.ts";
 import { nsCoupons, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "./nuvemshop.ts";
 import { notify } from "./push.ts";
-import { isPaginasPro } from "./brand.ts";
+import { brandOf, isPaginasPro } from "./brand.ts";
 import { paginasproReply } from "./paginaspro-agent.ts";
 
 export type Channel = "instagram" | "whatsapp";
@@ -388,6 +388,7 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
   // Conta da PáginasPro: atendente próprio (sites), nunca o da loja
   const { data: acc } = await db.from("social_accounts").select("meta").eq("id", conversation.account_id).maybeSingle();
   if (isPaginasPro(acc?.meta)) return paginasproReply(db, conversation, inboundMessageId);
+  if (brandOf(acc?.meta) === "canal") return; // conta de canal (vídeos do YouTube): ninguém responde sozinho
   const { data: settings } = await db.from("brand_settings").select("agent_enabled").eq("user_id", conversation.user_id).maybeSingle();
   if (!settings?.agent_enabled) return;
 
