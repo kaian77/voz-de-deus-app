@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face { font-family: P; src: url(Poppins-Bold.ttf); font-weight: 700; }
+@font-face { font-family: P; src: url(Poppins-Medium.ttf); font-weight: 500; }
+html,body{margin:0;background:#141a35}
+canvas{display:block;width:540px;height:960px}
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 540, H = 960;
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+g.scale(2, 2);
+const game = new Image(); game.src = 'game.png';
+const icon = new Image(); icon.src = 'icon.png';
+const ease = x => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+const back = x => { x = Math.min(1, Math.max(0, x)); const a = 1.7; return 1 + (a + 1) * Math.pow(x - 1, 3) + a * Math.pow(x - 1, 2); };
+const lerp = (a, b, k) => a + (b - a) * k;
+const seg = (t, a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+function rr(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function txt(s, x, y, size, color = '#fff', align = 'center', weight = 700) { g.font = `${weight} ${size}px P`; g.textAlign = align; g.textBaseline = 'middle'; g.fillStyle = color; g.fillText(s, x, y); }
+
+// tela do celular
+const P = { x: 100, y: 236, w: 340, h: 690 };
+const S = { x: P.x + 10, y: P.y + 10, w: P.w - 20, h: P.h - 20 };
+
+function phone(drawScreen) {
+  g.save();
+  g.shadowColor = 'rgba(0,0,0,.5)'; g.shadowBlur = 40; g.shadowOffsetY = 18;
+  rr(P.x, P.y, P.w, P.h, 44); g.fillStyle = '#0b0d14'; g.fill();
+  g.restore();
+  rr(P.x + 2, P.y + 2, P.w - 4, P.h - 4, 42); g.strokeStyle = '#3a3f55'; g.lineWidth = 2; g.stroke();
+  g.save(); rr(S.x, S.y, S.w, S.h, 34); g.clip();
+  drawScreen();
+  // barra de status
+  g.fillStyle = 'rgba(0,0,0,.0)';
+  txt('9:41', S.x + 30, S.y + 14, 11, '#fff', 'center', 700);
+  g.fillStyle = '#fff'; rr(S.x + S.w - 40, S.y + 9, 22, 10, 3); g.fill();
+  g.restore();
+  // câmera
+  rr(P.x + P.w / 2 - 40, P.y + 14, 80, 18, 9); g.fillStyle = '#000'; g.fill();
+}
+function gameFull(y0) {
+  // print do jogo ocupando a tela (cover)
+  const ih = S.w * (game.height / game.width);
+  g.fillStyle = '#1a2142'; g.fillRect(S.x, S.y, S.w, S.h);
+  g.drawImage(game, S.x, y0, S.w, ih);
+}
+function chromeBar(url = 'voz-de-deus-app.vercel.app/jogo') {
+  g.fillStyle = '#1f2330'; g.fillRect(S.x, S.y, S.w, 80);
+  rr(S.x + 12, S.y + 34, S.w - 60, 34, 17); g.fillStyle = '#343a4f'; g.fill();
+  txt(url, S.x + 26, S.y + 51, 11.5, '#e9ecf5', 'left', 500);
+  for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(S.x + S.w - 24, S.y + 41 + i * 7, 2.4, 0, 7); g.fillStyle = '#e9ecf5'; g.fill(); }
+}
+const DOTS = () => ({ x: S.x + S.w - 24, y: S.y + 48 });
+const MENU = ['Nova guia', 'Nova guia anônima', 'Histórico', 'Downloads', 'Adicionar à tela inicial', 'Configurações'];
+const menuItem = i => ({ x: S.x + S.w - 250, y: S.y + 70 + i * 44, w: 240, h: 44 });
+function chromeMenu(k, hi) {
+  const h = MENU.length * 44 + 12;
+  g.save(); g.globalAlpha = ease(k);
+  g.shadowColor = 'rgba(0,0,0,.45)'; g.shadowBlur = 20;
+  rr(S.x + S.w - 256, S.y + 64, 248, h * ease(k), 12); g.fillStyle = '#2b3042'; g.fill(); g.restore();
+  if (k < 0.6) return;
+  MENU.forEach((m, i) => {
+    const it = menuItem(i);
+    if (i === 4 && hi > 0) { rr(it.x, it.y + 4, it.w - 6, it.h - 4, 8); g.fillStyle = `rgba(255,207,51,${0.25 * hi})`; g.fill(); }
+    txt(m, it.x + 16, it.y + 26, 13, i === 4 ? '#ffd23f' : '#e9ecf5', 'left', i === 4 ? 700 : 500);
+  });
+}
+function dialogAndroid(k) {
+  g.fillStyle = `rgba(0,0,0,${0.5 * ease(k)})`; g.fillRect(S.x, S.y, S.w, S.h);
+  const w = 290, h = 200, x = S.x + (S.w - w) / 2, y = S.y + 230;
+  g.save(); g.translate(x + w / 2, y + h / 2); const s = back(k); g.scale(s, s); g.translate(-(x + w / 2), -(y + h / 2));
+  rr(x, y, w, h, 18); g.fillStyle = '#2b3042'; g.fill();
+  txt('Adicionar à tela inicial', x + 22, y + 34, 15, '#fff', 'left');
+  g.drawImage(icon, x + 22, y + 66, 52, 52);
+  rr(x + 88, y + 74, w - 110, 36, 6); g.strokeStyle = '#6f7aa8'; g.lineWidth = 1.5; g.stroke();
+  txt('Block Pop', x + 98, y + 92, 14, '#fff', 'left', 500);
+  txt('Cancelar', x + w - 150, y + 165, 14, '#8fb0ff', 'center', 700);
+  rr(x + w - 112, y + 146, 96, 38, 19); g.fillStyle = '#8fb0ff'; g.fill();
+  txt('Adicionar', x + w - 64, y + 165, 14, '#14182b', 'center', 700);
+  g.restore();
+}
+const ADD_ANDROID = () => ({ x: S.x + (S.w - 290) / 2 + 290 - 64, y: S.y + 230 + 165 });
+
+const APPS = [['#ff5f6d', 'Câmera'], ['#36c96f', 'Mensagens'], ['#4a7dff', 'Mapas'], ['#ffb02e', 'Notas'], ['#a25cff', 'Música'], ['#2ec4e6', 'Clima'], ['#f0475a', 'Vídeos'], ['#7a8399', 'Ajustes'], ['#ff9a2e', 'Fotos'], ['#3fb8af', 'Agenda']];
+const HOME_SLOT = 10; // posição do Block Pop
+const slotPos = i => ({ x: S.x + 28 + (i % 4) * 74, y: S.y + 70 + Math.floor(i / 4) * 92 });
+function home(t, popAt, iphone) {
+  const gr = g.createLinearGradient(S.x, S.y, S.x + S.w, S.y + S.h);
+  gr.addColorStop(0, iphone ? '#ff9a8b' : '#3a6ee8'); gr.addColorStop(1, iphone ? '#6a5af9' : '#27c4c9');
+  g.fillStyle = gr; g.fillRect(S.x, S.y, S.w, S.h);
+  APPS.forEach((a, i) => {
+    const p = slotPos(i);
+    rr(p.x, p.y, 58, 58, 15); g.fillStyle = a[0]; g.fill();
+    rr(p.x + 14, p.y + 14, 30, 30, 8); g.fillStyle = 'rgba(255,255,255,.55)'; g.fill();
+    txt(a[1], p.x + 29, p.y + 72, 10, '#fff', 'center', 500);
+  });
+  const k = seg(t, popAt, popAt + 0.5);
+  if (k > 0) {
+    const p = slotPos(HOME_SLOT), s = back(k);
+    g.save(); g.translate(p.x + 29, p.y + 29); g.scale(s, s);
+    g.save(); rr(-29, -29, 58, 58, 15); g.clip(); g.drawImage(icon, -29, -29, 58, 58); g.restore();
+    g.restore();
+    txt('Block Pop', p.x + 29, p.y + 72, 10, '#fff', 'center', 700);
+    // brilho em volta do ícone novo
+    const pulse = (t - popAt) % 1.2 / 1.2;
+    if (t > popAt + 0.5) { g.beginPath(); g.arc(p.x + 29, p.y + 29, 34 + pulse * 22, 0, 7); g.strokeStyle = `rgba(255,210,63,${0.8 * (1 - pulse)})`; g.lineWidth = 3; g.stroke(); }
+  }
+}
+function safariBar() {
+  const y = S.y + S.h - 92;
+  g.fillStyle = '#1f2330'; g.fillRect(S.x, y, S.w, 92);
+  rr(S.x + 14, y + 10, S.w - 28, 34, 12); g.fillStyle = '#343a4f'; g.fill();
+  txt('voz-de-deus-app.vercel.app', S.x + S.w / 2, y + 27, 11.5, '#e9ecf5', 'center', 500);
+  const iy = y + 66; const xs = [S.x + 34, S.x + 96, S.x + 160, S.x + 224, S.x + 286];
+  g.strokeStyle = '#8fb0ff'; g.lineWidth = 2.2; g.lineCap = 'round'; g.lineJoin = 'round';
+  // < >
+  g.beginPath(); g.moveTo(xs[0] + 4, iy - 8); g.lineTo(xs[0] - 4, iy); g.lineTo(xs[0] + 4, iy + 8); g.stroke();
+  g.beginPath(); g.moveTo(xs[1] - 4, iy - 8); g.lineTo(xs[1] + 4, iy); g.lineTo(xs[1] - 4, iy + 8); g.stroke();
+  // compartilhar (quadrado com seta)
+  shareIcon(xs[2], iy, '#8fb0ff');
+  // livro e abas
+  g.strokeRect(xs[3] - 9, iy - 8, 18, 15);
+  g.strokeRect(xs[4] - 7, iy - 7, 14, 14); g.strokeRect(xs[4] - 3, iy - 11, 14, 14);
+}
+function shareIcon(x, y, col) {
+  g.strokeStyle = col; g.lineWidth = 2.2;
+  g.beginPath(); g.moveTo(x - 6, y - 2); g.lineTo(x - 9, y - 2); g.lineTo(x - 9, y + 11); g.lineTo(x + 9, y + 11); g.lineTo(x + 9, y - 2); g.lineTo(x + 6, y - 2); g.stroke();
+  g.beginPath(); g.moveTo(x, y + 4); g.lineTo(x, y - 12); g.moveTo(x - 5, y - 7); g.lineTo(x, y - 12); g.lineTo(x + 5, y - 7); g.stroke();
+}
+const SHARE = () => ({ x: S.x + 160, y: S.y + S.h - 92 + 66 });
+const SHEET = ['Copiar', 'Adicionar à Lista de Leitura', 'Adicionar aos Favoritos', 'Adicionar à Tela de Início', 'Buscar na Página'];
+const sheetItem = i => ({ x: S.x + 14, y: S.y + S.h - 300 + 70 + i * 44, w: S.w - 28, h: 40 });
+function shareSheet(k, hi) {
+  g.fillStyle = `rgba(0,0,0,${0.45 * ease(k)})`; g.fillRect(S.x, S.y, S.w, S.h);
+  const y = S.y + S.h - 300 * ease(k);
+  rr(S.x, y, S.w, 320, 22); g.fillStyle = '#23283a'; g.fill();
+  rr(S.x + S.w / 2 - 20, y + 8, 40, 5, 3); g.fillStyle = '#4b5270'; g.fill();
+  ['#36c96f', '#4a7dff', '#ff5f6d', '#ffb02e'].forEach((c, i) => { g.beginPath(); g.arc(S.x + 50 + i * 74, y + 42, 20, 0, 7); g.fillStyle = c; g.fill(); });
+  SHEET.forEach((s, i) => {
+    const it = sheetItem(i), yy = it.y - (S.y + S.h - 300) + y;
+    rr(it.x, yy, it.w, it.h - 4, 10); g.fillStyle = i === 3 && hi > 0 ? `rgba(255,207,51,${0.15 + 0.2 * hi})` : '#2f3550'; g.fill();
+    txt(s, it.x + 14, yy + 18, 12.5, i === 3 ? '#ffd23f' : '#e9ecf5', 'left', i === 3 ? 700 : 500);
+    if (i === 3) { g.strokeStyle = '#ffd23f'; g.lineWidth = 2; g.strokeRect(it.x + it.w - 34, yy + 8, 18, 18); g.beginPath(); g.moveTo(it.x + it.w - 25, yy + 12); g.lineTo(it.x + it.w - 25, yy + 22); g.moveTo(it.x + it.w - 30, yy + 17); g.lineTo(it.x + it.w - 20, yy + 17); g.stroke(); }
+  });
+}
+function iosAdd(k) {
+  const y = S.y + S.h - (S.h - 40) * ease(k);
+  rr(S.x, y, S.w, S.h, 22); g.fillStyle = '#1c2030'; g.fill();
+  txt('Cancelar', S.x + 18, y + 32, 13, '#8fb0ff', 'left', 500);
+  txt('Adicionar', S.x + S.w - 18, y + 32, 13, '#8fb0ff', 'right', 700);
+  txt('Adicionar à Tela de Início', S.x + S.w / 2, y + 66, 15, '#fff', 'center', 700);
+  rr(S.x + 14, y + 92, S.w - 28, 80, 12); g.fillStyle = '#2b3042'; g.fill();
+  g.drawImage(icon, S.x + 26, y + 104, 56, 56);
+  txt('Block Pop', S.x + 96, y + 122, 15, '#fff', 'left', 700);
+  txt('voz-de-deus-app.vercel.app', S.x + 96, y + 146, 10.5, '#9aa3c7', 'left', 500);
+}
+const ADD_IOS = () => ({ x: S.x + S.w - 44, y: S.y + 40 + 32 });
+
+// legenda de cima: número do passo + texto
+function caption(n, text, k, sub) {
+  if (k <= 0) return;
+  g.save(); g.globalAlpha = Math.min(1, k * 3); const dy = (1 - ease(k * 2)) * 16;
+  if (n) {
+    g.beginPath(); g.arc(70, 96 + dy, 26, 0, 7); g.fillStyle = '#ffcf33'; g.fill();
+    txt(String(n), 70, 98 + dy, 26, '#14182b');
+  }
+  const lines = text.split('\n');
+  lines.forEach((l, i) => txt(l, n ? 110 : W / 2, 82 + dy + i * 34, 25, '#fff', n ? 'left' : 'center'));
+  if (sub) txt(sub, n ? 110 : W / 2, 82 + dy + lines.length * 34 + 4, 15, '#aab4e8', n ? 'left' : 'center', 500);
+  g.restore();
+}
+function badge(label, color) {
+  rr(W / 2 - 90, 18, 180, 30, 15); g.fillStyle = color; g.fill();
+  txt(label, W / 2, 34, 14, '#14182b');
+}
+// dedo: bolinha branca com anel; no toque, onda
+function finger(x, y, tapK, show) {
+  if (!show) return;
+  if (tapK > 0 && tapK < 1) { g.beginPath(); g.arc(x, y, 14 + tapK * 26, 0, 7); g.strokeStyle = `rgba(255,255,255,${0.9 * (1 - tapK)})`; g.lineWidth = 4; g.stroke(); }
+  g.beginPath(); g.arc(x, y, tapK > 0 && tapK < 0.4 ? 12 : 15, 0, 7); g.fillStyle = 'rgba(255,255,255,.85)'; g.fill();
+  g.lineWidth = 3; g.strokeStyle = 'rgba(20,24,43,.6)'; g.stroke();
+}
+// caminho do dedo: [tempo, x, y]; toques: tempos
+function path(t, keys) {
+  if (t <= keys[0][0]) return { x: keys[0][1], y: keys[0][2] };
+  for (let i = 1; i < keys.length; i++) {
+    if (t <= keys[i][0]) { const k = ease((t - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0])); return { x: lerp(keys[i - 1][1], keys[i][1], k), y: lerp(keys[i - 1][2], keys[i][2], k) }; }
+  }
+  const l = keys[keys.length - 1]; return { x: l[1], y: l[2] };
+}
+const tapK = (t, taps) => { for (const a of taps) if (t >= a && t < a + 0.6) return (t - a) / 0.6; return 0; };
+
+// linha do tempo (s)
+const TAPS = [5.0, 7.6, 10.6, 13.2, 16.6, 21.0, 23.4, 25.7];
+window.TAPS = TAPS;
+const END = 30;
+function render(t) {
+  g.clearRect(0, 0, W, H);
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#2b3566'); bg.addColorStop(1, '#141a35');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+
+  if (t < 3.2) {
+    // abertura
+    const k = back(seg(t, 0.1, 0.7));
+    g.save(); g.translate(W / 2, 330); g.scale(k, k);
+    g.save(); rr(-90, -90, 180, 180, 40); g.clip(); g.drawImage(icon, -90, -90, 180, 180); g.restore(); g.restore();
+    g.globalAlpha = seg(t, 0.5, 1);
+    txt('Como colocar o', W / 2, 500, 30); txt('BLOCK POP', W / 2, 550, 52, '#ffcf33'); txt('na tela do celular', W / 2, 604, 30);
+    g.globalAlpha = seg(t, 1.2, 1.7);
+    txt('Igual a um aplicativo, grátis', W / 2, 670, 19, '#aab4e8', 'center', 500);
+    g.globalAlpha = 1;
+    return;
+  }
+  if (t < 18.6) {
+    badge('ANDROID · CHROME', '#7ee6a4');
+    const fk = { show: true };
+    let fp;
+    phone(() => {
+      if (t < 14.2) {
+        const y0 = S.y + 80 + (1 - ease(seg(t, 5.2, 5.8))) * 40;
+        if (t > 5.2) { g.globalAlpha = ease(seg(t, 5.2, 5.8)); gameFull(y0); g.globalAlpha = 1; } else { g.fillStyle = '#f3f3f6'; g.fillRect(S.x, S.y, S.w, S.h); txt('Toque em Ir para abrir', S.x + S.w / 2, S.y + 300, 14, '#8a90a8', 'center', 500); }
+        chromeBar();
+        if (t > 7.7 && t < 11.0) chromeMenu(seg(t, 7.7, 8.1), seg(t, 10.0, 10.6));
+        if (t > 10.9) dialogAndroid(seg(t, 10.9, 11.3));
+      } else if (t < 17.0) {
+        home(t, 14.6, false);
+      } else {
+        // abre o jogo em tela cheia, crescendo do ícone
+        const k = ease(seg(t, 17.0, 17.6)), p = slotPos(HOME_SLOT);
+        home(t, 14.6, false);
+        g.save(); const x = lerp(p.x, S.x, k), y = lerp(p.y, S.y, k), w = lerp(58, S.w, k), h = lerp(58, S.h, k);
+        rr(x, y, w, h, lerp(15, 30, k)); g.clip();
+        g.fillStyle = '#1a2142'; g.fillRect(x, y, w, h);
+        g.drawImage(game, x, y, w, w * (game.height / game.width));
+        g.restore();
+      }
+    });
+    const d = DOTS(), m = menuItem(4), a = ADD_ANDROID(), h = slotPos(HOME_SLOT);
+    fp = path(t, [[3.2, S.x + 270, S.y + 420], [4.4, S.x + S.w - 50, S.y + 58], [6.4, S.x + S.w - 50, S.y + 58], [7.4, d.x, d.y], [9.0, d.x, d.y], [10.3, m.x + 120, m.y + 24], [11.6, m.x + 120, m.y + 24], [12.9, a.x, a.y], [14.0, a.x, a.y], [15.6, S.x + 200, S.y + 520], [16.3, h.x + 29, h.y + 29]]);
+    finger(fp.x, fp.y, tapK(t, TAPS), t < 17.0);
+    if (t < 6.4) caption(1, 'Abra o link do jogo\nno Chrome', seg(t, 3.2, 3.8), 'voz-de-deus-app.vercel.app/jogo');
+    else if (t < 9.6) caption(2, 'Toque nos 3 pontinhos\nno canto de cima', seg(t, 6.4, 7.0));
+    else if (t < 12.2) caption(3, 'Toque em "Adicionar\nà tela inicial"', seg(t, 9.6, 10.2), 'ou "Instalar app"');
+    else if (t < 14.2) caption(4, 'Toque em\n"Adicionar"', seg(t, 12.2, 12.8));
+    else caption(0, 'Pronto! O jogo fica\nna sua tela', seg(t, 14.2, 14.8), 'É só tocar no ícone e jogar');
+    return;
+  }
+  if (t < 27.2) {
+    badge('IPHONE · SAFARI', '#8fb0ff');
+    phone(() => {
+      if (t < 26.6) {
+        gameFull(S.y + 30);
+        safariBar();
+        if (t > 21.1 && t < 23.9) shareSheet(seg(t, 21.1, 21.5), seg(t, 22.9, 23.4));
+        if (t > 23.7) iosAdd(seg(t, 23.7, 24.1));
+      } else home(t, 26.4, true);
+    });
+    const s = SHARE(), it = sheetItem(3), a = ADD_IOS();
+    const fp = path(t, [[18.6, S.x + 200, S.y + 400], [20.2, s.x, s.y], [21.6, s.x, s.y], [22.8, it.x + it.w - 60, it.y + 18], [24.2, it.x + it.w - 60, it.y + 18], [25.2, a.x, a.y]]);
+    finger(fp.x, fp.y, tapK(t, TAPS), t < 26.4);
+    if (t < 21.6) caption(1, 'No iPhone, abra no Safari\ne toque em Compartilhar', seg(t, 18.6, 19.2));
+    else if (t < 24.0) caption(2, 'Toque em "Adicionar\nà Tela de Início"', seg(t, 21.6, 22.2), 'role a lista para baixo se não aparecer');
+    else caption(3, 'Toque em\n"Adicionar"', seg(t, 24.0, 24.6));
+    return;
+  }
+  // final
+  const k = back(seg(t, 27.2, 27.8));
+  g.save(); g.translate(W / 2, 320); g.scale(k, k);
+  g.save(); rr(-80, -80, 160, 160, 36); g.clip(); g.drawImage(icon, -80, -80, 160, 160); g.restore(); g.restore();
+  g.globalAlpha = seg(t, 27.6, 28.1);
+  txt('Pronto!', W / 2, 470, 44, '#ffcf33');
+  txt('Agora é só jogar', W / 2, 525, 28);
+  txt('e desafiar seus amigos', W / 2, 562, 28);
+  g.globalAlpha = seg(t, 28.2, 28.7);
+  rr(W / 2 - 220, 630, 440, 56, 28); g.fillStyle = '#36c96f'; g.fill();
+  txt('voz-de-deus-app.vercel.app/jogo', W / 2, 658, 18, '#fff');
+  g.globalAlpha = 1;
+}
+window.render = render; window.END = END;
+window.ready = Promise.all([game.decode(), icon.decode(), document.fonts.load('700 20px P'), document.fonts.load('500 20px P')]);
+</script></body></html>
