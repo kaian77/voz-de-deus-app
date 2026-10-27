@@ -19,7 +19,7 @@ export const ML_SITES: Record<string, { country: string; label: string }> = {
 
 // Assunto: manual, instruções, montagem, furos, parafusos, peças faltando (pt, es, en)
 const TOPIC =
-  /manual|instru[cç]|instructivo|diagram|passo a passo|paso a paso|montag|montar|mont[ae]i|armad|armar|arm[eé]|ensambl|assembl|put together|fur[oa]|fura[cç]|agujer|\bholes?\b|parafus|tornill|screws?|pe[cç]as? falt|falt\w* (pe[cç]|parafus|piez|tornill)|missing (part|piece|screw|hardware)|faltan? (piez|tornill)/i;
+  /\b(manual|instru[cç][oõã]\w*|passo a passo|montag\w*|montar|furos?|fura[cç][aã]o|parafusos?|pe[cç]as? faltando|faltou (pe[cç]a|parafuso)|instructivo|instrucciones|paso a paso|armado|armar|ensambl\w*|tornillos?|agujeros?|faltan? (piezas|tornillos)|instructions?|assembly|assembl(e|ed|ing)|put (it )?together|missing (parts|pieces|screws|hardware|bolts)|holes? (did ?n[o']?t|don'?t|do not|never) (line|match)|pre-?drilled|diagrams?)\b/i;
 // Tom de reclamação (para avaliação de 4-5 estrelas que fala do assunto contar, precisa disso)
 const NEG =
   /dif[ií]cil|complicad|confus|ruim|p[eé]ssim|horr[ií]vel|errad|n[aã]o encaix|n[aã]o bat|falt(ou|ando|aram|an|[oó])|sem manual|sin manual|n[aã]o vem|n[aã]o veio|n[aã]o tem manual|n[aã]o entend|mal explic|terrible|awful|confusing|unclear|missing|wrong|poor|hard to|difficult|nightmare|didn'?t|did not|doesn'?t|useless|\bmal[oa]?\b|no encaj|no vien|no trae|no se entiende|horrible|incomplet|nada claro|pouco claro|poco claro/i;
