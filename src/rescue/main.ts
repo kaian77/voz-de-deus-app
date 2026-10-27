@@ -2,6 +2,7 @@
 // (areia/água em grade fina) até o dragão ou o fogo. Cada toque gasta uma jogada e os espinhos chegam perto do rei.
 // Tudo em canvas, sem imagens; som sintetizado. Fase e progresso ficam no navegador.
 import { t } from "../i18n3d";
+import { ART, ready } from "./art";
 import { LEVELS, type Level } from "./levels";
 
 const TILE = 30; // tamanho do bloco (unidades lógicas)
@@ -411,6 +412,16 @@ function tileSprite(color: number, rocket?: "h" | "v") {
   g.fill();
   const cx = TILE / 2, cy = TILE / 2;
   const col = TILE_COL[color];
+  const art = rocket ? ART.rocket : ART.icons[color];
+  if (ready(art)) {
+    g.save();
+    g.translate(cx, cy);
+    if (rocket === "v") g.rotate(Math.PI / 2);
+    g.drawImage(art, -12.5, -13, 25, 25);
+    g.restore();
+    tileCache.set(key, sp);
+    return sp;
+  }
   g.save();
   g.translate(cx, cy);
   if (rocket) {
@@ -523,6 +534,25 @@ function drawKing(tm: number) {
   const jump = state === "won" ? Math.abs(Math.sin(tm / 160)) * 10 : poke ? Math.sin(poke * Math.PI) * 10 : scared ? Math.sin(tm / 40) * 1.2 : 0;
   // perdeu: os espinhos encostam e o rei fica amassado (desenho animado), com estrelinhas
   const squash = state === "lost" ? ease((tm - endAt) / 300) : 0;
+  const kImg = state === "won" ? ART.king.happy : scared ? ART.king.scared : ART.king.idle;
+  if (ready(kImg)) {
+    // rei desenhado (SVG): ocupa quase a altura do quarto, de frente; respira devagar
+    const kh = Math.min(h * 0.92, 92), kw = kh * 0.75;
+    const breathe = 1 + Math.sin(tm / 500) * 0.015;
+    const kxc = outerRight ? x + kw / 2 + 6 : x + w - kw / 2 - 6;
+    ctx.save();
+    ctx.translate(kxc + (scared && state === "play" ? Math.sin(tm / 30) * 0.8 : 0), y + h - 3 - jump);
+    ctx.scale((1 - squash * 0.45) * breathe, (1 + squash * 0.1) / breathe);
+    ctx.drawImage(kImg, -kw / 2, -kh, kw, kh);
+    ctx.restore();
+    kingHit = { x: kxc - kw / 2, y: y + h - kh, w: kw, h: kh };
+    drawSpeech(tm, kxc, y + h - kh + 6, x, y, h);
+    if (squash) for (let i = 0; i < 3; i++) {
+      const a = tm / 300 + (i * Math.PI * 2) / 3;
+      text("★", kxc + Math.cos(a) * 16, y + h - kh + Math.sin(a) * 5, 11, "#ffd23f", "center", false);
+    }
+    return;
+  }
   ctx.save();
   ctx.translate(kx, ky - jump);
   ctx.scale(sc * (outerRight ? 1 : -1) * (1 - squash * 0.45), sc * (1 + squash * 0.12));
@@ -593,7 +623,11 @@ function drawKing(tm: number) {
     text("★", kx + Math.cos(a) * 14, ky - 58 * sc + Math.sin(a) * 4, 10, "#ffd23f", "center", false);
   }
   else if (scared && Math.floor(tm / 400) % 2) text("!", kx + (outerRight ? 14 : -14), ky - 60 * sc, 18, "#ff4d4d");
-  // balão de fala (fica dentro do tabuleiro)
+  drawSpeech(tm, kx, ky - 60 * sc, x, y, h);
+}
+
+/** Balão de fala do rei (fica dentro do tabuleiro): em cima da cabeça ou, sem espaço, embaixo do quarto. */
+function drawSpeech(tm: number, kx: number, headY: number, _x: number, y: number, h: number) {
   const age = tm - speech.t0;
   if (speech.text && age < speech.dur) {
     const k = back(age / 220), fade = age > speech.dur - 250 ? (speech.dur - age) / 250 : 1;
@@ -609,7 +643,7 @@ function drawKing(tm: number) {
     let bx = kx - bw / 2;
     bx = Math.max(4, Math.min(cols * TILE - bw - 4, bx));
     // em cima do rei; sem espaço (quarto no topo), embaixo do quarto com a ponta para cima
-    let by = ky - 60 * sc - bh - 10;
+    let by = headY - bh - 10;
     const below = by < 4;
     if (below) by = y + h + 10;
     const tipX = Math.max(bx + 12, Math.min(bx + bw - 12, kx));
@@ -645,6 +679,7 @@ function drawGoal(tm: number) {
   }
   const prog = Math.min(1, got / need);
   const w = x1 - x0, h = y1 - y0;
+  let dragonDraw: (() => void) | null = null;
   ctx.save();
   rr(x0, y0, w, h, 6);
   ctx.clip();
@@ -680,6 +715,13 @@ function drawGoal(tm: number) {
     const leave = state === "won" ? ease((tm - endAt) / 900) : 0;
     const cx = x0 + w / 2 + Math.sin(tm / 600) * w * 0.12, cy = y1 + 6 + leave * h * 1.4;
     const hs = Math.min(w * 0.22, h * 0.9);
+    const dImg = hitFlash > 0.2 ? ART.dragon.hurt : ART.dragon.idle;
+    if (ready(dImg)) {
+      // desenhado depois de soltar o recorte: a cabeça sai para fora do buraco
+      const dw = Math.min(w * 0.5, 110), dh = dw * 0.76;
+      const shake = hitFlash > 0.2 ? Math.sin(tm / 20) * 2 : 0;
+      dragonDraw = () => ctx.drawImage(dImg, cx - dw / 2 + shake, y1 - dh * 0.98 + leave * (dh + 10) + Math.sin(tm / 350) * 2, dw, dh);
+    } else {
     ctx.save();
     ctx.translate(cx, cy);
     const flash = hitFlash > 0.2;
@@ -719,6 +761,7 @@ function drawGoal(tm: number) {
       ctx.fill();
     }
     ctx.restore();
+    }
     if (state === "play" && tm > roarAt) {
       roarAt = tm + 6000 + Math.random() * 4000;
       floats.push({ text: "GRRR!", x: cx, y: y0 + 6, t0: tm, color: "#ff6b3d", size: 18 });
@@ -727,6 +770,15 @@ function drawGoal(tm: number) {
     }
   }
   ctx.restore();
+  if (dragonDraw && state === "won") {
+    // foge para dentro do buraco: recorta de novo só no fim
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0 - 40, y0 - 200, w + 80, h + 200);
+    ctx.clip();
+    dragonDraw();
+    ctx.restore();
+  } else dragonDraw?.();
   hitFlash *= 0.85;
 }
 
@@ -1066,4 +1118,6 @@ if (location.search.includes("debug")) {
 }
 startLevel(lvlIndex);
 document.fonts?.ready.then(() => tileCache.clear());
+// a arte em SVG carrega em seguida: refaz os azulejos com os ícones
+[...ART.icons, ART.rocket].forEach((im) => im.addEventListener("load", () => tileCache.clear()));
 requestAnimationFrame(draw);
