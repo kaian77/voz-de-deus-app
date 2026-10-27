@@ -21,3 +21,8 @@ html = re.sub(r'<script defer src="\./assets/[^"]+"></script>', lambda _: "<scri
 open("../site/jogos/block-pop-index.html", "w", encoding="utf-8").write(html)
 PY
 echo "pronto: site/jogos/block-pop-index.html"
+# Mesma versão de um arquivo só publicada no nosso site (opção "Hospedado externamente (iframe)" do portal):
+# https://voz-de-deus-app.vercel.app/crazygames/index.html
+mkdir -p ../public/crazygames
+cp ../site/jogos/block-pop-index.html ../public/crazygames/index.html
+echo "pronto: public/crazygames/index.html"
