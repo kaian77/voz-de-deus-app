@@ -287,7 +287,12 @@ export default function YouTubePage() {
   const invalidate = useInvalidate();
   const { data: channels = [], isLoading } = useTable("yt_channels", { order: "created_at", ascending: true });
   const { data: allVideos = [] } = useTable("yt_videos", { order: "publish_at", limit: 80 }, { refetchInterval: 15000 });
-  const videos = allVideos.filter((v) => v.kind !== "clip" && v.status !== "deleted");
+  // Os que já foram ao ar saem da lista (o arquivo já foi apagado); ficam a um toque em "Ver os que já foram ao ar"
+  const [showLive, setShowLive] = useState(false);
+  const isLive = (v: YtVideo) => v.status === "uploaded" && !!v.publish_at && new Date(v.publish_at).getTime() <= Date.now();
+  const listed = allVideos.filter((v) => v.kind !== "clip" && v.status !== "deleted");
+  const liveCount = listed.filter(isLive).length;
+  const videos = showLive ? listed : listed.filter((v) => !isLive(v));
   const [connecting, setConnecting] = useState(false);
   const [watching, setWatching] = useState<YtVideo | null>(null);
   // Erro da conexão fica na tela (o toast some rápido e no celular passa despercebido)
@@ -344,10 +349,18 @@ export default function YouTubePage() {
 
       <TikTokCaptions />
 
-      {videos.length > 0 && (
+      {(videos.length > 0 || liveCount > 0) && (
         <div className="mt-6">
-          <h2 className="mb-3 text-sm font-semibold">Vídeos</h2>
-          <div className="divide-y rounded-lg border bg-card">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">{showLive ? "Vídeos" : "Vídeos a caminho"}</h2>
+            {liveCount > 0 && (
+              <button type="button" onClick={() => setShowLive((x) => !x)} className="text-xs text-muted-foreground hover:underline">
+                {showLive ? "Esconder os que já foram ao ar" : `Ver os que já foram ao ar (${liveCount})`}
+              </button>
+            )}
+          </div>
+          {videos.length === 0 && <p className="text-xs text-muted-foreground">Nenhum vídeo na fila agora.</p>}
+          <div className="divide-y rounded-lg border bg-card empty:hidden">
             {videos.map((v) => {
               const ch = byId.get(v.channel_ref);
               return (
