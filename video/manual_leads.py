@@ -9,9 +9,13 @@ Cada avaliação que reclama do manual/montagem (mesmas palavras do manual-leads
 Variáveis: SUPABASE_URL, SUPABASE_SERVICE_KEY, ETSY_API_KEY (opcional), SCRAPER_URL.
 """
 import datetime as dt
+import csv
+import io
 import json
 import os
 import re
+import subprocess
+import tempfile
 import time
 import unicodedata
 import urllib.error
@@ -19,7 +23,7 @@ import urllib.parse
 import urllib.request
 
 from worker import URL, http, rest
-from leads import UA, jload, scrape, wait_scraper
+from leads import UA, jload
 
 TOPIC = re.compile(
     r"manual|instru[cç]|instructivo|diagram|passo a passo|paso a paso|montag|montar|mont[ae]i|armad|armar|arm[eé]|ensambl|assembl|put together|"
@@ -80,14 +84,15 @@ def geocode(place):
 
 def places_of(text):
     """"Miami FL" -> 1 lugar; "Estados Unidos, Inglaterra" -> cidades grandes de cada país. -> [(nome, lat, lng, país)]"""
-    split = [p.strip() for p in re.split(r"[;,/]| e | y | and ", text) if p.strip()]
-    first = geocode(split[0]) if len(split) > 1 else None
-    # "Estados Unidos, Inglaterra" = vários países; "Miami, FL" = um lugar só
-    whole = None if first and first[3] else geocode(text)
-    parts = [text] if whole and not whole[3] else split
+    # "Madrid, Londres" / "Estados Unidos e Inglaterra" = vários lugares; "Miami, FL" (sigla depois da vírgula) = um lugar só
+    split = [p.strip() for p in re.split(r"[;/]|,| e | y | and ", text) if p.strip()]
+    if len(split) > 1 and any(len(p) <= 3 for p in split[1:]):
+        split = [text]
+    whole = geocode(text) if len(split) == 1 else None
+    parts = split
     out = []
     for part in parts[:4]:
-        g = whole if part == text else geocode(part)
+        g = whole if whole and part == text else geocode(part)
         if not g:
             print(f"  não achei \"{part}\" no mapa")
             continue
@@ -118,6 +123,29 @@ def save(search, brands):
     return len(rows)
 
 
+IMAGE = "gosom/google-maps-scraper:v1.18.1"
+
+
+def scrape_reviews(keyword, lat, lng, lang):
+    """Robô no modo linha de comando com -extra-reviews (o modo web só traz ~8 avaliações por lugar) -> linhas do CSV."""
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "q.txt"), "w") as f:
+            f.write(keyword + "\n")
+        cmd = ["docker", "run", "--rm", "-v", f"{d}:/work", IMAGE, "-input", "/work/q.txt", "-results", "/work/out.csv",
+               "-lang", lang, "-depth", "2", "-extra-reviews", "-geo", f"{lat:.6f},{lng:.6f}", "-zoom", "12", "-c", "4", "-exit-monitor", "2m"]
+        try:
+            subprocess.run(cmd, check=True, timeout=25 * 60, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        except subprocess.TimeoutExpired:
+            print("  (o robô passou de 25 min; fico com o que ele já gravou)")
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"robô falhou: {(e.stderr or b'')[-300:].decode(errors='replace')}") from None
+        path = os.path.join(d, "out.csv")
+        if not os.path.exists(path):
+            return []
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return list(csv.DictReader(io.StringIO(f.read())))
+
+
 def run_maps(search):
     places = places_of(search["place"])
     if not places:
@@ -127,9 +155,8 @@ def run_maps(search):
     jobs = [(q, p) for p in places for q in queries][:6]
     brands, scanned, seen_places, errors = [], 0, set(), []
     for q, (name, lat, lng, country) in jobs:
-        cell = {"lat": f"{lat:.6f}", "lon": f"{lng:.6f}", "radius": 15000, "zoom": 12}
         try:
-            rows = scrape(f"{q} {name}", cell, 3, lang=lang, extra_reviews=True)
+            rows = scrape_reviews(f"{q} {name}", lat, lng, lang)
         except Exception as e:  # uma cidade que falha não perde as outras
             errors.append(str(e))
             print(f"  {q} em {name}: {e}")
@@ -210,8 +237,6 @@ def run_etsy(search):
 
 def main():
     searches = rest("GET", "manual_searches?status=eq.queued&source=in.(maps,etsy)&order=created_at&limit=10&select=*") or []
-    if any(s["source"] == "maps" for s in searches):
-        wait_scraper()
     for s in searches:
         print(f"▶ manual ruim · {s['source']} · {s['query']} {s.get('place') or ''}")
         rest("PATCH", f"manual_searches?id=eq.{s['id']}", {"status": "running", "error": None, "updated_at": now()})

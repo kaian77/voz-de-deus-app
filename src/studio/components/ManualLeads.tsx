@@ -17,8 +17,8 @@ import { LEAD_STATUS } from "./LeadsMap";
 type Source = ManualSearch["source"];
 type Lang = "pt" | "en" | "es";
 
+// Mercado Livre saiu da tela: a API recusa avaliações de anúncios de outros vendedores ("access denied"; código mantido em _shared/manual-leads.ts)
 const SOURCES: { id: Source; label: string; hint: string }[] = [
-  { id: "ml", label: "Mercado Livre", hint: "Lê as avaliações dos anúncios (Brasil e Mercado Libre de fora) e junta por marca. Usa o acesso da sua conta conectada." },
   { id: "maps", label: "Google Maps", hint: "Lojas e fábricas de móveis de qualquer cidade do mundo, lendo as avaliações delas. País inteiro vira as maiores cidades dele. Leva de 20 a 60 minutos." },
   { id: "etsy", label: "Etsy", hint: "Lojas do Etsy (EUA e Europa). Precisa do secret ETSY_API_KEY (grátis em etsy.com/developers)." },
 ];
@@ -62,10 +62,10 @@ const contactSearch = (l: ManualLead, lang: Lang) =>
 
 export default function ManualLeads() {
   const invalidate = useInvalidate();
-  const [source, setSource] = useState<Source>("ml");
+  const [source, setSource] = useState<Source>("maps");
   const [site, setSite] = useState("MLB");
   const [mapsLang, setMapsLang] = useState<Lang>("en");
-  const [query, setQuery] = useState(ML_SITES[0].preset);
+  const [query, setQuery] = useState(MAPS_PRESET.en);
   const [place, setPlace] = useState("");
   const [sending, setSending] = useState(false);
   const [filter, setFilter] = useState<LeadStatus | "all">("new");
