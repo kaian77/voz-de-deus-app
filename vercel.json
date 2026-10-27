@@ -118,7 +118,7 @@
       ]
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!crazygames/).*)",
       "headers": [
         {
           "key": "X-Frame-Options",
@@ -175,6 +175,19 @@
         {
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/crazygames/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self' https://*.crazygames.com https://crazygames.com https://*.crazygames.io"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
         }
       ]
     }
