@@ -871,6 +871,29 @@
   }
   (_a = document.fonts) == null ? void 0 : _a.ready.then(() => sprites.clear());
   initPlatform();
+  if (location.search.includes("debug")) {
+    window.__blocks = {
+      over: () => over,
+      move: () => {
+        let best2 = null;
+        tray.forEach((p2, i) => {
+          if (!p2) return;
+          for (let r = 0; r <= N - p2.h; r++) for (let c = 0; c <= N - p2.w; c++) {
+            if (!fits(board, p2, r, c)) continue;
+            const { rows, cols, tmp } = fullLines(board, p2, r, c);
+            const lines = rows.length + cols.length;
+            applyClear(tmp, rows, cols);
+            const fill = tmp.filter((x) => x >= 0).length;
+            if (!best2 || lines > best2.lines || lines === best2.lines && fill < best2.fill) best2 = { i, r, c, lines, fill };
+          }
+        });
+        if (!best2) return null;
+        const b = best2;
+        const p = tray[b.i], s = slot(b.i);
+        return { from: s, to: { x: L.bx + b.c * L.c + p.w * L.c / 2, y: L.by + b.r * L.c + L.c * 1.1 + p.h * L.c } };
+      }
+    };
+  }
   requestAnimationFrame(draw);
 })();
 
