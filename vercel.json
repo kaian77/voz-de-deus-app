@@ -9,6 +9,10 @@
       "destination": "/corrida.html"
     },
     {
+      "source": "/jogo",
+      "destination": "/jogo.html"
+    },
+    {
       "source": "/montagem/:slug",
       "destination": "/montagem.html"
     },
