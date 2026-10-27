@@ -93,9 +93,57 @@ const seconds = (iso: string) => {
   return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0);
 };
 
-export type Trend = { id: string; title: string; channel: string; views: number; per_day: number; published_at: string; kind: "short" | "long" };
+export type Trend = {
+  id: string; title: string; channel: string; views: number; per_day: number; published_at: string; kind: "short" | "long";
+  /** Quantas vezes o vídeo bateu a mediana dos últimos vídeos do próprio canal (null = canal com poucos vídeos) */
+  lift?: number | null;
+};
 
-/** Os vídeos que mais deram audiência no nicho nos últimos 90 dias (em português), ordenados por visualizações por dia. */
+const median = (xs: number[]) => {
+  const v = [...xs].sort((a, b) => a - b);
+  return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : 0;
+};
+
+/**
+ * Quanto cada vídeo bateu o próprio canal: views ÷ mediana dos últimos 15 vídeos do canal. Visualização bruta só mede o
+ * tamanho do canal; o múltiplo mostra o TEMA que funcionou (um canal pequeno que fez 10x é o melhor sinal). Barato na
+ * cota: canais e vídeos vão em lotes de 50 (1 unidade cada) e cada lista de uploads custa 1.
+ */
+async function channelLift(token: string, videos: { id: string; channel_id: string; views: number }[]) {
+  const lift = new Map<string, number | null>();
+  const chIds = [...new Set(videos.map((v) => v.channel_id))].slice(0, 40);
+  const uploads = new Map<string, string>();
+  for (let i = 0; i < chIds.length; i += 50) {
+    const data = await yt(token, "channels", { part: "contentDetails", id: chIds.slice(i, i + 50).join(","), maxResults: "50" });
+    // deno-lint-ignore no-explicit-any
+    for (const c of (data.items ?? []) as any[]) if (c.contentDetails?.relatedPlaylists?.uploads) uploads.set(c.id, c.contentDetails.relatedPlaylists.uploads);
+  }
+  const recent = new Map<string, string[]>();
+  await Promise.all([...uploads].map(async ([ch, pl]) => {
+    const data = await yt(token, "playlistItems", { part: "contentDetails", playlistId: pl, maxResults: "15" }).catch(() => null);
+    // deno-lint-ignore no-explicit-any
+    recent.set(ch, ((data?.items ?? []) as any[]).map((it) => it.contentDetails?.videoId).filter(Boolean));
+  }));
+  const all = [...new Set([...recent.values()].flat())];
+  const views = new Map<string, number>();
+  for (let i = 0; i < all.length; i += 50) {
+    const data = await yt(token, "videos", { part: "statistics", id: all.slice(i, i + 50).join(",") });
+    // deno-lint-ignore no-explicit-any
+    for (const v of (data.items ?? []) as any[]) views.set(v.id, Number(v.statistics?.viewCount ?? 0));
+  }
+  for (const v of videos) {
+    const own = (recent.get(v.channel_id) ?? []).map((id) => views.get(id)).filter((n): n is number => n !== undefined);
+    const med = median(own);
+    // Com menos de 4 vídeos a mediana não diz nada
+    lift.set(v.id, own.length >= 4 && med > 0 ? Math.round((v.views / med) * 10) / 10 : null);
+  }
+  return lift;
+}
+
+/**
+ * O que está dando audiência no nicho nos últimos 90 dias. Ordena pelo quanto o vídeo bateu o próprio canal (lift) e,
+ * no empate, por visualizações por dia; vídeo com menos de 1.000 views fica de fora (ruído).
+ */
 export async function ytResearch(token: string, niche: string, language = "pt", extra: string[] = []): Promise<Trend[]> {
   const en = language === "en";
   const after = new Date(Date.now() - 90 * 86400000).toISOString();
@@ -111,24 +159,54 @@ export async function ytResearch(token: string, niche: string, language = "pt", 
   if (!ids.size) return [];
   const data = await yt(token, "videos", { part: "snippet,statistics,contentDetails", id: [...ids].slice(0, 50).join(",") });
   // deno-lint-ignore no-explicit-any
-  const out: Trend[] = (data.items ?? []).map((v: any) => {
+  const out = (data.items ?? []).map((v: any) => {
     const views = Number(v.statistics?.viewCount ?? 0);
     const days = Math.max(1, (Date.now() - new Date(v.snippet.publishedAt).getTime()) / 86400000);
     return {
-      id: v.id, title: v.snippet.title, channel: v.snippet.channelTitle, views, per_day: Math.round(views / days),
+      id: v.id, title: v.snippet.title, channel: v.snippet.channelTitle, channel_id: v.snippet.channelId as string, views, per_day: Math.round(views / days),
       published_at: v.snippet.publishedAt, kind: seconds(v.contentDetails?.duration) <= 180 ? "short" : "long",
     };
-  });
-  return out.sort((a, b) => b.per_day - a.per_day).slice(0, 30);
+  }).filter((t: { views: number }) => t.views >= 1000) as (Trend & { channel_id: string })[];
+  // Sem o múltiplo (erro na cota, por exemplo) volta para visualizações por dia
+  const lift = await channelLift(token, out).catch(() => new Map<string, number | null>());
+  const ranked: Trend[] = out.map(({ channel_id: _, ...t }) => ({ ...t, lift: lift.get(t.id) ?? null }));
+  const score = (t: Trend) => (t.lift ?? 1) * Math.log10(t.per_day + 10);
+  return ranked.sort((a, b) => score(b) - score(a)).slice(0, 30);
 }
 
 // --------------------------------------------------------------------------------------------- temas e roteiros
+
+/**
+ * Fórmulas de gancho (primeira frase do vídeo). Ideia do projeto aberto chatgpt-youtube-agent-skill (MIT), reescrita para
+ * os nossos canais. O gancho confirma o título, abre uma pergunta que a pessoa não consegue largar e mostra que a
+ * resposta vem.
+ */
+const HOOKS = [
+  ["numero", "Número surpreendente", "um número concreto que a pessoa não sabia, dito seco, e a consequência", "Você pisca cerca de 15 mil vezes por dia. E quase nunca percebe."],
+  ["e_se", "E se...", "uma situação extrema e concreta, e a promessa de mostrar o que acontece", "O que acontece com seu corpo se você ficar 3 dias sem dormir?"],
+  ["contrario", "Contrário", "derruba algo que quase todo mundo acredita", "Você não usa só 10% do cérebro. E isso nunca foi verdade."],
+  ["segredo", "Detalhe escondido", "um detalhe que quase ninguém repara, em algo conhecido", "Tem um detalhe na história de Davi e Golias que quase ninguém percebe."],
+  ["virada", "Virada", "começa normal e vira na segunda frase", "Elias venceu 450 profetas num dia. No dia seguinte, pediu para morrer."],
+  ["pergunta", "Pergunta que coça", "uma pergunta simples que a pessoa nunca soube responder", "Por que o avião não cai quando o motor desliga?"],
+  ["comparacao", "X vs Y", "dois lados com uma aposta clara", "Café ou energético: qual acorda mais de verdade?"],
+  ["erro", "Erro comum", "algo que a pessoa provavelmente faz errado", "Você provavelmente lava as mãos do jeito errado."],
+  ["consequencia", "Consequência", "começa pelo fim chocante e volta para explicar", "Esse erro de um soldado mudou o fim de um império inteiro."],
+  ["tempo", "Contagem", "um prazo curto que cria pressa", "Em 60 segundos você vai entender como a internet chega na sua casa."],
+  ["pessoa", "Personagem", "uma pessoa específica e o que aconteceu com ela", "Um pastor de ovelhas virou rei sem nunca ter pedido isso."],
+  ["proibido", "Ninguém conta", "algo que fica de fora das versões comuns da história", "Tem uma parte da história de Jonas que quase nunca é contada na igreja."],
+] as const;
+const HOOK_IDS = HOOKS.map(([id]) => id) as unknown as [string, ...string[]];
+const HOOK_GUIDE =
+  `Fórmulas de gancho (a primeira frase do vídeo):\n` + HOOKS.map(([id, name, shape, ex]) => `- ${id} (${name}): ${shape}. Ex.: "${ex}"`).join("\n") +
+  `\nRegras do gancho: confirma o título na primeira frase; uma ideia só; específico vence genérico (número, nome, lugar); ` +
+  `nunca comece com "olá", "neste vídeo" ou o nome do canal; não entregue a resposta no gancho.`;
 
 const Plan = z.object({
   items: z.array(z.object({
     kind: z.enum(["short", "long"]),
     topic: z.string().describe("Tema específico do vídeo, ex.: 'Por que Moisés não entrou na Terra Prometida'"),
-    angle: z.string().describe("O gancho/ângulo que prende (pergunta ou fato surpreendente), em 1 frase"),
+    hook: z.enum(HOOK_IDS).describe("Fórmula de gancho que melhor combina com o tema (varie entre os vídeos)"),
+    angle: z.string().describe("A primeira frase do vídeo, já escrita na fórmula escolhida"),
     inspired_by: z.array(z.string()).describe("ids dos vídeos de referência que mostram que esse tipo de tema dá audiência"),
   })),
 });
@@ -261,7 +339,7 @@ const LANG_STICK: Record<string, string> = {
   pt: `\n\nEscreva tudo em português do Brasil (valores em reais quando fizer sentido).`,
 };
 
-const STICK_TRENDS: Record<string, string[]> = {
+export const STICK_TRENDS: Record<string, string[]> = {
   en: ["what happens if you", "explained stick figure animation", "why do we"],
   pt: ["o que acontece se você", "por que a gente", "como funciona explicado"],
   es: ["qué pasa si", "por qué los humanos", "cómo funciona explicado"],
@@ -277,15 +355,18 @@ const rules = (niche: string, language: string, style = "") =>
 export async function planTopics(niche: string, trends: Trend[], recent: string[], kinds: ("short" | "long")[], language = "pt", style = "") {
   const out = await generateJSON(Plan,
     rules(niche, language, style) +
-      `\n\nAgora você é o editor do canal: escolha os temas dos próximos vídeos com base no que está dando audiência.`,
-    `Vídeos do nicho que mais crescem (título · visualizações por dia · formato · id):\n` +
-      (trends.length ? trends.map((t) => `- ${t.title} · ${t.per_day}/dia · ${t.kind} · ${t.id}`).join("\n") : "(sem dados agora; use temas clássicos que sempre dão audiência)") +
+      `\n\nAgora você é o editor do canal: escolha os temas dos próximos vídeos com base no que está dando audiência.\n\n${HOOK_GUIDE}`,
+    `Vídeos do nicho que mais crescem (título · quantas vezes bateu a média do próprio canal · visualizações por dia · formato · id). ` +
+      `O múltiplo é o sinal mais forte: um vídeo que fez 5x a média do canal mostra um TEMA que funciona, mesmo em canal pequeno.\n` +
+      (trends.length ? trends.map((t) => `- ${t.title} · ${t.lift ? `${t.lift}x a média` : "média ?"} · ${t.per_day}/dia · ${t.kind} · ${t.id}`).join("\n") : "(sem dados agora; use temas clássicos que sempre dão audiência)") +
       `\n\nTemas que o canal já fez (não repita):\n${recent.length ? recent.map((r) => `- ${r}`).join("\n") : "(nenhum)"}` +
       `\n\nEscolha exatamente ${kinds.length} temas, nesta ordem de formato: ${kinds.join(", ")}. ` +
       `Shorts: um único fato surpreendente e rápido. Longo: tema com várias curiosidades para 6 a 8 minutos.` +
       (style === "stickman" ? ` Temas no formato "o que acontece se...", "por que...", "como funciona..." ou "X vs Y", fáceis de mostrar com desenhos simples.` : ""),
     "low");
-  return out.items.slice(0, kinds.length).map((it, i) => ({ ...it, kind: kinds[i] }));
+  // A fórmula vai junto no ângulo (o roteirista segue a mesma)
+  const name = (id: string) => HOOKS.find(([h]) => h === id)?.[1] ?? id;
+  return out.items.slice(0, kinds.length).map(({ hook, ...it }, i) => ({ ...it, angle: `[${name(hook)}] ${it.angle}`, kind: kinds[i] }));
 }
 
 export async function writeScript(niche: string, video: { kind: string; topic: string; angle?: string | null; redo_note?: string | null }, language = "pt", style = "", tiktok = false): Promise<YtScript | StickScriptT> {
@@ -307,11 +388,37 @@ export async function writeScript(niche: string, video: { kind: string; topic: s
       `Abertura com gancho forte nos primeiros 15 segundos e a promessa do vídeo; depois 5 a 7 capítulos (curiosidades), ` +
       `cada um começando numa cena com chapter preenchido (a primeira cena tem chapter "${en ? "Introduction" : language === "es" ? "Introducción" : "Introdução"}"); ` +
       `fechamento com uma lição e chamada para se inscrever e comentar.`;
-  return await generateJSON(stick ? StickScript : Script,
-    rules(niche, language, style),
-    `${shape}\n\nTema: ${video.topic}\nGancho: ${video.angle ?? "(escolha o melhor)"}` +
+  const script = await generateJSON(stick ? StickScript : Script,
+    rules(niche, language, style) + `\n\n${HOOK_GUIDE}`,
+    `${shape}\n\nTema: ${video.topic}\nGancho: ${video.angle ?? "(escolha a melhor fórmula)"}` +
       (video.redo_note ? `\n\nO dono pediu para refazer este vídeo assim: ${video.redo_note}` : ""),
     "medium");
+  return await checkHook(script, language).catch(() => script);
+}
+
+const HookCheck = z.object({
+  score: z.number().describe("Nota de 0 a 10 do gancho"),
+  problems: z.array(z.string()).describe("O que enfraquece o gancho (vazio se nota 8 ou mais)"),
+  better: z.string().describe("Primeira frase reescrita, mais forte, no mesmo idioma e com no máximo 14 palavras; vazio se nota 8 ou mais"),
+});
+
+/**
+ * Dá nota ao gancho antes de gravar (como o hookscore do projeto de skills): abaixo de 7, troca só a fala da primeira
+ * cena pela versão melhor. A imagem/pose da cena continua a mesma.
+ */
+async function checkHook<T extends { title: string; scenes: { narration: string }[] }>(script: T, language: string): Promise<T> {
+  const first = script.scenes[0]?.narration;
+  if (!first) return script;
+  const r = await generateJSON(HookCheck,
+    `Você avalia ganchos de vídeos curtos e longos do YouTube/TikTok. Seja duro: a maioria dos ganchos é fraca.\n\n${HOOK_GUIDE}\n\n` +
+      `Critérios: confirma o título? abre uma pergunta que a pessoa não consegue largar? é específico (número, nome, lugar)? ` +
+      `uma ideia só? sem enrolação no começo? não entrega a resposta?`,
+    `Idioma do vídeo: ${language}\nTítulo: ${script.title}\nPrimeiras falas:\n1. ${first}\n2. ${script.scenes[1]?.narration ?? ""}\n\n` +
+      `Dê a nota do gancho (fala 1, com a 2 de apoio). Se for menor que 8, reescreva a fala 1 sem mudar o fato nem inventar nada.`,
+    "low");
+  if (r.score >= 7 || !r.better.trim()) return script;
+  const scenes = script.scenes.map((sc, i) => i === 0 ? { ...sc, narration: r.better.trim() } : sc);
+  return { ...script, scenes };
 }
 
 // --------------------------------------------------------------------------------------------- piloto diário
