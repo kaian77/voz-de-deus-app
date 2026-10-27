@@ -1,0 +1,40 @@
+# Arte do jogo Castle Rescue (video/game_art.py): gera as ilustrações e publica na branch "game-art" para escolher.
+name: Arte do jogo
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  art:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      POLLINATIONS_TOKEN: ${{ secrets.POLLINATIONS_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependências
+        run: pip install -q "pillow>=10" "numpy>=1.26" "rembg[cpu]>=2.0.50"
+      - name: Modelo de recorte (cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.rembg
+          key: rembg-u2net-v2
+      - name: Gerar a arte
+        run: python3 video/game_art.py
+      - name: Publicar na branch game-art
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan game-art-tmp
+          git rm -rf --cached . -q
+          git add -f art/
+          git commit -qm "Arte do jogo"
+          git push -fq origin HEAD:game-art
