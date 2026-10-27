@@ -19,7 +19,7 @@ type Lang = "pt" | "en" | "es";
 
 const SOURCES: { id: Source; label: string; hint: string }[] = [
   { id: "ml", label: "Mercado Livre", hint: "Lê as avaliações dos anúncios (Brasil e Mercado Libre de fora) e junta por marca. Usa o acesso da sua conta conectada." },
-  { id: "maps", label: "Google Maps", hint: "Lojas e fábricas de móveis de qualquer cidade do mundo, lendo as avaliações delas. Leva de 10 a 30 minutos." },
+  { id: "maps", label: "Google Maps", hint: "Lojas e fábricas de móveis de qualquer cidade do mundo, lendo as avaliações delas. País inteiro vira as maiores cidades dele. Leva de 20 a 60 minutos." },
   { id: "etsy", label: "Etsy", hint: "Lojas do Etsy (EUA e Europa). Precisa do secret ETSY_API_KEY (grátis em etsy.com/developers)." },
 ];
 
@@ -111,7 +111,7 @@ export default function ManualLeads() {
     if (source === "maps" && !place.trim()) return toast.error("Diga a cidade e o país");
     run(
       { source, query, place: source === "maps" ? place : undefined, site: source === "ml" ? site : source === "maps" ? mapsLang : undefined },
-      source === "ml" ? "Lendo as avaliações! Leva 1 a 3 minutos." : "Buscando! Leva de 10 a 30 minutos; pode sair da tela.",
+      source === "ml" ? "Lendo as avaliações! Leva 1 a 3 minutos." : "Buscando! Leva de 20 a 60 minutos; pode sair da tela.",
     );
   };
 
@@ -161,7 +161,7 @@ export default function ManualLeads() {
             )}
             <Input className={cn(source === "etsy" && "sm:col-span-2")} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tipos de móvel, separados por vírgula" onKeyDown={(e) => e.key === "Enter" && source !== "maps" && start()} />
             {source === "maps" && (
-              <Input className="sm:col-span-2" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Cidade e país (ex.: Miami FL, Madrid España)" onKeyDown={(e) => e.key === "Enter" && start()} />
+              <Input className="sm:col-span-2" value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Cidade ou país (ex.: Miami FL, Madrid, Estados Unidos)" onKeyDown={(e) => e.key === "Enter" && start()} />
             )}
             <Button onClick={start} disabled={sending} className={cn(source === "maps" && "sm:col-start-3 sm:row-start-2")}>
               {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}Buscar
@@ -176,7 +176,7 @@ export default function ManualLeads() {
           ) : (
             <ul className="max-h-72 divide-y overflow-y-auto">
               {searches.map((s) => {
-                const stuck = (s.status === "queued" || s.status === "running") && Date.now() - new Date(s.updated_at ?? s.created_at).getTime() > (s.source === "ml" ? 8 : 45) * 60_000;
+                const stuck = (s.status === "queued" || s.status === "running") && Date.now() - new Date(s.updated_at ?? s.created_at).getTime() > (s.source === "ml" ? 8 : 120) * 60_000;
                 return (
                   <li key={s.id} className="px-4 py-2.5">
                     <div className="flex items-start gap-2">
@@ -190,6 +190,12 @@ export default function ManualLeads() {
                       </span>
                       {(s.status === "queued" || s.status === "running") && !stuck && <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-muted-foreground" />}
                     </div>
+                    {s.log && (s.status === "failed" || (s.status === "done" && !s.found)) && (
+                      <p className="mt-1 break-words text-[11px] text-muted-foreground">
+                        {Object.entries(s.log).filter(([k]) => k !== "errors").map(([k, v]) => `${k.replace(/_/g, " ")} ${v}`).join(" · ")}
+                        {Array.isArray(s.log.errors) && s.log.errors.length > 0 && <span className="block">{s.log.errors.join(" | ")}</span>}
+                      </p>
+                    )}
                     {(s.status === "failed" || s.status === "done" || stuck) && (
                       <button type="button" onClick={() => run({ retry_id: s.id }, "Buscando de novo!")} className="mt-1 text-xs font-medium hover:underline">
                         Buscar de novo

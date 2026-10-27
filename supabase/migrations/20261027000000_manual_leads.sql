@@ -67,3 +67,6 @@ drop policy if exists "own all" on public.manual_searches;
 drop policy if exists "own all" on public.manual_leads;
 create policy "own all" on public.manual_searches for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "own all" on public.manual_leads for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Contagem de cada etapa da busca e os primeiros erros (para entender busca que volta vazia)
+alter table public.manual_searches add column if not exists log jsonb;
