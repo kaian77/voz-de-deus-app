@@ -9,6 +9,10 @@
       "destination": "/corrida.html"
     },
     {
+      "source": "/montagem/:slug",
+      "destination": "/montagem.html"
+    },
+    {
       "source": "/media/:path*",
       "destination": "https://rrlxhnmfsmknzhqpfrhr.supabase.co/storage/v1/object/public/media/:path*"
     },
@@ -80,6 +84,15 @@
     },
     {
       "source": "/corrida/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/montagem/(.*)",
       "headers": [
         {
           "key": "X-Robots-Tag",
