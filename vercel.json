@@ -9,6 +9,10 @@
       "destination": "/corrida.html"
     },
     {
+      "source": "/resgate",
+      "destination": "/resgate.html"
+    },
+    {
       "source": "/jogo",
       "destination": "/jogo.html"
     },
