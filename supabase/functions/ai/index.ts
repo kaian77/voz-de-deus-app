@@ -22,6 +22,9 @@ import { runVideosFor, videoAutopilotStatus } from "../_shared/video-autopilot.t
 import { sendWhatsAppTo } from "../_shared/sale-alerts.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 import { notify, pushPublicKey, sendPendingPush } from "../_shared/push.ts";
+import { ML_SITES, runMlManualSearch } from "../_shared/manual-leads.ts";
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
 const SYSTEM = (brand: string) =>
   `Você é estrategista de conteúdo e social media sênior, especialista em Instagram e TikTok no Brasil. ` +
@@ -331,6 +334,33 @@ Deno.serve(async (req) => {
       const { data, error } = await db.from("lead_searches").insert({ user_id: userId, query, place, wanted }).select().single();
       if (error) throw new HttpError(500, error.message);
       return json({ ...data, started: await dispatchRender("leads.yml") });
+    }
+    if (action === "manual_search") {
+      // Leads da Montagem 3D: marcas de móveis com avaliações reclamando do manual. Mercado Livre roda aqui em
+      // segundo plano; Google Maps e Etsy vão para o workflow "Leads do Google Maps" (video/manual_leads.py).
+      const start = async (row: { id: string; source: string }) => {
+        if (row.source !== "ml") return await dispatchRender("leads.yml");
+        const job = runMlManualSearch(db, row.id);
+        if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(job);
+        else await job;
+        return true;
+      };
+      if (input.retry_id) {
+        const { data, error } = await db.from("manual_searches").update({ status: "queued", error: null, updated_at: new Date().toISOString() })
+          .eq("id", String(input.retry_id)).eq("user_id", userId).in("status", ["failed", "queued", "done"]).select().single();
+        if (error || !data) throw new HttpError(404, "Busca não encontrada");
+        return json({ ...data, started: await start(data) });
+      }
+      const source = ["ml", "maps", "etsy"].includes(String(input.source)) ? String(input.source) : "ml";
+      const query = String(input.query ?? "").trim().slice(0, 120);
+      const place = String(input.place ?? "").trim().slice(0, 120) || null;
+      const site = String(input.site ?? "").slice(0, 8) || null;
+      if (!query) throw new HttpError(400, "Diga o tipo de móvel (ex.: rack, guarda-roupa)");
+      if (source === "ml" && !(site && ML_SITES[site])) throw new HttpError(400, "Escolha o país do Mercado Livre");
+      if (source === "maps" && !place) throw new HttpError(400, "Diga a cidade ou o país (ex.: Miami FL)");
+      const { data, error } = await db.from("manual_searches").insert({ user_id: userId, source, query, place, site }).select().single();
+      if (error) throw new HttpError(500, error.message);
+      return json({ ...data, started: await start(data) });
     }
     if (action === "store_products") {
       // Busca de produtos da loja para vincular a um post

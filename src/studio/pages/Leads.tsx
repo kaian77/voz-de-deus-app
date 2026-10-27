@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Copy, Download, ExternalLink, Globe, Loader2, MapPin, Search, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { useInvalidate, useOffer, useSaveRow, useTable } from "../lib/hooks";
 import type { Lead, LeadSearch, LeadStatus } from "../lib/types";
 import { EmptyState, PageHeader, Panel, relativeTime, SectionLabel, WhatsAppIcon } from "../components/bits";
 import LeadsMap, { areaColor, LEAD_STATUS } from "../components/LeadsMap";
+import ManualLeads from "../components/ManualLeads";
 import { offerMessages } from "../lib/offer";
 
 const MSG_KEY = "studio-leads-msg";
@@ -55,6 +56,9 @@ function exportCsv(leads: Lead[]) {
 export default function Leads() {
   const invalidate = useInvalidate();
   const navigate = useNavigate();
+  // Abas: empresas sem site (landing page) × móveis com manual ruim (Montagem 3D)
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("aba") === "manual" ? "manual" : "site";
   const [query, setQuery] = useState("");
   const [place, setPlace] = useState("");
   const [wanted, setWanted] = useState("30");
@@ -133,9 +137,26 @@ export default function Leads() {
     <div>
       <PageHeader
         title="Leads"
-        description="Empresas do Google Maps sem site e com WhatsApp, para oferecer landing page. As áreas já pesquisadas ficam pintadas no mapa."
-        actions={leads.length > 0 && <Button variant="outline" size="sm" onClick={() => exportCsv(shown)}><Download className="mr-1.5 h-4 w-4" />Planilha</Button>}
+        description={tab === "manual"
+          ? "Marcas de móveis com avaliações reclamando do manual ou da montagem, no Brasil e lá fora, para oferecer a Montagem 3D."
+          : "Empresas do Google Maps sem site e com WhatsApp, para oferecer landing page. As áreas já pesquisadas ficam pintadas no mapa."}
+        actions={tab === "site" && leads.length > 0 && <Button variant="outline" size="sm" onClick={() => exportCsv(shown)}><Download className="mr-1.5 h-4 w-4" />Planilha</Button>}
       />
+
+      <div className="mb-4 flex gap-1 rounded-lg border bg-card p-1 sm:w-fit">
+        {([["site", "Sem site (landing)"], ["manual", "Manual ruim (Montagem 3D)"]] as const).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setParams(k === "manual" ? { aba: "manual" } : {}, { replace: true })}
+            className={cn("flex-1 rounded-md px-3 py-1.5 text-xs font-medium sm:flex-none", tab === k ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground")}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "manual" ? <ManualLeads /> : <>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
@@ -275,6 +296,7 @@ export default function Leads() {
         )}
         <SectionLabel className="mt-3">O botão Chamar abre o WhatsApp com a mensagem pronta e marca o lead como contatado.</SectionLabel>
       </div>
+      </>}
     </div>
   );
 }
