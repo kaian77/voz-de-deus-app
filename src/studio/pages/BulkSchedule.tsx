@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { api } from "../lib/api";
 import { useTable } from "../lib/hooks";
 import { renderPostMedia } from "../lib/publishing";
-import type { Platform, Post } from "../lib/types";
+import type { Platform, Post, SocialAccount } from "../lib/types";
 import TikTokSettings, { TIKTOK_DEFAULTS, tiktokProblem, toApiOptions, useTikTokCreator, type TikTokOptions } from "../components/TikTokSettings";
 import { PageHeader, Panel, PlatformIcon, SlidePreview, toLocalInput } from "../components/bits";
 
@@ -110,6 +110,25 @@ function videoInfo(src: string): Promise<{ seconds?: number; frame?: Blob }> {
   });
 }
 
+const ACCOUNT_KEY = "bulk-accounts";
+const isLoja = (a: SocialAccount) => !a.meta?.brand || a.meta.brand === "brax";
+const accountLabel = (a: SocialAccount) =>
+  `@${a.username ?? a.display_name ?? "conta"}${a.meta?.brand === "paginaspro" ? " · PáginasPro" : a.meta?.brand === "canal" ? " · fora da loja" : " · Brax Pins"}`;
+
+function readSavedAccounts(): Partial<Record<Platform, string>> {
+  try {
+    return JSON.parse(localStorage.getItem(ACCOUNT_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+/** Conta em que um post sai naquela rede (sem escolha = a da loja). */
+function postAccount(p: Post, platform: Platform, accounts: SocialAccount[]) {
+  const chosen = (p.options?.account_ids as Record<string, string> | undefined)?.[platform];
+  return chosen ?? accounts.find((a) => a.platform === platform && isLoja(a))?.id;
+}
+
 /** Horários livres a partir do dia escolhido, pulando os já ocupados e os que já passaram. */
 function* slots(start: string, times: string[], taken: Set<string>) {
   const sorted = [...new Set(times.filter(Boolean))].sort();
@@ -134,11 +153,45 @@ export default function BulkSchedule() {
   const { data: accounts = [] } = useTable("social_accounts");
   const connected = (["instagram", "tiktok"] as Platform[]).filter((p) => accounts.some((a) => a.platform === p));
   const [picked, setPlatforms] = useState<Platform[]>([]);
+  const [chosenAccounts, setChosenAccounts] = useState<Partial<Record<Platform, string>>>(readSavedAccounts);
+  const social = accounts as SocialAccount[];
+  const accountsOf = (p: Platform) => social.filter((a) => a.platform === p);
+  // Conta de cada rede: a escolhida (se ainda existe) ou a da loja
+  const accountFor = (p: Platform) =>
+    accountsOf(p).find((a) => a.id === chosenAccounts[p]) ?? accountsOf(p).find(isLoja) ?? accountsOf(p)[0];
+  const chooseAccount = (p: Platform, id: string) => {
+    const next = { ...chosenAccounts, [p]: id };
+    setChosenAccounts(next);
+    try {
+      localStorage.setItem(ACCOUNT_KEY, JSON.stringify(next));
+    } catch {
+      /* sem armazenamento: vale só nesta visita */
+    }
+  };
   // Só as redes conectadas valem (os posts de Aprovações podem citar uma rede que não está conectada)
   const platforms = picked.filter((p) => connected.includes(p));
   const [items, setItems] = useState<Item[]>([]);
   const [start, setStart] = useState(() => dayKey(new Date()));
-  const [times, setTimes] = useState<string[]>(["13:00", "19:00"]);
+  const [times, setTimesState] = useState<string[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("bulk-times") || "null");
+      if (Array.isArray(saved) && saved.length) return saved;
+    } catch {
+      /* sem armazenamento */
+    }
+    return ["13:00", "19:00"];
+  });
+  // Lembra os horários do dia para a próxima vez
+  const setTimes = (next: string[] | ((cur: string[]) => string[])) =>
+    setTimesState((cur) => {
+      const value = typeof next === "function" ? next(cur) : next;
+      try {
+        localStorage.setItem("bulk-times", JSON.stringify(value));
+      } catch {
+        /* sem armazenamento */
+      }
+      return value;
+    });
   const [skipTaken, setSkipTaken] = useState(true);
   const [hint, setHint] = useState("");
   const [suffix, setSuffix] = useState("");
@@ -187,11 +240,14 @@ export default function BulkSchedule() {
   const patch = (id: string, p: Partial<Item>) => setItems((list) => list.map((x) => (x.id === id ? { ...x, ...p } : x)));
 
   // Data e hora de cada post: as escolhidas à mão ficam; as outras pegam os próximos horários livres, na ordem da lista
+  const targetIds = platforms.map((p) => accountFor(p)?.id).filter(Boolean).join();
   const schedule = useMemo(() => {
     const taken = new Set<string>();
     if (skipTaken) {
       for (const p of posts as Post[]) {
         if (items.some((x) => x.post?.id === p.id)) continue; // os que estão sendo reagendados aqui
+        // Só ocupa o horário se o post sai numa das contas escolhidas aqui (a conta nova não disputa horário com a loja)
+        if (!platforms.some((pl) => p.platforms.includes(pl) && postAccount(p, pl, social) === accountFor(pl)?.id)) continue;
         if (p.scheduled_at && ["scheduled", "pending_approval", "publishing"].includes(p.status)) taken.add(toLocalInput(p.scheduled_at));
       }
     }
@@ -200,7 +256,8 @@ export default function BulkSchedule() {
     const out: Record<string, string | undefined> = {};
     for (const it of items) out[it.id] = it.when || gen.next().value || undefined;
     return out;
-  }, [items, posts, start, times, skipTaken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, posts, start, times, skipTaken, targetIds]);
 
   const onFiles = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -262,6 +319,7 @@ export default function BulkSchedule() {
           hint,
           kind: it.type === "video" ? "reel" : "image",
           platforms,
+          account_id: (accountFor("instagram") && platforms.includes("instagram") ? accountFor("instagram") : accountFor(platforms[0]))?.id,
         });
         patch(it.id, { caption: `${r.caption}\n\n${r.hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ")}` });
         done++;
@@ -293,9 +351,19 @@ export default function BulkSchedule() {
     return null;
   };
 
+  const accountIds = () => {
+    const out: Record<string, string> = {};
+    for (const p of platforms) {
+      const a = accountFor(p);
+      if (a) out[p] = a.id;
+    }
+    return out;
+  };
+
   const save = async () => {
     const p = problem();
     if (p) return toast.error(p);
+    const account_ids = accountIds();
     setSaving(true);
     let saved = 0;
     try {
@@ -311,7 +379,12 @@ export default function BulkSchedule() {
             caption,
             scheduled_at,
             status: "scheduled",
-            options: { ...(p.options ?? {}), ...(onTikTok ? { tiktok: toApiOptions(ttOpts) } : {}) },
+            options: {
+              ...(p.options ?? {}),
+              ...(onTikTok ? { tiktok: toApiOptions(ttOpts) } : {}),
+              // Post da PáginasPro continua na conta dela
+              ...(p.options?.brand === "paginaspro" ? {} : { account_ids }),
+            },
           });
           saved++;
           continue;
@@ -327,7 +400,7 @@ export default function BulkSchedule() {
           scheduled_at,
           status: "scheduled",
           results: {},
-          options: onTikTok ? { tiktok: toApiOptions(ttOpts) } : {},
+          options: { ...(onTikTok ? { tiktok: toApiOptions(ttOpts) } : {}), account_ids },
           created_by: "user",
         });
         saved++;
@@ -475,6 +548,26 @@ export default function BulkSchedule() {
                 })}
               </div>
             )}
+            {platforms.some((p) => accountsOf(p).length > 1) && (
+              <div className="mt-4 space-y-3">
+                {platforms.filter((p) => accountsOf(p).length > 1).map((p) => (
+                  <div key={p} className="space-y-1.5">
+                    <Label htmlFor={`acc-${p}`} className="text-xs">Conta do {p === "instagram" ? "Instagram" : "TikTok"}</Label>
+                    <select
+                      id={`acc-${p}`}
+                      value={accountFor(p)?.id ?? ""}
+                      onChange={(e) => chooseAccount(p, e.target.value)}
+                      className="h-9 w-full rounded-md border bg-background px-2 text-[13px]"
+                    >
+                      {accountsOf(p).map((a) => (
+                        <option key={a.id} value={a.id}>{accountLabel(a)}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+            <AccountProfile account={platforms.map(accountFor).find((a) => a && !isLoja(a))} />
           </Panel>
 
           <Panel title="Horários" description="Os posts entram, na ordem da lista, nos próximos horários livres a partir do dia escolhido.">
@@ -531,6 +624,47 @@ export default function BulkSchedule() {
           </Panel>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Perfil de uma conta fora da loja: a IA usa nas legendas dos posts dela. */
+function AccountProfile({ account }: { account?: SocialAccount }) {
+  const qc = useQueryClient();
+  const [about, setAbout] = useState(account?.meta?.profile ?? "");
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setAbout(account?.meta?.profile ?? ""), [account?.id, account?.meta?.profile]);
+  if (!account) return null;
+  const changed = about.trim() !== (account.meta?.profile ?? "").trim();
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.invoke("ai", { action: "account_profile", account_id: account.id, about });
+      await qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
+      toast.success("Perfil da conta salvo");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="mt-4 space-y-1.5 border-t pt-4">
+      <Label htmlFor="acc-profile" className="text-xs">Sobre @{account.username} (a IA usa nas legendas)</Label>
+      <Textarea
+        id="acc-profile"
+        rows={5}
+        className="text-[13px]"
+        value={about}
+        onChange={(e) => setAbout(e.target.value)}
+        placeholder={"Assunto da página, público, tom de voz, hashtags e chamada final.\nEx.: Curiosidades do dia a dia. Tom leve e direto. Hashtags: #curiosidades #vocesabia. Chamada: Siga para mais."}
+      />
+      {!account.meta?.profile && <p className="text-xs text-muted-foreground">Sem perfil, a IA escreve só sobre o que aparece no vídeo.</p>}
+      {changed && (
+        <Button size="sm" variant="outline" onClick={save} disabled={saving}>
+          {saving && <Loader2 className="animate-spin" />}Salvar perfil
+        </Button>
+      )}
     </div>
   );
 }

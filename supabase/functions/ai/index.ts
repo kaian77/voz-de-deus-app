@@ -23,6 +23,7 @@ import { sendWhatsAppTo } from "../_shared/sale-alerts.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 import { notify, pushPublicKey, sendPendingPush } from "../_shared/push.ts";
 import { ML_SITES, runMlManualSearch } from "../_shared/manual-leads.ts";
+import { isBrax } from "../_shared/brand.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -158,6 +159,17 @@ Deno.serve(async (req) => {
       // Botão "Otimizar agora" (Studio → Uso): tira do storage os vídeos antigos que já não servem
       const days = Math.min(30, Math.max(1, Number(input.days) || 3));
       return json(await optimizeStorage(db, days));
+    }
+    if (action === "account_profile") {
+      // Perfil de uma conta fora da loja (ex.: Instagram novo): a IA usa nas legendas dos posts dessa conta
+      const { data: acc } = await db.from("social_accounts").select("*").eq("id", String(input.account_id ?? "")).eq("user_id", userId)
+        .in("platform", ["instagram", "tiktok"]).maybeSingle();
+      if (!acc) throw new HttpError(404, "Conta não encontrada");
+      const about = String(input.about ?? "").trim().slice(0, 2000);
+      const meta = { ...acc.meta, profile: about || null };
+      const { error } = await db.from("social_accounts").update({ meta }).eq("id", acc.id);
+      if (error) throw new HttpError(500, error.message);
+      return json({ meta });
     }
     if (action === "push_key") return json({ key: await pushPublicKey(db) });
     if (action === "push_subscribe") {
@@ -605,7 +617,19 @@ Deno.serve(async (req) => {
         // Legenda olhando a foto (ou um quadro do vídeo) — usada no agendamento em massa
         const storage = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/media/${userId}/`;
         const image = typeof input.image === "string" && input.image.startsWith(storage) ? [input.image] : [];
-        return json(await generateJSON(Caption, system,
+        // Conta escolhida fora da loja: escreve com o perfil dela, nunca com o da Brax Pins
+        let accountSystem = system;
+        if (input.account_id) {
+          const { data: acc } = await db.from("social_accounts").select("username, meta").eq("id", String(input.account_id)).eq("user_id", userId).maybeSingle();
+          if (acc && !isBrax(acc.meta)) {
+            accountSystem = SYSTEM(
+              acc.meta?.profile
+                ? `Conta: @${acc.username}\n${acc.meta.profile}`
+                : `Conta: @${acc.username}. Sem perfil definido: escreva só sobre o que aparece na imagem, sem citar loja, produto à venda nem marca.`,
+            );
+          }
+        }
+        return json(await generateJSON(Caption, accountSystem,
           `Crie uma legenda para um ${input.kind === "reel" ? "Reels/vídeo" : "post de foto"} para ${(input.platforms ?? ["instagram"]).join(" e ")}.\n` +
           `${image.length ? "Olhe a imagem anexada (é o post ou um quadro do vídeo) e escreva sobre o que aparece nela.\n" : ""}` +
           `${input.hint ? `Contexto do usuário: ${String(input.hint).slice(0, 600)}\n` : ""}` +
