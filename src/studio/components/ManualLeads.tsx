@@ -196,7 +196,7 @@ export default function ManualLeads() {
                         {Array.isArray(s.log.errors) && s.log.errors.length > 0 && <span className="block">{s.log.errors.join(" | ")}</span>}
                       </p>
                     )}
-                    {(s.status === "failed" || s.status === "done" || stuck) && (
+                    {s.source !== "ml" && (s.status === "failed" || s.status === "done" || stuck) && (
                       <button type="button" onClick={() => run({ retry_id: s.id }, "Buscando de novo!")} className="mt-1 text-xs font-medium hover:underline">
                         Buscar de novo
                       </button>
