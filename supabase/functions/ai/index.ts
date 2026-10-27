@@ -10,7 +10,7 @@ import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
 import { cleanDomain, DNS_RECORDS, importClientData, publishPatch, vercelDomain, vercelDomainStatus, writeLanding } from "../_shared/landing.ts";
 import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
-import { planDay, ytDeleteVideo, ytResearch, ytToken } from "../_shared/youtube.ts";
+import { planDay, STICK_TRENDS, ytDeleteVideo, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
@@ -262,7 +262,7 @@ Deno.serve(async (req) => {
     if (action === "yt_research") {
       const { data: channel } = await db.from("yt_channels").select("*").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();
       if (!channel) throw new HttpError(400, "Conecte o canal do YouTube primeiro");
-      const trends = await ytResearch(await ytToken(db, channel.id), channel.niche, channel.language);
+      const trends = await ytResearch(await ytToken(db, channel.id), channel.niche, channel.language, channel.style === "stickman" ? STICK_TRENDS[channel.language] ?? STICK_TRENDS.en : []);
       await db.from("yt_channels").update({ trends, trends_at: new Date().toISOString(), error: null }).eq("id", channel.id);
       return json({ trends });
     }

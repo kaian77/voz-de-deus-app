@@ -491,7 +491,7 @@ export interface YtChannel {
   shorts_per_day: number;
   long_per_week: number;
   voice: string;
-  trends: { id: string; title: string; channel: string; views: number; per_day: number; kind: "short" | "long" }[] | null;
+  trends: { id: string; title: string; channel: string; views: number; per_day: number; kind: "short" | "long"; lift?: number | null }[] | null;
   trends_at: string | null;
   planned_on: string | null;
   tiktok_account: string | null;
