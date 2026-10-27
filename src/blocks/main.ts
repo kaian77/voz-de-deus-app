@@ -319,12 +319,12 @@ function continueGame() {
   // No portal: vídeo de verdade (só continua se a pessoa assistiu); fora dele, simulação de 2 s
   if (showAd("rewarded", {
     start: () => ac?.suspend(),
-    done: (ok) => {
+    done: (ok, why) => {
       ac?.resume();
       if (ok) {
         continued = true;
         reopen();
-      } else floats.push({ text: t("Vídeo indisponível agora", "Video not available now", "Video no disponible ahora"), x: L.W / 2, y: L.H / 2 + 200, t0: now(), size: 18, color: "#fff" });
+      } else floats.push({ text: t("Vídeo indisponível agora", "Video not available now", "Video no disponible ahora") + (why ? ` (${why})` : ""), x: L.W / 2, y: L.H / 2 + 200, t0: now(), size: 18, color: "#fff" });
     },
   })) return;
   continued = true;
