@@ -245,9 +245,9 @@ function place(i: number, r0: number, c0: number) {
     const praise = [t("Bom!", "Good!", "¡Bien!"), t("Ótimo!", "Great!", "¡Genial!"), t("Incrível!", "Amazing!", "¡Increíble!"),
       t("Fantástico!", "Fantastic!", "¡Fantástico!"), t("Lendário!", "Legendary!", "¡Legendario!")];
     const lvl = lines + streak - 2;
-    if (clean) floats.push({ text: t("Tabuleiro limpo! +300", "Board clear! +300", "¡Tablero limpio! +300"), x: L.W / 2, y: L.by + L.c * 4, t0: tm + 150, size: L.c * 0.62, color: "#ffd23f" });
-    else if (lvl >= 0) floats.push({ text: praise[Math.min(lvl, 4)], x: L.W / 2, y: L.by + L.c * 3.6, t0: tm + 120, size: L.c * (0.8 + Math.min(lvl, 4) * 0.08), color: COLORS[p.color][1] });
-    if (streak >= 2) floats.push({ text: `Combo ${streak}`, x: L.W / 2, y: L.by + L.c * 4.6, t0: tm + 220, size: L.c * 0.5, color: "#fff" });
+    if (clean) floats.push({ text: t("Tabuleiro limpo! +300", "Board clear! +300", "¡Tablero limpio! +300"), x: L.bx + L.c * 4, y: L.by + L.c * 4, t0: tm + 150, size: L.c * 0.62, color: "#ffd23f" });
+    else if (lvl >= 0) floats.push({ text: praise[Math.min(lvl, 4)], x: L.bx + L.c * 4, y: L.by + L.c * 3.6, t0: tm + 120, size: L.c * (0.8 + Math.min(lvl, 4) * 0.08), color: COLORS[p.color][1] });
+    if (streak >= 2) floats.push({ text: `Combo ${streak}`, x: L.bx + L.c * 4, y: L.by + L.c * 4.6, t0: tm + 220, size: L.c * 0.5, color: "#fff" });
     shake = Math.min(14, 4 + lines * 3 + streak);
     sfx("clear", lines + streak);
     vibrate(lines > 1 ? [20, 30, 40] : 25);
@@ -258,7 +258,7 @@ function place(i: number, r0: number, c0: number) {
         mission.done = true;
         mission.days = mission.last === today() ? mission.days : mission.days + 1;
         mission.last = today();
-        floats.push({ text: t("Missão do dia cumprida! 🔥", "Daily mission done! 🔥", "¡Misión del día cumplida! 🔥"), x: L.W / 2, y: L.by + L.c * 5.6, t0: tm + 400, size: L.c * 0.48, color: "#7ee6a4" });
+        floats.push({ text: t("Missão do dia cumprida! 🔥", "Daily mission done! 🔥", "¡Misión del día cumplida! 🔥"), x: L.bx + L.c * 4, y: L.by + L.c * 5.6, t0: tm + 400, size: L.c * 0.48, color: "#7ee6a4" });
         confetti();
       }
     }
@@ -348,21 +348,47 @@ function reopen() {
 // ------------------------------------------------------------------------------------------------ layout e desenho
 const cv = document.getElementById("game") as HTMLCanvasElement;
 const ctx = cv.getContext("2d")!;
-const L = { W: 0, H: 0, dpr: 1, c: 40, bx: 0, by: 0, ty: 0, tc: 20 };
+// land = tela deitada (computador, iframe do portal): placar à esquerda, grade no meio, peças em coluna à direita
+const L = { W: 0, H: 0, dpr: 1, c: 40, bx: 0, by: 0, ty: 0, tc: 20, land: false, sx: 0, sy: 0, ss: 40, chipX: 0, chipY: 0, chipW: 400, trayX: 0, trayH: 0 };
 function layout() {
   L.dpr = Math.min(window.devicePixelRatio || 1, 2.5);
   L.W = window.innerWidth;
   L.H = window.innerHeight;
   cv.width = Math.round(L.W * L.dpr);
   cv.height = Math.round(L.H * L.dpr);
-  const top = Math.max(118, L.H * 0.17);
-  L.c = Math.floor(Math.min((L.W - 28) / N, (L.H - top - 70) / 11.2, 64));
-  L.bx = Math.round((L.W - L.c * N) / 2);
-  L.by = Math.round(top);
-  // bandeja no meio do espaço que sobra embaixo da grade, peças maiores quando cabe
-  const below = L.H - (L.by + L.c * N + 8) - 20;
-  L.tc = Math.round(Math.min(L.c * 0.62, below / 5.5, (L.W / 3 - 16) / 5));
-  L.ty = L.by + L.c * N + 8 + below / 2;
+  L.land = L.W > L.H * 1.15;
+  if (L.land) {
+    const leftW = Math.min(240, Math.max(170, L.W * 0.24));
+    L.c = Math.floor(Math.min((L.H - 40) / N, (L.W - leftW - 70) / 11.4, 72));
+    const total = leftW + L.c * N + L.c * 3.4 + 60;
+    const x0 = Math.max(10, (L.W - total) / 2);
+    L.bx = Math.round(x0 + leftW + 30);
+    L.by = Math.round((L.H - L.c * N) / 2);
+    L.trayX = L.bx + L.c * N + 30 + L.c * 1.7;
+    L.trayH = (L.c * N) / 3;
+    L.tc = Math.floor(Math.min(L.c * 0.62, (L.trayH - 10) / 5, (L.c * 3.4) / 5));
+    L.sx = x0 + leftW / 2;
+    L.sy = L.H * 0.36;
+    L.ss = Math.min(56, leftW * 0.28);
+    L.chipX = L.sx;
+    L.chipY = L.sy + L.ss * 0.9 + 10;
+    L.chipW = leftW;
+  } else {
+    const top = Math.max(118, L.H * 0.17);
+    L.c = Math.floor(Math.min((L.W - 28) / N, (L.H - top - 70) / 11.2, 64));
+    L.bx = Math.round((L.W - L.c * N) / 2);
+    L.by = Math.round(top);
+    // bandeja no meio do espaço que sobra embaixo da grade, peças maiores quando cabe
+    const below = L.H - (L.by + L.c * N + 8) - 20;
+    L.tc = Math.round(Math.min(L.c * 0.62, below / 5.5, (L.W / 3 - 16) / 5));
+    L.ty = L.by + L.c * N + 8 + below / 2;
+    L.sx = L.W / 2;
+    L.sy = L.by * 0.42;
+    L.ss = Math.min(56, L.by * 0.36);
+    L.chipX = L.W / 2;
+    L.chipY = L.by * 0.78;
+    L.chipW = L.W - 24;
+  }
   sprites.clear();
 }
 const now = () => performance.now();
@@ -430,7 +456,18 @@ function dragPos(p: Piece, x: number, y: number) {
 }
 // bandeja do tamanho da grade (no computador as peças não ficam nos cantos da tela)
 const trayW = () => Math.min(L.W, L.c * N * 1.35);
-const slotX = (i: number) => L.W / 2 + (i - 1) * (trayW() / 3);
+/** Centro da casa i da bandeja (embaixo da grade em pé; coluna à direita deitado). */
+const slot = (i: number) => L.land ? { x: L.trayX, y: L.by + (i + 0.5) * L.trayH } : { x: L.W / 2 + (i - 1) * (trayW() / 3), y: L.ty };
+/** Qual peça da bandeja está no ponto tocado (-1 = nenhuma). */
+function slotAt(x: number, y: number) {
+  if (L.land) {
+    if (Math.abs(x - L.trayX) > L.c * 2.2) return -1;
+    const i = Math.floor((y - L.by) / L.trayH);
+    return i >= 0 && i < 3 ? i : -1;
+  }
+  if (y < L.by + L.c * N + 8) return -1;
+  return Math.min(2, Math.max(0, Math.floor((x - (L.W - trayW()) / 2) / (trayW() / 3))));
+}
 
 let sound = load("blockpop-sound") !== "off";
 const soundBtn = () => ({ x: L.W - 52, y: 20, w: 36, h: 36 });
@@ -457,8 +494,8 @@ function draw() {
   const sb = soundBtn();
   text(sound ? "🔊" : "🔇", sb.x + sb.w / 2, sb.y + sb.h / 2, 22);
   const pulse = 1 + Math.max(0, 1 - (tm - lastScoreBump) / 250) * 0.12;
-  text(Math.round(shown).toLocaleString(), L.W / 2, L.by * 0.42, Math.min(56, L.by * 0.36) * pulse);
-  const chipY = L.by * 0.78;
+  text(Math.round(shown).toLocaleString(), L.sx, L.sy, L.ss * pulse);
+  const chipY = L.chipY;
   const mtxt = challenge && !(score > challenge)
     ? t(`⚔️ Desafio: passe de ${challenge.toLocaleString()} pontos`, `⚔️ Challenge: beat ${challenge.toLocaleString()} points`, `⚔️ Reto: supera ${challenge.toLocaleString()} puntos`)
     : challenge && score > challenge && !mission.done
@@ -466,17 +503,20 @@ function draw() {
     : mission.done
     ? t(`🔥 Missão cumprida · ${mission.days} dia(s) seguidos`, `🔥 Mission done · ${mission.days} day streak`, `🔥 Misión cumplida · ${mission.days} día(s) seguidos`)
     : t(`🎯 Missão de hoje: ${Math.min(mission.lines, GOAL)}/${GOAL} linhas`, `🎯 Today: clear ${Math.min(mission.lines, GOAL)}/${GOAL} lines`, `🎯 Misión de hoy: ${Math.min(mission.lines, GOAL)}/${GOAL} líneas`);
+  // diminui a letra se o texto não couber (coluna estreita na tela deitada)
   ctx.font = font(14, 600);
+  const fs = Math.min(14, (14 * (L.chipW - 28)) / ctx.measureText(mtxt).width);
+  ctx.font = font(fs, 600);
   const mw = ctx.measureText(mtxt).width + 28;
-  rr(ctx, (L.W - mw) / 2, chipY - 15, mw, 30, 15);
+  rr(ctx, L.chipX - mw / 2, chipY - 15, mw, 30, 15);
   ctx.fillStyle = "rgba(255,255,255,0.08)";
   ctx.fill();
   if (!mission.done && mission.lines > 0) {
-    rr(ctx, (L.W - mw) / 2, chipY - 15, Math.max(30, mw * Math.min(1, mission.lines / GOAL)), 30, 15);
+    rr(ctx, L.chipX - mw / 2, chipY - 15, Math.max(30, mw * Math.min(1, mission.lines / GOAL)), 30, 15);
     ctx.fillStyle = "rgba(126,230,164,0.22)";
     ctx.fill();
   }
-  text(mtxt, L.W / 2, chipY + 1, 14, "#e6ebff", "center", 600);
+  text(mtxt, L.chipX, chipY + 1, fs, "#e6ebff", "center", 600);
 
   // tremida da tela nos combos
   const sx = shake > 0.3 ? (Math.random() - 0.5) * shake : 0, sy = shake > 0.3 ? (Math.random() - 0.5) * shake : 0;
@@ -551,7 +591,8 @@ function draw() {
     const k = back((tm - trayIn - i * 70) / 380);
     const fitsNow = !!anyFit(board, p);
     const s = L.tc;
-    const x0 = slotX(i) - (p.w * s) / 2 + (1 - k) * L.W * 0.6, y0 = L.ty - (p.h * s) / 2;
+    const sp = slot(i);
+    const x0 = sp.x - (p.w * s) / 2 + (1 - k) * L.W * 0.6, y0 = sp.y - (p.h * s) / 2;
     for (const [r, c] of p.cells) block(fitsNow ? p.color : 0, x0 + c * s, y0 + r * s, s, fitsNow ? 1 : 0.25);
     if (!fitsNow) {
       // peça que não cabe fica apagada
@@ -618,11 +659,12 @@ function draw() {
   // dica no começo: mão mostrando o arraste
   if (!placedEver && !drag && tray[1]) {
     const k = ((tm / 1600) % 1);
-    const hx = slotX(1), hy = L.ty + 10 - ease(k) * (L.ty - L.by - L.c * 4);
+    const s1 = slot(1), e = ease(k);
+    const hx = s1.x + (L.bx + L.c * 4 - s1.x) * e, hy = s1.y + 10 + (L.by + L.c * 4 - s1.y - 10) * e;
     ctx.globalAlpha = k > 0.85 ? (1 - k) / 0.15 : 1;
     text("👆", hx, hy, 38);
     ctx.globalAlpha = 1;
-    text(t("Arraste as peças para a grade", "Drag the pieces onto the grid", "Arrastra las piezas a la cuadrícula"), L.W / 2, L.H - 26, 15, "#aab4e8", "center", 600);
+    text(t("Arraste as peças para a grade", "Drag the pieces onto the grid", "Arrastra las piezas a la cuadrícula"), L.land ? L.sx : L.W / 2, L.land ? L.chipY + 44 : L.H - 26, L.land ? 12 : 15, "#aab4e8", "center", 600);
   }
 
   // fim de jogo
@@ -739,9 +781,8 @@ cv.addEventListener("pointerdown", (e) => {
     else if (!onPortal() && inside(x, y, b.share)) shareChallenge();
     return;
   }
-  if (y < L.by + L.c * N + 8) return;
-  const i = Math.min(2, Math.max(0, Math.floor((x - (L.W - trayW()) / 2) / (trayW() / 3))));
-  if (!tray[i]) return;
+  const i = slotAt(x, y);
+  if (i < 0 || !tray[i]) return;
   drag = { i, x, y, row: -9, col: -9, ok: false };
   cv.setPointerCapture(e.pointerId);
   sfx("pick");
