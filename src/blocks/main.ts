@@ -834,4 +834,28 @@ try {
 }
 document.fonts?.ready.then(() => sprites.clear());
 initPlatform();
+// Robô do vídeo de divulgação (?debug): diz a melhor jogada (a que mais limpa linhas) e onde arrastar na tela
+if (location.search.includes("debug")) {
+  (window as unknown as Record<string, unknown>).__blocks = {
+    over: () => over,
+    move: () => {
+      let best: { i: number; r: number; c: number; lines: number; fill: number } | null = null;
+      tray.forEach((p, i) => {
+        if (!p) return;
+        for (let r = 0; r <= N - p.h; r++) for (let c = 0; c <= N - p.w; c++) {
+          if (!fits(board, p, r, c)) continue;
+          const { rows, cols, tmp } = fullLines(board, p, r, c);
+          const lines = rows.length + cols.length;
+          applyClear(tmp, rows, cols);
+          const fill = tmp.filter((x) => x >= 0).length;
+          if (!best || lines > best.lines || (lines === best.lines && fill < best.fill)) best = { i, r, c, lines, fill };
+        }
+      });
+      if (!best) return null;
+      const b = best as { i: number; r: number; c: number };
+      const p = tray[b.i]!, s = slot(b.i);
+      return { from: s, to: { x: L.bx + b.c * L.c + (p.w * L.c) / 2, y: L.by + b.r * L.c + L.c * 1.1 + p.h * L.c } };
+    },
+  };
+}
 requestAnimationFrame(draw);

@@ -4,10 +4,15 @@ Arquivos (nesta pasta):
 - `block-pop-crazygames.zip`: o jogo (index.html + assets, com o SDK do CrazyGames). Gerar de novo: `./scripts/build-crazygames.sh`.
 - `block-pop-index.html`: o mesmo jogo num arquivo só, para quando o antivírus bloqueia o .zip: salvar como `index.html` numa pasta e compactar no computador (botão direito → Compactar para arquivo ZIP).
 - Capas: `cover-1920x1080.png` (paisagem), `cover-800x1200.png` (retrato), `cover-800x800.png` (quadrada).
+- Vídeos de prévia (até 20 s): `video-paisagem.mp4` (1280×720) e `video-retrato.mp4` (720×1280), gravados com o robô `?debug` (`window.__blocks.move()` = melhor jogada e onde arrastar).
 
 **Name:** Block Pop
 
-**Category:** Puzzle (tags: block, puzzle, 1010, casual, brain)
+**Category:** Puzzle
+
+**Tags (até 5):** Block, Puzzle, Casual, Brain, Relaxing
+
+**Which tools did you use?:** HTML5 / JavaScript sem engine (se não tiver na lista: Other)
 
 **Short description:**
 Drag colorful blocks onto the 8x8 grid, fill rows and columns to clear them and chain combos for huge scores!
