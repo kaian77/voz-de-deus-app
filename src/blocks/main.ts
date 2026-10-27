@@ -3,6 +3,7 @@
 // Tudo desenhado em canvas, sem imagens; som sintetizado no navegador. Recorde, partida e missão do dia ficam no navegador.
 import { t } from "../i18n3d";
 import { gameplay, initPlatform, onPortal, showAd } from "./platform";
+import { openRanking, playerName, rankingOn, submitBest, type Submit } from "./ranking";
 
 type Cell = [number, number];
 type Piece = { cells: Cell[]; w: number; h: number; color: number };
@@ -210,8 +211,18 @@ function checkOver() {
       best = score;
       save("blockpop-best", String(best));
     }
+    rankInfo = null;
+    if (rankingOn && score > 0) {
+      if (playerName()) submitBest(best).then((r) => (rankInfo = r));
+      else if (!load("blockpop-asked")) {
+        // 1ª partida: convida para entrar no ranking (uma vez só; depois fica no botão 🏆)
+        save("blockpop-asked", "1");
+        setTimeout(() => openRanking(best), 1600);
+      }
+    }
   }
 }
+let rankInfo: Submit | null = null;
 
 function place(i: number, r0: number, c0: number) {
   gameplay(true);
@@ -471,6 +482,7 @@ function slotAt(x: number, y: number) {
 
 let sound = load("blockpop-sound") !== "off";
 const soundBtn = () => ({ x: L.W - 52, y: 20, w: 36, h: 36 });
+const rankBtn = () => ({ x: L.W - 96, y: 20, w: 36, h: 36 });
 const overButtons = () => {
   const w = Math.min(300, L.W - 60), x = (L.W - w) / 2, y = L.H / 2 + 40;
   const again = y + (continued ? 0 : 70);
@@ -493,6 +505,10 @@ function draw() {
   text(`👑 ${best.toLocaleString()}`, 18, 38, 20, "#ffd23f", "left", 600);
   const sb = soundBtn();
   text(sound ? "🔊" : "🔇", sb.x + sb.w / 2, sb.y + sb.h / 2, 22);
+  if (rankingOn) {
+    const rb = rankBtn();
+    text("🏆", rb.x + rb.w / 2, rb.y + rb.h / 2, 22);
+  }
   const pulse = 1 + Math.max(0, 1 - (tm - lastScoreBump) / 250) * 0.12;
   text(Math.round(shown).toLocaleString(), L.sx, L.sy, L.ss * pulse);
   const chipY = L.chipY;
@@ -676,6 +692,12 @@ function draw() {
     text(t("Sem espaço!", "Out of space!", "¡Sin espacio!"), L.W / 2, L.H / 2 - 120, 40);
     text(score.toLocaleString(), L.W / 2, L.H / 2 - 62, 56, "#ffd23f");
     text(score >= best && score > 0 ? t("Novo recorde! 👑", "New best! 👑", "¡Nuevo récord! 👑") : `👑 ${best.toLocaleString()}`, L.W / 2, L.H / 2 - 18, 18, "#e6ebff", "center", 600);
+    if (rankingOn) {
+      const rl = rankInfo?.ok && rankInfo.rank
+        ? t(`🏆 Você está em ${rankInfo.rank}º no ranking`, `🏆 You're #${rankInfo.rank} in the ranking`, `🏆 Estás en el puesto ${rankInfo.rank}º`)
+        : !playerName() ? t("Toque em 🏆 para entrar no ranking", "Tap 🏆 to join the ranking", "Toca 🏆 para entrar al ranking") : "";
+      if (rl) text(rl, L.W / 2, L.H / 2 + 12, 15, "#ffd23f", "center", 600);
+    }
     const b = overButtons();
     if (!continued) button(b.cont, t("▶  Continuar (ver vídeo)", "▶  Continue (watch video)", "▶  Continuar (ver video)"), "#36c96f");
     button(b.again, t("Jogar de novo", "Play again", "Jugar de nuevo"), "#4a7dff");
@@ -773,6 +795,10 @@ cv.addEventListener("pointerdown", (e) => {
     return;
   }
   if (now() < adUntil) return;
+  if (rankingOn && inside(x, y, rankBtn())) {
+    openRanking(best);
+    return;
+  }
   if (over) {
     if (now() - overAt < 900) return;
     const b = overButtons();
