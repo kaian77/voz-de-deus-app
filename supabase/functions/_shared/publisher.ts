@@ -92,7 +92,11 @@ async function stepTikTok(db: SupabaseClient, post: Post, r: PlatformResult): Pr
       r.inbox = true;
     }
   }
-  const status = await ttPublishStatus(token, r.publish_id);
+  // Vídeo da caixa de entrada: o TikTok às vezes não acha o status (invalid_publish_id), mas o vídeo chega no app
+  const status = await ttPublishStatus(token, r.publish_id).catch((e) => {
+    if (r.inbox && e instanceof TikTokError && e.code === "invalid_publish_id") return { status: "SEND_TO_USER_INBOX" } as Awaited<ReturnType<typeof ttPublishStatus>>;
+    throw e;
+  });
   if (r.inbox && status.status === "SEND_TO_USER_INBOX") {
     // O TikTok não aceita legenda em vídeo mandado para a caixa de entrada: avisa com a legenda para colar no app
     if (["reel", "video"].includes(post.kind)) {

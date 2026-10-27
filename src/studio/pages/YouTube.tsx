@@ -271,7 +271,7 @@ function TikTokCaptions() {
             <div className="min-w-0 flex-1">
               <p className="line-clamp-1 text-[13px] font-medium">{p.title ?? p.caption}</p>
               <p className="text-xs text-muted-foreground">
-                {p.status === "published" ? "Na caixa de entrada" : p.status === "failed" ? "Falhou" : `Chega ${p.scheduled_at ? formatDateTime(p.scheduled_at) : "em breve"}`}
+                {p.status === "published" || p.results?.tiktok?.inbox ? "Na caixa de entrada" : p.status === "failed" ? "Falhou" : `Chega ${p.scheduled_at ? formatDateTime(p.scheduled_at) : "em breve"}`}
               </p>
             </div>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => copy(p.caption)}>Copiar legenda</Button>
