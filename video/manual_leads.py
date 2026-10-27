@@ -26,13 +26,18 @@ from worker import URL, http, rest
 from leads import UA, jload
 
 TOPIC = re.compile(
-    r"manual|instru[cç]|instructivo|diagram|passo a passo|paso a paso|montag|montar|mont[ae]i|armad|armar|arm[eé]|ensambl|assembl|put together|"
-    r"fur[oa]|fura[cç]|agujer|\bholes?\b|parafus|tornill|screws?|pe[cç]as? falt|falt\w* (pe[cç]|parafus|piez|tornill)|"
-    r"missing (part|piece|screw|hardware)|faltan? (piez|tornill)", re.I)
+    r"\b(manual|instru[cç][oõã]\w*|passo a passo|montag\w*|montar|furos?|fura[cç][aã]o|parafusos?|pe[cç]as? faltando|faltou (pe[cç]a|parafuso)|"
+    r"instructivo|instrucciones|paso a paso|armado|armar|ensambl\w*|tornillos?|agujeros?|faltan? (piezas|tornillos)|"
+    r"instructions?|assembly|assembl(e|ed|ing)|put (it )?together|missing (parts|pieces|screws|hardware|bolts)|holes? (did ?n[o']?t|don'?t|do not|never) (line|match)|pre-?drilled|diagrams?)\b",
+    re.I)
 NEG = re.compile(
     r"dif[ií]cil|complicad|confus|ruim|p[eé]ssim|horr[ií]vel|errad|n[aã]o encaix|n[aã]o bat|falt(ou|ando|aram|an|[oó])|sem manual|sin manual|"
     r"n[aã]o vem|n[aã]o veio|n[aã]o tem manual|n[aã]o entend|mal explic|terrible|awful|confusing|unclear|missing|wrong|poor|hard to|difficult|"
     r"nightmare|didn'?t|did not|doesn'?t|useless|\bmal[oa]?\b|no encaj|no vien|no trae|no se entiende|horrible|incomplet|nada claro|pouco claro|poco claro", re.I)
+
+
+# Só lojas/fábricas de móveis (o Maps devolve casa de leilão, loja de decoração... para "furniture store")
+FURNITURE = re.compile(r"furniture|mueble|m[oó]ve(l|is)|mobil|cabinet|kitchen|closet|wardrobe|carpinter|marcenar|ebanister|sofa|bed store|mattress|colch|office equip|escrit[oó]rio", re.I)
 
 
 def is_complaint(text, rate):
@@ -172,7 +177,7 @@ def run_maps(search):
                              "name": (row.get("title") or "").strip(), "country": country, "url": (row.get("link") or "")[:500] or None,
                              "rating": num(row.get("review_rating")), "read": 0, "complaints": 0, "samples": [],
                              "contact": {"site": (row.get("website") or "").strip() or None, "phone": (row.get("phone") or "").strip() or None}}
-            if not b["name"]:
+            if not b["name"] or not FURNITURE.search(f"{row.get('category') or ''} {b['name']}"):
                 continue
             for v in reviews:
                 text = ((v or {}).get("Description") or "").strip()
@@ -242,6 +247,8 @@ def main():
         rest("PATCH", f"manual_searches?id=eq.{s['id']}", {"status": "running", "error": None, "updated_at": now()})
         try:
             brands, scanned = run_maps(s) if s["source"] == "maps" else run_etsy(s)
+            # Buscar de novo: o que a rodada anterior achou e ainda não foi trabalhado sai (o filtro pode ter mudado)
+            rest("DELETE", f"manual_leads?search_id=eq.{s['id']}&status=eq.new")
             found = save(s, brands)
             print(f"  {found} marcas com reclamação de manual/montagem ({scanned} avaliações lidas)")
             rest("PATCH", f"manual_searches?id=eq.{s['id']}", {"status": "done", "found": found, "scanned": scanned, "updated_at": now()})
