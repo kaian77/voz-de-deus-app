@@ -10,6 +10,8 @@ export default defineConfig({
   build: {
     outDir: "dist-crazygames",
     emptyOutDir: true,
+    // sem minificar: código legível (antivírus do navegador desconfia de JS compactado dentro de .zip)
+    minify: false,
     rollupOptions: { input: { jogo: path.resolve(__dirname, "jogo.html") } },
   },
 });
