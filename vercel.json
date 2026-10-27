@@ -1,6 +1,16 @@
 {
   "rewrites": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "(.*blockpop.*)\\.vercel\\.app"
+        }
+      ],
+      "destination": "/jogo.html"
+    },
+    {
       "source": "/3d/:slug",
       "destination": "/tour3d.html"
     },
