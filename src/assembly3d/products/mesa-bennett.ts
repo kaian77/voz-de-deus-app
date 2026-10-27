@@ -9,6 +9,8 @@ import {
 } from "../parts";
 
 const IMG = "/montagem/mesa-bennett/";
+const GLUE = { pt: "Cola", en: "Glue", es: "Pegamento" };
+const PHILLIPS = { pt: "Chave Phillips", en: "Phillips screwdriver", es: "Destornillador Phillips" };
 const BH = 0.06, BW = 0.09; // seção das travessas da base
 const BY = 0.012 + BH / 2; // centro das travessas em cima das sapatas
 const TOP = 0.732; // embaixo do sub-tampo
@@ -290,73 +292,113 @@ function build(scene: THREE.Scene): Built {
 
 export const mesaBennett: Product = {
   slug: "mesa-bennett",
-  name: "Mesa Bennett 1,15 m",
-  subtitle: "Tampo de vidro · cód. 1031400 / 1018300 / 1018600",
+  name: { pt: "Mesa Bennett 1,15 m", en: "Bennett Table 1.15 m", es: "Mesa Bennett 1,15 m" },
+  subtitle: { pt: "Tampo de vidro · cód. 1031400 / 1018300 / 1018600", en: "Glass top · code 1031400 / 1018300 / 1018600", es: "Tapa de vidrio · cód. 1031400 / 1018300 / 1018600" },
   size: "1155 × 895 × 780 mm",
   pieces: [
-    { id: "06", name: "Base central", qty: 1 },
-    { id: "10", name: "Sub-tampo", qty: 1 },
-    { id: "11", name: "Travessa menor", qty: 2 },
-    { id: "14", name: "Travessa lateral", qty: 4 },
-    { id: "17/19", name: "Tampo (30 kg)", qty: 1 },
+    { id: "06", name: { pt: "Base central", en: "Center base", es: "Base central" }, qty: 1 },
+    { id: "10", name: { pt: "Sub-tampo", en: "Lower cover", es: "Cubierta inferior" }, qty: 1 },
+    { id: "11", name: { pt: "Travessa menor", en: "Short crosspiece", es: "Travesaño menor" }, qty: 2 },
+    { id: "14", name: { pt: "Travessa lateral", en: "Side crosspiece", es: "Travesaño lateral" }, qty: 4 },
+    { id: "17/19", name: { pt: "Tampo (30 kg)", en: "Top panel (30 kg)", es: "Tapa (30 kg)" }, qty: 1 },
   ],
   hardware: [
-    { id: "A", name: "Barra roscada", size: "M6 × 180", qty: 1 },
-    { id: "B", name: "Parafuso", size: "6,0 × 45", qty: 8 },
-    { id: "C", name: "Tambor", qty: 2 },
-    { id: "D", name: "Parafuso", size: "6,0 × 30", qty: 16 },
-    { id: "F", name: "Sapata", qty: 4 },
-    { id: "H", name: "Cavilha", size: "8 × 30", qty: 16 },
+    { id: "A", name: { pt: "Barra roscada", en: "Threaded rod", es: "Varilla roscada" }, size: "M6 × 180", qty: 1 },
+    { id: "B", name: { pt: "Parafuso", en: "Screw", es: "Tornillo" }, size: "6.0 × 45", qty: 8 },
+    { id: "C", name: { pt: "Tambor", en: "Cam lock", es: "Excéntrica" }, qty: 2 },
+    { id: "D", name: { pt: "Parafuso", en: "Screw", es: "Tornillo" }, size: "6.0 × 30", qty: 16 },
+    { id: "F", name: { pt: "Sapata", en: "Leveling foot", es: "Regatón" }, qty: 4 },
+    { id: "H", name: { pt: "Cavilha", en: "Dowel", es: "Clavija" }, size: "8 × 30", qty: 16 },
   ],
   steps: [
     {
-      n: "", title: "Separe as peças", img: IMG + "pecas.jpg", uses: {}, pieces: ["06", "11", "14", "10", "17/19"],
-      text: "Forre o chão com a embalagem e separe tudo: base 06, duas travessas 11, quatro travessas 14, sub-tampo 10 e o tampo 17/19 (30 kg, peça ajuda para mover).",
+      n: "", title: { pt: "Separe as peças", en: "Lay out the parts", es: "Separa las piezas" }, img: IMG + "pecas.jpg", uses: {}, pieces: ["06", "11", "14", "10", "17/19"],
+      text: {
+        pt: "Forre o chão com a embalagem e separe tudo: base 06, duas travessas 11, quatro travessas 14, sub-tampo 10 e o tampo 17/19 (30 kg, peça ajuda para mover).",
+        en: "Cover the floor with the packaging and lay everything out: base 06, two crosspieces 11, four crosspieces 14, lower cover 10 and top 17/19 (30 kg, ask someone to help you move it).",
+        es: "Cubre el piso con el embalaje y separa todo: base 06, dos travesaños 11, cuatro travesaños 14, cubierta 10 y la tapa 17/19 (30 kg, pide ayuda para moverla).",
+      },
       cam: { target: [0, 0.1, -0.15], offset: [1.5, 1.7, 2.1] }, dur: 3,
     },
     {
-      n: "01", title: "Cavilhas nas travessas 14", img: IMG + "passo-01.jpg", uses: { H: 12 }, tools: ["Cola"], pieces: ["14"],
-      text: "Aplique cola nos furos e encaixe 3 cavilhas H em cada travessa 14 (1 no pé e 2 no topo). Faça nas 4.",
+      n: "01", title: { pt: "Cavilhas nas travessas 14", en: "Dowels in crosspieces 14", es: "Clavijas en los travesaños 14" }, img: IMG + "passo-01.jpg", uses: { H: 12 }, tools: [GLUE], pieces: ["14"],
+      text: {
+        pt: "Aplique cola nos furos e encaixe 3 cavilhas H em cada travessa 14 (1 no pé e 2 no topo). Faça nas 4.",
+        en: "Put glue in the holes and insert 3 dowels H in each crosspiece 14 (1 at the foot, 2 at the top). Do all 4.",
+        es: "Pon pegamento en los agujeros y coloca 3 clavijas H en cada travesaño 14 (1 en el pie y 2 arriba). Haz los 4.",
+      },
       cam: { target: [0, 0.04, 0.7], offset: [0.5, 0.55, 0.75] }, dur: 9,
     },
     {
-      n: "02", title: "Sapatas", img: IMG + "passo-02.jpg", uses: { F: 4 }, pieces: ["06", "11"],
-      text: "Vire a base central 06 e as travessas menores 11 e encaixe as sapatas F: 2 na 06 e 1 em cada 11.",
+      n: "02", title: { pt: "Sapatas", en: "Leveling feet", es: "Regatones" }, img: IMG + "passo-02.jpg", uses: { F: 4 }, pieces: ["06", "11"],
+      text: {
+        pt: "Vire a base central 06 e as travessas menores 11 e encaixe as sapatas F: 2 na 06 e 1 em cada 11.",
+        en: "Turn over the center base 06 and the short crosspieces 11 and fit the leveling feet F: 2 on 06 and 1 on each 11.",
+        es: "Da vuelta la base central 06 y los travesaños 11 y coloca los regatones F: 2 en la 06 y 1 en cada 11.",
+      },
       cam: { target: [0.25, 0.06, -0.15], offset: [0.75, 0.75, 1.0] }, dur: 7,
     },
     {
-      n: "03", title: "Cavilhas e barra na 06", img: IMG + "passo-03.jpg", uses: { H: 4, A: 1 }, tools: ["Cola"], pieces: ["06"],
-      text: "Passe cola e encaixe 4 cavilhas H nas laterais da base 06. Depois passe a barra roscada A pelo furo do meio.",
+      n: "03", title: { pt: "Cavilhas e barra na 06", en: "Dowels and rod in 06", es: "Clavijas y varilla en la 06" }, img: IMG + "passo-03.jpg", uses: { H: 4, A: 1 }, tools: [GLUE], pieces: ["06"],
+      text: {
+        pt: "Passe cola e encaixe 4 cavilhas H nas laterais da base 06. Depois passe a barra roscada A pelo furo do meio.",
+        en: "Apply glue and insert 4 dowels H on the sides of base 06. Then slide the threaded rod A through the middle hole.",
+        es: "Pon pegamento y coloca 4 clavijas H en los lados de la base 06. Luego pasa la varilla roscada A por el agujero del medio.",
+      },
       cam: { target: [0, 0.04, -0.42], offset: [0.35, 0.4, 0.55] }, dur: 7,
     },
     {
-      n: "04", title: "Monte a cruz da base", img: IMG + "passo-04.jpg", uses: { C: 2 }, tools: ["Chave Allen E"], pieces: ["06", "11"],
-      text: "Encaixe uma travessa 11 de cada lado da 06. Coloque o tambor C no furo de cada 11 e gire com a chave Allen E até travar na barra.",
+      n: "04", title: { pt: "Monte a cruz da base", en: "Build the cross base", es: "Arma la cruz de la base" }, img: IMG + "passo-04.jpg", uses: { C: 2 }, tools: [{ pt: "Chave Allen E", en: "Allen key E", es: "Llave Allen E" }], pieces: ["06", "11"],
+      text: {
+        pt: "Encaixe uma travessa 11 de cada lado da 06. Coloque o tambor C no furo de cada 11 e gire com a chave Allen E até travar na barra.",
+        en: "Fit one crosspiece 11 on each side of 06. Drop the cam lock C into the hole of each 11 and turn it with Allen key E until it locks on the rod.",
+        es: "Encaja un travesaño 11 a cada lado de la 06. Pon la excéntrica C en el agujero de cada 11 y gírala con la llave Allen E hasta trabar en la varilla.",
+      },
       cam: { target: [0, 0.05, 0], offset: [0.6, 0.65, 0.8] }, dur: 8,
     },
     {
-      n: "05", title: "Encaixe as travessas 14", img: IMG + "passo-05.jpg", uses: {}, tools: ["Cola"], pieces: ["14"],
-      text: "Passe cola nos furos das pontas da cruz e encaixe as 4 travessas 14, inclinadas para dentro.",
+      n: "05", title: { pt: "Encaixe as travessas 14", en: "Fit crosspieces 14", es: "Encaja los travesaños 14" }, img: IMG + "passo-05.jpg", uses: {}, tools: [GLUE], pieces: ["14"],
+      text: {
+        pt: "Passe cola nos furos das pontas da cruz e encaixe as 4 travessas 14, inclinadas para dentro.",
+        en: "Put glue in the holes at the ends of the cross and fit the 4 crosspieces 14, leaning inward.",
+        es: "Pon pegamento en los agujeros de las puntas de la cruz y encaja los 4 travesaños 14, inclinados hacia adentro.",
+      },
       cam: { target: [0, 0.32, 0], offset: [1.1, 0.75, 1.35] }, dur: 8,
     },
     {
-      n: "06", title: "Parafuse por baixo", img: IMG + "passo-06.jpg", uses: { B: 8 }, tools: ["Chave Phillips"], pieces: ["06", "11"],
-      text: "Por baixo da base, parafuse 8 parafusos B (6,0 × 45): 2 em cada travessa 14, pela 06 e pelas 11.",
+      n: "06", title: { pt: "Parafuse por baixo", en: "Screw from below", es: "Atornilla por debajo" }, img: IMG + "passo-06.jpg", uses: { B: 8 }, tools: [PHILLIPS], pieces: ["06", "11"],
+      text: {
+        pt: "Por baixo da base, parafuse 8 parafusos B (6,0 × 45): 2 em cada travessa 14, pela 06 e pelas 11.",
+        en: "From under the base, drive 8 screws B (6.0 × 45): 2 into each crosspiece 14, through 06 and the 11s.",
+        es: "Por debajo de la base, coloca 8 tornillos B (6,0 × 45): 2 en cada travesaño 14, por la 06 y las 11.",
+      },
       cam: { target: [0, 0.28, 0], offset: [1.05, -0.05, 1.15] }, dur: 9,
     },
     {
-      n: "07", title: "Sub-tampo 10", img: IMG + "passo-07.jpg", uses: { D: 8 }, tools: ["Chave Phillips"], pieces: ["10"],
-      text: "Apoie o sub-tampo 10 no topo das travessas 14 e parafuse 8 parafusos D (6,0 × 30).",
+      n: "07", title: { pt: "Sub-tampo 10", en: "Lower cover 10", es: "Cubierta 10" }, img: IMG + "passo-07.jpg", uses: { D: 8 }, tools: [PHILLIPS], pieces: ["10"],
+      text: {
+        pt: "Apoie o sub-tampo 10 no topo das travessas 14 e parafuse 8 parafusos D (6,0 × 30).",
+        en: "Rest the lower cover 10 on top of the crosspieces 14 and drive 8 screws D (6.0 × 30).",
+        es: "Apoya la cubierta 10 sobre los travesaños 14 y coloca 8 tornillos D (6,0 × 30).",
+      },
       cam: { target: [0, 0.65, 0], offset: [0.75, 0.75, 0.9] }, dur: 9,
     },
     {
-      n: "08", title: "Fixe no tampo", img: IMG + "passo-08.jpg", uses: { D: 8 }, tools: ["Chave Phillips"], pieces: ["10", "17/19"],
-      text: "Deite o tampo 17/19 com o vidro para baixo em cima da embalagem. Vire a base de cabeça para baixo sobre ele e parafuse mais 8 parafusos D pelo sub-tampo 10.",
+      n: "08", title: { pt: "Fixe no tampo", en: "Attach the top", es: "Fija la tapa" }, img: IMG + "passo-08.jpg", uses: { D: 8 }, tools: [PHILLIPS], pieces: ["10", "17/19"],
+      text: {
+        pt: "Deite o tampo 17/19 com o vidro para baixo em cima da embalagem. Vire a base de cabeça para baixo sobre ele e parafuse mais 8 parafusos D pelo sub-tampo 10.",
+        en: "Lay the top 17/19 glass side down on the packaging. Turn the base upside down onto it and drive 8 more screws D through the lower cover 10.",
+        es: "Apoya la tapa 17/19 con el vidrio hacia abajo sobre el embalaje. Pon la base boca abajo encima y coloca 8 tornillos D más por la cubierta 10.",
+      },
       cam: { target: [0, 0.45, -0.3], offset: [1.4, 1.15, 1.7] }, dur: 10,
     },
     {
-      n: "", title: "Vire e nivele", img: IMG + "passo-09.jpg", uses: {}, pieces: ["17/19"],
-      text: "Com outra pessoa, vire a mesa. Gire as sapatas niveladoras F até a mesa ficar firme. Pronto!",
+      n: "", title: { pt: "Vire e nivele", en: "Flip and level", es: "Da vuelta y nivela" }, img: IMG + "passo-09.jpg", uses: {}, pieces: ["17/19"],
+      text: {
+        pt: "Com outra pessoa, vire a mesa. Gire as sapatas niveladoras F até a mesa ficar firme. Pronto!",
+        en: "With a second person, flip the table over. Turn the leveling feet F until it stands steady. Done!",
+        es: "Con otra persona, da vuelta la mesa. Gira los regatones F hasta que quede firme. ¡Listo!",
+      },
       cam: { target: [0, 0.42, 0], offset: [1.5, 0.95, 1.9] }, dur: 7,
     },
   ],

@@ -189,3 +189,4 @@ body.night { background: #0b0508; color: #f2e6d0; }
 .night .r3-pitch { background: #2a0d10; }
 .night .r3-lab { color: #140a0b; }
 .night .r3-lab.land, .night .r3-lab.leader, .night .r3-lab.water { color: #fff; }
+.r3-lang { flex: none; padding: 5px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: rgba(255, 255, 255, 0.16); color: #fff; border: 0; cursor: pointer; }

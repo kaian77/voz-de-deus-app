@@ -82,3 +82,4 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .a3-fold { margin-left: auto; font-size: 16px; color: #bfb4a4; transition: transform 0.2s; }
 .a3-card.min > :not(.a3-head) { display: none; }
 .a3-card.min .a3-fold { transform: rotate(-90deg); }
+.a3-lang { flex: none; padding: 5px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: rgba(255, 255, 255, 0.85); color: #1c1a17; border: 0; cursor: pointer; }
