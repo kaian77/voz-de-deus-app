@@ -61,6 +61,8 @@ let board = new Int8Array(N * N).fill(-1);
 let tray: (Piece | null)[] = [null, null, null];
 let score = 0, shown = 0, streak = 0, idle = 0, continued = false, placedEver = false;
 let best = Number(load("blockpop-best") ?? 0);
+// Link de desafio: "consegue passar dos meus pontos?" (vem de quem compartilhou)
+const challenge = Math.max(0, Number(new URLSearchParams(location.search).get("desafio")) || 0);
 let over = false, overAt = 0, adUntil = 0;
 const fx: Fx[] = [];
 const parts: Particle[] = [];
@@ -149,12 +151,13 @@ function solvable(b: Int8Array, set: Piece[]) {
 /** Peças novas: quase sempre dá para usar as 3 (a pessoa perde achando que errou, não por azar), mais difíceis com o placar. */
 function newTray() {
   const filled = board.filter((x) => x >= 0).length / (N * N);
-  const hard = Math.min(1, score / 4000);
+  // Mais difícil desde o começo e endurece rápido: peças grandes frequentes, poucas peças de 1-2 casas
+  const hard = Math.min(1, score / 1200);
   const weight = (s: Cell[]) => {
     const n = s.length;
-    if (n <= 2) return 0.6 + filled * 1.5;
-    if (n >= 9) return 0.25 + hard * 0.5 - filled * 0.4;
-    if (n >= 6) return 0.6 + hard * 0.6 - filled * 0.6;
+    if (n <= 2) return 0.3 + filled * 0.5;
+    if (n >= 9) return 0.55 + hard * 0.9 - filled * 0.3;
+    if (n >= 6) return 0.9 + hard * 0.7 - filled * 0.3;
     return 1;
   };
   const pick = () => {
@@ -177,9 +180,12 @@ function newTray() {
     return opts.length ? makePiece(opts[Math.floor(Math.random() * opts.length)]) : pick();
   };
   let set: Piece[] = [];
+  // A ajuda (peça que fecha linha) some com o placar, e a garantia de dar para usar as 3 peças também:
+  // lá na frente vem trio impossível e a pessoa precisa ter deixado espaço
+  const guarantee = Math.random() < 1 - hard * 0.55;
   for (let a = 0; a < 40; a++) {
-    set = [Math.random() < 0.4 ? helper() : pick(), pick(), pick()];
-    if (solvable(board, set)) break;
+    set = [Math.random() < 0.25 * (1 - hard) ? helper() : pick(), pick(), pick()];
+    if (!guarantee ? set.some((p) => anyFit(board, p)) : solvable(board, set)) break;
     if (a === 39) set = [makePiece([[0, 0]]), makePiece(parse("XX")), makePiece([[0, 0]])];
   }
   // cores diferentes nas 3
@@ -264,8 +270,30 @@ function place(i: number, r0: number, c0: number) {
   persist();
 }
 
-function restart() {
+/** Partida nova já começa com alguns blocos espalhados (sem linha completa): não começa "de graça". */
+function scatter() {
   board = new Int8Array(N * N).fill(-1);
+  const n = 9 + Math.floor(Math.random() * 6);
+  for (let i = 0; i < n * 3 && board.filter((x) => x >= 0).length < n; i++) {
+    const k = Math.floor(Math.random() * N * N);
+    if (board[k] >= 0) continue;
+    board[k] = Math.floor(Math.random() * COLORS.length);
+    const { rows, cols } = fullLines(board, null);
+    if (rows.length + cols.length) board[k] = -1;
+  }
+}
+
+/** Compartilha o placar com link de desafio (WhatsApp, Instagram etc. pelo menu do celular; senão copia). */
+function shareChallenge() {
+  const url = `${location.origin}${location.pathname}?desafio=${score}`;
+  const msg = t(`Fiz ${score.toLocaleString()} pontos no Block Pop 🧩 Duvido você passar!`, `I scored ${score.toLocaleString()} in Block Pop 🧩 Bet you can't beat it!`,
+    `Hice ${score.toLocaleString()} puntos en Block Pop 🧩 ¡A que no me superas!`);
+  if (navigator.share) navigator.share({ text: msg, url }).catch(() => undefined);
+  else navigator.clipboard?.writeText(`${msg} ${url}`).then(() => floats.push({ text: t("Link copiado!", "Link copied!", "¡Enlace copiado!"), x: L.W / 2, y: L.H / 2 + 200, t0: now(), size: 22, color: "#fff" }));
+}
+
+function restart() {
+  scatter();
   score = 0;
   shown = 0;
   streak = 0;
@@ -384,7 +412,8 @@ let sound = load("blockpop-sound") !== "off";
 const soundBtn = () => ({ x: L.W - 52, y: 20, w: 36, h: 36 });
 const overButtons = () => {
   const w = Math.min(300, L.W - 60), x = (L.W - w) / 2, y = L.H / 2 + 40;
-  return { cont: { x, y, w, h: 56 }, again: { x, y: y + (continued ? 0 : 70), w, h: 56 } };
+  const again = y + (continued ? 0 : 70);
+  return { cont: { x, y, w, h: 56 }, again: { x, y: again, w, h: 56 }, share: { x, y: again + 70, w, h: 56 } };
 };
 
 function draw() {
@@ -406,7 +435,11 @@ function draw() {
   const pulse = 1 + Math.max(0, 1 - (tm - lastScoreBump) / 250) * 0.12;
   text(Math.round(shown).toLocaleString(), L.W / 2, L.by * 0.42, Math.min(56, L.by * 0.36) * pulse);
   const chipY = L.by * 0.78;
-  const mtxt = mission.done
+  const mtxt = challenge && !(score > challenge)
+    ? t(`⚔️ Desafio: passe de ${challenge.toLocaleString()} pontos`, `⚔️ Challenge: beat ${challenge.toLocaleString()} points`, `⚔️ Reto: supera ${challenge.toLocaleString()} puntos`)
+    : challenge && score > challenge && !mission.done
+    ? t("🏆 Você venceu o desafio!", "🏆 You beat the challenge!", "🏆 ¡Superaste el reto!")
+    : mission.done
     ? t(`🔥 Missão cumprida · ${mission.days} dia(s) seguidos`, `🔥 Mission done · ${mission.days} day streak`, `🔥 Misión cumplida · ${mission.days} día(s) seguidos`)
     : t(`🎯 Missão de hoje: ${Math.min(mission.lines, GOAL)}/${GOAL} linhas`, `🎯 Today: clear ${Math.min(mission.lines, GOAL)}/${GOAL} lines`, `🎯 Misión de hoy: ${Math.min(mission.lines, GOAL)}/${GOAL} líneas`);
   ctx.font = font(14, 600);
@@ -580,6 +613,7 @@ function draw() {
     const b = overButtons();
     if (!continued) button(b.cont, t("▶  Continuar (ver vídeo)", "▶  Continue (watch video)", "▶  Continuar (ver video)"), "#36c96f");
     button(b.again, t("Jogar de novo", "Play again", "Jugar de nuevo"), "#4a7dff");
+    button(b.share, t("⚔️  Desafiar um amigo", "⚔️  Challenge a friend", "⚔️  Retar a un amigo"), "#a25cff");
     ctx.globalAlpha = 1;
   }
   // tela do anúncio (por enquanto simulada; no CrazyGames entra o vídeo de verdade)
@@ -677,6 +711,7 @@ cv.addEventListener("pointerdown", (e) => {
     const b = overButtons();
     if (!continued && inside(x, y, b.cont)) continueGame();
     else if (inside(x, y, b.again)) restart();
+    else if (inside(x, y, b.share)) shareChallenge();
     return;
   }
   if (y < L.by + L.c * N + 8) return;
@@ -723,8 +758,12 @@ try {
     if (tray.every((x) => !x)) newTray();
     checkOver();
     if (over) overAt = now() - 700;
-  } else newTray();
+  } else {
+    scatter();
+    newTray();
+  }
 } catch {
+  scatter();
   newTray();
 }
 document.fonts?.ready.then(() => sprites.clear());
