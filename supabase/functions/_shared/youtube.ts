@@ -97,6 +97,8 @@ export type Trend = {
   id: string; title: string; channel: string; views: number; per_day: number; published_at: string; kind: "short" | "long";
   /** Quantas vezes o vídeo bateu a mediana dos últimos vídeos do próprio canal (null = canal com poucos vídeos) */
   lift?: number | null;
+  /** Vídeo do próprio canal (os que mais deram certo), para o plano repetir o que funcionou */
+  own?: boolean;
 };
 
 const median = (xs: number[]) => {
@@ -172,6 +174,33 @@ export async function ytResearch(token: string, niche: string, language = "pt", 
   const ranked: Trend[] = out.map(({ channel_id: _, ...t }) => ({ ...t, lift: lift.get(t.id) ?? null }));
   const score = (t: Trend) => (t.lift ?? 1) * Math.log10(t.per_day + 10);
   return ranked.sort((a, b) => score(b) - score(a)).slice(0, 30);
+}
+
+/**
+ * Os vídeos do próprio canal que mais deram certo (últimos 50 envios): ordenados pelo múltiplo sobre a mediana do canal.
+ * Vai junto com a pesquisa (own = true) para o plano fazer mais do que já funcionou e transformar Short bom em longo.
+ */
+export async function ytOwnHits(token: string): Promise<Trend[]> {
+  const ch = await yt(token, "channels", { part: "contentDetails", mine: "true" });
+  const pl = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  if (!pl) return [];
+  const items = await yt(token, "playlistItems", { part: "contentDetails", playlistId: pl, maxResults: "50" });
+  // deno-lint-ignore no-explicit-any
+  const ids = ((items.items ?? []) as any[]).map((it) => it.contentDetails?.videoId).filter(Boolean);
+  if (ids.length < 3) return [];
+  const data = await yt(token, "videos", { part: "snippet,statistics,contentDetails,status", id: ids.join(",") });
+  // deno-lint-ignore no-explicit-any
+  const vids = ((data.items ?? []) as any[]).filter((v) => v.status?.privacyStatus === "public").map((v) => {
+    const views = Number(v.statistics?.viewCount ?? 0);
+    const days = Math.max(1, (Date.now() - new Date(v.snippet.publishedAt).getTime()) / 86400000);
+    return {
+      id: v.id as string, title: v.snippet.title as string, channel: v.snippet.channelTitle as string, views, per_day: Math.round(views / days),
+      published_at: v.snippet.publishedAt as string, kind: (seconds(v.contentDetails?.duration) <= 180 ? "short" : "long") as Trend["kind"], own: true,
+    };
+  });
+  const med = median(vids.map((v) => v.views));
+  return vids.map((v) => ({ ...v, lift: med > 0 ? Math.round((v.views / med) * 10) / 10 : null }))
+    .filter((v) => (v.lift ?? 0) >= 1.5 && v.views >= 100).sort((a, b) => b.views - a.views).slice(0, 8);
 }
 
 // --------------------------------------------------------------------------------------------- temas e roteiros
@@ -353,12 +382,21 @@ const rules = (niche: string, language: string, style = "") =>
   (style === "cinematic" ? CINEMATIC : style === "collage" ? COLLAGE : "");
 
 export async function planTopics(niche: string, trends: Trend[], recent: string[], kinds: ("short" | "long")[], language = "pt", style = "") {
+  const own = trends.filter((t) => t.own);
+  const others = trends.filter((t) => !t.own);
   const out = await generateJSON(Plan,
     rules(niche, language, style) +
       `\n\nAgora você é o editor do canal: escolha os temas dos próximos vídeos com base no que está dando audiência.\n\n${HOOK_GUIDE}`,
     `Vídeos do nicho que mais crescem (título · quantas vezes bateu a média do próprio canal · visualizações por dia · formato · id). ` +
       `O múltiplo é o sinal mais forte: um vídeo que fez 5x a média do canal mostra um TEMA que funciona, mesmo em canal pequeno.\n` +
-      (trends.length ? trends.map((t) => `- ${t.title} · ${t.lift ? `${t.lift}x a média` : "média ?"} · ${t.per_day}/dia · ${t.kind} · ${t.id}`).join("\n") : "(sem dados agora; use temas clássicos que sempre dão audiência)") +
+      (others.length ? others.map((t) => `- ${t.title} · ${t.lift ? `${t.lift}x a média` : "média ?"} · ${t.per_day}/dia · ${t.kind} · ${t.id}`).join("\n") : "(sem dados agora; use temas clássicos que sempre dão audiência)") +
+      (own.length
+        ? `\n\nVídeos DESTE canal que mais deram certo (título · quantas vezes bateu a média do canal · formato · id). É o sinal mais confiável do que ` +
+          `o público deste canal quer: faça mais temas do mesmo tipo e com o mesmo tipo de gancho (sem repetir o mesmo tema). ` +
+          `Nos vídeos LONGOS, aprofunde um tema de Short que foi bem ou junte vários do mesmo tipo (ex.: Short "o peixe de Jonas não era baleia" → ` +
+          `longo "7 coisas da Bíblia que quase todo mundo entende errado"):\n` +
+          own.map((t) => `- ${t.title} · ${t.lift}x · ${t.kind} · ${t.id}`).join("\n")
+        : "") +
       `\n\nTemas que o canal já fez (não repita):\n${recent.length ? recent.map((r) => `- ${r}`).join("\n") : "(nenhum)"}` +
       `\n\nEscolha exatamente ${kinds.length} temas, nesta ordem de formato: ${kinds.join(", ")}. ` +
       `Shorts: um único fato surpreendente e rápido. Longo: tema com várias curiosidades para 6 a 8 minutos.` +
@@ -369,11 +407,18 @@ export async function planTopics(niche: string, trends: Trend[], recent: string[
   return out.items.slice(0, kinds.length).map(({ hook, ...it }, i) => ({ ...it, angle: `[${name(hook)}] ${it.angle}`, kind: kinds[i] }));
 }
 
-export async function writeScript(niche: string, video: { kind: string; topic: string; angle?: string | null; redo_note?: string | null }, language = "pt", style = "", tiktok = false): Promise<YtScript | StickScriptT> {
+export async function writeScript(
+  niche: string, video: { kind: string; topic: string; angle?: string | null; redo_note?: string | null }, language = "pt", style = "", tiktok = false,
+  hasLong = false,
+): Promise<YtScript | StickScriptT> {
   const short = video.kind === "short";
   const en = language === "en";
   const stick = style === "stickman";
-  const cta = stick
+  // Canal com vídeo longo no ar: o Short chama para os longos (são eles que somam horas assistidas para monetizar)
+  const cta = hasLong
+    ? (en ? `"the full stories are in the long videos on the channel"` : language === "es" ? `"las historias completas están en los videos largos del canal"`
+      : `"as histórias completas estão nos vídeos longos do canal"`)
+    : stick
     ? (en ? `"follow for more"` : language === "es" ? `"sígueme para más"` : `"me segue para mais"`)
     : (en ? `"subscribe for more Bible secrets"` : language === "es" ? `"suscríbete para más secretos de la Biblia"` : `"se inscreve para mais curiosidades da Bíblia"`);
   // Canal que também posta no TikTok: o TikTok só paga vídeo com mais de 1 minuto
@@ -445,7 +490,10 @@ export async function planDay(db: SupabaseClient, channel: any, date: string, on
     try {
       // Bonequinhos: além do nicho, o que está em alta nos vídeos explicativos em geral
       const extra = channel.style === "stickman" ? STICK_TRENDS[channel.language] ?? STICK_TRENDS.en : [];
-      trends = await ytResearch(await ytToken(db, channel.id), channel.niche, channel.language, extra);
+      const token = await ytToken(db, channel.id);
+      trends = await ytResearch(token, channel.niche, channel.language, extra);
+      // Os próprios vídeos que deram certo vão junto (erro aqui não derruba a pesquisa)
+      trends = [...trends, ...await ytOwnHits(token).catch(() => [])];
       await db.from("yt_channels").update({ trends, trends_at: new Date().toISOString(), error: null }).eq("id", channel.id);
     } catch (e) {
       await db.from("yt_channels").update({ error: `Pesquisa: ${(e as Error).message}` }).eq("id", channel.id);
@@ -506,7 +554,17 @@ export async function ytAutopilot(db: SupabaseClient) {
       .eq("id", next.id).eq("status", "draft").select("id").maybeSingle();
     if (claimed) {
       try {
-        const script = await writeScript(next.yt_channels?.niche ?? "Curiosidades da Bíblia", next, next.yt_channels?.language ?? "pt", next.yt_channels?.style ?? "", !!next.yt_channels?.tiktok_account);
+        // Último vídeo longo do canal já no ar: o Short leva para ele (chamada no fim + link na descrição)
+        const { data: long } = next.kind === "short"
+          ? await db.from("yt_videos").select("youtube_id,title").eq("channel_ref", next.channel_ref).eq("kind", "long").eq("status", "uploaded")
+            .not("youtube_id", "is", null).lte("publish_at", new Date().toISOString()).order("publish_at", { ascending: false }).limit(1).maybeSingle()
+          : { data: null };
+        const lang = next.yt_channels?.language ?? "pt";
+        const script = await writeScript(next.yt_channels?.niche ?? "Curiosidades da Bíblia", next, lang, next.yt_channels?.style ?? "", !!next.yt_channels?.tiktok_account, !!long);
+        if (long) {
+          const label = lang === "en" ? "▶ Watch the full video" : lang === "es" ? "▶ Mira el video completo" : "▶ Assista o vídeo completo";
+          script.description = `${label}: ${long.title ?? ""} https://youtu.be/${long.youtube_id}\n\n${script.description}`;
+        }
         await db.from("yt_videos").update({ status: "queued", script, title: script.title, error: null, updated_at: new Date().toISOString() }).eq("id", next.id);
         result.scripted = next.id;
         result.dispatched = await dispatchRender("youtube.yml");
