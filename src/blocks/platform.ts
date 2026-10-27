@@ -54,7 +54,9 @@ export function showAd(kind: "midgame" | "rewarded", hooks: { start?: () => void
       adError: (e) => {
         const why = String((e as { code?: string; message?: string })?.code ?? (e as { message?: string })?.message ?? e);
         console.warn("CrazyGames ad error", kind, e);
-        hooks.done(kind === "midgame", why);
+        // No Basic Launch o CrazyGames desliga os anúncios (adsDisabledBasicLaunch) e às vezes não tem anúncio
+        // (unfilled): aí o "continuar" sai de graça, para o jogador não ficar com um botão que não funciona
+        hooks.done(kind === "midgame" || /adsDisabled|unfilled/i.test(why), why);
       },
     });
   } catch {

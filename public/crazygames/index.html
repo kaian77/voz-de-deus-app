@@ -80,7 +80,7 @@
         adError: (e) => {
           const why = String((e == null ? void 0 : e.code) ?? (e == null ? void 0 : e.message) ?? e);
           console.warn("CrazyGames ad error", kind, e);
-          hooks.done(kind === "midgame", why);
+          hooks.done(kind === "midgame" || /adsDisabled|unfilled/i.test(why), why);
         }
       });
     } catch {
