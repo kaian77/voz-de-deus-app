@@ -53,9 +53,20 @@ def num(v, cast=float):
         return None
 
 
+# País inteiro não cabe numa busca do Maps (ela olha uns 15 km em volta): vira as maiores cidades dele
+CITIES = {
+    "US": ["New York NY", "Los Angeles CA", "Chicago IL", "Houston TX", "Miami FL", "Dallas TX"],
+    "GB": ["London", "Manchester", "Birmingham UK"], "CA": ["Toronto", "Vancouver"], "AU": ["Sydney", "Melbourne"],
+    "IE": ["Dublin"], "ES": ["Madrid", "Barcelona", "Valencia España"], "PT": ["Lisboa", "Porto"],
+    "MX": ["Ciudad de México", "Guadalajara", "Monterrey"], "AR": ["Buenos Aires", "Córdoba Argentina"],
+    "CO": ["Bogotá", "Medellín"], "CL": ["Santiago Chile"], "PE": ["Lima"], "UY": ["Montevideo"],
+    "BR": ["São Paulo SP", "Rio de Janeiro RJ", "Belo Horizonte MG", "Curitiba PR"],
+}
+
+
 def geocode(place):
-    """Cidade/país em qualquer lugar do mundo -> (lat, lng, país ISO) ou None."""
-    q = urllib.parse.urlencode({"format": "json", "limit": 3, "addressdetails": 1, "q": place})
+    """Cidade (ou país) em qualquer lugar do mundo -> (lat, lng, país ISO, é_país) ou None."""
+    q = urllib.parse.urlencode({"format": "jsonv2", "limit": 3, "addressdetails": 1, "q": place})
     req = urllib.request.Request(f"https://nominatim.openstreetmap.org/search?{q}", headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=30) as r:
         hits = json.loads(r.read())
@@ -63,7 +74,32 @@ def geocode(place):
     if not hits:
         return None
     h = max(hits, key=lambda h: float(h.get("importance") or 0))
-    return float(h["lat"]), float(h["lon"]), ((h.get("address") or {}).get("country_code") or "").upper() or None
+    country = ((h.get("address") or {}).get("country_code") or "").upper() or None
+    return float(h["lat"]), float(h["lon"]), country, h.get("addresstype") == "country" or int(h.get("place_rank") or 30) <= 4
+
+
+def places_of(text):
+    """"Miami FL" -> 1 lugar; "Estados Unidos, Inglaterra" -> cidades grandes de cada país. -> [(nome, lat, lng, país)]"""
+    split = [p.strip() for p in re.split(r"[;,/]| e | y | and ", text) if p.strip()]
+    first = geocode(split[0]) if len(split) > 1 else None
+    # "Estados Unidos, Inglaterra" = vários países; "Miami, FL" = um lugar só
+    whole = None if first and first[3] else geocode(text)
+    parts = [text] if whole and not whole[3] else split
+    out = []
+    for part in parts[:4]:
+        g = whole if part == text else geocode(part)
+        if not g:
+            print(f"  não achei \"{part}\" no mapa")
+            continue
+        lat, lng, country, is_country = g
+        if is_country:
+            for city in CITIES.get(country or "", [])[:3]:
+                c = geocode(city)
+                if c:
+                    out.append((city, c[0], c[1], country))
+        else:
+            out.append((part, lat, lng, country))
+    return out[:6]
 
 
 def save(search, brands):
@@ -83,17 +119,27 @@ def save(search, brands):
 
 
 def run_maps(search):
-    area = geocode(search["place"])
-    if not area:
+    places = places_of(search["place"])
+    if not places:
         raise RuntimeError(f"não achei \"{search['place']}\" no mapa; escreva cidade e país (ex.: Miami FL, Madrid España)")
-    lat, lng, country = area
     lang = search.get("site") if search.get("site") in ("pt", "en", "es") else "en"
-    cell = {"lat": f"{lat:.6f}", "lon": f"{lng:.6f}", "radius": 15000, "zoom": 12}
-    brands, scanned = [], 0
-    for q in [x.strip() for x in search["query"].split(",") if x.strip()][:3]:
-        rows = scrape(f"{q} {search['place']}", cell, 5, lang=lang, extra_reviews=True)
-        print(f"  {q}: {len(rows)} lugares")
+    queries = [x.strip() for x in search["query"].split(",") if x.strip()][: 2 if len(places) > 2 else 3]
+    jobs = [(q, p) for p in places for q in queries][:6]
+    brands, scanned, seen_places, errors = [], 0, set(), []
+    for q, (name, lat, lng, country) in jobs:
+        cell = {"lat": f"{lat:.6f}", "lon": f"{lng:.6f}", "radius": 15000, "zoom": 12}
+        try:
+            rows = scrape(f"{q} {name}", cell, 3, lang=lang, extra_reviews=True)
+        except Exception as e:  # uma cidade que falha não perde as outras
+            errors.append(str(e))
+            print(f"  {q} em {name}: {e}")
+            continue
+        print(f"  {q} em {name}: {len(rows)} lugares")
         for row in rows:
+            pid = row.get("place_id") or row.get("cid") or row.get("link")
+            if pid in seen_places:
+                continue
+            seen_places.add(pid)
             reviews = (jload(row.get("user_reviews_extended")) or []) + (jload(row.get("user_reviews")) or [])
             seen, b = set(), {"key": row.get("place_id") or row.get("cid") or row.get("link") or norm(row.get("title")),
                              "name": (row.get("title") or "").strip(), "country": country, "url": (row.get("link") or "")[:500] or None,
@@ -114,6 +160,8 @@ def run_maps(search):
                         b["samples"].append({"text": text[:280], "rate": rate, "product": row.get("category") or "", "url": b["url"]})
             scanned += b["read"]
             brands.append(b)
+    if not brands and errors:
+        raise RuntimeError(errors[-1])
     return brands, scanned
 
 

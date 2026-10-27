@@ -378,6 +378,8 @@ export interface ManualSearch {
   found: number;
   scanned: number;
   error: string | null;
+  /** Contagem de cada etapa e os primeiros erros (Mercado Livre) */
+  log: Record<string, number | string[]> | null;
   created_at: string;
   updated_at: string;
 }
