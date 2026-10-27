@@ -118,7 +118,7 @@
       ]
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!crazygames/).*)",
       "headers": [
         {
           "key": "X-Frame-Options",
@@ -175,6 +175,15 @@
         {
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/crazygames/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
         }
       ]
     }
