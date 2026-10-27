@@ -6,6 +6,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { box, cyl, mat } from "../tour3d/furniture";
 import { Path } from "./path";
 import type { RaceEvent } from "./types";
+import { num, t as tx, tr } from "../i18n3d";
 
 export const HALF = 2.6; // meia largura da pista
 const SUN_DIR = new THREE.Vector3(500, 260, 220);
@@ -472,7 +473,7 @@ export function buildWorld(ev: RaceEvent): World {
     box(stand, U1 - U0, 0.3, 11, mat(0x232328), (U0 + U1) / 2, 0.6 + TIERS * 0.75 + 3.4, -3.6);
     for (let u = U0; u <= U1; u += 12) cyl(stand, 0.15, 0.6 + TIERS * 0.75 + 3.4, 0x6a6c72, u, 0, -TIERS * 1.3 + 0.4, 6);
     if (ev.slogan) {
-      const sl = sign(stand, [ev.slogan], 34, 2.2, "#120808", ev.colors.primary);
+      const sl = sign(stand, [tr(ev.slogan)], 34, 2.2, "#120808", ev.colors.primary);
       sl.position.set((U0 + U1) / 2, 0.6 + TIERS * 0.75 + 2.6, 1.95);
     }
     stand.updateMatrixWorld();
@@ -541,7 +542,7 @@ export function buildWorld(ev: RaceEvent): World {
   for (const l of ev.landmarks) {
     landmark(scene, l.kind, l.x, l.z);
     const top = l.kind === "torre" ? 50 : l.kind === "congresso" ? 26 : l.kind === "estadio" ? 18 : 14;
-    if (l.name) marks.push({ id: l.kind, name: l.name, pos: new THREE.Vector3(l.x, height(l.x, l.z) + top, l.z), kind: "land" });
+    if (l.name) marks.push({ id: l.kind, name: tr(l.name), pos: new THREE.Vector3(l.x, height(l.x, l.z) + top, l.z), kind: "land" });
   }
 
   // arena
@@ -550,7 +551,7 @@ export function buildWorld(ev: RaceEvent): World {
   if (!auto) arena.add(drape(150, 46, 8, 46, layered(0xb7cf86, 1)));
   const colors = night ? [0xe3262e, 0x2a2a2e, 0x8c1016, 0x3a3a40, 0xe3262e, 0x2a2a2e] : [0xff5a1f, 0x2f8cff, 0x14a37f, 0xffb21f, 0x9b59d0, 0x2f8cff];
   ev.arena.forEach((s, i) => {
-    marks.push({ id: s.id, name: `${s.icon} ${s.name}`, pos: new THREE.Vector3(s.x, height(s.x, s.z) + 7, s.z), kind: "spot" });
+    marks.push({ id: s.id, name: `${s.icon} ${tr(s.name)}`, pos: new THREE.Vector3(s.x, height(s.x, s.z) + 7, s.z), kind: "spot" });
     if (s.id === "largada") return;
     if (s.id === "podio") {
       const g = new THREE.Group();
@@ -565,7 +566,7 @@ export function buildWorld(ev: RaceEvent): World {
         const num = sign(g, [n], 0.5, 0.3, bg, "#0f2238", false);
         num.position.set(st.x, PODIUM.deck + st.h / 2, 0.41);
       }
-      const back = sign(g, ["PÓDIO", ev.name.toUpperCase()], 5.6, 2.4, ev.colors.dark, night ? ev.colors.primary : "#ffffff");
+      const back = sign(g, [tx("PÓDIO", "PODIUM", "PODIO"), tr(ev.name).toUpperCase()], 5.6, 2.4, ev.colors.dark, night ? ev.colors.primary : "#ffffff");
       back.position.set(0, 2.1, -0.9);
       for (const sx of [-2.8, 2.8]) cyl(g, 0.06, 3.3, 0xcfd4da, sx, 0, -0.92, 6);
       arena.add(g);
@@ -582,7 +583,7 @@ export function buildWorld(ev: RaceEvent): World {
       }
       return;
     }
-    tent(arena, s.x, s.z, colors[i % colors.length], s.name.toUpperCase(), height(s.x, s.z), night);
+    tent(arena, s.x, s.z, colors[i % colors.length], tr(s.name).toUpperCase(), height(s.x, s.z), night);
   });
 
   // pórtico de largada / chegada (no sentido da largada)
@@ -602,7 +603,7 @@ export function buildWorld(ev: RaceEvent): World {
   beam.castShadow = true;
   arch.add(beam);
   for (const s of [-1, 1]) {
-    const b = sign(arch, ["LARGADA · CHEGADA"], 7.5, 1.6, ev.colors.dark, "#ffffff", false);
+    const b = sign(arch, [tx("LARGADA · CHEGADA", "START · FINISH", "LARGADA · LLEGADA")], 7.5, 1.6, ev.colors.dark, "#ffffff", false);
     b.position.set(s * 1.05, 9.6, 0);
     b.rotation.y = s * Math.PI / 2;
   }
@@ -668,8 +669,8 @@ export function buildWorld(ev: RaceEvent): World {
       g.add(post);
     }
     for (const q of waterAt) {
-      const kms = q.ws.map((w) => String(w).replace(".", ","));
-      const name = `💧 Água · km ${kms.length > 1 ? `${kms.slice(0, -1).join(", ")} e ${kms[kms.length - 1]}` : kms[0]}`;
+      const kms = q.ws.map((w) => (Number.isInteger(w) ? String(w) : num(w)));
+      const name = `💧 ${tx("Água", "Water", "Agua")} · km ${kms.length > 1 ? `${kms.slice(0, -1).join(", ")} ${tx("e", "and", "y")} ${kms[kms.length - 1]}` : kms[0]}`;
       marks.push({ id: `${d.id}-agua${q.ws[0]}`, name, pos: new THREE.Vector3(q.x, height(q.x, q.z) + 6, q.z), dist: d.id, kind: "water" });
     }
     scene.add(g);

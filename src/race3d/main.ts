@@ -8,13 +8,15 @@ import { BODY, Crowd, Pose, SKIN, ZOMBIE_SKIN } from "./crowd";
 import { exemplo } from "./events/exemplo";
 import { zombieRun } from "./events/zombie-run";
 import type { Distance, RaceEvent } from "./types";
+import { lang, langSwitch, num, pitchMsg, t as tx, tr } from "../i18n3d";
 
 const EVENTS: Record<string, RaceEvent> = { exemplo, "zombie-run": zombieRun };
 const slug = location.pathname.split("/").filter(Boolean)[1] || new URLSearchParams(location.search).get("e") || "exemplo";
 const ev = EVENTS[slug] ?? exemplo;
+const evName = tr(ev.name);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
-document.title = `${ev.name} · percurso 3D${ev.demo ? " (demonstração)" : ""}`;
+document.title = `${evName} · ${tx("percurso 3D", "3D race course", "recorrido 3D")}${ev.demo ? ` (${tx("demonstração", "demo", "demostración")})` : ""}`;
 const root = document.documentElement.style;
 root.setProperty("--p", ev.colors.primary);
 root.setProperty("--d", ev.colors.dark);
@@ -27,39 +29,42 @@ if (ev.font) {
   document.head.appendChild(link);
   root.setProperty("--brand", `"${ev.font}", var(--font)`);
 }
-const startTxt = `${Math.floor(ev.start)}h${ev.start % 1 ? String(Math.round((ev.start % 1) * 60)).padStart(2, "0") : ""}`;
-const distName = (d: Distance) => (d.name ? `${d.label} · ${d.name}` : d.label);
+const STATUS: Record<string, string> = { esgotado: tx("esgotado", "sold out", "agotado"), aberto: tx("aberto", "open", "abierto"), "em breve": tx("em breve", "soon", "pronto") };
+const startMin = String(Math.round((ev.start % 1) * 60)).padStart(2, "0");
+const startTxt = lang === "pt" ? `${Math.floor(ev.start)}h${ev.start % 1 ? startMin : ""}` : `${Math.floor(ev.start)}:${startMin}`;
+const distName = (d: Distance) => (d.name ? `${d.label} · ${tr(d.name)}` : d.label);
 
 $("app").innerHTML = `
 <div class="r3-canvas" id="canvas"></div>
 <div class="r3-labels" id="labels"></div>
 <header class="r3-top">
-  <div class="r3-brand"><b>${ev.name}</b><span>${ev.subtitle} · ${ev.date}, ${startTxt}</span></div>
-  ${ev.demo ? `<a class="r3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">Demonstração<small>PáginasPro</small></a>` : ""}
+  <div class="r3-brand"><b>${evName}</b><span>${tr(ev.subtitle)} · ${tr(ev.date)}, ${startTxt}</span></div>
+  ${ev.demo ? `<a class="r3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">${tx("Demonstração", "Demo", "Demostración")}<small>PáginasPro</small></a>` : ""}
 </header>
 <div class="r3-hud">
-  <div class="r3-clock"><b id="clock">--:--</b><span id="race">antes da largada</span></div>
+  <div class="r3-clock"><b id="clock">--:--</b><span id="race">${tx("antes da largada", "before the start", "antes de la largada")}</span></div>
   <div class="r3-lead" id="lead"></div>
 </div>
 <div class="r3-cams">
-  <div class="r3-seg" id="cams"><button data-c="seguir">🎥 Seguir</button><button data-c="voo">✈️ Sobrevoo</button></div>
+  <div class="r3-seg" id="cams"><button data-c="seguir">🎥 ${tx("Seguir", "Follow", "Seguir")}</button><button data-c="voo">✈️ ${tx("Sobrevoo", "Flyover", "Sobrevuelo")}</button></div>
   <div class="r3-seg" id="speeds"><button data-s="10">10x</button><button data-s="30">30x</button><button data-s="60" class="on">60x</button><button data-s="120">120x</button></div>
 </div>
 <div class="r3-count" id="count" hidden></div>
 <div class="r3-hint" id="hint"></div>
 <div class="r3-done" id="done" hidden></div>
-<button class="r3-go" id="go">▶ Dar a largada</button>
+<button class="r3-go" id="go">▶ ${tx("Dar a largada", "Start the race", "Dar la largada")}</button>
 <nav class="r3-tabs" id="tabs">
-  <button data-t="percurso">🗺️<span>Percurso</span></button>
-  <button data-t="simular">⏱️<span>Simule</span></button>
-  <button data-t="arena">🏁<span>Arena</span></button>
-  <button data-t="inscricao">🎽<span>Inscrição</span></button>
+  <button data-t="percurso">🗺️<span>${tx("Percurso", "Course", "Recorrido")}</span></button>
+  <button data-t="simular">⏱️<span>${tx("Simule", "Simulate", "Simula")}</span></button>
+  <button data-t="arena">🏁<span>${tx("Arena", "Venue", "Arena")}</span></button>
+  <button data-t="inscricao">🎽<span>${tx("Inscrição", "Sign up", "Inscripción")}</span></button>
 </nav>
-<section class="r3-sheet" id="sheet" hidden><button class="r3-x" id="sheetX" aria-label="Fechar">×</button><div id="sheetBody"></div></section>
+<section class="r3-sheet" id="sheet" hidden><button class="r3-x" id="sheetX" aria-label="${tx("Fechar", "Close", "Cerrar")}">×</button><div id="sheetBody"></div></section>
 `;
 
 // ---------- cena
 const world = buildWorld(ev);
+document.querySelector(".r3-top")!.insertBefore(langSwitch("r3-lang"), document.querySelector(".r3-demo"));
 const { scene } = world;
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -162,7 +167,7 @@ const me = {
 };
 const SHIRTS = [0xffd400, 0xff5a1f, 0x2f8cff, 0x14a37f, 0xe04e8a, 0x111111];
 const esc = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const meName = () => me.name.trim() || "Você";
+const meName = () => me.name.trim() || tx("Você", "You", "Tú");
 const ME_SCALE = RUN_SCALE * 1.1;
 const meCrowd = new Crowd(1, ME_SCALE, { lamps: ev.night, gore });
 const paintMe = () => {
@@ -225,7 +230,7 @@ const clockAt = (sec: number) => {
   const m = Math.floor(ev.start * 60 + sec / 60);
   return `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 };
-const kmTxt = (d: Distance, s: number) => (Math.max(0, s) / unitsPerKm(d)).toFixed(1).replace(".", ",");
+const kmTxt = (d: Distance, s: number) => num(Math.max(0, s) / unitsPerKm(d));
 
 function place(path: ReturnType<typeof pathOf>, s: number, lat: number) {
   path.at(s, P);
@@ -252,9 +257,9 @@ function resetRace() {
   podiumCrowd.commit();
   medals.me.visible = medals.second.visible = medals.third.visible = false;
   $("done").hidden = true;
-  $("race").textContent = "antes da largada";
+  $("race").textContent = tx("antes da largada", "before the start", "antes de la largada");
   $("clock").textContent = clockAt(0);
-  $("go").textContent = "▶ Dar a largada";
+  $("go").textContent = `▶ ${tx("Dar a largada", "Start the race", "Dar la largada")}`;
 }
 
 // pelotões que largam depois andam até a faixa quando o anterior já saiu
@@ -331,7 +336,7 @@ function stepRunners(dt: number, dtReal: number, now: number) {
         const lead = runners.filter((r) => r.d === me.d).reduce((m, r) => Math.max(m, r.s), 0);
         if (me.s > lead) {
           me.passed = true;
-          hint(`🔥 ${meName()} passou o líder! Faltam ${kmTxt(me.d, pathOf(me.d).length - me.s)} km`, 3500);
+          hint(`🔥 ${meName()} ${tx("passou o líder! Faltam", "passed the leader!", "¡pasó al líder! Faltan")} ${kmTxt(me.d, pathOf(me.d).length - me.s)} km${tx("", " to go", "")}`, 3500);
           beep(990, 0.12);
         }
       }
@@ -388,7 +393,7 @@ for (const m of world.marks) {
 }
 const meLabel = addLabel(meName().toUpperCase(), new THREE.Vector3(), "me", 1e9);
 const podium = ev.arena.find((a) => a.id === "podio");
-const leadLabels = ev.distances.map((d) => addLabel(`Líder ${d.label}`, new THREE.Vector3(), "leader", 900, d.id));
+const leadLabels = ev.distances.map((d) => addLabel(`${tx("Líder", "Leader", "Líder")} ${d.label}`, new THREE.Vector3(), "leader", 900, d.id));
 const v3 = new THREE.Vector3();
 function drawLabels() {
   const w = innerWidth, h = innerHeight;
@@ -437,7 +442,7 @@ function setCam(c: Cam) {
     const t = followPoint();
     const off = new THREE.Vector3(-P.dx * 6.5, 3, -P.dz * 6.5);
     flyTo(t, off);
-    hint(me.on ? "Seguindo você. Arraste para girar em volta." : `Seguindo o líder do ${dist.label}. Arraste para girar.`);
+    hint(me.on ? tx("Seguindo você. Arraste para girar em volta.", "Following you. Drag to look around.", "Siguiéndote. Arrastra para girar.") : `${tx("Seguindo o líder do", "Following the leader of the", "Siguiendo al líder de los")} ${dist.label}. ${tx("Arraste para girar.", "Drag to look around.", "Arrastra para girar.")}`);
   }
   if (c === "geral") overview();
 }
@@ -481,7 +486,7 @@ function followPoint() {
   let best: Runner | null = winner(dist);
   if (best && cam === "seguir" && winHint !== dist.id) {
     winHint = dist.id;
-    hint(`🏆 O vencedor dos ${dist.label} chegou em ${fmt(best.fin)}! Toque em Sobrevoo para ver o percurso.`, 4500);
+    hint(`🏆 ${tx("O vencedor dos", "The winner of the", "¡El ganador de los")} ${dist.label} ${tx("chegou em", "finished in", "llegó en")} ${fmt(best.fin)}! ${tx("Toque em Sobrevoo para ver o percurso.", "Tap Flyover to see the course.", "Toca Sobrevuelo para ver el recorrido.")}`, 4500);
   }
   if (!best) for (const r of runners) if (r.d === dist && r.fin < 0 && (!best || r.s > best.s)) best = r;
   if (!best) best = runners.find((r) => r.d === dist) ?? runners[0];
@@ -519,7 +524,7 @@ function updateCamera(dtReal: number, now: number) {
     const want = new THREE.Vector3(a.x - a.dx * 30, height(a.x, a.z) + 22, a.z - a.dz * 30);
     camera.position.lerp(want, 1 - Math.exp(-dtReal * 2));
     controls.target.lerp(new THREE.Vector3(b.x, height(b.x, b.z) + 2, b.z), 1 - Math.exp(-dtReal * 2));
-    $("race").textContent = state === "race" ? $("race").textContent : `sobrevoo · km ${kmTxt(dist, vooS)}`;
+    $("race").textContent = state === "race" ? $("race").textContent : `${tx("sobrevoo", "flyover", "sobrevuelo")} · km ${kmTxt(dist, vooS)}`;
   }
   controls.update();
 }
@@ -591,7 +596,7 @@ function startRace() {
       n--;
       window.setTimeout(tick, 800);
     } else {
-      el.textContent = ev.go ?? "VAI!";
+      el.textContent = ev.go ? tr(ev.go) : tx("VAI!", "GO!", "¡YA!");
       el.classList.remove("pop");
       void el.offsetWidth;
       el.classList.add("pop");
@@ -599,7 +604,7 @@ function startRace() {
       beep(495, 0.9, 0.12, "square");
       if (ev.distances.some((d) => d.zombie)) growl();
       state = "race";
-      $("go").textContent = "⟲ Reiniciar";
+      $("go").textContent = `⟲ ${tx("Reiniciar", "Restart", "Reiniciar")}`;
       window.setTimeout(() => (el.hidden = true), 900);
     }
   };
@@ -663,7 +668,7 @@ $("go").addEventListener("click", () => {
     setCam("seguir");
   } else {
     resetRace();
-    hint("Pronto para uma nova largada.");
+    hint(tx("Pronto para uma nova largada.", "Ready for a new start.", "Listo para una nueva largada."));
   }
 });
 $("cams").addEventListener("click", (e) => {
@@ -675,7 +680,7 @@ $("speeds").addEventListener("click", (e) => {
   if (!b?.dataset.s) return;
   speed = Number(b.dataset.s);
   document.querySelectorAll<HTMLButtonElement>("#speeds button").forEach((x) => x.classList.toggle("on", x === b));
-  hint(`1 segundo na tela = ${speed} segundos de prova`);
+  hint(tx(`1 segundo na tela = ${speed} segundos de prova`, `1 second on screen = ${speed} seconds of race`, `1 segundo en pantalla = ${speed} segundos de carrera`));
 });
 
 function setDist(d: Distance) {
@@ -745,15 +750,15 @@ function renderSheet() {
   if (!tab) return;
   if (tab === "percurso") {
     const st = stats(dist);
-    body.innerHTML = `<h3>Percurso</h3>${distChips()}
-      <div class="r3-facts"><div><b>${dist.km} km</b><span>distância</span></div><div><b>${st.max - st.min} m</b><span>desnível</span></div><div><b>+${st.gain} m</b><span>subida total</span></div><div><b>${dist.water.length}</b><span>postos de água</span></div></div>
+    body.innerHTML = `<h3>${tx("Percurso", "Course", "Recorrido")}</h3>${distChips()}
+      <div class="r3-facts"><div><b>${dist.km} km</b><span>${tx("distância", "distance", "distancia")}</span></div><div><b>${st.max - st.min} m</b><span>${tx("desnível", "elevation range", "desnivel")}</span></div><div><b>+${st.gain} m</b><span>${tx("subida total", "total climb", "subida total")}</span></div><div><b>${dist.water.length}</b><span>${tx("postos de água", "water stations", "puestos de agua")}</span></div></div>
       <canvas class="r3-prof" id="prof"></canvas>
-      <p class="r3-small">Toque no gráfico para ver aquele trecho. Água no km ${dist.water.map((w) => String(w).replace(".", ",")).join(" · ")}. Largada ${dist.wave ? `${dist.wave} min depois do ${ev.distances[0].label}` : `às ${startTxt}`}.${ev.routeNote ? ` ${ev.routeNote}` : ""}</p>
-      <button class="r3-btn" id="sobrevoo">✈️ Sobrevoar o percurso</button>`;
+      <p class="r3-small">${tx("Toque no gráfico para ver aquele trecho. Água no km", "Tap the chart to see that stretch. Water at km", "Toca el gráfico para ver ese tramo. Agua en el km")} ${dist.water.map((w) => num(w)).join(" · ")}. ${tx("Largada", "Start", "Largada")} ${dist.wave ? `${dist.wave} min ${tx("depois do", "after the", "después de los")} ${ev.distances[0].label}` : `${tx("às", "at", "a las")} ${startTxt}`}.${ev.routeNote ? ` ${tr(ev.routeNote)}` : ""}</p>
+      <button class="r3-btn" id="sobrevoo">✈️ ${tx("Sobrevoar o percurso", "Fly over the course", "Sobrevolar el recorrido")}</button>`;
     $("sobrevoo").addEventListener("click", () => {
       setCam("voo");
       closeSheet();
-      hint(`Sobrevoando o ${dist.label}. Toque em Seguir para voltar à prova.`);
+      hint(`${tx("Sobrevoando o", "Flying over the", "Sobrevolando los")} ${dist.label}. ${tx("Toque em Seguir para voltar à prova.", "Tap Follow to go back to the race.", "Toca Seguir para volver a la carrera.")}`);
     });
     const prof = $<HTMLCanvasElement>("prof");
     prof.addEventListener("click", (e) => {
@@ -768,15 +773,15 @@ function renderSheet() {
     drawProfile();
   } else if (tab === "simular") {
     const pr = me.champ ? predictChamp(dist) : predict(dist, me.pace);
-    body.innerHTML = `<h3>Simule a sua prova</h3>${distChips()}
-      <div class="r3-me"><input id="meName" maxlength="18" placeholder="Seu nome" value="${esc(me.name)}" autocomplete="given-name">
-        <div class="r3-shirts">${SHIRTS.map((c) => `<button data-shirt="${c}" class="${c === me.shirt ? "on" : ""}" style="--c:#${c.toString(16).padStart(6, "0")}" aria-label="Cor da camiseta"></button>`).join("")}</div></div>
-      <label class="r3-champ"><input type="checkbox" id="champ" ${me.champ ? "checked" : ""}><span><b>🏆 Quero chegar em 1º</b><small>Seu bonequinho vem atrás do líder e arranca no fim.</small></span></label>
-      <label class="r3-pace${me.champ ? " off" : ""}" id="paceBox">Seu ritmo <b id="paceV">${fmtPace(me.pace)} /km</b><input type="range" id="pace" min="3" max="10" step="0.05" value="${me.pace}"></label>
-      <div class="r3-facts"><div><b id="predT">${fmt(pr.total)}</b><span>tempo previsto</span></div><div><b id="predC">${clockAt(dist.wave * 60 + pr.total)}</b><span>você chega</span></div></div>
+    body.innerHTML = `<h3>${tx("Simule a sua prova", "Simulate your race", "Simula tu carrera")}</h3>${distChips()}
+      <div class="r3-me"><input id="meName" maxlength="18" placeholder="${tx("Seu nome", "Your name", "Tu nombre")}" value="${esc(me.name)}" autocomplete="given-name">
+        <div class="r3-shirts">${SHIRTS.map((c) => `<button data-shirt="${c}" class="${c === me.shirt ? "on" : ""}" style="--c:#${c.toString(16).padStart(6, "0")}" aria-label="${tx("Cor da camiseta", "Shirt color", "Color de la camiseta")}"></button>`).join("")}</div></div>
+      <label class="r3-champ"><input type="checkbox" id="champ" ${me.champ ? "checked" : ""}><span><b>🏆 ${tx("Quero chegar em 1º", "I want to finish 1st", "Quiero llegar 1º")}</b><small>${tx("Seu bonequinho vem atrás do líder e arranca no fim.", "Your runner stays behind the leader and sprints at the end.", "Tu corredor va detrás del líder y acelera al final.")}</small></span></label>
+      <label class="r3-pace${me.champ ? " off" : ""}" id="paceBox">${tx("Seu ritmo", "Your pace", "Tu ritmo")} <b id="paceV">${fmtPace(me.pace)} /km</b><input type="range" id="pace" min="3" max="10" step="0.05" value="${me.pace}"></label>
+      <div class="r3-facts"><div><b id="predT">${fmt(pr.total)}</b><span>${tx("tempo previsto", "expected time", "tiempo previsto")}</span></div><div><b id="predC">${clockAt(dist.wave * 60 + pr.total)}</b><span>${tx("você chega", "you finish at", "llegas a las")}</span></div></div>
       <div class="r3-splits" id="splits">${pr.splits.map((t, i) => `<span>km ${i + 1}<b>${fmt(t)}</b></span>`).join("")}</div>
-      <p class="r3-small">Já conta as subidas e descidas do percurso. Seu bonequinho larga no pelotão do seu ritmo.</p>
-      <button class="r3-btn hot" id="runMe">▶ ${me.champ ? "Correr para vencer" : "Correr com o meu ritmo"}</button>`;
+      <p class="r3-small">${tx("Já conta as subidas e descidas do percurso. Seu bonequinho larga no pelotão do seu ritmo.", "Hills are already counted. Your runner starts in the corral for your pace.", "Ya cuenta las subidas y bajadas del recorrido. Tu corredor larga en el grupo de tu ritmo.")}</p>
+      <button class="r3-btn hot" id="runMe">▶ ${me.champ ? tx("Correr para vencer", "Run to win", "Correr para ganar") : tx("Correr com o meu ritmo", "Run at my pace", "Correr a mi ritmo")}</button>`;
     $<HTMLInputElement>("meName").addEventListener("input", (e) => {
       me.name = (e.target as HTMLInputElement).value.slice(0, 18);
       meLabel.el.textContent = meName().toUpperCase();
@@ -803,19 +808,19 @@ function renderSheet() {
     });
     $("runMe").addEventListener("click", () => launchMe(dist));
   } else if (tab === "arena") {
-    body.innerHTML = `<h3>Arena</h3><div class="r3-list">${ev.arena
-      .map((a) => `<button data-a="${a.id}"><i>${a.icon}</i><span><b>${a.name}</b><small>${a.info}</small></span></button>`)
+    body.innerHTML = `<h3>${tx("Arena", "Venue", "Arena")}</h3><div class="r3-list">${ev.arena
+      .map((a) => `<button data-a="${a.id}"><i>${a.icon}</i><span><b>${tr(a.name)}</b><small>${tr(a.info)}</small></span></button>`)
       .join("")}</div>`;
     body.querySelectorAll<HTMLButtonElement>("[data-a]").forEach((b) => b.addEventListener("click", () => focusSpot(b.dataset.a!)));
   } else if (tab === "inscricao") {
-    body.innerHTML = `<h3>Inscrição</h3>
-      <div class="r3-lots">${ev.lots.map((l) => `<div class="${l.status.replace(" ", "")}"><span>${l.name}</span><b>${l.price}</b><em>${l.status}</em>${l.items ? `<small>${l.items}</small>` : ""}</div>`).join("")}</div>
-      <p class="r3-small">Kit: ${ev.kit.join(" · ")}.${ev.lotsNote ? ` ${ev.lotsNote}` : ev.demo ? " Valores de exemplo." : ""}</p>
-      <button class="r3-btn hot" id="signup">Inscreva-se</button>
-      ${ev.demo ? `<div class="r3-pitch"><b>Quer isso no seu evento?</b><span>Percurso real, seus lotes, link de inscrição e a marca dos patrocinadores.</span><a class="r3-btn wa" target="_blank" rel="noopener" href="https://wa.me/${ev.whatsapp}?text=${encodeURIComponent(`Olá, Bruno! Vi o percurso 3D (demonstração) da ${ev.name} e quero saber mais.`)}">Falar com a PáginasPro no WhatsApp</a></div>` : ""}`;
+    body.innerHTML = `<h3>${tx("Inscrição", "Sign up", "Inscripción")}</h3>
+      <div class="r3-lots">${ev.lots.map((l) => `<div class="${l.status.replace(" ", "")}"><span>${tr(l.name)}</span><b>${tr(l.price)}</b><em>${STATUS[l.status]}</em>${l.items ? `<small>${tr(l.items)}</small>` : ""}</div>`).join("")}</div>
+      <p class="r3-small">Kit: ${ev.kit.map(tr).join(" · ")}.${ev.lotsNote ? ` ${tr(ev.lotsNote)}` : ev.demo ? tx(" Valores de exemplo.", " Sample prices.", " Valores de ejemplo.") : ""}</p>
+      <button class="r3-btn hot" id="signup">${tx("Inscreva-se", "Sign up", "Inscríbete")}</button>
+      ${ev.demo ? `<div class="r3-pitch"><b>${tx("Quer isso no seu evento?", "Want this for your event?", "¿Quieres esto para tu evento?")}</b><span>${tx("Percurso real, seus lotes, link de inscrição e a marca dos patrocinadores.", "Your real course, your prices, your registration link and your sponsors' logos.", "Tu recorrido real, tus precios, tu enlace de inscripción y las marcas de tus patrocinadores.")}</span><a class="r3-btn wa" target="_blank" rel="noopener" href="https://wa.me/${ev.whatsapp}?text=${encodeURIComponent(pitchMsg(`${tx("do percurso 3D da", "3D race course of", "del recorrido 3D de")} ${evName}`))}">${tx("Falar com a PáginasPro no WhatsApp", "Talk to PáginasPro on WhatsApp", "Hablar con PáginasPro por WhatsApp")}</a></div>` : ""}`;
     $("signup").addEventListener("click", () => {
       if (ev.signup) window.open(ev.signup, "_blank", "noopener");
-      else hint("Na versão do seu evento, este botão abre a página de inscrição (Ticket Sports, Sympla…).", 4200);
+      else hint(tx("Na versão do seu evento, este botão abre a página de inscrição (Ticket Sports, Sympla…).", "In your event's version, this button opens your registration page.", "En la versión de tu evento, este botón abre tu página de inscripción."), 4200);
     });
   }
   body.querySelectorAll<HTMLButtonElement>("[data-d]").forEach((b) =>
@@ -848,7 +853,7 @@ function focusSpot(id: string) {
   fly = null;
   flyTo(new THREE.Vector3(a.x, height(a.x, a.z) + 1, a.z), new THREE.Vector3(-20, 18, 30));
   if (innerWidth < 700) closeSheet();
-  hint(`${a.icon} ${a.name}: ${a.info}`, 5000);
+  hint(`${a.icon} ${tr(a.name)}: ${tr(a.info)}`, 5000);
 }
 
 function drawProfile() {
@@ -912,12 +917,14 @@ async function shareMe(win: boolean) {
   url.searchParams.set("d", me.d.id);
   if (me.champ) url.searchParams.set("campeao", "1");
   if (!location.pathname.startsWith("/corrida/")) url.searchParams.set("e", ev.slug);
-  const text = win ? `${meName()} venceu os ${me.d.label} da ${ev.name} e ganhou medalha de ouro! Veja a corrida:` : `${meName()} fez os ${me.d.label} da ${ev.name} em ${fmt(me.fin)}. Veja:`;
+  const text = win
+    ? tx(`${meName()} venceu os ${me.d.label} da ${evName} e ganhou medalha de ouro! Veja a corrida:`, `${meName()} won the ${me.d.label} at ${evName} and got the gold medal! Watch the race:`, `¡${meName()} ganó los ${me.d.label} de ${evName} y se llevó la medalla de oro! Mira la carrera:`)
+    : tx(`${meName()} fez os ${me.d.label} da ${evName} em ${fmt(me.fin)}. Veja:`, `${meName()} ran the ${me.d.label} at ${evName} in ${fmt(me.fin)}. Watch:`, `${meName()} corrió los ${me.d.label} de ${evName} en ${fmt(me.fin)}. Mira:`);
   try {
-    if (navigator.share) await navigator.share({ title: ev.name, text, url: url.toString() });
+    if (navigator.share) await navigator.share({ title: evName, text, url: url.toString() });
     else {
       await navigator.clipboard.writeText(`${text} ${url}`);
-      hint("Link copiado. É só colar no WhatsApp.");
+      hint(tx("Link copiado. É só colar no WhatsApp.", "Link copied. Just paste it on WhatsApp.", "Enlace copiado. Solo pégalo en WhatsApp."));
     }
   } catch {
     /* cancelou */
@@ -960,7 +967,7 @@ function medalCanvas(d: Distance, tone: Tone) {
   g.font = "600 34px Jost, sans-serif";
   g.textAlign = "center";
   g.textBaseline = "middle";
-  const name = ev.name.toUpperCase();
+  const name = evName.toUpperCase();
   const arc = Math.min(Math.PI * 1.1, name.length * 0.17);
   [...name].forEach((ch, i) => {
     const a = -Math.PI / 2 - arc / 2 + (arc * (i + 0.5)) / name.length;
@@ -975,8 +982,8 @@ function medalCanvas(d: Distance, tone: Tone) {
   g.font = "700 150px Jost, sans-serif";
   g.fillText(d.label, 256, 270);
   g.font = "600 38px Jost, sans-serif";
-  g.fillText(tone === "ouro" && me.champ ? "CAMPEÃO" : tone === "ouro" ? d.title ?? "FINISHER" : tone === "prata" ? "2º LUGAR" : "3º LUGAR", 256, 368);
-  const top = "★ " + ev.subtitle.split("·").pop()!.trim().toUpperCase() + " ★";
+  g.fillText(tone === "ouro" && me.champ ? tx("CAMPEÃO", "CHAMPION", "CAMPEÓN") : tone === "ouro" ? (d.title ? tr(d.title) : "FINISHER") : tone === "prata" ? tx("2º LUGAR", "2ND PLACE", "2º LUGAR") : tx("3º LUGAR", "3RD PLACE", "3º LUGAR"), 256, 368);
+  const top = "★ " + tr(ev.subtitle).split("·").pop()!.trim().toUpperCase() + " ★";
   g.font = "500 30px Jost, sans-serif";
   g.font = `500 ${Math.min(30, Math.floor((30 * 330) / g.measureText(top).width))}px Jost, sans-serif`;
   g.fillText(top, 256, 150);
@@ -1070,7 +1077,7 @@ function startCeremony() {
   setCam("geral");
   fly = null;
   flyTo(new THREE.Vector3(podium.x, height(podium.x, podium.z) + 0.85, podium.z), new THREE.Vector3(0.9, 0.75, 5.2));
-  hint(`Cerimônia de premiação dos ${me.d.label}`, 3000);
+  hint(`${tx("Cerimônia de premiação dos", "Award ceremony ·", "Ceremonia de premiación de los")} ${me.d.label}`, 3000);
 }
 const lerp = (a: number, b: number, k: number) => a + (b - a) * Math.max(0, Math.min(1, k));
 function stepCeremony(dt: number, now: number) {
@@ -1121,20 +1128,20 @@ function stepCeremony(dt: number, now: number) {
     window.setTimeout(() => beep(659, 0.18), 180);
     window.setTimeout(() => beep(784, 0.18), 360);
     window.setTimeout(() => beep(1047, 0.7), 540);
-    hint(`🥇 Medalha de ouro para ${meName()}!`, 4000);
+    hint(`🥇 ${tx("Medalha de ouro para", "Gold medal for", "¡Medalla de oro para")} ${meName()}!`, 4000);
   }
   if (t > 11 && t - dt <= 11) {
     const done = $("done");
     done.hidden = false;
     done.classList.add("win");
-    done.innerHTML = `${medalImg()}<b>${esc(meName())}, campeão dos ${me.d.label}!</b><span>${fmt(me.fin)} · ${ev.name}</span>
-      <div><button class="r3-btn hot" id="share2">Compartilhar</button><button class="r3-btn" id="doneX2">Fechar</button></div>`;
+    done.innerHTML = `${medalImg()}<b>${esc(meName())}, ${tx("campeão dos", "champion of the", "campeón de los")} ${me.d.label}!</b><span>${fmt(me.fin)} · ${evName}</span>
+      <div><button class="r3-btn hot" id="share2">${tx("Compartilhar", "Share", "Compartir")}</button><button class="r3-btn" id="doneX2">${tx("Fechar", "Close", "Cerrar")}</button></div>`;
     $("share2").addEventListener("click", () => shareMe(true));
     $("doneX2").addEventListener("click", () => (done.hidden = true));
   }
 }
 
-const medalImg = () => `<img class="r3-medal" alt="Medalha" src="${ev.medal ?? medalCanvas(me.d, "ouro").toDataURL()}">`;
+const medalImg = () => `<img class="r3-medal" alt="${tx("Medalha", "Medal", "Medalla")}" src="${ev.medal ?? medalCanvas(me.d, "ouro").toDataURL()}">`;
 
 function finished() {
   const mates = runners.filter((r) => r.d === me.d);
@@ -1145,12 +1152,12 @@ function finished() {
   const win = pos === 1;
   done.classList.toggle("win", win);
   done.innerHTML = win
-    ? `${medalImg()}<b>${who} venceu os ${me.d.label}!</b><span>${fmt(me.fin)} · 1º de ${mates.length + 1} · ${ev.name}</span>
-      <div><button class="r3-btn hot" id="podiumGo">🏆 Subir no pódio</button><button class="r3-btn" id="share">Compartilhar</button></div>
-      <div><button class="r3-btn" id="doneSign">Quero me inscrever</button><button class="r3-btn" id="doneX">Fechar</button></div>`
-    : `${medalImg()}<b>${who} completou os ${me.d.label}!</b><span>${fmt(me.fin)} · ${pos}º de ${mates.length + 1} (simulação)</span>
-      <div><button class="r3-btn hot" id="doneSign">Quero me inscrever</button><button class="r3-btn" id="share">Compartilhar</button></div>
-      <div><button class="r3-btn" id="doneX">Fechar</button></div>`;
+    ? `${medalImg()}<b>${who} ${tx("venceu os", "won the", "ganó los")} ${me.d.label}!</b><span>${fmt(me.fin)} · 1º ${tx("de", "of", "de")} ${mates.length + 1} · ${evName}</span>
+      <div><button class="r3-btn hot" id="podiumGo">🏆 ${tx("Subir no pódio", "Go to the podium", "Subir al podio")}</button><button class="r3-btn" id="share">${tx("Compartilhar", "Share", "Compartir")}</button></div>
+      <div><button class="r3-btn" id="doneSign">${tx("Quero me inscrever", "Sign me up", "Quiero inscribirme")}</button><button class="r3-btn" id="doneX">${tx("Fechar", "Close", "Cerrar")}</button></div>`
+    : `${medalImg()}<b>${who} ${tx("completou os", "finished the", "completó los")} ${me.d.label}!</b><span>${fmt(me.fin)} · ${pos}º ${tx("de", "of", "de")} ${mates.length + 1} (${tx("simulação", "simulation", "simulación")})</span>
+      <div><button class="r3-btn hot" id="doneSign">${tx("Quero me inscrever", "Sign me up", "Quiero inscribirme")}</button><button class="r3-btn" id="share">${tx("Compartilhar", "Share", "Compartir")}</button></div>
+      <div><button class="r3-btn" id="doneX">${tx("Fechar", "Close", "Cerrar")}</button></div>`;
   confetti(win ? 700 : 250);
   if (win) {
     beep(523, 0.18);
@@ -1176,22 +1183,22 @@ function finished() {
 function hud() {
   if (state === "race") {
     $("clock").textContent = clockAt(T);
-    $("race").textContent = `prova ${fmt(T)}`;
+    $("race").textContent = `${tx("prova", "race", "carrera")} ${fmt(T)}`;
   }
   const parts: string[] = [];
   for (const d of ev.distances) {
     const mates = runners.filter((r) => r.d === d);
     const lead = mates.filter((r) => r.fin < 0).reduce((m, r) => Math.max(m, r.s), -1);
     const fin = mates.filter((r) => r.fin >= 0).length;
-    if (state !== "race" || T < d.wave * 60) parts.push(`<span style="--c:${d.color}">${d.label} ${state === "race" ? `larga em ${fmt(d.wave * 60 - T)}` : "no pelotão"}</span>`);
-    else if (fin === mates.length) parts.push(`<span style="--c:${d.color}">${d.label} · todos chegaram</span>`);
-    else if (fin) parts.push(`<span style="--c:${d.color}">${d.label} · 1º em ${fmt(winner(d)!.fin)} · ${fin} de ${mates.length} chegaram</span>`);
-    else parts.push(`<span style="--c:${d.color}">${d.label} líder km ${kmTxt(d, lead)}</span>`);
+    if (state !== "race" || T < d.wave * 60) parts.push(`<span style="--c:${d.color}">${d.label} ${state === "race" ? `${tx("larga em", "starts in", "larga en")} ${fmt(d.wave * 60 - T)}` : tx("no pelotão", "in the corral", "en el corral")}</span>`);
+    else if (fin === mates.length) parts.push(`<span style="--c:${d.color}">${d.label} · ${tx("todos chegaram", "everyone finished", "todos llegaron")}</span>`);
+    else if (fin) parts.push(`<span style="--c:${d.color}">${d.label} · 1º ${tx("em", "in", "en")} ${fmt(winner(d)!.fin)} · ${fin} ${tx("de", "of", "de")} ${mates.length} ${tx("chegaram", "finished", "llegaron")}</span>`);
+    else parts.push(`<span style="--c:${d.color}">${d.label} ${tx("líder", "leader", "líder")} km ${kmTxt(d, lead)}</span>`);
   }
   if (me.on) {
     const mates = runners.filter((r) => r.d === me.d);
     const ahead = mates.filter((r) => (r.fin >= 0 && (me.fin < 0 || r.fin < me.fin)) || (r.fin < 0 && me.fin < 0 && r.s > me.s)).length;
-    parts.unshift(`<span class="me">${esc(meName())} · ${me.fin >= 0 ? `chegou em ${fmt(me.fin)}` : `km ${kmTxt(me.d, me.s)}`} · ${ahead + 1}º</span>`);
+    parts.unshift(`<span class="me">${esc(meName())} · ${me.fin >= 0 ? `${tx("chegou em", "finished in", "llegó en")} ${fmt(me.fin)}` : `km ${kmTxt(me.d, me.s)}`} · ${ahead + 1}º</span>`);
   }
   $("lead").innerHTML = parts.join("");
 }
@@ -1208,7 +1215,7 @@ function frame() {
   for (const [i, d] of ev.distances.entries()) {
     let best: Runner | null = winner(d);
     const l = leadLabels[i];
-    const txt = best ? `🏆 1º ${d.label}` : `Líder ${d.label}`;
+    const txt = best ? `🏆 1º ${d.label}` : `${tx("Líder", "Leader", "Líder")} ${d.label}`;
     if (l.el.textContent !== txt) l.el.textContent = txt;
     if (!best) for (const r of runners) if (r.d === d && r.fin < 0 && r.s > 0 && (!best || r.s > best.s)) best = r;
     if (best && state === "race") l.pos.set(best.x, height(best.x, best.z) + 1.6, best.z);
@@ -1241,6 +1248,6 @@ camera.position.set(s0.x - 70, 45, s0.z + 95);
 flyTo(new THREE.Vector3(s0.x + 10, height(s0.x, s0.z), s0.z + 8), new THREE.Vector3(-46, 24, 58));
 frame();
 if (me.name) {
-  $("go").textContent = `▶ Ver ${meName()} correr`;
-  window.setTimeout(() => hint(`${meName()} está no pelotão dos ${me.d.label}. Toque para ver a corrida!`, 4500), 900);
-} else window.setTimeout(() => hint("Toque em ▶ Dar a largada. Arraste para girar, pinça para zoom.", 4500), 900);
+  $("go").textContent = `▶ ${tx(`Ver ${meName()} correr`, `Watch ${meName()} run`, `Ver correr a ${meName()}`)}`;
+  window.setTimeout(() => hint(tx(`${meName()} está no pelotão dos ${me.d.label}. Toque para ver a corrida!`, `${meName()} is in the ${me.d.label} corral. Tap to watch the race!`, `${meName()} está en el corral de los ${me.d.label}. ¡Toca para ver la carrera!`), 4500), 900);
+} else window.setTimeout(() => hint(tx("Toque em ▶ Dar a largada. Arraste para girar, pinça para zoom.", "Tap ▶ Start the race. Drag to rotate, pinch to zoom.", "Toca ▶ Dar la largada. Arrastra para girar, pellizca para zoom."), 4500), 900);

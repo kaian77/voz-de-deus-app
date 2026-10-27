@@ -175,3 +175,4 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .t3-expired p { opacity: 0.85; line-height: 1.5; }
 .t3-exp-k { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #ffd36b; opacity: 1 !important; }
 @media (max-width: 420px) { .t3-demo { font-size: 10px; letter-spacing: 0.06em; padding: 6px 8px; } }
+.t3-lang { flex: none; padding: 5px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: rgba(255, 255, 255, 0.85); color: #2f3727; border: 0; cursor: pointer; }

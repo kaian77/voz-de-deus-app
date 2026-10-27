@@ -8,6 +8,7 @@ import { buildCondo } from "./condo";
 import { buildApartment, collide, type Apartment, type RoomInfo } from "./plan3d";
 import type { FeatureKind, Plan, Project, Status } from "./types";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/studio/lib/config";
+import { langSwitch, t as tx } from "../i18n3d";
 
 const PROJECTS: Record<string, Project> = { [bernadette.slug]: bernadette };
 
@@ -16,11 +17,11 @@ const project = PROJECTS[slug];
 const app = document.getElementById("app")!;
 
 if (!project) {
-  app.innerHTML = `<div class="t3-404"><p>Este tour não existe ou saiu do ar.</p></div>`;
+  app.innerHTML = `<div class="t3-404"><p>${tx("Este tour não existe ou saiu do ar.", "This tour doesn't exist or is offline.", "Este tour no existe o salió del aire.")}</p></div>`;
   throw new Error("tour não encontrado");
 }
 
-document.title = `${project.name} · Tour 3D (demonstração)`;
+document.title = `${project.name} · Tour 3D (${tx("demonstração", "demo", "demostración")})`;
 const root = document.documentElement.style;
 root.setProperty("--p", project.colors.primary);
 root.setProperty("--pd", project.colors.dark);
@@ -28,15 +29,16 @@ root.setProperty("--pl", project.colors.light);
 root.setProperty("--ac", project.colors.accent);
 
 const FEATURES: Record<FeatureKind, { icon: string; title: string; text: string }> = {
-  acustica: { icon: "🔇", title: "Parede acústica", text: "30% mais isolamento acústico entre os ambientes." },
-  fechadura: { icon: "🔐", title: "Fechadura eletrônica", text: "Na porta de entrada do apartamento." },
-  varanda: { icon: "🍖", title: "Varanda gourmet", text: "Bancada e ponto para churrasqueira." },
-  ar: { icon: "❄️", title: "Infraestrutura de ar-condicionado", text: "Pronta para instalar o ar." },
-  janela: { icon: "🪟", title: "Janelas de até 1,5 m", text: "Mais luz natural nos quartos." },
-  servico: { icon: "🧺", title: "Tanque", text: "Área de serviço com tanque." },
-  hidro: { icon: "🛁", title: "Terraço com hidromassagem", text: "Deck e hidro na cobertura." },
+  acustica: { icon: "🔇", title: tx("Parede acústica", "Acoustic walls", "Pared acústica"), text: tx("30% mais isolamento acústico entre os ambientes.", "30% more sound insulation between rooms.", "30% más aislamiento acústico entre ambientes.") },
+  fechadura: { icon: "🔐", title: tx("Fechadura eletrônica", "Electronic lock", "Cerradura electrónica"), text: tx("Na porta de entrada do apartamento.", "On the apartment front door.", "En la puerta de entrada del departamento.") },
+  varanda: { icon: "🍖", title: tx("Varanda gourmet", "Gourmet balcony", "Balcón gourmet"), text: tx("Bancada e ponto para churrasqueira.", "Counter and BBQ hookup.", "Mesada y punto para parrilla.") },
+  ar: { icon: "❄️", title: tx("Infraestrutura de ar-condicionado", "Air conditioning ready", "Preinstalación de aire"), text: tx("Pronta para instalar o ar.", "Ready to install the AC.", "Lista para instalar el aire.") },
+  janela: { icon: "🪟", title: tx("Janelas de até 1,5 m", "Windows up to 1.5 m", "Ventanas de hasta 1,5 m"), text: tx("Mais luz natural nos quartos.", "More daylight in the bedrooms.", "Más luz natural en los dormitorios.") },
+  servico: { icon: "🧺", title: tx("Tanque", "Laundry sink", "Pileta"), text: tx("Área de serviço com tanque.", "Laundry area with sink.", "Lavadero con pileta.") },
+  hidro: { icon: "🛁", title: tx("Terraço com hidromassagem", "Terrace with hot tub", "Terraza con hidromasaje"), text: tx("Deck e hidro na cobertura.", "Deck and hot tub on the penthouse.", "Deck e hidro en el penthouse.") },
 };
 
+const BLK = tx("Bloco", "Building", "Bloque"), APT = tx("Apto", "Unit", "Depto");
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const wa = (msg: string) => `https://wa.me/${project.whatsapp}?text=${encodeURIComponent(msg)}`;
 const WA_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7a2.8 2.8 0 0 0 1.8-1.3 2.3 2.3 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3Z"/></svg>`;
@@ -45,36 +47,37 @@ app.innerHTML = `
 <div class="t3-canvas" id="cv"></div>
 <div class="t3-labels" id="labels"></div>
 <header class="t3-top">
-  <button class="t3-back" id="back" hidden aria-label="Voltar ao condomínio">←</button>
+  <button class="t3-back" id="back" hidden aria-label="${tx("Voltar ao condomínio", "Back to the condo", "Volver al condominio")}">←</button>
   <div class="t3-brand"><b>${esc(project.name)}</b><span>${esc(project.city)}</span></div>
-  <a class="t3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">Demonstração · PáginasPro</a>
+  <a class="t3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">${tx("Demonstração", "Demo", "Demostración")} · PáginasPro</a>
 </header>
 <div class="t3-hint" id="hint"></div>
 <div class="t3-sun" id="sun">
-  <button id="play" aria-label="Pausar o sol">❚❚</button>
-  <input type="range" id="hour" min="5" max="21" step="0.05" value="9.5" aria-label="Horário">
+  <button id="play" aria-label="${tx("Pausar o sol", "Pause the sun", "Pausar el sol")}">❚❚</button>
+  <input type="range" id="hour" min="5" max="21" step="0.05" value="9.5" aria-label="${tx("Horário", "Time of day", "Horario")}">
   <span id="hourLbl">09:30</span>
 </div>
 <div class="t3-apt" id="aptbar" hidden>
   <div class="t3-plans" id="plans"></div>
   <div class="t3-modes" id="modes">
-    <button data-m="fora">De fora</button><button data-m="boneca">Casa de boneca</button><button data-m="andar">Andar por dentro</button>
+    <button data-m="fora">${tx("De fora", "Outside", "Afuera")}</button><button data-m="boneca">${tx("Casa de boneca", "Dollhouse", "Casa de muñecas")}</button><button data-m="andar">${tx("Andar por dentro", "Walk inside", "Caminar por dentro")}</button>
   </div>
 </div>
 <nav class="t3-rooms" id="rooms" hidden></nav>
-<canvas class="t3-mini" id="mini" hidden aria-label="Planta: toque para ir até o ponto"></canvas>
-<button class="t3-auto" id="auto" hidden>▶ Passeio automático</button>
+<canvas class="t3-mini" id="mini" hidden aria-label="${tx("Planta: toque para ir até o ponto", "Floor plan: tap to go there", "Plano: toca para ir al punto")}"></canvas>
+<button class="t3-auto" id="auto" hidden>▶ ${tx("Passeio automático", "Auto tour", "Paseo automático")}</button>
 <div class="t3-fade" id="fade"></div>
-<a class="t3-wa" id="wa" target="_blank" rel="noopener">${WA_ICON}<span>Falar com vendas</span></a>
+<a class="t3-wa" id="wa" target="_blank" rel="noopener">${WA_ICON}<span>${tx("Falar com vendas", "Talk to sales", "Hablar con ventas")}</span></a>
 <nav class="t3-tabs" id="tabs">
-  <button data-t="condo" class="on">Condomínio</button><button data-t="plantas">Plantas</button><button data-t="unidades">Unidades</button><button data-t="lazer">Lazer</button>
+  <button data-t="condo" class="on">${tx("Condomínio", "Condo", "Condominio")}</button><button data-t="plantas">${tx("Plantas", "Floor plans", "Planos")}</button><button data-t="unidades">${tx("Unidades", "Units", "Unidades")}</button><button data-t="lazer">${tx("Lazer", "Amenities", "Ocio")}</button>
 </nav>
-<section class="t3-sheet" id="sheet" hidden><button class="t3-x" id="sheetX" aria-label="Fechar">×</button><div id="sheetBody"></div></section>
+<section class="t3-sheet" id="sheet" hidden><button class="t3-x" id="sheetX" aria-label="${tx("Fechar", "Close", "Cerrar")}">×</button><div id="sheetBody"></div></section>
 <div class="t3-photo" id="photo" hidden><figure><img id="photoImg" alt=""><figcaption id="photoCap"></figcaption></figure></div>
-<p class="t3-foot">Demonstração da PáginasPro para apresentação · plantas e imagens do site do empreendimento · não é material oficial</p>
-<div class="t3-loading" id="loading"><div></div><p>Montando o condomínio…</p></div>`;
+<p class="t3-foot">${tx("Demonstração da PáginasPro para apresentação · plantas e imagens do site do empreendimento · não é material oficial", "PáginasPro demo for presentation · plans and images from the development's website · not official material", "Demostración de PáginasPro para presentación · planos e imágenes del sitio del emprendimiento · no es material oficial")}</p>
+<div class="t3-loading" id="loading"><div></div><p>${tx("Montando o condomínio…", "Building the condo…", "Armando el condominio…")}</p></div>`;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+document.querySelector(".t3-top")!.insertBefore(langSwitch("t3-lang"), document.querySelector(".t3-demo"));
 
 // ---------------- renderer e câmera
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -138,12 +141,12 @@ const rest = (path: string, init?: RequestInit) =>
   });
 /** Demonstração vencida: no lugar do tour, um aviso com o WhatsApp da PáginasPro. */
 function showExpired() {
-  const msg = encodeURIComponent(`Olá! Vi a demonstração do Tour 3D do ${project.name} e quero saber como deixar oficial.`);
+  const msg = encodeURIComponent(tx(`Olá! Vi a demonstração do Tour 3D do ${project.name} e quero saber como deixar oficial.`, `Hi! I saw the 3D Tour demo of ${project.name} and I want to make it official.`, `¡Hola! Vi la demostración del Tour 3D de ${project.name} y quiero saber cómo hacerlo oficial.`));
   app.innerHTML = `<div class="t3-expired"><div>
     <p class="t3-exp-k">Tour 3D · PáginasPro</p>
-    <h1>A demonstração do ${esc(project.name)} terminou</h1>
-    <p>Quer o tour 3D oficial, com as plantas, o lazer e o mapa de unidades atualizado pela sua equipe?</p>
-    <a class="t3-btn wa" href="https://wa.me/5561992372216?text=${msg}" target="_blank" rel="noopener">${WA_ICON} Falar com a PáginasPro</a>
+    <h1>${tx(`A demonstração do ${esc(project.name)} terminou`, `The ${esc(project.name)} demo has ended`, `La demostración de ${esc(project.name)} terminó`)}</h1>
+    <p>${tx("Quer o tour 3D oficial, com as plantas, o lazer e o mapa de unidades atualizado pela sua equipe?", "Want the official 3D tour, with floor plans, amenities and a unit map your team keeps up to date?", "¿Quieres el tour 3D oficial, con planos, amenities y el mapa de unidades actualizado por tu equipo?")}</p>
+    <a class="t3-btn wa" href="https://wa.me/5561992372216?text=${msg}" target="_blank" rel="noopener">${WA_ICON} ${tx("Falar com a PáginasPro", "Talk to PáginasPro", "Hablar con PáginasPro")}</a>
   </div></div>`;
 }
 async function loadUnits() {
@@ -172,14 +175,14 @@ async function loadUnits() {
       canEdit = false;
     }
     document.body.classList.toggle("editing", canEdit);
-    hint(canEdit ? "Modo edição: em Unidades, toque numa unidade e escolha Disponível, Reservado ou Vendido." : "Link de edição inválido.");
+    hint(canEdit ? tx("Modo edição: em Unidades, toque numa unidade e escolha Disponível, Reservado ou Vendido.", "Edit mode: in Units, tap a unit and choose Available, Reserved or Sold.", "Modo edición: en Unidades, toca una unidad y elige Disponible, Reservado o Vendido.") : tx("Link de edição inválido.", "Invalid edit link.", "Enlace de edición inválido."));
   }
   if (!sheet.hidden && sheet.dataset.tab === "unidades") openUnits();
 }
 async function saveUnits(units: { block: string; unit: number; status: Status }[]) {
   const r = await rest("rpc/tour_set_units", { method: "POST", body: JSON.stringify({ p_slug: project.slug, p_token: editToken, p_units: units }) });
   if (!r.ok) {
-    hint("Não consegui salvar. Confira a internet e tente de novo.");
+    hint(tx("Não consegui salvar. Confira a internet e tente de novo.", "Couldn't save. Check your connection and try again.", "No pude guardar. Revisa la conexión e intenta de nuevo."));
     return false;
   }
   // primeira gravação: as outras unidades deixam de ser "exemplo" e ficam disponíveis
@@ -200,7 +203,7 @@ function statusOf(block: string, n: number): Status {
   const v = (h >>> 0) % 20;
   return v < 10 ? "vendido" : v < 13 ? "reservado" : "disponivel";
 }
-const STATUS_TXT: Record<Status, string> = { disponivel: "Disponível", reservado: "Reservado", vendido: "Vendido" };
+const STATUS_TXT: Record<Status, string> = { disponivel: tx("Disponível", "Available", "Disponible"), reservado: tx("Reservado", "Reserved", "Reservado"), vendido: tx("Vendido", "Sold", "Vendido") };
 
 // ---------------- etiquetas (HTML sobre o 3D)
 type Label = { el: HTMLElement; pos: THREE.Vector3; view: View; near?: number };
@@ -236,14 +239,14 @@ function placeLabels() {
 }
 
 // condomínio: blocos e lazer
-for (const b of condo.blocks) addLabel(`Bloco <b>${b.id}</b>`, condo.blockTop(b.id), "condo", "block", () => openBlock(b.id));
+for (const b of condo.blocks) addLabel(`${BLK} <b>${b.id}</b>`, condo.blockTop(b.id), "condo", "block", () => openBlock(b.id));
 for (const hsp of condo.hotspots) {
   const a = project.amenities.find((x) => x.id === hsp.id);
   if (a?.short) addLabel(`<i></i>${esc(a.short)}`, hsp.pos, "condo", "spot", () => showAmenity(a.id));
 }
 // os espaços internos ficam juntos numa etiqueta só (abre a galeria)
 const indoor = project.amenities.filter((a) => a.photo && !a.short && a.id !== "local").length;
-addLabel(`<i></i>Clube · ${indoor} espaços`, condo.clubPos, "condo", "spot club", () => openLazer());
+addLabel(`<i></i>${tx("Clube", "Clubhouse", "Club")} · ${indoor} ${tx("espaços", "spaces", "espacios")}`, condo.clubPos, "condo", "spot club", () => openLazer());
 
 // ---------------- câmera animada
 let fly: null | { p0: THREE.Vector3; t0: THREE.Vector3; p1: THREE.Vector3; t1: THREE.Vector3; k: number; dur: number } = null;
@@ -331,7 +334,7 @@ function setMode(m: Mode, reset = false) {
       walkTo = null;
     }
     fly = null;
-    hint("Toque no chão ou nos círculos para andar. Arraste para olhar em volta.");
+    hint(tx("Toque no chão ou nos círculos para andar. Arraste para olhar em volta.", "Tap the floor or the circles to walk. Drag to look around.", "Toca el piso o los círculos para caminar. Arrastra para mirar alrededor."));
   } else {
     stopAuto();
     controls.enabled = true;
@@ -508,13 +511,13 @@ let auto: null | { i: number; t: number; base: number; list: RoomInfo[] } = null
 function startAuto() {
   const list = state.apt!.rooms.filter((r) => r.room.nav !== false);
   auto = { i: 0, t: 0, base: 0, list };
-  $("auto").textContent = "❚❚ Parar passeio";
+  $("auto").textContent = `❚❚ ${tx("Parar passeio", "Stop tour", "Parar paseo")}`;
   goRoom(list[0]);
 }
 function stopAuto() {
   if (!auto) return;
   auto = null;
-  $("auto").textContent = "▶ Passeio automático";
+  $("auto").textContent = `▶ ${tx("Passeio automático", "Auto tour", "Paseo automático")}`;
 }
 $("auto").addEventListener("click", () => (auto ? stopAuto() : startAuto()));
 function stepAuto(dt: number) {
@@ -727,7 +730,7 @@ body.addEventListener("click", (e) => {
     return;
   }
   if (t.closest("[data-reset]") && canEdit) {
-    if (confirm("Marcar todas as unidades de todos os blocos como disponíveis?")) saveUnits(allUnits("disponivel")).then((ok) => ok && openUnits());
+    if (confirm(tx("Marcar todas as unidades de todos os blocos como disponíveis?", "Mark every unit in every building as available?", "¿Marcar todas las unidades de todos los bloques como disponibles?"))) saveUnits(allUnits("disponivel")).then((ok) => ok && openUnits());
     return;
   }
   const see = t.closest<HTMLElement>("[data-see]");
@@ -739,7 +742,7 @@ body.addEventListener("click", (e) => {
     const b = condo.blocks.find((x) => x.id === block)!;
     const out = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), b.group.rotation.y);
     flyTo(at.clone().addScaledVector(out, 85).setY(at.y + 14), at, 1.4);
-    hint(`Apto ${floor * 100 + final} do Bloco ${block} destacado no prédio.`);
+    hint(tx(`Apto ${floor * 100 + final} do Bloco ${block} destacado no prédio.`, `Unit ${floor * 100 + final} in Building ${block} highlighted.`, `Depto ${floor * 100 + final} del Bloque ${block} destacado en el edificio.`));
   }
 });
 
@@ -750,21 +753,21 @@ function openBlock(id: string) {
     .flatMap((f) => (f > b.floors ? [1, 2] : [1, 2, 3, 4]).map((n) => statusOf(id, f * 100 + n)))
     .filter((s) => s === "disponivel").length;
   openSheet(`
-    <h2>Bloco ${id}</h2>
-    <p class="t3-sub">${b.floors} andares + cobertura · ${total} unidades · <b>${free} disponíveis</b>${realStatus ? "" : " <small>(exemplo)</small>"}</p>
-    <h3>Entrar num apartamento</h3>
+    <h2>${BLK} ${id}</h2>
+    <p class="t3-sub">${b.floors} ${tx("andares + cobertura", "floors + penthouse", "pisos + penthouse")} · ${total} ${tx("unidades", "units", "unidades")} · <b>${free} ${tx("disponíveis", "available", "disponibles")}</b>${realStatus ? "" : ` <small>(${tx("exemplo", "sample", "ejemplo")})</small>`}</p>
+    <h3>${tx("Entrar num apartamento", "Go inside an apartment", "Entrar a un departamento")}</h3>
     <div class="t3-grid">${project.plans.map((p) => planCard(p)).join("")}</div>
-    <button class="t3-btn" data-blocktab="${id}">Ver mapa de unidades do Bloco ${id}</button>`, "condo");
+    <button class="t3-btn" data-blocktab="${id}">${tx(`Ver mapa de unidades do Bloco ${id}`, `See unit map of Building ${id}`, `Ver mapa de unidades del Bloque ${id}`)}</button>`, "condo");
   const p = b.group.position.clone();
   flyTo(p.clone().add(new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), b.group.rotation.y).multiplyScalar(95)).setY(40), p.clone().setY(4), 1.2);
 }
 
 function openPlans() {
   openSheet(`
-    <h2>Plantas</h2>
-    <p class="t3-sub">Toque numa planta para ver em 3D e andar por dentro.</p>
+    <h2>${tx("Plantas", "Floor plans", "Planos")}</h2>
+    <p class="t3-sub">${tx("Toque numa planta para ver em 3D e andar por dentro.", "Tap a plan to see it in 3D and walk inside.", "Toca un plano para verlo en 3D y caminar por dentro.")}</p>
     <div class="t3-grid">${project.plans.map((p) => planCard(p)).join("")}</div>
-    <h3>Diferenciais</h3>
+    <h3>${tx("Diferenciais", "Highlights", "Diferenciales")}</h3>
     <ul class="t3-list">${project.highlights.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>`, "plantas");
 }
 
@@ -773,7 +776,7 @@ function openUnits(block = state.unit?.block ?? condo.blocks[0].id) {
   let rows = "";
   for (let f = b.floors + 1; f >= 1; f--) {
     const finals = f > b.floors ? [1, 2] : [1, 2, 3, 4];
-    rows += `<div class="t3-row ${f > b.floors ? "cob" : ""}"><span>${f > b.floors ? "Cob." : f + "º"}</span>${finals
+    rows += `<div class="t3-row ${f > b.floors ? "cob" : ""}"><span>${f > b.floors ? tx("Cob.", "PH", "PH") : f + "º"}</span>${finals
       .map((n) => {
         const num = f * 100 + n;
         const st = statusOf(block, num);
@@ -783,30 +786,30 @@ function openUnits(block = state.unit?.block ?? condo.blocks[0].id) {
       .join("")}</div>`;
   }
   const u = state.unit && state.unit.block === block ? state.unit : null;
-  let card = `<p class="t3-sub">Toque numa unidade.</p>`;
+  let card = `<p class="t3-sub">${tx("Toque numa unidade.", "Tap a unit.", "Toca una unidad.")}</p>`;
   if (u) {
     const num = u.floor * 100 + u.final;
     const st = statusOf(u.block, num);
     const plan = project.plans.find((p) => p.id === planOfUnit(u.floor, u.final, b.floors))!;
     card = `<div class="t3-unit">
-      <div><b>Apto ${num} · Bloco ${u.block}</b><span class="st ${st}">${STATUS_TXT[st]}</span></div>
+      <div><b>${APT} ${num} · ${BLK} ${u.block}</b><span class="st ${st}">${STATUS_TXT[st]}</span></div>
       <p>${esc(plan.name)} · ${esc(plan.area)}</p>
       <div class="t3-row2">
-        <button class="t3-btn" data-plan="${plan.id}" data-mode="andar">Ver por dentro</button>
-        <button class="t3-btn ghost" data-see="1">Ver no prédio</button>
+        <button class="t3-btn" data-plan="${plan.id}" data-mode="andar">${tx("Ver por dentro", "See inside", "Ver por dentro")}</button>
+        <button class="t3-btn ghost" data-see="1">${tx("Ver no prédio", "See on the building", "Ver en el edificio")}</button>
       </div>
       ${canEdit ? `<div class="t3-setst">${(["disponivel", "reservado", "vendido"] as Status[]).map((s) => `<button data-setst="${s}" class="${s}${s === st ? " on" : ""}">${STATUS_TXT[s]}</button>`).join("")}</div>` : ""}
-      ${st !== "vendido" && !canEdit ? `<a class="t3-btn wa" target="_blank" rel="noopener" href="${wa(`Olá! Vi o tour 3D do ${project.name} e tenho interesse no apto ${num} do Bloco ${u.block} (${plan.short}).`)}">${WA_ICON} Tenho interesse</a>` : ""}
+      ${st !== "vendido" && !canEdit ? `<a class="t3-btn wa" target="_blank" rel="noopener" href="${wa(tx(`Olá! Vi o tour 3D do ${project.name} e tenho interesse no apto ${num} do Bloco ${u.block} (${plan.short}).`, `Hi! I saw the ${project.name} 3D tour and I'm interested in unit ${num}, Building ${u.block} (${plan.short}).`, `¡Hola! Vi el tour 3D de ${project.name} y me interesa el depto ${num} del Bloque ${u.block} (${plan.short}).`))}">${WA_ICON} ${tx("Tenho interesse", "I'm interested", "Me interesa")}</a>` : ""}
     </div>`;
   }
   openSheet(`
-    <h2>Mapa de unidades</h2>
-    <div class="t3-blocks">${condo.blocks.map((x) => `<button data-blocktab="${x.id}" class="${x.id === block ? "on" : ""}">Bloco ${x.id}</button>`).join("")}</div>
-    <div class="t3-legend"><i class="disponivel"></i>Disponível <i class="reservado"></i>Reservado <i class="vendido"></i>Vendido</div>
+    <h2>${tx("Mapa de unidades", "Unit map", "Mapa de unidades")}</h2>
+    <div class="t3-blocks">${condo.blocks.map((x) => `<button data-blocktab="${x.id}" class="${x.id === block ? "on" : ""}">${BLK} ${x.id}</button>`).join("")}</div>
+    <div class="t3-legend"><i class="disponivel"></i>${STATUS_TXT.disponivel} <i class="reservado"></i>${STATUS_TXT.reservado} <i class="vendido"></i>${STATUS_TXT.vendido}</div>
     <div class="t3-map">${rows}</div>
-    ${canEdit ? `<p class="t3-edit">✏️ Modo edição: toque numa unidade e escolha a situação. Salva na hora para todo mundo.</p>` : ""}
-    <p class="t3-note">${realStatus ? "Situação atualizada pela equipe de vendas." : "Situação das unidades de exemplo, só para a demonstração."}</p>
-    ${canEdit ? `<button class="t3-btn ghost" data-reset="1">Marcar todas como disponíveis</button>` : ""}
+    ${canEdit ? `<p class="t3-edit">✏️ ${tx("Modo edição: toque numa unidade e escolha a situação. Salva na hora para todo mundo.", "Edit mode: tap a unit and choose its status. It saves right away for everyone.", "Modo edición: toca una unidad y elige su estado. Se guarda al instante para todos.")}</p>` : ""}
+    <p class="t3-note">${realStatus ? tx("Situação atualizada pela equipe de vendas.", "Status kept up to date by the sales team.", "Estado actualizado por el equipo de ventas.") : tx("Situação das unidades de exemplo, só para a demonstração.", "Sample unit status, for this demo only.", "Estado de las unidades de ejemplo, solo para la demostración.")}</p>
+    ${canEdit ? `<button class="t3-btn ghost" data-reset="1">${tx("Marcar todas como disponíveis", "Mark all as available", "Marcar todas como disponibles")}</button>` : ""}
     ${card}`, "unidades");
 }
 
@@ -819,7 +822,7 @@ function pickUnit(block: string, floor: number, final: number) {
 
 function openLazer() {
   openSheet(`
-    <h2>Lazer clube</h2>
+    <h2>${tx("Lazer clube", "Clubhouse amenities", "Ocio club")}</h2>
     <p class="t3-sub">${esc(project.tagline)}</p>
     <div class="t3-gallery">${project.amenities
       .filter((a) => a.photo)
@@ -850,7 +853,7 @@ function showCondo() {
   camera.position.copy(CONDO_HOME.pos).multiplyScalar(1.05);
   controls.target.copy(CONDO_HOME.target);
   flyTo(CONDO_HOME.pos, CONDO_HOME.target, 0.9);
-  hint("Toque num bloco para escolher o apartamento. Toque nos pontos do lazer para ver as fotos.");
+  hint(tx("Toque num bloco para escolher o apartamento. Toque nos pontos do lazer para ver as fotos.", "Tap a building to pick an apartment. Tap the amenity dots to see the photos.", "Toca un bloque para elegir el departamento. Toca los puntos de ocio para ver las fotos."));
   syncUi();
 }
 
@@ -901,10 +904,10 @@ function syncUi() {
   $("sun").hidden = apt;
   document.body.classList.toggle("walking", apt && state.mode === "andar");
   const msg = state.unit
-    ? `Olá! Vi o tour 3D do ${project.name} e quero saber do apto ${state.unit.floor * 100 + state.unit.final} do Bloco ${state.unit.block}.`
+    ? tx(`Olá! Vi o tour 3D do ${project.name} e quero saber do apto ${state.unit.floor * 100 + state.unit.final} do Bloco ${state.unit.block}.`, `Hi! I saw the ${project.name} 3D tour and I'd like to know about unit ${state.unit.floor * 100 + state.unit.final}, Building ${state.unit.block}.`, `¡Hola! Vi el tour 3D de ${project.name} y quiero saber del depto ${state.unit.floor * 100 + state.unit.final} del Bloque ${state.unit.block}.`)
     : apt
-      ? `Olá! Vi o tour 3D do ${project.name} e quero saber mais do apartamento de ${state.plan.short.toLowerCase()} (${state.plan.area}).`
-      : `Olá! Vi o tour 3D do ${project.name} e quero saber mais.`;
+      ? tx(`Olá! Vi o tour 3D do ${project.name} e quero saber mais do apartamento de ${state.plan.short.toLowerCase()} (${state.plan.area}).`, `Hi! I saw the ${project.name} 3D tour and I'd like to know more about the ${state.plan.short.toLowerCase()} apartment (${state.plan.area}).`, `¡Hola! Vi el tour 3D de ${project.name} y quiero saber más del departamento de ${state.plan.short.toLowerCase()} (${state.plan.area}).`)
+      : tx(`Olá! Vi o tour 3D do ${project.name} e quero saber mais.`, `Hi! I saw the ${project.name} 3D tour and I'd like to know more.`, `¡Hola! Vi el tour 3D de ${project.name} y quiero saber más.`);
   $<HTMLAnchorElement>("wa").href = wa(msg);
 }
 

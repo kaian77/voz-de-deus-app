@@ -5,31 +5,33 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { mesaBennett } from "./products/mesa-bennett";
 import type { Product } from "./types";
+import { langSwitch, pitchMsg, t as T, tr } from "../i18n3d";
 
 const PRODUCTS: Record<string, Product> = { "mesa-bennett": mesaBennett };
 const slug = location.pathname.split("/").filter(Boolean)[1] || new URLSearchParams(location.search).get("p") || "mesa-bennett";
 const pr = PRODUCTS[slug] ?? mesaBennett;
+const prName = tr(pr.name);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-document.title = `${pr.name} · montagem 3D${pr.demo ? " (demonstração)" : ""}`;
+document.title = `${prName} · ${T("montagem 3D", "3D assembly", "montaje 3D")}${pr.demo ? ` (${T("demonstração", "demo", "demostración")})` : ""}`;
 
 $("app").innerHTML = `
 <div class="a3-canvas" id="canvas"></div>
 <div class="a3-labels" id="labels"></div>
 <header class="a3-top">
-  <div class="a3-brand"><small>Passo a passo 3D</small><b>${esc(pr.name)}</b></div>
-  ${pr.demo ? `<a class="a3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">Demonstração<small>PáginasPro</small></a>` : ""}
+  <div class="a3-brand"><small>${T("Passo a passo 3D", "Step by step 3D", "Paso a paso 3D")}</small><b>${esc(prName)}</b></div>
+  ${pr.demo ? `<a class="a3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">${T("Demonstração", "Demo", "Demostración")}<small>PáginasPro</small></a>` : ""}
 </header>
 <section class="a3-card" id="card"></section>
-<div class="a3-view"><button data-v="sala" class="on">Sala</button><button data-v="desenho">Desenho</button></div>
-<button class="a3-manual" id="manualBtn" aria-label="Ver a página do manual"><img id="manualImg" alt="Página do manual"><span>Manual</span></button>
-<div class="a3-zoom" id="zoom" hidden><img id="zoomImg" alt="Página do manual"><button class="a3-x" id="zoomX" aria-label="Fechar">×</button></div>
+<div class="a3-view"><button data-v="sala" class="on">${T("Sala", "Room", "Sala")}</button><button data-v="desenho">${T("Desenho", "Drawing", "Dibujo")}</button></div>
+<button class="a3-manual" id="manualBtn" aria-label="${T("Ver a página do manual", "See the manual page", "Ver la página del manual")}"><img id="manualImg" alt="Manual"><span>${T("Manual", "Manual", "Manual")}</span></button>
+<div class="a3-zoom" id="zoom" hidden><img id="zoomImg" alt="Manual"><button class="a3-x" id="zoomX" aria-label="${T("Fechar", "Close", "Cerrar")}">×</button></div>
 <nav class="a3-bar">
   <div class="a3-prog" id="prog"></div>
   <div class="a3-ctrl">
-    <button id="prev" aria-label="Passo anterior">‹</button>
-    <button id="play" class="play" aria-label="Animar">▶</button>
-    <button id="next" aria-label="Próximo passo">›</button>
+    <button id="prev" aria-label="${T("Passo anterior", "Previous step", "Paso anterior")}">‹</button>
+    <button id="play" class="play" aria-label="${T("Animar", "Play", "Animar")}">▶</button>
+    <button id="next" aria-label="${T("Próximo passo", "Next step", "Paso siguiente")}">›</button>
   </div>
 </nav>
 `;
@@ -117,6 +119,7 @@ scene.add(sun);
 scene.background = new THREE.Color(0xe9e3d8);
 
 const built = pr.build(scene);
+document.querySelector(".a3-top")!.insertBefore(langSwitch("a3-lang"), document.querySelector(".a3-demo"));
 
 // ---------- modo Desenho: tudo branco com o traço preto, como no manual
 const drawMat = new THREE.MeshBasicMaterial({ color: 0xffffff, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
@@ -164,19 +167,19 @@ function renderCard() {
   const st = pr.steps[step];
   const hw = Object.entries(st.uses).map(([id, q]) => {
     const h = pr.hardware.find((x) => x.id === id)!;
-    return `<span class="hw"><b>${q}×</b> ${id} · ${h.name}${h.size ? ` ${h.size}` : ""}</span>`;
+    return `<span class="hw"><b>${q}×</b> ${id} · ${tr(h.name)}${h.size ? ` ${h.size}` : ""}</span>`;
   });
-  const tools = (st.tools ?? []).map((x) => `<span class="tool">${x}</span>`);
+  const tools = (st.tools ?? []).map((x) => `<span class="tool">${tr(x)}</span>`);
   const last = step === N - 1;
   $("card").innerHTML = `
-    <div class="a3-head">${st.n ? `<i>${st.n}</i>` : `<i class="s">${step === 0 ? "★" : "✓"}</i>`}<div><small>${st.n ? `Passo ${Number(st.n)} de ${pr.steps.filter((x) => x.n).length}` : step === 0 ? "Antes de começar" : "Final"}</small><b>${st.title}</b></div><span class="a3-fold" aria-hidden="true">▾</span></div>
-    <p>${st.text}</p>
+    <div class="a3-head">${st.n ? `<i>${st.n}</i>` : `<i class="s">${step === 0 ? "★" : "✓"}</i>`}<div><small>${st.n ? `${T("Passo", "Step", "Paso")} ${Number(st.n)} ${T("de", "of", "de")} ${pr.steps.filter((x) => x.n).length}` : step === 0 ? T("Antes de começar", "Before you start", "Antes de empezar") : T("Final", "Last step", "Final")}</small><b>${tr(st.title)}</b></div><span class="a3-fold" aria-hidden="true">▾</span></div>
+    <p>${tr(st.text)}</p>
     ${hw.length || tools.length ? `<div class="a3-chips">${hw.join("")}${tools.join("")}</div>` : ""}
-    ${step === 0 ? `<div class="a3-parts">${pr.pieces.map((p) => `<span><b>${p.id}</b>${p.qty > 1 ? ` ${p.qty}×` : ""} ${p.name}</span>`).join("")}</div>` : ""}
+    ${step === 0 ? `<div class="a3-parts">${pr.pieces.map((p) => `<span><b>${p.id}</b>${p.qty > 1 ? ` ${p.qty}×` : ""} ${tr(p.name)}</span>`).join("")}</div>` : ""}
     <div class="a3-count" id="count"></div>
-    ${last && pr.demo ? `<div class="a3-pitch"><b>Quer o manual da sua marca assim?</b><span>QR code na caixa abre o passo a passo 3D no celular. Menos dúvida, menos devolução e avaliação melhor.</span><a href="https://wa.me/${pr.whatsapp}?text=${encodeURIComponent(`Olá, Bruno! Vi a montagem 3D (demonstração) da ${pr.name} e quero para os manuais da minha marca.`)}" target="_blank" rel="noopener">Falar com a PáginasPro no WhatsApp</a></div>` : ""}`;
+    ${last && pr.demo ? `<div class="a3-pitch"><b>${T("Quer o manual da sua marca assim?", "Want your brand's manuals like this?", "¿Quieres los manuales de tu marca así?")}</b><span>${T("QR code na caixa abre o passo a passo 3D no celular. Menos dúvida, menos devolução e avaliação melhor.", "A QR code on the box opens the 3D step by step on the phone. Fewer support calls, fewer returns, better reviews.", "Un código QR en la caja abre el paso a paso 3D en el celular. Menos dudas, menos devoluciones y mejores reseñas.")}</span><a href="https://wa.me/${pr.whatsapp}?text=${encodeURIComponent(pitchMsg(`${T("da montagem 3D", "3D assembly", "de montaje 3D")} (${prName})`))}" target="_blank" rel="noopener">${T("Falar com a PáginasPro no WhatsApp", "Talk to PáginasPro on WhatsApp", "Hablar con PáginasPro por WhatsApp")}</a></div>` : ""}`;
   $<HTMLImageElement>("manualImg").src = st.img;
-  $("prog").innerHTML = pr.steps.map((_, i) => `<button data-s="${i}" class="${i < step ? "done" : i === step ? "on" : ""}" aria-label="Passo ${i}"></button>`).join("");
+  $("prog").innerHTML = pr.steps.map((_, i) => `<button data-s="${i}" class="${i < step ? "done" : i === step ? "on" : ""}" aria-label="${T("Passo", "Step", "Paso")} ${i}"></button>`).join("");
   $<HTMLButtonElement>("prev").disabled = step === 0;
   $<HTMLButtonElement>("next").disabled = step === N - 1;
   updCount();
@@ -185,7 +188,7 @@ function updCount() {
   const used = usedUntil(step, t);
   const n = Object.values(used).reduce((a, b) => a + b, 0);
   const el = document.getElementById("count");
-  if (el) el.textContent = `Ferragens usadas: ${n} de ${totalHw}`;
+  if (el) el.textContent = `${T("Ferragens usadas", "Hardware used", "Herrajes usados")}: ${n} ${T("de", "of", "de")} ${totalHw}`;
 }
 function playBtn() {
   $("play").textContent = playing ? "❚❚" : t >= 1 ? "↻" : "▶";
