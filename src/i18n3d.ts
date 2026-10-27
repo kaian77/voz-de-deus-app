@@ -15,6 +15,8 @@ function detect(): Lang {
     }
     return q;
   }
+  // Versão do CrazyGames (tem o SDK deles na página): o portal exige inglês como idioma padrão
+  if (document.querySelector('script[src*="crazygames-sdk"]')) return "en";
   try {
     const saved = localStorage.getItem("demo-lang") as Lang | null;
     if (saved && LANGS.includes(saved)) return saved;

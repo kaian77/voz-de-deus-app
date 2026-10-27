@@ -12,6 +12,8 @@ export default defineConfig({
     emptyOutDir: true,
     // sem minificar: código legível (antivírus do navegador desconfia de JS compactado dentro de .zip)
     minify: false,
-    rollupOptions: { input: { jogo: path.resolve(__dirname, "jogo.html") } },
+    modulePreload: false,
+    // script comum (não módulo): abre até com dois cliques no arquivo (file://), que bloqueia módulos
+    rollupOptions: { input: { jogo: path.resolve(__dirname, "jogo.html") }, output: { format: "iife" } },
   },
 });
