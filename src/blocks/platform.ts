@@ -43,14 +43,19 @@ export function gameplay(on: boolean) {
  * Anúncio. rewarded = "ver vídeo para continuar" (recompensa em done); midgame = entre partidas.
  * Sem portal: devolve false e o jogo faz a simulação dele. Anúncio que falha (adblock, sem anúncio) também libera.
  */
-export function showAd(kind: "midgame" | "rewarded", hooks: { start?: () => void; done: (ok: boolean) => void }) {
+export function showAd(kind: "midgame" | "rewarded", hooks: { start?: () => void; done: (ok: boolean, why?: string) => void }) {
   if (!sdk) return false;
   gameplay(false);
   try {
     sdk.ad.requestAd(kind, {
       adStarted: () => hooks.start?.(),
       adFinished: () => hooks.done(true),
-      adError: () => hooks.done(kind === "midgame"),
+      // motivo do erro (unfilled = sem anúncio agora, adblock, adCooldown...) aparece na tela e no console
+      adError: (e) => {
+        const why = String((e as { code?: string; message?: string })?.code ?? (e as { message?: string })?.message ?? e);
+        console.warn("CrazyGames ad error", kind, e);
+        hooks.done(kind === "midgame", why);
+      },
     });
   } catch {
     hooks.done(kind === "midgame");
