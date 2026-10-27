@@ -1,0 +1,15 @@
+// Versão do Block Pop para o CrazyGames: só o jogo, caminhos relativos (o portal hospeda numa pasta dele), sem a
+// pasta public do Studio. scripts/build-crazygames.sh põe o SDK e gera o .zip para enviar.
+import path from "path";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  base: "./",
+  publicDir: false,
+  resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
+  build: {
+    outDir: "dist-crazygames",
+    emptyOutDir: true,
+    rollupOptions: { input: { jogo: path.resolve(__dirname, "jogo.html") } },
+  },
+});

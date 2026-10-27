@@ -2,6 +2,7 @@
 // Grade 8×8, 3 peças por vez; linha ou coluna cheia explode; acabou quando nenhuma peça cabe.
 // Tudo desenhado em canvas, sem imagens; som sintetizado no navegador. Recorde, partida e missão do dia ficam no navegador.
 import { t } from "../i18n3d";
+import { gameplay, initPlatform, onPortal, showAd } from "./platform";
 
 type Cell = [number, number];
 type Piece = { cells: Cell[]; w: number; h: number; color: number };
@@ -202,6 +203,7 @@ function checkOver() {
   const left = tray.filter((p): p is Piece => !!p);
   if (left.length && !left.some((p) => anyFit(board, p))) {
     over = true;
+    gameplay(false);
     overAt = now();
     sfx("over");
     if (score > best) {
@@ -212,6 +214,7 @@ function checkOver() {
 }
 
 function place(i: number, r0: number, c0: number) {
+  gameplay(true);
   const p = tray[i]!;
   for (const [r, c] of p.cells) board[(r + r0) * N + c + c0] = p.color;
   tray[i] = null;
@@ -293,6 +296,11 @@ function shareChallenge() {
 }
 
 function restart() {
+  // anúncio entre partidas (só no portal)
+  if (showAd("midgame", { start: () => ac?.suspend(), done: () => { ac?.resume(); newGame(); } })) return;
+  newGame();
+}
+function newGame() {
   scatter();
   score = 0;
   shown = 0;
@@ -308,19 +316,33 @@ function restart() {
 
 /** "Continuar": aqui entra o vídeo de anúncio (SDK do CrazyGames). Abre espaço no meio e dá peças pequenas. */
 function continueGame() {
+  // No portal: vídeo de verdade (só continua se a pessoa assistiu); fora dele, simulação de 2 s
+  if (showAd("rewarded", {
+    start: () => ac?.suspend(),
+    done: (ok) => {
+      ac?.resume();
+      if (ok) {
+        continued = true;
+        reopen();
+      } else floats.push({ text: t("Vídeo indisponível agora", "Video not available now", "Video no disponible ahora"), x: L.W / 2, y: L.H / 2 + 200, t0: now(), size: 18, color: "#fff" });
+    },
+  })) return;
   continued = true;
   adUntil = now() + 2200;
-  setTimeout(() => {
-    const tm = now();
-    for (let r = 2; r < 6; r++) for (let c = 0; c < N; c++) {
-      if (board[r * N + c] >= 0) fx.push({ r, c, color: board[r * N + c], t0: tm + c * 25 });
-      board[r * N + c] = -1;
-    }
-    over = false;
-    newTray();
-    sfx("clear", 3);
-    persist();
-  }, 2200);
+  setTimeout(reopen, 2200);
+}
+/** Depois do vídeo: abre espaço no meio da grade e dá peças novas. */
+function reopen() {
+  const tm = now();
+  for (let r = 2; r < 6; r++) for (let c = 0; c < N; c++) {
+    if (board[r * N + c] >= 0) fx.push({ r, c, color: board[r * N + c], t0: tm + c * 25 });
+    board[r * N + c] = -1;
+  }
+  over = false;
+  newTray();
+  sfx("clear", 3);
+  persist();
+  gameplay(true);
 }
 
 // ------------------------------------------------------------------------------------------------ layout e desenho
@@ -406,7 +428,9 @@ function dragPos(p: Piece, x: number, y: number) {
   const px = x - (p.w * L.c) / 2, py = y - L.c * 1.1 - p.h * L.c;
   return { px, py, col: Math.round((px - L.bx) / L.c), row: Math.round((py - L.by) / L.c) };
 }
-const slotX = (i: number) => (L.W * (1 + i * 2)) / 6;
+// bandeja do tamanho da grade (no computador as peças não ficam nos cantos da tela)
+const trayW = () => Math.min(L.W, L.c * N * 1.35);
+const slotX = (i: number) => L.W / 2 + (i - 1) * (trayW() / 3);
 
 let sound = load("blockpop-sound") !== "off";
 const soundBtn = () => ({ x: L.W - 52, y: 20, w: 36, h: 36 });
@@ -613,7 +637,8 @@ function draw() {
     const b = overButtons();
     if (!continued) button(b.cont, t("▶  Continuar (ver vídeo)", "▶  Continue (watch video)", "▶  Continuar (ver video)"), "#36c96f");
     button(b.again, t("Jogar de novo", "Play again", "Jugar de nuevo"), "#4a7dff");
-    button(b.share, t("⚔️  Desafiar um amigo", "⚔️  Challenge a friend", "⚔️  Retar a un amigo"), "#a25cff");
+    // no portal não pode ter link para fora: o desafio fica só no nosso link
+    if (!onPortal()) button(b.share, t("⚔️  Desafiar um amigo", "⚔️  Challenge a friend", "⚔️  Retar a un amigo"), "#a25cff");
     ctx.globalAlpha = 1;
   }
   // tela do anúncio (por enquanto simulada; no CrazyGames entra o vídeo de verdade)
@@ -711,11 +736,11 @@ cv.addEventListener("pointerdown", (e) => {
     const b = overButtons();
     if (!continued && inside(x, y, b.cont)) continueGame();
     else if (inside(x, y, b.again)) restart();
-    else if (inside(x, y, b.share)) shareChallenge();
+    else if (!onPortal() && inside(x, y, b.share)) shareChallenge();
     return;
   }
   if (y < L.by + L.c * N + 8) return;
-  const i = Math.min(2, Math.max(0, Math.floor(x / (L.W / 3))));
+  const i = Math.min(2, Math.max(0, Math.floor((x - (L.W - trayW()) / 2) / (trayW() / 3))));
   if (!tray[i]) return;
   drag = { i, x, y, row: -9, col: -9, ok: false };
   cv.setPointerCapture(e.pointerId);
@@ -767,4 +792,5 @@ try {
   newTray();
 }
 document.fonts?.ready.then(() => sprites.clear());
+initPlatform();
 requestAnimationFrame(draw);
