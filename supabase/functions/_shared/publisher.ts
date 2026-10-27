@@ -1,6 +1,7 @@
 // Máquina de estados da publicação. Cada execução avança o post o máximo possível;
 // vídeos que ainda estão processando ficam em "publishing" e são retomados no próximo ciclo do cron.
 import { isBrax } from "./brand.ts";
+import { notify } from "./push.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { igCreateContainer, igPublishContainer, igTokenFor, igWaitContainer } from "./instagram.ts";
 import { TikTokError, tiktokCaption, ttPublishPhotos, ttPublishStatus, ttPublishVideo, ttTokenFor, ttUploadToInbox } from "./tiktok.ts";
@@ -93,6 +94,10 @@ async function stepTikTok(db: SupabaseClient, post: Post, r: PlatformResult): Pr
   }
   const status = await ttPublishStatus(token, r.publish_id);
   if (r.inbox && status.status === "SEND_TO_USER_INBOX") {
+    // O TikTok não aceita legenda em vídeo mandado para a caixa de entrada: avisa com a legenda para colar no app
+    if (["reel", "video"].includes(post.kind)) {
+      await notify(db, post.user_id, "TikTok: vídeo na caixa de entrada", `Cole a legenda ao publicar: ${caption}`, "/studio/youtube#tiktok").catch(() => undefined);
+    }
     return { status: "published", publish_id: r.publish_id, inbox: true, account_id: account.id };
   }
   if (status.status === "PUBLISH_COMPLETE") {

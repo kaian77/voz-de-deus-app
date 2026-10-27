@@ -255,6 +255,33 @@ function ChannelCard({ ch, onChanged }: { ch: YtChannel; onChanged: () => void }
   );
 }
 
+/** Vídeos mandados para a caixa de entrada do TikTok: o TikTok não aceita legenda por lá, então ela fica aqui para copiar. */
+function TikTokCaptions() {
+  const { data: posts = [] } = useTable("posts", { order: "created_at", limit: 60 }, { refetchInterval: 30000 });
+  const list = posts.filter((p) => p.options?.source === "youtube").slice(0, 8);
+  if (!list.length) return null;
+  const copy = (text: string) => navigator.clipboard.writeText(text).then(() => toast.success("Legenda copiada: cole no TikTok ao publicar"));
+  return (
+    <div id="tiktok" className="mt-6">
+      <h2 className="mb-1 text-sm font-semibold">Legendas para o TikTok</h2>
+      <p className="mb-3 text-xs text-muted-foreground">O vídeo chega na caixa de entrada do app sem legenda (regra do TikTok). Copie aqui e cole na hora de publicar.</p>
+      <div className="divide-y rounded-lg border bg-card">
+        {list.map((p) => (
+          <div key={p.id} className="flex items-center gap-3 px-4 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-1 text-[13px] font-medium">{p.title ?? p.caption}</p>
+              <p className="text-xs text-muted-foreground">
+                {p.status === "published" ? "Na caixa de entrada" : p.status === "failed" ? "Falhou" : `Chega ${p.scheduled_at ? formatDateTime(p.scheduled_at) : "em breve"}`}
+              </p>
+            </div>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => copy(p.caption)}>Copiar legenda</Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function YouTubePage() {
   const [params, setParams] = useSearchParams();
   const invalidate = useInvalidate();
@@ -314,6 +341,8 @@ export default function YouTubePage() {
           {channels.map((c) => <ChannelCard key={c.id} ch={c} onChanged={() => { invalidate("yt_channels"); invalidate("yt_videos"); }} />)}
         </div>
       )}
+
+      <TikTokCaptions />
 
       {videos.length > 0 && (
         <div className="mt-6">
