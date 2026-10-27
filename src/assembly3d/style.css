@@ -1,0 +1,84 @@
+:root {
+  --ink: #1c1a17;
+  --paper: #f7f4ee;
+  --acc: #e8833a;
+  --font: "Jost", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bar: calc(max(10px, env(safe-area-inset-bottom)) + 74px);
+}
+[hidden] { display: none !important; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #e9e3d8; color: var(--ink); font-family: var(--font); }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+#app { position: fixed; inset: 0; }
+.a3-canvas, .a3-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.a3-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+
+.a3-top { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 14px 8px; }
+.a3-brand { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.a3-brand small { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--acc); }
+.a3-brand b { font-size: 20px; font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.a3-demo {
+  text-decoration: none; flex: none; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; padding: 5px 12px; border-radius: 12px;
+  background: #ffd36b; color: #2b2b1f; display: flex; flex-direction: column; align-items: center; line-height: 1.2;
+}
+.a3-demo small { font-size: 10px; letter-spacing: 0.02em; text-transform: none; font-weight: 500; opacity: 0.8; }
+
+.a3-card {
+  position: absolute; left: 10px; top: calc(max(10px, env(safe-area-inset-top)) + 52px); z-index: 4; width: min(calc(100vw - 20px), 360px);
+  max-height: calc(100vh - var(--bar) - max(10px, env(safe-area-inset-top)) - 140px); overflow-y: auto;
+  background: rgba(28, 26, 23, 0.9); color: #f5f1ea; border-radius: 16px; padding: 12px 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); backdrop-filter: blur(6px);
+}
+.a3-head { display: flex; gap: 10px; align-items: center; }
+.a3-head i { flex: none; width: 38px; height: 38px; border-radius: 50%; background: #fff; color: var(--ink); font-style: normal; font-weight: 700; display: grid; place-items: center; font-size: 15px; }
+.a3-head i.s { background: var(--acc); color: #fff; }
+.a3-head div { display: flex; flex-direction: column; min-width: 0; }
+.a3-head small { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #d9cfc0; }
+.a3-head b { font-size: 17px; font-weight: 600; line-height: 1.15; }
+.a3-card p { margin: 8px 0; font-size: 13.5px; line-height: 1.4; color: #e9e2d6; }
+.a3-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.a3-chips span { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: #3a352f; }
+.a3-chips .hw b { color: var(--acc); }
+.a3-chips .tool { background: transparent; border: 1px solid #5a534b; }
+.a3-parts { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; font-size: 12.5px; color: #e9e2d6; }
+.a3-parts b { display: inline-grid; place-items: center; min-width: 26px; height: 20px; padding: 0 5px; border-radius: 10px; background: #fff; color: var(--ink); font-size: 11px; margin-right: 4px; }
+.a3-count { margin-top: 8px; font-size: 11.5px; color: #bfb4a4; font-variant-numeric: tabular-nums; }
+.a3-pitch { margin-top: 10px; padding: 10px; border-radius: 12px; background: #2f2a25; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.a3-pitch span { color: #d9cfc0; }
+.a3-pitch a { text-align: center; padding: 10px; border-radius: 999px; background: #1fa855; color: #fff; text-decoration: none; font-weight: 600; }
+
+.a3-view { position: absolute; right: 10px; bottom: calc(var(--bar) + 12px); z-index: 4; display: flex; background: rgba(255, 255, 255, 0.92); border-radius: 999px; padding: 3px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12); }
+.a3-view button { padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; }
+.a3-view button.on { background: var(--ink); color: #fff; }
+.a3-manual {
+  position: absolute; left: 10px; bottom: calc(var(--bar) + 12px); z-index: 4; width: 96px; border-radius: 12px; background: #fff; padding: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.a3-manual img { width: 100%; height: 62px; object-fit: contain; display: block; }
+.a3-manual span { font-size: 11px; font-weight: 600; color: #5a534b; }
+.a3-zoom { position: fixed; inset: 0; z-index: 9; background: rgba(20, 18, 15, 0.78); display: grid; place-items: center; padding: 16px; }
+.a3-zoom img { max-width: 100%; max-height: 86vh; border-radius: 12px; background: #fff; }
+.a3-x { position: absolute; right: 14px; top: max(14px, env(safe-area-inset-top)); width: 40px; height: 40px; border-radius: 50%; background: #fff; font-size: 24px; line-height: 1; }
+
+.a3-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; background: #fff; box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  padding: 8px 16px max(10px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 6px; align-items: center;
+}
+.a3-prog { display: flex; gap: 5px; width: 100%; max-width: 420px; }
+.a3-prog button { flex: 1; height: 6px; border-radius: 3px; background: #e5dfd5; }
+.a3-prog button.done { background: #b9ab98; }
+.a3-prog button.on { background: var(--acc); }
+.a3-ctrl { display: flex; gap: 18px; align-items: center; }
+.a3-ctrl button { width: 44px; height: 44px; border-radius: 50%; background: #f1ece4; font-size: 26px; line-height: 1; display: grid; place-items: center; }
+.a3-ctrl button:disabled { opacity: 0.35; }
+.a3-ctrl .play { width: 54px; height: 54px; background: var(--acc); color: #fff; font-size: 20px; box-shadow: 0 6px 18px rgba(232, 131, 58, 0.45); }
+
+.a3-badge {
+  position: absolute; left: 0; top: 0; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; background: #1c1a17; color: #fff; font-size: 12px; font-weight: 700;
+  display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.a3-badge.hw { background: var(--acc); }
+@media (min-width: 760px) { .a3-card { width: 380px; } .a3-manual { width: 150px; } .a3-manual img { height: 100px; } }
+.a3-head { cursor: pointer; }
+.a3-fold { margin-left: auto; font-size: 16px; color: #bfb4a4; transition: transform 0.2s; }
+.a3-card.min > :not(.a3-head) { display: none; }
+.a3-card.min .a3-fold { transform: rotate(-90deg); }
