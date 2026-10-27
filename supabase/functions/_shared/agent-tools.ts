@@ -299,9 +299,18 @@ const tools = {
       scheduled_at: z.string().optional().describe("ISO 8601 com fuso, ex: 2026-10-12T18:30:00-03:00"),
       notes: z.string().optional().describe("Raciocínio/estratégia para o usuário ler na aprovação"),
       tiktok_privacy: z.enum(["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]).optional(),
+      account_ids: z.object({ instagram: z.string().optional(), tiktok: z.string().optional() }).optional()
+        .describe("Conta que publica em cada rede (ids de accounts no get_overview). Sem isso, publica na conta da Brax Pins."),
     }),
     run: async (ctx: Ctx, input: any) => {
       const media = normalizeMedia(input.media);
+      const accountIds: Record<string, string> = {};
+      for (const [platform, id] of Object.entries(input.account_ids ?? {})) {
+        if (!id || !input.platforms.includes(platform)) continue;
+        const { data: acc } = await ctx.db.from("social_accounts").select("id").eq("id", id).eq("user_id", ctx.userId).eq("platform", platform).maybeSingle();
+        if (!acc) throw new Error(`Conta ${id} não é uma conta de ${platform} conectada`);
+        accountIds[platform] = acc.id;
+      }
       const brand = await settings(ctx);
       const needsRender = Boolean(input.slides?.length) && media.length === 0;
       if (!needsRender) {
@@ -323,7 +332,10 @@ const tools = {
         notes: input.notes,
         status,
         created_by: "agent",
-        options: input.tiktok_privacy ? { tiktok: { privacy_level: input.tiktok_privacy } } : {},
+        options: {
+          ...(input.tiktok_privacy ? { tiktok: { privacy_level: input.tiktok_privacy } } : {}),
+          ...(Object.keys(accountIds).length ? { account_ids: accountIds } : {}),
+        },
       }).select().single();
       if (error) throw error;
       return {

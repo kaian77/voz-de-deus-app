@@ -52,7 +52,7 @@ function BrandSelect({ account }: { account: SocialAccount }) {
     >
       <option value="brax">Brax Pins</option>
       <option value="paginaspro">PáginasPro</option>
-      <option value="canal">Canal (vídeos do YouTube)</option>
+      <option value="canal">Canal / outra conta (fora da loja)</option>
     </select>
   );
 }
