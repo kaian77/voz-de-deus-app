@@ -139,10 +139,11 @@ def wait_scraper():
     raise RuntimeError("o robô do Google Maps não subiu")
 
 
-def scrape(keyword, cell, depth):
-    """Uma busca no robô -> linhas do CSV dele (title, phone, website, category, address, latitude, longitude...)."""
-    body = {"name": "studio", "keywords": [keyword], "lang": "pt", "fast_mode": False, "depth": depth,
-            "email": False, "max_time": 600, **cell}
+def scrape(keyword, cell, depth, lang="pt", extra_reviews=False):
+    """Uma busca no robô -> linhas do CSV dele (title, phone, website, category, address, latitude, longitude...).
+    extra_reviews: lê mais avaliações de cada lugar (coluna user_reviews_extended; usado pelos leads da Montagem 3D)."""
+    body = {"name": "studio", "keywords": [keyword], "lang": lang, "fast_mode": False, "depth": depth,
+            "email": False, "max_time": 900 if extra_reviews else 600, "extra_reviews": extra_reviews, **cell}
     job = json.loads(scraper("POST", "/api/v1/jobs", body)).get("id")
     if not job:
         raise RuntimeError("o robô não criou a busca")
@@ -370,7 +371,8 @@ def main():
                 if r["found"] < r["wanted"]:
                     rest("PATCH", f"lead_searches?id=eq.{r['id']}", {"status": "queued"})
         requeue_stuck()
-        print("queued" if queued() or rest("GET", "leads?details_status=in.(queued,running)&select=id&limit=1") else "empty")
+        manual = rest("GET", "manual_searches?status=eq.queued&source=in.(maps,etsy)&select=id&limit=1")
+        print("queued" if queued() or manual or rest("GET", "leads?details_status=in.(queued,running)&select=id&limit=1") else "empty")
         return
     wait_scraper()
     rest("PATCH", "leads?details_status=eq.running", {"details_status": "queued"})  # rodada anterior interrompida

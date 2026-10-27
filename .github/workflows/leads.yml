@@ -1,4 +1,4 @@
-# Leads do Google Maps (Renda Extra): processa a fila de buscas do Studio (tabela lead_searches) com o robô
+# Leads do Google Maps (Renda Extra): processa a fila de buscas do Studio (tabela lead_searches; e manual_searches de Maps/Etsy, video/manual_leads.py) com o robô
 # open source gosom/google-maps-scraper. O Studio dispara este workflow ao criar uma busca (secret
 # VIDEO_DISPATCH_TOKEN); o horário abaixo é a rede de segurança. Com a fila vazia, termina em segundos.
 name: Leads do Google Maps
@@ -23,6 +23,8 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}
+      # Leads da Montagem 3D no Etsy (opcional): "keystring:shared secret" do app em etsy.com/developers
+      ETSY_API_KEY: ${{ secrets.ETSY_API_KEY }}
     steps:
       - name: Chaves do Supabase
         run: |
@@ -49,6 +51,10 @@ jobs:
       - name: Buscar leads
         if: steps.queue.outputs.status == 'queued'
         run: cd video && python3 leads.py
+
+      - name: Móveis com manual ruim (Maps e Etsy)
+        if: steps.queue.outputs.status == 'queued'
+        run: cd video && python3 manual_leads.py
 
       - name: Log do robô (se falhar)
         if: failure() && steps.queue.outputs.status == 'queued'

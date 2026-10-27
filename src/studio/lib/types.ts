@@ -366,6 +366,43 @@ export interface Lead {
   updated_at: string;
 }
 
+/** Busca de marcas de móveis com manual ruim (Leads → "Manual ruim"; leads da Montagem 3D). */
+export interface ManualSearch {
+  id: string;
+  source: "ml" | "maps" | "etsy";
+  /** Site do Mercado Livre (MLB, MLM...) ou idioma do Maps (pt, en, es) */
+  site: string | null;
+  query: string;
+  place: string | null;
+  status: "queued" | "running" | "done" | "failed";
+  found: number;
+  scanned: number;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Marca/loja com avaliações reclamando do manual ou da montagem. */
+export interface ManualLead {
+  id: string;
+  search_id: string | null;
+  source: "ml" | "maps" | "etsy";
+  key: string;
+  name: string;
+  country: string | null;
+  url: string | null;
+  rating: number | null;
+  reviews_read: number;
+  complaints: number;
+  samples: { text: string; rate: number | null; product: string; url?: string }[];
+  contact: { site?: string | null; phone?: string | null; instagram?: string | null } | null;
+  status: LeadStatus;
+  notes: string | null;
+  contacted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Landing page de cliente (Renda extra → Landing pages). O HTML sai de src/landing/render.ts. */
 export interface LandingPage {
   id: string;
@@ -596,6 +633,8 @@ export interface TableMap {
   ai_videos: AiVideo;
   lead_searches: LeadSearch;
   leads: Lead;
+  manual_searches: ManualSearch;
+  manual_leads: ManualLead;
   landing_pages: LandingPage;
   landing_stats: LandingStat;
   site_stats: SiteStat;
