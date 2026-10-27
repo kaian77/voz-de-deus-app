@@ -137,13 +137,16 @@ def scrape_reviews(keyword, lat, lng, lang):
         with open(os.path.join(d, "q.txt"), "w") as f:
             f.write(keyword + "\n")
         cmd = ["docker", "run", "--rm", "-v", f"{d}:/work", IMAGE, "-input", "/work/q.txt", "-results", "/work/out.csv",
-               "-lang", lang, "-depth", "2", "-extra-reviews", "-geo", f"{lat:.6f},{lng:.6f}", "-zoom", "12", "-c", "4", "-exit-monitor", "2m"]
+               "-lang", lang, "-depth", "2", "-extra-reviews", "-geo", f"{lat:.6f},{lng:.6f}", "-zoom", "12", "-radius", "15000", "-c", "4", "-exit-on-inactivity", "3m"]
         try:
             subprocess.run(cmd, check=True, timeout=25 * 60, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         except subprocess.TimeoutExpired:
             print("  (o robô passou de 25 min; fico com o que ele já gravou)")
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"robô falhou: {(e.stderr or b'')[-300:].decode(errors='replace')}") from None
+            err = (e.stderr or b"").decode(errors="replace").strip()
+            print(err[-3000:])
+            # 1ª linha diz o motivo (ex.: "flag provided but not defined"); o resto costuma ser a lista de opções
+            raise RuntimeError(f"robô falhou: {err.splitlines()[0][:300] if err else e.returncode}") from None
         path = os.path.join(d, "out.csv")
         if not os.path.exists(path):
             return []
