@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "questions": [
+      { "q": "Quantos dias e noites choveu durante o dilúvio?", "opts": ["7", "40", "150"], "a": 1,
+        "ref": "Gênesis 7:12", "exp": "Choveu quarenta dias e quarenta noites. As águas cobriram a terra por cento e cinquenta dias." },
+      { "q": "Quantas pedras Davi pegou no riacho antes de enfrentar Golias?", "opts": ["1", "3", "5"], "a": 2,
+        "ref": "1 Samuel 17:40", "exp": "Davi escolheu cinco pedras lisas do riacho. E bastou uma só." },
+      { "q": "Quem era o pai de João Batista?", "opts": ["Zacarias", "José", "Simeão"], "a": 0,
+        "ref": "Lucas 1:13", "exp": "Zacarias era sacerdote, e o anjo anunciou que sua esposa Isabel teria um filho." },
+      { "q": "Quantos anos viveu Matusalém, o homem mais velho da Bíblia?", "opts": ["930", "969", "777"], "a": 1,
+        "ref": "Gênesis 5:27", "exp": "Matusalém viveu novecentos e sessenta e nove anos. Novecentos e trinta foi a idade de Adão." },
+      { "q": "Qual era a profissão de Mateus antes de seguir Jesus?", "opts": ["Pescador", "Carpinteiro", "Cobrador de impostos"], "a": 2,
+        "ref": "Mateus 9:9", "exp": "Mateus estava sentado na coletoria, cobrando impostos, quando Jesus disse: segue-me." }
+    ]
+  },
+  {
+    "id": 2,
+    "questions": [
+      { "q": "Qual foi o primeiro milagre de Jesus?", "opts": ["Andar sobre as águas", "Transformar água em vinho", "Multiplicar os pães"], "a": 1,
+        "ref": "João 2:11", "exp": "Foi nas bodas de Caná da Galileia, quando Jesus transformou água em vinho." },
+      { "q": "Quem foi jogado na cova dos leões?", "opts": ["Daniel", "José", "Moisés"], "a": 0,
+        "ref": "Daniel 6:16", "exp": "Daniel foi jogado na cova, e Deus fechou a boca dos leões." },
+      { "q": "Quantos apóstolos Jesus escolheu?", "opts": ["7", "10", "12"], "a": 2,
+        "ref": "Lucas 6:13", "exp": "Jesus chamou os discípulos e escolheu doze, a quem chamou de apóstolos." },
+      { "q": "Em que cidade Jesus nasceu?", "opts": ["Nazaré", "Belém", "Jerusalém"], "a": 1,
+        "ref": "Mateus 2:1", "exp": "Jesus nasceu em Belém da Judeia. Ele cresceu em Nazaré." },
+      { "q": "Quem negou Jesus três vezes?", "opts": ["Judas", "Pedro", "Tomé"], "a": 1,
+        "ref": "Mateus 26:75", "exp": "Pedro negou Jesus três vezes antes de o galo cantar, e depois chorou amargamente." }
+    ]
+  },
+  {
+    "id": 3,
+    "questions": [
+      { "q": "Quem era a mãe do profeta Samuel?", "opts": ["Ana", "Raquel", "Sara"], "a": 0,
+        "ref": "1 Samuel 1:20", "exp": "Ana orou pedindo um filho. Deus respondeu, e ela o chamou de Samuel." },
+      { "q": "Qual rei pediu a Deus sabedoria em vez de riquezas?", "opts": ["Davi", "Salomão", "Saul"], "a": 1,
+        "ref": "1 Reis 3:9", "exp": "Salomão pediu um coração sábio para governar. E Deus lhe deu também riquezas." },
+      { "q": "Por quantos anos o povo de Israel andou pelo deserto?", "opts": ["7", "40", "70"], "a": 1,
+        "ref": "Números 14:33", "exp": "O povo andou quarenta anos pelo deserto antes de entrar na terra prometida." },
+      { "q": "Qual era o nome da esposa de Abraão?", "opts": ["Sara", "Rebeca", "Lia"], "a": 0,
+        "ref": "Gênesis 17:15", "exp": "Ela se chamava Sarai, e Deus mudou seu nome para Sara." },
+      { "q": "Com que idade Jesus começou seu ministério?", "opts": ["Uns 20 anos", "Uns 30 anos", "Uns 40 anos"], "a": 1,
+        "ref": "Lucas 3:23", "exp": "A Bíblia diz que Jesus tinha cerca de trinta anos quando começou seu ministério." }
+    ]
+  }
+]
