@@ -170,6 +170,14 @@ export async function optimizeStorage(db: SupabaseClient, days = 3) {
     if (p) paths.push(p);
   }
 
+  // Desafio da Bíblia: vídeo marcado como postado há mais de 1 dia
+  const { data: quiz } = await db.from("quiz_episodes").select("id,video_url").eq("status", "posted").not("video_url", "is", null)
+    .lt("posted_at", new Date(Date.now() - DAY).toISOString()).limit(200);
+  for (const q of quiz ?? []) {
+    const p = storagePath(q.video_url!);
+    if (p) paths.push(p);
+  }
+
   // Vídeos de produto pelo arquivo (pasta videos/, nome = id do vídeo): pega os que ficaram sem registro,
   // os de registro já "apagado" e os que passaram do prazo; mantém os de post ainda por publicar
   const { data: files } = await db.rpc("studio_files", { folder: "videos" });
@@ -204,6 +212,7 @@ export async function optimizeStorage(db: SupabaseClient, days = 3) {
     await db.from("deals").update({ status: "skipped" }).in("id", ids(deals)).in("status", ["ready", "rendering"]);
     await db.from("deals").update({ video_url: null, thumb_url: null }).in("id", ids(deals));
   }
+  if (quiz?.length) await db.from("quiz_episodes").update({ video_url: null }).in("id", ids(quiz));
   // Registro que apontava para arquivo apagado agora fica sem link (o Studio não mostra vídeo quebrado)
   const gone = fileIds.filter((f) => paths.includes(f.name)).map((f) => f.id);
   if (gone.length) await db.from("product_videos").update({ video_url: null, file_deleted_at: now }).in("id", gone).not("video_url", "is", null);

@@ -1,22 +1,40 @@
-# Desafio da Bíblia (Facebook/Kwai, postado à mão): renderiza os episódios de video/quiz_episodes.json com a voz
-# (video/quiz.py) e publica os vídeos + legendas + foto/capa da página na branch "desafio-da-biblia".
+# Desafio da Bíblia (Facebook/Kwai, postado à mão): video/quiz_auto.py cria episódios novos com a IA (piloto do
+# Studio: mantém alguns prontos e não postados) e renderiza os da fila com video/quiz.py; o vídeo vai para o storage e
+# aparece em Studio → Desafio da Bíblia para baixar, com a legenda para copiar. O Studio dispara pelo botão; o
+# horário abaixo repõe os episódios todo dia.
 name: Desafio da Bíblia
 
 on:
   workflow_dispatch:
-    inputs:
-      episodes:
-        description: "Episódios (ex.: 1,2,3 ou all)"
-        default: all
+  schedule:
+    - cron: "23 9 * * *"
 
-permissions:
-  contents: write
+concurrency:
+  group: quiz
+  cancel-in-progress: false
 
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL }}
     steps:
+      - name: Chaves do Supabase
+        run: |
+          set -euo pipefail
+          api() { curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1$1"; }
+          REF=$(api /projects | jq -r --arg n "$SUPABASE_PROJECT_NAME" '.[] | select(.name == $n) | .id' | head -1)
+          [[ -n $REF ]] || { echo "::error::Projeto $SUPABASE_PROJECT_NAME não encontrado"; exit 1; }
+          KEY=$(api "/projects/$REF/api-keys?reveal=true" | jq -r '[.[] | select(.name == "service_role" or .type == "secret") | .api_key][0] // empty')
+          [[ -n $KEY ]] || { echo "::error::Não consegui ler a chave de serviço do projeto"; exit 1; }
+          echo "::add-mask::$KEY"
+          echo "SUPABASE_URL=https://$REF.supabase.co" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_KEY=$KEY" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -28,19 +46,5 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0"
 
-      - name: Renderizar
-        run: |
-          mkdir -p out
-          cd video && python3 quiz.py --brand ../out/pagina && python3 quiz.py "${{ inputs.episodes }}" ../out
-
-      - name: Publicar na branch desafio-da-biblia
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch -q origin desafio-da-biblia && git checkout -q -b pub origin/desafio-da-biblia || git checkout -q --orphan pub
-          git rm -rf --cached . -q || true
-          find . -mindepth 1 -maxdepth 1 ! -name out ! -name .git ! -name 'desafio-da-biblia-*' ! -name pagina -exec rm -rf {} +
-          cp -r out/* . && rm -rf out
-          git add -A
-          git commit -qm "Desafio da Bíblia: episódios ${{ inputs.episodes }}"
-          git push -q origin HEAD:desafio-da-biblia
+      - name: Criar e renderizar
+        run: cd video && python3 quiz_auto.py
