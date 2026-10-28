@@ -234,6 +234,9 @@ export interface BrandSettings {
   autopilot_enabled?: boolean;
   autopilot_per_week?: number;
   pp_autopilot_enabled?: boolean;
+  quiz_autopilot?: boolean;
+  quiz_buffer?: number;
+  quiz_request?: number;
   pp_autopilot_per_week?: number;
   pp_autopilot_last_run?: string | null;
   pp_autopilot_error?: string | null;
@@ -548,6 +551,22 @@ export interface Deal {
 }
 
 /** Fonte de cortes (pasta/arquivo do Drive de uma campanha de clipping) — Renda extra → Cortes. */
+/** Episódio do Desafio da Bíblia (quiz em vídeo para Facebook/Kwai, postado à mão). */
+export interface QuizEpisode {
+  id: string;
+  number: number;
+  theme: string | null;
+  questions: { q: string; opts: string[]; a: number; ref: string; exp: string }[];
+  status: "queued" | "rendering" | "ready" | "posted" | "failed";
+  video_url: string | null;
+  duration: number | null;
+  caption: string | null;
+  error: string | null;
+  posted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ClipSource {
   id: string;
   channel_ref: string;
@@ -644,6 +663,7 @@ export interface TableMap {
   yt_channels: YtChannel;
   yt_videos: YtVideo;
   clip_sources: ClipSource;
+  quiz_episodes: QuizEpisode;
   deals: Deal;
   strategies: Strategy;
   site_reviews: SiteReview;

@@ -188,6 +188,24 @@ Deno.serve(async (req) => {
       await db.from("push_subscriptions").delete().eq("user_id", userId).eq("endpoint", String(input.endpoint ?? ""));
       return json({ ok: true });
     }
+    if (action === "quiz_request") {
+      // Desafio da Bíblia: "Fazer mais agora" (a IA cria as perguntas e o workflow faz os vídeos) e liga/desliga o piloto
+      const patch: Record<string, unknown> = {};
+      if (typeof input.autopilot === "boolean") patch.quiz_autopilot = input.autopilot;
+      if (input.buffer !== undefined) patch.quiz_buffer = Math.min(10, Math.max(1, Number(input.buffer) || 3));
+      const more = Math.min(10, Math.max(0, Number(input.count) || 0));
+      if (more) {
+        const { data: s } = await db.from("brand_settings").select("quiz_request").eq("user_id", userId).maybeSingle();
+        patch.quiz_request = (s?.quiz_request ?? 0) + more;
+      }
+      if (Object.keys(patch).length) {
+        const { error } = await db.from("brand_settings").upsert({ user_id: userId, ...patch }, { onConflict: "user_id" });
+        if (error) throw new Error(error.message);
+      }
+      const dispatched = more || input.run === true || patch.quiz_autopilot === true ? await dispatchRender("quiz-video.yml") : false;
+      return json({ ok: true, dispatched });
+    }
+
     if (action === "clips_add_source") {
       // Cortes: nova fonte (pasta/arquivo do Drive de uma campanha) entra na fila do workflow "Cortes"; com id, só atualiza os dados salvos
       const { data: channel } = await db.from("yt_channels").select("id").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();

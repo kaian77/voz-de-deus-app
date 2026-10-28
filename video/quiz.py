@@ -285,7 +285,8 @@ def build(ep, outdir, silent=False):
     fx = []  # (início, som)
     events = {}
     t = 0.4
-    d = say("intro", f"Desafio da Bíblia! Cinco perguntas. Duvido você acertar todas. Conte nos dedos quantas você acerta, e no final comente aqui embaixo.")
+    theme = ep.get("theme")
+    d = say("intro", f"Desafio da Bíblia! {'Hoje o tema é ' + theme + '. ' if theme else ''}Cinco perguntas. Duvido você acertar todas. Conte nos dedos quantas você acerta, e no final comente aqui embaixo.")
     tl.append((t, "intro"))
     fx.append((0.1, "whoosh"))
     t += d + 0.6
@@ -355,7 +356,7 @@ def build(ep, outdir, silent=False):
     os.makedirs(folder, exist_ok=True)
     mp4 = os.path.join(folder, "video.mp4")
     ff = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-                           "-i", wav, "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+                           "-i", wav, "-c:v", "libx264", "-preset", "medium", "-crf", "23", "-pix_fmt", "yuv420p",
                            "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", mp4], stdin=subprocess.PIPE)
     frames = int(total * FPS)
     for fi in range(frames):
@@ -367,7 +368,7 @@ def build(ep, outdir, silent=False):
     with open(os.path.join(folder, "legenda.txt"), "w") as f:
         f.write(caption(ep))
     print("ok", mp4, f"{total:.1f}s")
-    return mp4
+    return mp4, total
 
 
 def frame(tm, ep, ev, cards, opts, n):
@@ -381,6 +382,15 @@ def frame(tm, ep, ev, cards, opts, n):
         dl.text((W / 2, 170), "DUVIDO VOCÊ", font=font(104), fill=CREAM, anchor="mm")
         dl.text((W / 2, 310), "ACERTAR AS 5!", font=font(120), fill=GOLD, anchor="mm")
         scaled(im, lay, W / 2, 820, k)
+        if ep.get("theme"):
+            kt = ease((tm - 0.5) / 0.5)
+            f = font(46)
+            label = ep["theme"].upper()
+            while f.getlength(label) > W - 260 and f.size > 30:
+                f = font(f.size - 2)
+            w = f.getlength(label) + 80
+            rr(d, (W / 2 - w / 2, 440, W / 2 + w / 2, 530), 45, GOLD + (int(255 * kt),))
+            d.text((W / 2, 487), label, font=f, fill=NAVY + (int(255 * kt),), anchor="mm")
         k2 = ease((tm - 1.6) / 0.6)
         if k2 > 0:
             box = (140, 1260, W - 140, 1420)
@@ -452,7 +462,8 @@ def frame(tm, ep, ev, cards, opts, n):
 
 
 def caption(ep):
-    return (f"📖 Desafio da Bíblia #{ep['id']}: duvido você acertar as 5!\n\n"
+    theme = f" · {ep['theme']}" if ep.get("theme") else ""
+    return (f"📖 Desafio da Bíblia #{ep['id']}{theme}: duvido você acertar as 5!\n\n"
             "Comente aqui embaixo quantas você acertou 👇\n"
             "Compartilhe com quem ama a Palavra de Deus 🙏 e siga a página para o desafio de amanhã.\n\n"
             "#biblia #desafiobiblico #quizbiblico #palavradedeus #jesus #fe #deus #evangelho #igreja #amem\n")
