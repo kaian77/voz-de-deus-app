@@ -326,7 +326,8 @@ def build(ep, outdir, silent=False):
 
     # áudio
     n_s = int(total * SR) + SR
-    mix = pad_music(n_s / SR)
+    mix = pad_music(n_s / SR)[:n_s]
+    mix = np.pad(mix, (0, n_s - len(mix)))
     voice = np.zeros(n_s, np.float32)
     for st, k in tl:
         a = int(st * SR)
