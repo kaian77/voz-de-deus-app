@@ -819,8 +819,9 @@ def to_tiktok(video, final, work, publish_at):
     if not account:
         return
     small = os.path.join(work, "tiktok.mp4")  # cópia mais leve (limite de 50 MB por arquivo no storage)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", final, "-c:v", "libx264", "-preset", "veryfast", "-crf", "24",
-                    "-maxrate", "6M", "-bufsize", "12M", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", small], check=True)
+    # teto de 3,5 Mbps: o TikTok baixa daqui e isso conta na banda do Supabase
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", final, "-c:v", "libx264", "-preset", "medium", "-crf", "25",
+                    "-maxrate", "3500k", "-bufsize", "7M", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", small], check=True)
     url = storage_upload(small, f"{video['user_id']}/youtube/{video['id']}-tiktok.mp4", "video/mp4")
     script = video["script"]
     tags = [t for t in re.findall(r"#\w+", script.get("description", "")) if t.lower() != "#shorts"][:5]

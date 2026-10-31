@@ -2,7 +2,7 @@ name: Banda do storage (egress)
 
 # Mostra o que mais gastou banda do storage nas últimas 24 h (limite dos logs no plano grátis):
 # arquivos mais baixados, por pasta e por quem baixou (navegador, Instagram, workflows...).
-# Só lê os logs pela API de gerenciamento do Supabase; não muda nada.
+# Só lê os logs pela API de gerenciamento do Supabase (endpoint `logs`, SQL do ClickHouse); não muda nada.
 on:
   workflow_dispatch:
 
@@ -19,35 +19,31 @@ jobs:
           START=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           q() {
-            curl -sS -G -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-              "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" \
+            sleep 8  # a API limita várias consultas seguidas
+            curl -sS --max-time 60 -G -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs" \
               --data-urlencode "sql=$1" --data-urlencode "iso_timestamp_start=$START" --data-urlencode "iso_timestamp_end=$END"
           }
-          BASE="from edge_logs
-            cross join unnest(metadata) as m
-            cross join unnest(m.request) as req
-            cross join unnest(m.response) as res
-            cross join unnest(res.headers) as rh
-            cross join unnest(req.headers) as qh
-            where req.path like '/storage/v1/object/%' and req.method = 'GET'"
-          echo "== Arquivos que mais gastaram (MB, downloads) =="
-          q "select req.path as path, count(*) as hits, round(sum(safe_cast(rh.content_length as int64)) / 1048576, 1) as mb $BASE
-             group by path order by mb desc limit 60" | tee files.json \
-            | jq -r '.result[]? | "\(.mb)\t\(.hits)\t\(.path)"' || true
-          jq -r '.error? // empty' files.json
-          echo
-          echo "== Por quem baixou (MB) =="
-          q "select coalesce(qh.user_agent, '?') as ua, count(*) as hits, round(sum(safe_cast(rh.content_length as int64)) / 1048576, 1) as mb $BASE
-             group by ua order by mb desc limit 25" \
-            | jq -r '.result[]? | "\(.mb)\t\(.hits)\t\(.ua)"' || true
-          echo
-          echo "== Por pasta (MB) =="
-          q "select regexp_extract(req.path, r'/public/media/[^/]+/([^/]+)') as pasta, count(*) as hits,
-               round(sum(safe_cast(rh.content_length as int64)) / 1048576, 1) as mb $BASE
-             group by pasta order by mb desc limit 30" \
-            | jq -r '.result[]? | "\(.mb)\t\(.hits)\t\(.pasta)"' || true
+          show() { jq -r --arg k "$1" '(.error // .message // empty), (.result[]? | "\(.mb)\t\(.hits)\t\(.[$k])")'; }
+          A="log_attributes"
+          BYTES="round(sum(toInt64OrZero($A['response.headers.content_length'])) / 1048576, 1)"
+          WHERE="from logs where source = 'edge_logs'
+            and $A['request.url'] like '%/storage/v1/object/%' and $A['request.method'] = 'GET'"
+          echo "== Campos de uma linha (conferência) =="
+          q "select mapKeys($A) as k $WHERE limit 1" | head -c 4000; echo
           echo
           echo "== Total (MB) e cache =="
-          q "select coalesce(rh.cf_cache_status, '?') as cache, count(*) as hits,
-               round(sum(safe_cast(rh.content_length as int64)) / 1048576, 1) as mb $BASE group by cache order by mb desc" \
-            | jq -r '.result[]? | "\(.mb)\t\(.hits)\t\(.cache)"' || true
+          q "select $A['response.headers.cf_cache_status'] as cache, count() as hits, $BYTES as mb $WHERE
+             group by cache order by mb desc" | show cache
+          echo
+          echo "== Por pasta (MB) =="
+          q "select extract($A['request.url'], '/public/media/[^/]+/([^/]+)') as pasta, count() as hits, $BYTES as mb $WHERE
+             group by pasta order by mb desc limit 30" | show pasta
+          echo
+          echo "== Por quem baixou (MB) =="
+          q "select $A['request.headers.user_agent'] as ua, count() as hits, $BYTES as mb $WHERE
+             group by ua order by mb desc limit 25" | show ua
+          echo
+          echo "== Arquivos que mais gastaram (MB, downloads) =="
+          q "select cutQueryString($A['request.url']) as path, count() as hits, $BYTES as mb $WHERE
+             group by path order by mb desc limit 60" | show path

@@ -130,6 +130,20 @@ def briefing(brief, name, handle):
     }
 
 
+def compress(path):
+    """Versão leve para o storage: o motor sai em qualidade de master (~40 MB), e cada vez que o Instagram, o
+    TikTok ou o Studio baixa o vídeo isso conta na banda do Supabase. 1080p com teto de 4 Mbps continua nítido
+    no celular e fica ~4x menor. Se der erro ou não diminuir, usa o original."""
+    small = path[:-4] + "-leve.mp4"
+    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", path, "-c:v", "libx264", "-preset", "medium", "-crf", "24",
+                        "-maxrate", "4M", "-bufsize", "8M", "-pix_fmt", "yuv420p", "-profile:v", "high",
+                        "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", small], capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.exists(small) or os.path.getsize(small) >= os.path.getsize(path):
+        return path
+    print(f"   leve: {os.path.getsize(path) / 1e6:.1f} MB -> {os.path.getsize(small) / 1e6:.1f} MB", flush=True)
+    return small
+
+
 def cinema_spec(brief, name, photos):
     """Roteiro do estilo cinematográfico: só a câmera se mexe sobre as fotos originais."""
     colors = {**COLORS, **{k: v for k, v in (brief.get("colors") or {}).items() if isinstance(v, str) and v.startswith("#")}}
@@ -168,6 +182,7 @@ def render(row):
         p = subprocess.run([sys.executable, engine, "briefing.json", "video.mp4"], cwd=tmp, capture_output=True, text=True, timeout=900)
         if p.returncode != 0 or not os.path.exists(out):
             raise RuntimeError(f"render falhou: {(p.stderr or p.stdout)[-400:]}")
+        out = compress(out)
         with open(out, "rb") as f:
             data = f.read()
     path = f"{row['user_id']}/videos/{row['id']}.mp4"
