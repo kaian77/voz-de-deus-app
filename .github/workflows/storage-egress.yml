@@ -29,6 +29,9 @@ jobs:
           BYTES="round(sum(toInt64OrZero($A['response.headers.content_length'])) / 1048576, 1)"
           WHERE="from logs where source_name = 'edge_logs'
             and $A['request.path'] like '/storage/v1/object/%' and $A['request.method'] = 'GET'"
+          echo "== Colunas da tabela logs (conferência) =="
+          q "describe table logs" | head -c 3000; echo
+          q "select name, type from system.columns where table = 'logs'" | head -c 3000; echo
           echo "== Campos de uma linha (conferência) =="
           q "select mapKeys($A) as k $WHERE limit 1" | head -c 3000; echo
           echo
