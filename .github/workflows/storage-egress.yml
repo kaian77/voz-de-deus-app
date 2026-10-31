@@ -19,29 +19,25 @@ jobs:
           START=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           q() {
-            sleep 4  # a API limita várias consultas seguidas
-            curl -sS -G -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            sleep 8  # a API limita várias consultas seguidas
+            curl -sS --max-time 60 -G -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
               "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs" \
               --data-urlencode "sql=$1" --data-urlencode "iso_timestamp_start=$START" --data-urlencode "iso_timestamp_end=$END"
           }
           show() { jq -r --arg k "$1" '(.error // .message // empty), (.result[]? | "\(.mb)\t\(.hits)\t\(.[$k])")'; }
           A="log_attributes"
           BYTES="round(sum(toInt64OrZero($A['response.headers.content_length'])) / 1048576, 1)"
-          WHERE="from logs where source_name = 'edge_logs'
-            and $A['request.path'] like '/storage/v1/object/%' and $A['request.method'] = 'GET'"
-          echo "== Colunas da tabela logs (conferência) =="
-          for c in source ServiceName service_name event_message Body log_attributes LogAttributes attributes metadata resource_attributes; do
-            echo "-- coluna $c:"; q "select $c from logs limit 1" | head -c 700; echo
-          done
+          WHERE="from logs where source = 'edge_logs'
+            and $A['request.url'] like '%/storage/v1/object/%' and $A['request.method'] = 'GET'"
           echo "== Campos de uma linha (conferência) =="
-          q "select mapKeys($A) as k $WHERE limit 1" | head -c 3000; echo
+          q "select mapKeys($A) as k $WHERE limit 1" | head -c 4000; echo
           echo
           echo "== Total (MB) e cache =="
           q "select $A['response.headers.cf_cache_status'] as cache, count() as hits, $BYTES as mb $WHERE
              group by cache order by mb desc" | show cache
           echo
           echo "== Por pasta (MB) =="
-          q "select extract($A['request.path'], '/public/media/[^/]+/([^/]+)') as pasta, count() as hits, $BYTES as mb $WHERE
+          q "select extract($A['request.url'], '/public/media/[^/]+/([^/]+)') as pasta, count() as hits, $BYTES as mb $WHERE
              group by pasta order by mb desc limit 30" | show pasta
           echo
           echo "== Por quem baixou (MB) =="
@@ -49,5 +45,5 @@ jobs:
              group by ua order by mb desc limit 25" | show ua
           echo
           echo "== Arquivos que mais gastaram (MB, downloads) =="
-          q "select $A['request.path'] as path, count() as hits, $BYTES as mb $WHERE
+          q "select cutQueryString($A['request.url']) as path, count() as hits, $BYTES as mb $WHERE
              group by path order by mb desc limit 60" | show path
