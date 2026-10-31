@@ -277,6 +277,58 @@ def army(img, y, scared=0.0):
         face(img, x, y + 4, 46, "scared" if scared > 0.5 else "firm", ("af", i))
 
 
+# ------------------------------------------------------------------------------------------------ música infantil
+VOICE_KIDS, RATE_KIDS = "pt-BR-FranciscaNeural", "+0%"  # narradora carinhosa, de contar história
+
+
+def kids_music(dur, bpm=116):
+    """Trilha infantil alegre (original): marimba saltitante, baixo, palmas e chocalho; Dó maior, I-V-vi-IV."""
+    sr = quiz.SR
+    n = int(dur * sr)
+    out = np.zeros(n, np.float32)
+    beat = 60 / bpm
+    chords = [(261.63, 329.63, 392.0), (196.0, 246.94, 293.66), (220.0, 261.63, 329.63), (174.61, 220.0, 261.63)]
+    # motivo da marimba por acorde (graus 0-2 do acorde, oitava acima), 8 colcheias por compasso
+    motif = [0, 1, 2, 1, 2, 1, 0, None]
+    rng = np.random.default_rng(5)
+
+    def put(at, x):
+        a = int(at * sr)
+        if a < n:
+            out[a:a + len(x)] += x[: n - a]
+
+    def marimba(f, v):
+        t = np.arange(int(0.35 * sr)) / sr
+        return ((np.sin(2 * np.pi * f * t) + 0.25 * np.sin(2 * np.pi * f * 4 * t)) * np.exp(-t * 14) * v).astype(np.float32)
+
+    def bass(f, v):
+        t = np.arange(int(beat * 0.9 * sr)) / sr
+        return (np.sin(2 * np.pi * f * t) * np.exp(-t * 4) * v).astype(np.float32)
+
+    def noise(length, v, decay):
+        t = np.arange(int(length * sr)) / sr
+        return (rng.standard_normal(len(t)) * np.exp(-t * decay) * v).astype(np.float32)
+
+    bar, k = 0, 0.0
+    while k < dur:
+        ch = chords[bar % 4]
+        for i, deg in enumerate(motif):
+            at = k + i * beat / 2
+            if deg is not None:
+                put(at, marimba(ch[deg] * 2, 0.11 if i % 2 == 0 else 0.08))
+            put(at, noise(0.05, 0.012, 80))            # chocalho
+        put(k, bass(ch[0] / 2, 0.22))
+        put(k + 2 * beat, bass(ch[0] / 2, 0.18))
+        for b in (1, 3):                                # palmas no 2 e no 4
+            put(k + b * beat, noise(0.12, 0.05, 30))
+        if bar % 4 == 3:                                # sininho no fim da volta
+            put(k + 3.5 * beat, marimba(ch[2] * 4, 0.06))
+        bar += 1
+        k += 4 * beat
+    fade = np.minimum(1, np.minimum(np.arange(n) / sr / 1.0, (n - np.arange(n)) / sr / 2.0))
+    return out * fade.astype(np.float32)
+
+
 # ------------------------------------------------------------------------------------------------ roteiro
 SHOTS = [
     ("Davi era só um menino pastor, cuidando das ovelhas do pai.", 4.6),
@@ -374,7 +426,7 @@ def render(out, silent=False):
     clips, starts, t = [], [], 0.3
     for i, (line, base) in enumerate(SHOTS):
         p = os.path.join(work, f"v{i}.wav")
-        quiz.tts(line, p, silent)
+        quiz.tts(line, p, silent, VOICE_KIDS, RATE_KIDS)
         c = quiz.load_wav(p)
         dur = max(base, len(c) / quiz.SR + 0.9)
         clips.append(c)
@@ -384,7 +436,7 @@ def render(out, silent=False):
     total = t + end_card
     n = int(total * quiz.SR) + quiz.SR
     voice = np.zeros(n, np.float32)
-    mix = quiz.pad_music(n / quiz.SR)[:n]
+    mix = kids_music(n / quiz.SR)[:n] * 0.9
     mix = np.pad(mix, (0, n - len(mix)))
     for (st, _), c in zip(starts, clips):
         a = int((st + 0.25) * quiz.SR)

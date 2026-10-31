@@ -194,7 +194,7 @@ def option_layer(letter, text, state):
 
 
 # ------------------------------------------------------------------------------------------------ voz e som
-def tts(text, path, silent):
+def tts(text, path, silent, voice=None, rate=None):
     if silent:
         dur = max(1.2, len(text.split()) * 0.42)
         with wave.open(path, "wb") as w:
@@ -208,7 +208,7 @@ def tts(text, path, silent):
     mp3 = path + ".mp3"
     for attempt in range(4):
         try:
-            asyncio.run(edge_tts.Communicate(text, VOICE, rate=RATE).save(mp3))
+            asyncio.run(edge_tts.Communicate(text, voice or VOICE, rate=rate or RATE).save(mp3))
             break
         except Exception:
             if attempt == 3:
