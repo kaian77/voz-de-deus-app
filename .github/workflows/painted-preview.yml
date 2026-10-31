@@ -1,0 +1,34 @@
+# Amostra do estilo "desenho pintado à mão" (video/painted.py): renderiza com voz e publica o MP4 na branch
+# "painted-preview" (só esse arquivo), para o dono ver antes de ligar o estilo em algum canal.
+name: Amostra desenho pintado
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependências
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0"
+      - name: Renderizar
+        run: mkdir -p out && cd video && python3 painted.py ../out/davi-e-golias.mp4
+      - name: Publicar na branch painted-preview
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan painted-tmp
+          git rm -rf --cached . -q
+          git add -f out/davi-e-golias.mp4
+          git commit -qm "Amostra: Davi e Golias (desenho pintado)"
+          git push -fq origin HEAD:painted-preview
