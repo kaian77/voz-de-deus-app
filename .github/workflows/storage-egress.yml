@@ -30,6 +30,12 @@ jobs:
             cross join unnest(res.headers) as rh
             cross join unnest(req.headers) as qh
             where req.path like '/storage/v1/object/%' and req.method = 'GET'"
+          echo "== Aviso do Supabase sobre o endpoint novo =="
+          curl -sSL "https://supabase.com/changelog/48235-migration-of-supabase-management-api-logs-all-analytics-endpoint-to-logs-endpoint" \
+            | sed -e 's/<[^>]*>/\n/g' | grep -v '^\s*$' | grep -iE 'sql|table|source|logs|query|select|from |field|column|edge|storage' | head -80 || true
+          for t in logs edge_logs storage_logs "edge_logs_v2" "logs.edge" ; do
+            echo "-- tabela $t:"; q "select * from $t limit 1" | head -c 600; echo
+          done
           echo "== Conferência (resposta crua) =="
           q "select count(*) as n from edge_logs cross join unnest(metadata) as m cross join unnest(m.request) as req
              where req.path like '/storage/v1/object/%'" | head -c 1500; echo
