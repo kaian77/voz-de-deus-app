@@ -30,8 +30,9 @@ jobs:
           WHERE="from logs where source_name = 'edge_logs'
             and $A['request.path'] like '/storage/v1/object/%' and $A['request.method'] = 'GET'"
           echo "== Colunas da tabela logs (conferência) =="
-          q "describe table logs" | head -c 3000; echo
-          q "select name, type from system.columns where table = 'logs'" | head -c 3000; echo
+          for c in source ServiceName service_name event_message Body log_attributes LogAttributes attributes metadata resource_attributes; do
+            echo "-- coluna $c:"; q "select $c from logs limit 1" | head -c 700; echo
+          done
           echo "== Campos de uma linha (conferência) =="
           q "select mapKeys($A) as k $WHERE limit 1" | head -c 3000; echo
           echo
