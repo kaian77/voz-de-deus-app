@@ -20,7 +20,7 @@ jobs:
           END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           q() {
             curl -sS -G -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-              "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" \
+              "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs" \
               --data-urlencode "sql=$1" --data-urlencode "iso_timestamp_start=$START" --data-urlencode "iso_timestamp_end=$END"
           }
           BASE="from edge_logs
