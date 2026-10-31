@@ -30,6 +30,11 @@ jobs:
             cross join unnest(res.headers) as rh
             cross join unnest(req.headers) as qh
             where req.path like '/storage/v1/object/%' and req.method = 'GET'"
+          echo "== Conferência (resposta crua) =="
+          q "select count(*) as n from edge_logs cross join unnest(metadata) as m cross join unnest(m.request) as req
+             where req.path like '/storage/v1/object/%'" | head -c 1500; echo
+          q "select id, timestamp, event_message, metadata from edge_logs cross join unnest(metadata) as m cross join unnest(m.request) as req
+             where req.path like '/storage/v1/object/public/%' limit 1" | head -c 4000; echo
           echo "== Arquivos que mais gastaram (MB, downloads) =="
           q "select req.path as path, count(*) as hits, round(sum(safe_cast(rh.content_length as int64)) / 1048576, 1) as mb $BASE
              group by path order by mb desc limit 60" | tee files.json \
