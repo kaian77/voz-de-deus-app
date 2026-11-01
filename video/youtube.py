@@ -449,19 +449,22 @@ def ass_time(s):
     return f"{int(s // 3600)}:{int(s % 3600 // 60):02d}:{s % 60:05.2f}"
 
 
-def captions(words, short, w, h, path, hook=None, low=False):
-    """Legendas .ass: blocos curtos com a palavra falada destacada em amarelo."""
+def captions(words, short, w, h, path, hook=None, low=False, title=None):
+    """Legendas .ass no estilo dos Shorts que viralizam: 2 palavras por vez, a falada em amarelo e pulando, números e
+    palavras-chave em verde; no Short o título fica num cartão branco no alto depois do gancho."""
     # Short: um pouco abaixo do meio (fora da área dos botões do app); longo: embaixo.
     # low (bonequinhos): logo abaixo dos pés do boneco, ainda acima dos botões do app
-    size, per, align, margin = (92, 3, 2, int(h * (0.24 if low else 0.30))) if short else (54, 6, 2, 70)
+    size, per, align, margin = (140, 2, 2, int(h * (0.24 if low else 0.30))) if short else (56, 6, 2, 70)
     head = (
         "[Script Info]\nScriptType: v4.00+\nWrapStyle: 0\n"
         f"PlayResX: {w}\nPlayResY: {h}\n\n"
         "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
-        f"Style: Cap,Poppins,{size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,{7 if short else 4},"
+        f"Style: Cap,Poppins,{size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,{9 if short else 4},"
         f"{2 if short else 1},{align},60,60,{margin},1\n"
-        f"Style: Hook,Poppins,{150 if short else 110},&H0000D7FF,&H0000D7FF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,{11 if short else 8},4,8,60,60,0,1\n\n"
+        f"Style: Hook,Poppins,{150 if short else 110},&H0000D7FF,&H0000D7FF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,{11 if short else 8},4,8,60,60,0,1\n"
+        # Cartão do título (fundo branco opaco, texto escuro): BorderStyle 3, o contorno vira a margem do cartão
+        "Style: Head,Poppins,58,&H00332419,&H00332419,&H00FFFFFF,&H50000000,-1,0,0,0,100,100,0,0,3,16,0,8,90,90,0,1\n\n"
         "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
     # Agrupa as palavras: no máximo `per` por bloco, quebrando em pontuação
@@ -483,7 +486,13 @@ def captions(words, short, w, h, path, hook=None, low=False):
             for j, x in enumerate(g):
                 t = x["w"].upper() if short else x["w"]
                 t = t.replace("{", "").replace("}", "")
-                txt.append(f"{{\\c&H00D7FF&}}{t}{{\\c&HFFFFFF&}}" if j == i else t)
+                if j == i:  # palavra falada agora: amarela e "pula"
+                    grow = "\\fscx122\\fscy122\\t(0,110,\\fscx106\\fscy106)" if short else ""
+                    txt.append(f"{{\\c&H00D7FF&{grow}}}{t}{{\\rCap}}")
+                elif KEYWORD.search(t):  # número/valor: verde
+                    txt.append(f"{{\\c&H5BD62B&}}{t}{{\\rCap}}")
+                else:
+                    txt.append(t)
             pop = "{\\fscx108\\fscy108\\t(0,90,\\fscx100\\fscy100)}" if short and i == 0 else ""
             lines.append(f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Cap,,0,0,0,,{pop}{' '.join(txt)}")
     if hook:
@@ -492,8 +501,19 @@ def captions(words, short, w, h, path, hook=None, low=False):
         pos = f"\\pos({w // 2},{int(h * (0.16 if short else 0.10))})"
         lines.insert(0, f"Dialogue: 1,{ass_time(0.05)},{ass_time(2.4 if short else 3.2)},Hook,,0,0,0,,"
                         f"{{{pos}\\fad(0,300)\\fscx140\\fscy140\\t(0,220,\\fscx100\\fscy100)}}{txt}")
+    if short and title and words:
+        # Título fixo no alto (como o cartão dos vídeos que viralizam): entra quando o gancho sai e fica até o fim
+        tt = title.replace("{", "").replace("}", "").strip()
+        if len(tt) > 44:
+            tt = tt[:42].rsplit(" ", 1)[0] + "…"
+        end = words[-1]["t"] + words[-1]["d"] + 2.0
+        lines.insert(0, f"Dialogue: 2,{ass_time(2.5)},{ass_time(end)},Head,,0,0,0,,{{\\pos({w // 2},{int(h * 0.075)})\\fad(250,0)}}{tt}")
     with open(path, "w", encoding="utf-8") as f:
         f.write(head + "\n".join(lines) + "\n")
+
+
+# Números, valores e anos ganham cor própria na legenda (o olho para neles)
+KEYWORD = re.compile(r"\d")
 
 
 def font(size, bold=True):
@@ -534,8 +554,17 @@ def thumbnail(src, text, out):
     f = font(size)
     y = (720 - len(lines) * size * 1.02) / 2
     for i, ln in enumerate(lines):
-        color = (255, 215, 0) if i == len(lines) - 1 else (255, 255, 255)
-        d.text((56, y), ln, font=f, fill=color, stroke_width=10, stroke_fill=(0, 0, 0))
+        if i == len(lines) - 1 and len(lines) > 1:
+            y += 14
+            # última linha numa faixa amarela levemente inclinada (texto preto): é o que mais chama o olho na lista
+            l, t, r, b = (int(v) for v in d.textbbox((56, y), ln, font=f))
+            band = Image.new("RGBA", (r - l + 56, b - t + 36), (255, 210, 0, 255))
+            band = band.rotate(2, expand=True, resample=Image.BICUBIC)
+            im.paste(band, (l - 28, t - 22), band)
+            d = ImageDraw.Draw(im)
+            d.text((56, y), ln, font=f, fill=(15, 15, 15))
+        else:
+            d.text((56, y), ln, font=f, fill=(255, 255, 255), stroke_width=10, stroke_fill=(0, 0, 0))
         y += size * 1.02
     im.save(out, quality=90)
 
@@ -705,7 +734,7 @@ def render(video, work, channel=None):
 
     ass = os.path.join(work, "cap.ass")
     # Bonequinhos: o quadro da 1ª cena já é o gancho (o texto por cima embolava)
-    captions(words, short, w, h, ass, hook=None if stick else script.get("thumbnail_text"), low=stick)
+    captions(words, short, w, h, ass, hook=None if stick else script.get("thumbnail_text"), low=stick, title=script.get("title"))
     final = os.path.join(work, "final.mp4")
     args = ["ffmpeg", "-v", "error", "-y", "-i", silent, "-i", wav]
     if style in ("whiteboard", "stickman"):  # papel limpo: sem vinheta, grão nem partículas
