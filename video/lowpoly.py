@@ -1,7 +1,7 @@
 """Estilo "3D low-poly explicativo" para o StickWise (inglês): narra cada fala (edge-tts, palavra a palavra),
 monta a linha do tempo, grava a cena three.js (video/lowpoly/scene.html, via render.cjs) e junta voz + trilha + whoosh.
 
-Uso: python3 lowpoly.py saida.mp4 [--silent]   (--silent = sem voz, tempos estimados, para testar a imagem)
+Uso: python3 lowpoly.py <pasta> [tema ...] [--silent]   (--silent = sem voz, tempos estimados, para testar a imagem)
 """
 import json
 import os
@@ -15,24 +15,12 @@ import youtube as yt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 VOICE = "en-US-AndrewNeural"
-# Amostra: o amortecedor de massa (Taipei 101: 508 m, bola de 660 t presa por cabos)
-LINES = [
-    "This tower is more than five hundred meters tall.",
-    "And up here, the wind never stops pushing it.",
-    "Without help, the top would sway enough to make people feel sick.",
-    "So the engineers hid a secret inside.",
-    "A giant steel ball, six hundred and sixty tons, hanging from huge cables.",
-    "When the wind pushes the tower one way, the ball swings the other way.",
-    "It fights the motion, and the whole tower calms down.",
-    "It's called a tuned mass damper. Follow for more!",
-]
-CAPTION = ("Why don't skyscrapers fall over in the wind? 🌬️🏙️ Taipei 101 hides a 660-ton steel ball near the top "
-           "that swings against the sway.\n\n#engineering #howitworks #skyscraper #science #stickwise")
+TOPICS = os.path.join(HERE, "lowpoly", "topics")  # <tema>.json (falas + legenda) + <tema>.js (cena)
 
 
-def main():
-    out = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else "lowpoly.mp4")
-    silent = "--silent" in sys.argv
+def render(topic, out, silent=False):
+    spec = json.load(open(os.path.join(TOPICS, f"{topic}.json")))
+    LINES, CAPTION = spec["lines"], f"{spec['title']}\n\n{spec['caption']}"
     work = tempfile.mkdtemp()
     SR = yt.SR
     lines, voice_parts, cur = [], [], 0.6
@@ -53,7 +41,7 @@ def main():
         cur += dur + 0.45
     total = cur + 1.2
     tl = os.path.join(work, "timeline.json")
-    json.dump({"lines": lines, "total": total}, open(tl, "w"))
+    json.dump({"topic": topic, "lines": lines, "total": total}, open(tl, "w"))
 
     silent_mp4 = os.path.join(work, "silent.mp4")
     subprocess.run(["node", os.path.join(HERE, "lowpoly", "render.cjs"), tl, silent_mp4], check=True)
@@ -79,6 +67,16 @@ def main():
     with open(os.path.splitext(out)[0] + ".txt", "w") as f:
         f.write(CAPTION)
     print(f"ok: {out} ({total:.0f}s)")
+
+
+def main():
+    """python3 lowpoly.py <pasta de saída> [tema ...] [--silent]  (sem tema = todos)"""
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    outdir = os.path.abspath(args[0] if args else "out")
+    os.makedirs(outdir, exist_ok=True)
+    topics = args[1:] or sorted(f[:-5] for f in os.listdir(TOPICS) if f.endswith(".json"))
+    for t in topics:
+        render(t, os.path.join(outdir, f"{t}.mp4"), "--silent" in sys.argv)
 
 
 if __name__ == "__main__":
