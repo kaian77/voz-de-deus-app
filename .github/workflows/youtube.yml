@@ -16,7 +16,7 @@ concurrency:
 jobs:
   youtube:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}

@@ -299,6 +299,11 @@ def _http_detail(e):
         return str(e)
 
 
+# Serviço que já disse "acabou a cota de hoje" nesta rodada: não perde mais tempo com ele
+DEAD = set()
+LONG_IMAGES = 16  # vídeo longo: no máximo tantas imagens novas; as outras cenas reaproveitam com outro recorte
+
+
 def image(prompt, w, h, path, seed, style=None):
     """Imagem da cena: Cloudflare Workers AI (grátis, quando configurado) -> Pollinations. None se nenhum conseguiu."""
     from PIL import Image
@@ -329,6 +334,8 @@ def image(prompt, w, h, path, seed, style=None):
         f"https://image.pollinations.ai/prompt/{urllib.parse.quote(full)}?{q}",
         {"Authorization": f"Bearer {tok}"} if tok else None)))
     for name, fn in tries:
+        if name.split()[0] in DEAD:
+            continue
         for attempt in range(3):
             try:
                 raw, ctype = fn()
@@ -341,7 +348,15 @@ def image(prompt, w, h, path, seed, style=None):
                     cover(im, w, h).save(path, quality=93)
                     return name
             except Exception as e:
-                log(f"    imagem ({name}): {_http_detail(e)[:300]}")
+                detail = _http_detail(e)
+                log(f"    imagem ({name}): {detail[:300]}")
+                if "daily free allocation" in detail or "used up" in detail:
+                    DEAD.add(name.split()[0])  # cota do dia acabou: só amanhã
+                    break
+                wait = re.search(r"Retry after (\d+)s", detail)
+                if name == "pollinations" and wait:  # grátis = 1 imagem a cada 45 s: espera e tenta de novo
+                    time.sleep(int(wait.group(1)) + 2)
+                    continue
                 # Pedido recusado (sem crédito, limite do dia ou parâmetro): não adianta insistir neste serviço
                 if isinstance(e, urllib.error.HTTPError) and e.code in (400, 401, 402, 403, 404):
                     break
@@ -557,6 +572,9 @@ def render(video, work, channel=None):
 
     clips, lens, voices, words, chapters, starts, t = [], [], [], [], [], [], 0.0
     missing = []
+    # Longo tem ~60 cenas e os geradores grátis não dão conta: gera só LONG_IMAGES e o resto reaproveita
+    step = 1 if short else max(1, math.ceil(len(scenes) / LONG_IMAGES))
+    reuse = []
     for i, sc in enumerate(scenes):
         log(f"  cena {i + 1}/{len(scenes)}")
         mp3 = os.path.join(work, f"v{i}.mp3")
@@ -571,7 +589,9 @@ def render(video, work, channel=None):
         else:
             prompt = hero(sc["image"], script) if cine else sc["image"]
             # Cinemático: mesma semente em todas as cenas ajuda o rosto do protagonista a sair parecido
-            if not image(prompt, w, h, img, base_seed if cine else base_seed + i, style=look_for(sc)):
+            if i % step and not sc.get("chapter"):
+                reuse.append(i)
+            elif not image(prompt, w, h, img, base_seed if cine else base_seed + i, style=look_for(sc)):
                 missing.append((i, prompt))
             clips.append({"img": img, "length": length, "advance": length - XF, "motion": sc.get("motion") or "zoom_in",
                           "layout": sc.get("layout") or "photo", "label": sc.get("label") or ""})
@@ -590,10 +610,16 @@ def render(video, work, channel=None):
         time.sleep(30)
         missing = [(i, p) for i, p in missing
                    if not image(p, w, h, clips[i]["img"], (base_seed if cine else base_seed + i) + 7, style=look_for(scenes[i]))]
-    if len(missing) > len(scenes) * 0.3:
+    made = len(scenes) - len(reuse)
+    if len(missing) > made * 0.3:
         # Vídeo com metade das cenas repetidas não vale publicar: volta para a fila e tenta mais tarde
-        raise RuntimeError(f"os geradores de imagem falharam em {len(missing)} de {len(scenes)} cenas")
-    ok = [c["img"] for j, c in enumerate(clips) if j not in {i for i, _ in missing}] if missing else []
+        raise RuntimeError(f"os geradores de imagem falharam em {len(missing)} de {made} imagens")
+    bad = {i for i, _ in missing} | set(reuse)
+    ok = [c["img"] for j, c in enumerate(clips) if j not in bad] if bad and not stick else []
+    for n, i in enumerate(reuse):
+        # Cena do meio do longo: a imagem gerada mais perto (mesmo assunto), espelhada e noutro recorte
+        near = sorted(ok, key=lambda p: abs(int(os.path.basename(p)[1:-4]) - i))
+        fallback_image(clips[i]["img"], w, h, near[0] if near else None, salt=n + i)
     for n, (i, _) in enumerate(missing):
         # Reaproveita uma imagem boa que não é a vizinha, espelhada e noutro recorte
         far = [p for p in ok if abs(int(os.path.basename(p)[1:-4]) - i) > 1] or ok
@@ -904,6 +930,12 @@ def main():
         return
     if "--check" in sys.argv:
         requeue_stuck()
+        # Longos que falharam por falta de imagem (antes do limite de imagens por longo): voltam para a fila uma vez.
+        # A mensagem nova termina em "imagens", então estes não voltam de novo.
+        rest("PATCH", "yt_videos?status=eq.failed&kind=eq.long&error=like." + urllib.parse.quote("*geradores de imagem*cenas*"),
+             {"status": "queued", "attempts": 0, "error": None})
+        # Longos antigos que o GitHub cancelou 3x no limite de tempo (ficaram parados na fila): mais uma chance
+        rest("PATCH", f"yt_videos?status=eq.queued&kind=eq.long&attempts=gte.{MAX_ATTEMPTS}&created_at=lt.2026-11-02", {"attempts": 0})
         print("queued" if queued(1) else "empty")
         return
     if not (URL and KEY):
