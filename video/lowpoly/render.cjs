@@ -16,7 +16,7 @@ const path = require("path");
   try {
     const p = await b.newPage({ viewport: { width: 540, height: 960 }, deviceScaleFactor: 2 });
     p.on("pageerror", (e) => console.error("página:", e.message));
-    await p.goto(`http://127.0.0.1:${port}/video/lowpoly/scene.html`);
+    await p.goto(`http://127.0.0.1:${port}/video/lowpoly/scene.html?t=${tl.topic || "damper"}`);
     await p.waitForFunction(() => window.ready === true, null, { timeout: 60000 });
     await p.evaluate((x) => window.setTL(x), tl);
     const FPS = 30, N = Math.ceil(tl.total * FPS);
