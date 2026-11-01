@@ -1,0 +1,45 @@
+# Sobe no YouTube (canal de bonequinhos em inglês, StickWise) os vídeos 3D low-poly já renderizados na branch
+# lowpoly-preview (video/lowpoly_upload.py) e atualiza o nome do canal no Studio.
+name: Enviar vídeos 3D low-poly
+
+on:
+  workflow_dispatch:
+    inputs:
+      topics:
+        description: "Temas na ordem (o 1º sai na hora)"
+        required: true
+        default: "train contrail windows"
+      gap_hours:
+        description: "Horas entre um vídeo e outro"
+        required: true
+        default: "3"
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+    steps:
+      - name: Chaves do Supabase
+        run: |
+          set -euo pipefail
+          api() { curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1$1"; }
+          REF=$(api /projects | jq -r --arg n "$SUPABASE_PROJECT_NAME" '.[] | select(.name == $n) | .id' | head -1)
+          [[ -n $REF ]] || { echo "::error::Projeto $SUPABASE_PROJECT_NAME não encontrado"; exit 1; }
+          KEY=$(api "/projects/$REF/api-keys?reveal=true" | jq -r '[.[] | select(.name == "service_role" or .type == "secret") | .api_key][0] // empty')
+          [[ -n $KEY ]] || { echo "::error::Não consegui ler a chave de serviço do projeto"; exit 1; }
+          echo "::add-mask::$KEY"
+          echo "SUPABASE_URL=https://$REF.supabase.co" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_KEY=$KEY" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - name: Vídeos prontos
+        run: git fetch -q --depth 1 origin lowpoly-preview && mkdir -p ready && git --work-tree=ready checkout FETCH_HEAD -- out && ls -la ready/out
+      - name: Enviar
+        env:
+          TOPICS: ${{ inputs.topics }}
+          GAP: ${{ inputs.gap_hours }}
+        run: cd video && python3 lowpoly_upload.py ../ready/out "$GAP" $TOPICS
