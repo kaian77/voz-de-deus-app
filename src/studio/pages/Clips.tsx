@@ -4,6 +4,7 @@ import { Copy, ExternalLink, Loader2, Pencil, Play, Plus, RotateCcw, Scissors, S
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,7 +22,7 @@ const SOURCE_STATUS: Record<ClipSource["status"], { label: string; tone: string 
   failed: { label: "Falhou", tone: "text-danger" },
 };
 
-const EMPTY = { campaign: "", url: "", mirror_url: "", credit: "", hashtags: "", rules: "", clips_wanted: "6", per_day: "3" };
+const EMPTY = { campaign: "", url: "", mirror_url: "", credit: "", hashtags: "", rules: "", clips_wanted: "6", per_day: "3", edited: "" };
 
 const shortUrl = (v: YtVideo) => `https://youtube.com/shorts/${v.youtube_id}`;
 
@@ -66,7 +67,7 @@ export default function Clips() {
     setChannelId(s.channel_ref);
     setForm({
       campaign: s.campaign, url: s.url, mirror_url: s.mirror_url ?? "", credit: s.credit ?? "", hashtags: s.hashtags ?? "", rules: s.rules ?? "",
-      clips_wanted: String(s.clips_wanted), per_day: String(s.per_day),
+      clips_wanted: String(s.clips_wanted), per_day: String(s.per_day), edited: s.edited ? "1" : "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -75,7 +76,7 @@ export default function Clips() {
     try {
       await api.invoke("ai", {
         action: "clips_add_source", id: s.id, channel_id: s.channel_ref, campaign: s.campaign, url: s.url, mirror_url: s.mirror_url ?? "", credit: s.credit ?? "",
-        hashtags: s.hashtags ?? "", rules: s.rules ?? "", clips_wanted: s.clips_wanted, per_day: s.per_day,
+        hashtags: s.hashtags ?? "", rules: s.rules ?? "", clips_wanted: s.clips_wanted, per_day: s.per_day, edited: s.edited,
       });
       toast.success("Recomeçou! Baixar e transcrever o episódio leva de 30 min a 2 h.");
       invalidate("clip_sources");
@@ -90,7 +91,7 @@ export default function Clips() {
     setSending(true);
     try {
       const r = await api.invoke<{ started: boolean }>("ai", {
-        action: "clips_add_source", id: editing ?? undefined, channel_id: chosen, ...form, clips_wanted: Number(form.clips_wanted), per_day: Number(form.per_day),
+        action: "clips_add_source", id: editing ?? undefined, channel_id: chosen, ...form, clips_wanted: Number(form.clips_wanted), per_day: Number(form.per_day), edited: form.edited === "1",
       });
       toast.success(editing ? (r.started ? "Salvo e recomeçou!" : "Campanha salva: os próximos cortes já seguem os dados novos.") : r.started ? "Começou! Baixar e transcrever o episódio leva de 30 min a 2 h." : "Na fila: roda em até 6 h.");
       setForm(EMPTY);
@@ -163,6 +164,13 @@ export default function Clips() {
                 <Input value={form.hashtags} onChange={(e) => set("hashtags", e.target.value)} placeholder="#streamhousela #cwetv" />
               </div>
             </div>
+            <label className="flex items-start gap-2 rounded-md border p-3 text-sm">
+              <Checkbox className="mt-0.5" checked={form.edited === "1"} onCheckedChange={(v) => set("edited", v ? "1" : "")} />
+              <span>
+                A campanha já manda cortes prontos (vídeos curtos com legenda)
+                <span className="block text-xs text-muted-foreground">Cada vídeo vira um corte nosso: vídeo inteiro em pé com fundo desfocado, gancho e título próprios, sem legenda por cima da deles.</span>
+              </span>
+            </label>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Regras e o que a marca quer (cole o briefing)</Label>
               <Textarea rows={4} value={form.rules} onChange={(e) => set("rules", e.target.value)} placeholder="Funny, dramatic, relatable moments… each clip must have a title…" />

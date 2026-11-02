@@ -576,6 +576,8 @@ export interface ClipSource {
   credit: string | null;
   rules: string | null;
   mirror_url: string | null;
+  /** a campanha manda cortes prontos (curtos, com legenda): sem recorte do rosto nem legenda nossa */
+  edited: boolean;
   clips_wanted: number;
   per_day: number;
   status: "queued" | "processing" | "done" | "failed";

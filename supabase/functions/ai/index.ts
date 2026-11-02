@@ -221,6 +221,7 @@ Deno.serve(async (req) => {
         mirror_url: /^https?:\/\//.test(String(input.mirror_url ?? "").trim()) ? String(input.mirror_url).trim() : null,
         clips_wanted: Math.min(12, Math.max(1, Number(input.clips_wanted) || 6)),
         per_day: Math.min(6, Math.max(1, Number(input.per_day) || 3)),
+        edited: input.edited === true,
       };
       if (input.id) {
         const { data: old } = await db.from("clip_sources").select("status, mirror_url").eq("id", String(input.id)).eq("user_id", userId).maybeSingle();
