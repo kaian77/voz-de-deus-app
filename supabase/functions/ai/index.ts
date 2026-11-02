@@ -224,10 +224,11 @@ Deno.serve(async (req) => {
         edited: input.edited === true,
       };
       if (input.id) {
-        const { data: old } = await db.from("clip_sources").select("status, mirror_url").eq("id", String(input.id)).eq("user_id", userId).maybeSingle();
+        const { data: old } = await db.from("clip_sources").select("status, mirror_url, edited").eq("id", String(input.id)).eq("user_id", userId).maybeSingle();
         if (!old) throw new HttpError(404, "Campanha não encontrada");
         // Campanha que falhou volta para a fila ao salvar (botão "Tentar de novo")
-        const retry = old.status === "failed";
+        // Ligou "cortes prontos" depois: roda de novo já (no modo normal os vídeos curtos da pasta são pulados)
+        const retry = old.status === "failed" || (fields.edited && !old.edited && old.status !== "processing");
         // Link reserva novo: roda já (cortes esperando o Drive da campanha liberar)
         const mirrored = !!fields.mirror_url && fields.mirror_url !== old.mirror_url;
         const { data, error } = await db.from("clip_sources")
