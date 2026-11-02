@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bot, CalendarPlus, Check, Clapperboard, Download, Loader2, Send, Sparkles } from "lucide-react";
+import { Bot, CalendarPlus, Check, Clapperboard, Download, Loader2, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -85,7 +85,7 @@ function ApprovalItem({ post, selected, onSelect }: { post: Post; selected: bool
   return (
     <article className="overflow-hidden rounded-lg border bg-card">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2.5 text-[13px]">
-        <Checkbox checked={selected} onCheckedChange={(v) => onSelect(Boolean(v))} aria-label="Selecionar para agendar em massa" />
+        <Checkbox checked={selected} onCheckedChange={(v) => onSelect(Boolean(v))} aria-label="Selecionar" />
         <span className="flex items-center gap-1.5 font-medium"><Bot className="h-3.5 w-3.5 text-muted-foreground" /> {post.title || KIND_LABEL[post.kind]}</span>
         <span className="text-muted-foreground">{KIND_LABEL[post.kind]}</span>
         <span className="flex gap-1.5">{post.platforms.map((p) => <PlatformIcon key={p} platform={p} />)}</span>
@@ -415,11 +415,24 @@ export default function Approvals() {
     toast.success(`${ok} aprovado${ok === 1 ? "" : "s"}${drafts ? ` (${drafts} sem horário futuro viraram rascunho)` : ""}.`);
   };
 
+  const [rejecting, setRejecting] = useState(false);
+  const rejectSelected = async () => {
+    if (!confirm(`Reprovar ${chosen.length} post${chosen.length === 1 ? "" : "s"}? Eles somem da lista.`)) return;
+    setRejecting(true);
+    const results = await Promise.allSettled(chosen.map((id) => api.remove("posts", id)));
+    const failed = results.filter((r) => r.status === "rejected").length;
+    setRejecting(false);
+    setSelected([]);
+    invalidate("posts");
+    if (failed) toast.error(`${failed} não saíram, tente de novo.`);
+    else toast(`${results.length} reprovado${results.length === 1 ? "" : "s"}.`);
+  };
+
   return (
     <div>
       <PageHeader
         title="Aprovações"
-        description="Posts que o Studio preparou. Aprove no horário sugerido, publique agora ou selecione vários para aprovar de uma vez ou escolher os dias."
+        description="Posts que o Studio preparou. Aprove no horário sugerido, publique agora ou selecione vários (ou todos) para aprovar, reprovar ou escolher os dias de uma vez."
         actions={pending.length > 0 ? (
           <>
             <Button size="sm" variant="ghost" onClick={() => setSelected(chosen.length === pending.length ? [] : pending.map((p) => p.id))}>
@@ -428,6 +441,9 @@ export default function Approvals() {
             <Button size="sm" disabled={!chosen.length || approving !== null} onClick={approveSelected}>
               {approving !== null ? <Loader2 className="animate-spin" /> : <Check />}
               {approving !== null ? ` Aprovando ${approving}/${chosen.length}` : ` Aprovar${chosen.length ? ` (${chosen.length})` : ""}`}
+            </Button>
+            <Button size="sm" variant="outline" className="text-destructive" disabled={!chosen.length || approving !== null || rejecting} onClick={rejectSelected}>
+              {rejecting ? <Loader2 className="animate-spin" /> : <X />} Reprovar{chosen.length ? ` (${chosen.length})` : ""}
             </Button>
             <Button size="sm" variant="outline" disabled={!chosen.length || approving !== null} onClick={() => navigate(`/studio/em-massa?posts=${chosen.join(",")}`)}>
               <CalendarPlus /> Escolher dias
