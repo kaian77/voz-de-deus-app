@@ -1,0 +1,43 @@
+# Vídeo com o avatar do dono (video/avatar.py + roteiro em video/avatar/<nome>.json): voz grátis com tom próprio,
+# boca mexendo pelas 6 poses, cartão com o vídeo 3D da branch lowpoly-preview. Publica na branch "avatar-preview".
+name: Vídeo com avatar
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Roteiro (arquivo em video/avatar, sem .json)"
+        required: true
+        default: "furinho"
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependências
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0"
+      - name: Vídeos 3D prontos (cartão)
+        run: git fetch -q --depth 1 origin lowpoly-preview && mkdir -p ready && git --work-tree=ready checkout FETCH_HEAD -- out && git reset -q
+      - name: Renderizar
+        env:
+          SCRIPT: ${{ inputs.script }}
+        run: mkdir -p out && cd video && python3 avatar.py "avatar/$SCRIPT.json" "../out/$SCRIPT.mp4"
+      - name: Publicar na branch avatar-preview
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan avatar-tmp
+          git rm -rf --cached . -q
+          git add -f out/*.mp4 out/*.txt
+          git commit -qm "Vídeo com avatar"
+          git push -fq origin HEAD:avatar-preview

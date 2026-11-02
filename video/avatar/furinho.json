@@ -1,0 +1,19 @@
+{
+  "voice": "pt-BR-AntonioNeural",
+  "rate": "+8%",
+  "pitch": "+6Hz",
+  "header": "CURIOSIDADE · AVIÃO",
+  "tag": "JANELA DO AVIÃO",
+  "clip": "../ready/out/holes.mp4",
+  "lines": [
+    {"say": "Já reparou no furinho que tem na janela do avião?", "head": "O *furinho* da janela do avião"},
+    {"say": "Não é defeito. Ele tem nome: furo de respiro.", "head": "Não é *defeito*."},
+    {"say": "Porque a janela do avião tem três camadas.", "head": "São *3 camadas*."},
+    {"say": "A de fora é a que segura a pressão da cabine.", "head": "A de fora *segura a pressão*."},
+    {"say": "O furinho deixa o ar passar pela do meio, então só a de fora faz a força.", "head": "O ar *passa pelo furo*."},
+    {"say": "Se a de fora trincar, a do meio assume na hora.", "head": "A do meio é a *reserva*."},
+    {"say": "E ele ainda deixa a umidade sair, pra janela não embaçar.", "head": "E a janela *não embaça*."},
+    {"say": "Esse furinho tá ali pra te proteger. Me segue pra mais curiosidades!", "head": "Me *segue* pra mais!"}
+  ],
+  "caption": "Sabia que o furinho da janela do avião tem uma função? ✈️ A janela tem 3 camadas: o furo deixa o ar passar pela do meio, a de fora segura a pressão e a do meio fica de reserva. E ainda evita que a janela embace!\n\n#curiosidades #aviao #vocesabia #ciencia"
+}
