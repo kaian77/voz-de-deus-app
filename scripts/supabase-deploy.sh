@@ -89,7 +89,7 @@ api POST "/projects/$REF/secrets" "$NEW" >/dev/null
 echo "    $(jq -r 'map(.name) | join(", ")' <<<"$NEW")"
 
 echo "==> Edge functions"
-supabase functions deploy --project-ref "$REF" --use-api || supabase functions deploy --project-ref "$REF"
+supabase functions deploy --project-ref "$REF" --use-api --yes || supabase functions deploy --project-ref "$REF" --yes
 
 if [[ -n ${CRON_SECRET:-} ]]; then
   echo "==> Agendador (a cada minuto)"
