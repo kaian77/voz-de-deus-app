@@ -217,7 +217,7 @@ def clip_language(spoken, channel):
     return spoken if spoken in ("pt", "en", "es") else (channel.get("language") or "en")
 
 
-def pick_moments(lines, n, campaign, rules, language, extra=""):
+def pick_moments(lines, n, campaign, rules, language, extra="", lo=20):
     """Claude escolhe os melhores momentos (saída estruturada = JSON garantido)."""
     key = os.environ["ANTHROPIC_API_KEY"]
     model = os.environ.get("CLAUDE_MODEL") or "claude-opus-5-5"
@@ -240,7 +240,7 @@ def pick_moments(lines, n, campaign, rules, language, extra=""):
     prompt = (
         f"You are an expert short-form video editor who finds viral moments in long videos (campaign: {campaign}).\n"
         f"Pick the {n} best moments for YouTube Shorts from the transcript below. Each clip must:\n"
-        "- be 20 to 58 seconds long and NOT overlap other clips;\n"
+        f"- be {lo} to 58 seconds long and NOT overlap other clips;\n"
         "- start right at a strong hook (a surprising line, a question, conflict, a laugh) — no warm-up;\n"
         "- end on a payoff (punchline, reveal, strong reaction) and make sense on its own;\n"
         "- favor funny, dramatic, relatable or conversation-worthy moments, as the campaign asks;\n"
@@ -264,8 +264,8 @@ def pick_moments(lines, n, campaign, rules, language, extra=""):
     raise RuntimeError("a IA não escolheu os momentos")
 
 
-def snap(clips, words, total):
-    """Ajusta início/fim aos limites das palavras, garante 15-59 s e tira sobreposições."""
+def snap(clips, words, total, lo=15):
+    """Ajusta início/fim aos limites das palavras, garante lo-59 s e tira sobreposições."""
     out, used = [], []
     for c in sorted(clips, key=lambda c: c["start"]):
         a, b = max(0.0, float(c["start"])), min(total, float(c["end"]))
@@ -277,7 +277,7 @@ def snap(clips, words, total):
             b = min(total, after[0]["t"] + after[0]["d"] + 0.35)
         if b - a > 59:
             b = a + 59
-        if b - a < 15 or any(not (b <= u0 or a >= u1) for u0, u1 in used):
+        if b - a < lo or any(not (b <= u0 or a >= u1) for u0, u1 in used):
             continue
         used.append((a, b))
         out.append({**c, "start": a, "end": b})
@@ -328,11 +328,12 @@ def face_track(src, a, dur):
     return smooth
 
 
-def render_vertical(src, a, dur, out):
-    """Corte vertical 1080x1920: segue o rosto; sem rosto, vídeo inteiro sobre fundo desfocado."""
+def render_vertical(src, a, dur, out, whole=False):
+    """Corte vertical 1080x1920: segue o rosto; sem rosto (ou whole = corte pronto com legenda da marca), vídeo inteiro
+    sobre fundo desfocado."""
     import numpy as np
 
-    track = face_track(src, a, dur)
+    track = None if whole else face_track(src, a, dur)
     if track is None:
         vf = (f"[0:v]split[a][b];[a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},gblur=sigma=30,"
               f"eq=brightness=-0.12[bg];[b]scale={W}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,fps={FPS},format=yuv420p[v]")
@@ -364,10 +365,10 @@ def render_vertical(src, a, dur, out):
     return "face"
 
 
-def finish(video_only, src, a, dur, words, title, logo, work, out):
-    """Título na tela, legendas, logo e áudio normalizado."""
+def finish(video_only, src, a, dur, words, title, logo, work, out, captions=True):
+    """Título na tela, legendas (captions=False: o vídeo já tem a legenda da marca, só o gancho e o título), logo e áudio."""
     ass = os.path.join(work, "cap.ass")
-    clip_words = [{**w, "t": w["t"] - a} for w in words if a <= w["t"] <= a + dur]
+    clip_words = [{**w, "t": w["t"] - a} for w in words if a <= w["t"] <= a + dur] if captions else []
     # Primeiros 2 s: o título gigante em amarelo (é o que aparece de capa no feed de Shorts); depois vira a faixa branca
     yt.captions(clip_words, True, W, H, ass, hook=title)
     with open(ass, encoding="utf-8") as f:
@@ -461,9 +462,10 @@ def make_clip(source, channel, clip, video, words, logo, work, when, name, row_i
     """Renderiza um corte (vertical, título, logo, legendas), sobe prévia/capa e envia ao canal."""
     a, dur = clip["start"], clip["end"] - clip["start"]
     vo = os.path.join(work, "v.mp4")
-    mode = render_vertical(video, a, dur, vo)
+    edited = bool(source.get("edited"))
+    mode = render_vertical(video, a, dur, vo, whole=edited)
     final = os.path.join(work, "clip.mp4")
-    finish(vo, video, a, dur, words, clip["screen_title"], logo, work, final)
+    finish(vo, video, a, dur, words, clip["screen_title"], logo, work, final, captions=not edited)
     thumb_path = os.path.join(work, "t.jpg")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{dur * 0.3:.2f}", "-i", final, "-frames:v", "1", "-vf", "scale=540:-2", thumb_path], check=True)
     small = os.path.join(work, "p.mp4")
@@ -496,20 +498,23 @@ def process(source):
             log("  nada novo nessa fonte")
         logo = logo_for(source, work)
         files.sort(key=lambda f: bool(SKIP_NAMES.search(f[1])))  # episódios antes de teaser/trailer
-        for fid, name in files[:2]:  # até 2 vídeos novos por rodada (tempo do workflow)
+        edited = bool(source.get("edited"))  # campanha manda cortes prontos (curtos): cada um vira um corte nosso
+        for fid, name in files[:6 if edited else 2]:  # vídeos novos por rodada (tempo do workflow)
             log(f"  baixando {name}…")
             video = download(fid, name, work, source.get("mirror_url")) if fid != "direct" else download_direct(source["url"], work)
             total = duration(video)
-            if total < 180 and len(files) > 1:  # vinheta/teaser curto: não vale cortar se tem episódio
+            if total < 180 and len(files) > 1 and not edited:  # vinheta/teaser curto: não vale cortar se tem episódio
                 log(f"  {name} tem só {total:.0f}s, pulando")
                 drop(video)
                 continue
-            if total < 25:
+            if total < (11 if edited else 25):
                 raise RuntimeError(f"{name} não é um vídeo que dá para cortar ({total:.0f}s)")
             words, lines, language = transcript_for(source, fid, video, work)
             channel["language"] = clip_language(language, channel)
-            moments = snap(pick_moments(lines, min(source.get("clips_wanted") or 6, max(1, int(total // 60))), source["campaign"], source.get("rules"),
-                                        channel["language"]), words, total)
+            want = (1 if total < 120 else 2) if edited else min(source.get("clips_wanted") or 6, max(1, int(total // 60)))
+            lo = 10 if edited else 20
+            moments = snap(pick_moments(lines, want, source["campaign"], source.get("rules"), channel["language"], lo=lo),
+                           words, total, lo=min(lo, 15))
             slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
             for i, (clip, when) in enumerate(zip(moments, slots)):
                 clip["file"] = fid
@@ -578,8 +583,9 @@ def process_redos():
                 channel["language"] = clip_language(language, channel)
                 total = duration(video)
                 logo = logo_for(source, work)
+                lo = 10 if source.get("edited") else 20
                 moments = snap(pick_moments(lines, len(rows), source["campaign"], source.get("rules"),
-                                            channel["language"], extra), words, total)
+                                            channel["language"], extra, lo=lo), words, total, lo=min(lo, 15))
                 slots = next_slots(channel["id"], source.get("per_day") or 3, len(moments))
                 for row, clip, when in zip(rows, moments, slots):
                     clip["file"] = fid
