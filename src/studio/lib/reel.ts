@@ -11,7 +11,7 @@ const FPS = 30;
 
 const ease = (t: number) => 1 - Math.pow(1 - Math.min(Math.max(t, 0), 1), 3);
 
-function mp4Type() {
+export function mp4Type() {
   // Com som (AAC) primeiro; sem suporte, o vídeo sai mudo mesmo
   const types = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1,mp4a.40.2", "video/mp4;codecs=avc1.42E01E", "video/mp4;codecs=avc1", "video/mp4"];
   return typeof MediaRecorder !== "undefined" ? types.find((t) => MediaRecorder.isTypeSupported(t)) : undefined;
@@ -134,7 +134,7 @@ export async function renderReel(slides: Slide[], design: CarouselDesign = {}, s
 }
 
 /** Desenha `draw(t)` a 30 quadros por segundo durante `total` segundos e grava o canvas em MP4. */
-async function record(canvas: HTMLCanvasElement, type: string, total: number, draw: (t: number) => void, cues?: Cue[]): Promise<Blob> {
+export async function record(canvas: HTMLCanvasElement, type: string, total: number, draw: (t: number) => void, cues?: Cue[]): Promise<Blob> {
   draw(0);
   const stream = canvas.captureStream(FPS);
   // Som: trilha + efeitos sintetizados, gravados junto com o vídeo

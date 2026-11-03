@@ -20,6 +20,7 @@ import YouTube from "./studio/pages/YouTube";
 import Clips from "./studio/pages/Clips";
 import Quiz from "./studio/pages/Quiz";
 import Photos from "./studio/pages/Photos";
+import QuickPost from "./studio/pages/QuickPost";
 import Usage from "./studio/pages/Usage";
 import Accounts from "./studio/pages/Accounts";
 import ClaudeApi from "./studio/pages/ClaudeApi";
@@ -67,6 +68,7 @@ const App = () => (
             <Route path="cortes" element={<Clips />} />
             <Route path="desafio" element={<Quiz />} />
             <Route path="fotos" element={<Photos />} />
+            <Route path="postar" element={<QuickPost />} />
             <Route path="uso" element={<Usage />} />
             <Route path="contas" element={<Accounts />} />
             <Route path="claude" element={<ClaudeApi />} />

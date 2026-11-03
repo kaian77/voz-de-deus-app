@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  BarChart3, Bot, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Gauge, Inbox, Globe, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Star, Store, Workflow, Target, Youtube, Scissors, BookOpen, ImagePlus,
+  BarChart3, Bot, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Gauge, Inbox, Globe, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Star, Store, Workflow, Target, Youtube, Scissors, BookOpen, ImagePlus, Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -18,6 +18,7 @@ const GROUPS: { label?: string; items: Item[] }[] = [
   {
     label: "Publicar",
     items: [
+      { to: "/studio/postar", label: "Postar rápido", icon: Send },
       { to: "/studio/criar", label: "Criar post", icon: PenLine },
       { to: "/studio/videos", label: "Vídeos IA", icon: Clapperboard },
       { to: "/studio/em-massa", label: "Agendar em massa", icon: CalendarPlus },
@@ -99,7 +100,7 @@ function BottomBar({ onMore }: { onMore: () => void }) {
     <nav className="fixed inset-x-0 bottom-0 z-30 flex h-16 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden" aria-label="Navegação principal">
       {tab("/studio", "Início", LayoutGrid, 0, true)}
       {tab("/studio/aprovacoes", "Aprovar", CheckSquare, counts.approvals)}
-      <NavLink to="/studio/criar" className="flex flex-1 items-center justify-center" aria-label="Criar post">
+      <NavLink to="/studio/postar" className="flex flex-1 items-center justify-center" aria-label="Postar rápido">
         <span className="flex h-11 w-11 items-center justify-center rounded-full bg-foreground text-background shadow-sm"><Plus className="h-5 w-5" /></span>
       </NavLink>
       {tab("/studio/mensagens", "Mensagens", Inbox, counts.inbox)}
