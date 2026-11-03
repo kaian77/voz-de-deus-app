@@ -330,7 +330,7 @@ def on_theme(piece, bg, name=None):
     canvas.alpha_composite(floor)
 
     top = 0.2 if name else 0.07
-    p = fit(piece, S * 0.74, (floor_y - S * top) * 0.98)
+    p = fit(piece, S * 0.62, (floor_y - S * top) * 0.86)
     x = (S - p.width) // 2
     y = floor_y - p.height
     # cor do cenário um pouco por cima do pin (sem mudar o desenho) + brilho nas bordas vindo do cenário
