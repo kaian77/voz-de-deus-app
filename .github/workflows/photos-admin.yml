@@ -1,0 +1,49 @@
+# Fotos de produto em lote, a pedido do dono pelo Claude: refaz os lotes no estilo atual e cadastra de novo no site
+# (trocando os produtos que já tinham subido deles). Roda scripts/photo-jobs.ts com o mesmo código das functions.
+name: "Fotos de produto: refazer e cadastrar"
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "all (refazer + cadastrar), redo ou publish"
+        required: true
+        default: all
+
+concurrency:
+  group: photos-admin
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL }}
+      ML_APP_ID: ${{ secrets.ML_APP_ID }}
+      ML_CLIENT_SECRET: ${{ secrets.ML_CLIENT_SECRET }}
+      VIDEO_DISPATCH_TOKEN: ${{ secrets.VIDEO_DISPATCH_TOKEN }}
+      APP_URL: ${{ secrets.APP_URL }}
+      NUVEMSHOP_APP_ID: ${{ secrets.NUVEMSHOP_APP_ID }}
+      NUVEMSHOP_CLIENT_SECRET: ${{ secrets.NUVEMSHOP_CLIENT_SECRET }}
+    steps:
+      - name: Chaves do Supabase
+        run: |
+          set -euo pipefail
+          api() { curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1$1"; }
+          REF=$(api /projects | jq -r --arg n "$SUPABASE_PROJECT_NAME" '.[] | select(.name == $n) | .id' | head -1)
+          [[ -n $REF ]] || { echo "::error::Projeto $SUPABASE_PROJECT_NAME não encontrado"; exit 1; }
+          KEY=$(api "/projects/$REF/api-keys?reveal=true" | jq -r '[.[] | select(.name == "service_role" or .type == "secret") | .api_key][0] // empty')
+          [[ -n $KEY ]] || { echo "::error::Não consegui ler a chave de serviço do projeto"; exit 1; }
+          echo "::add-mask::$KEY"
+          echo "SUPABASE_URL=https://$REF.supabase.co" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$KEY" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Rodar
+        run: deno run -A --node-modules-dir=none scripts/photo-jobs.ts "${{ inputs.command }}"
