@@ -78,12 +78,9 @@ export default function QuickPost() {
       const first = photos[0]?.file;
       const image = first ? await api.upload(await fitted(first, 1080, 1350), "legenda.jpg") : undefined;
       const r = await api.invoke<{ caption: string; hashtags: string[] }>("ai", {
-        action: "caption_media", image, kind: kind === "reel" ? "reel" : "image", platforms: ["instagram"],
-        hint: [
-          productName && `Produto: ${productName}.`,
-          kind === "story" ? "É um story: legenda curtíssima (1 linha), sem hashtags longas." : "",
-          product?.url ? "O link do produto vai no direct para quem comentar; não escreva URL na legenda." : "",
-        ].filter(Boolean).join(" "),
+        action: "caption_media", image, kind, platforms: ["instagram"],
+        product_name: productName || undefined, product_description: product?.description,
+        hint: product?.url ? "O link do produto vai no direct para quem comentar; não escreva URL na legenda." : undefined,
       });
       setCaption(`${r.caption}${r.hashtags?.length ? `\n\n${r.hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ")}` : ""}`);
     } catch (e) {

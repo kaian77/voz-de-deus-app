@@ -684,9 +684,35 @@ Deno.serve(async (req) => {
           `Regras: primeira linha é o gancho; parágrafos curtos; termine com CTA; 5 a 12 hashtags relevantes (sem #) separadas no campo hashtags.`));
 
       case "caption_media": {
-        // Legenda olhando a foto (ou um quadro do vídeo) — usada no agendamento em massa
+        // Legenda olhando a foto (ou um quadro do vídeo) — usada no agendamento em massa e no Postar rápido
         const storage = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/media/${userId}/`;
         const image = typeof input.image === "string" && input.image.startsWith(storage) ? [input.image] : [];
+        const productName = String(input.product_name ?? "").trim().slice(0, 140);
+        if (productName) {
+          // Post de produto da loja: a legenda vende o produto para o público dele (ex.: profissionais de TO),
+          // no padrão de legenda do lojista; a foto só serve para saber como o produto é, nunca o cenário
+          const tpl = (await templateFor(db, userId).catch(() => null))?.data;
+          const guide = String(tpl?.ai_guide ?? "");
+          const at = guide.search(/legenda/i);
+          const pattern = at >= 0 ? guide.slice(at, at + 1800) : "";
+          const story = input.kind === "story";
+          return json(await generateJSON(Caption, system,
+            `Crie a legenda de um ${input.kind === "reel" ? "Reels" : story ? "story" : "post"} do Instagram que VENDE este produto da loja: "${productName}".\n` +
+            (input.product_description ? `Descrição do produto no site: ${String(input.product_description).slice(0, 700)}\n` : "") +
+            `Regras:\n- O assunto é o produto e quem compra/usa: fale direto com o público dele (a profissão, causa ou time do nome; ` +
+            `ex.: pin de Terapia Ocupacional → terapeutas ocupacionais e estudantes de TO, orgulho da profissão, presente para TO, jaleco/crachá).\n` +
+            `- Cite o nome do produto logo no começo.\n` +
+            `- A imagem anexada é só para você saber como o produto é (cores, se vem em prata e dourado, símbolo). ` +
+            `NÃO descreva o fundo, o cenário nem objetos que estão atrás (brinquedos, mesa, plantas...).\n` +
+            `- Não invente preço, medidas nem promoção.\n` +
+            (story
+              ? `- Story: 1 ou 2 frases curtas, sem hashtags.\n`
+              : pattern
+                ? `- Siga a estrutura deste padrão de legenda do lojista (troque o que está entre colchetes; hashtags vão separadas no campo hashtags, sem #):\n${pattern}\n`
+                : `- Primeira linha é o gancho; parágrafos curtos; termine com CTA; 5 a 12 hashtags do nicho (sem #) no campo hashtags.\n`) +
+            (input.hint ? `Observação do lojista: ${String(input.hint).slice(0, 400)}\n` : ""),
+            "low", image));
+        }
         // Conta escolhida fora da loja: escreve com o perfil dela, nunca com o da Brax Pins
         let accountSystem = system;
         if (input.account_id) {
