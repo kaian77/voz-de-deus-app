@@ -15,6 +15,7 @@ import { fixSharedListings, mlSyncStatus, queueKits, retryMlProblems, startMlSyn
 import { improveMlShowcase, mlReviews, setMlPremium } from "./ml-quality.ts";
 import { generateIdeas } from "./content-ideas.ts";
 import { deleteProduct, setStock } from "./store-manage.ts";
+import { listPhotoJobs, publishPhotoJob, redoPhotoJobs } from "./photo-jobs.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
 
@@ -865,6 +866,21 @@ const tools = {
       const s = await store(ctx);
       return nsUpdateProduct(s.token, s.storeId, product, { ...changes, ...(new_name ? { name: new_name } : {}) }, add_image_urls);
     },
+  },
+  list_photo_jobs: {
+    description: "Lotes de Fotos de produto (Loja → Fotos de produto): status, quantos produtos e quantos já estão no site.",
+    input: z.object({}),
+    run: async (ctx: Ctx) => listPhotoJobs(ctx.db, ctx.userId),
+  },
+  redo_photo_jobs: {
+    description: "Refaz lotes de Fotos de produto com o estilo atual (todos os prontos, ou os ids dados). Os produtos que já tinham subido desses lotes ficam marcados para serem trocados no próximo publish_photo_job.",
+    input: z.object({ ids: z.array(z.string()).optional() }),
+    run: async (ctx: Ctx, input: { ids?: string[] }) => redoPhotoJobs(ctx.db, ctx.userId, input.ids),
+  },
+  publish_photo_job: {
+    description: "Cadastra no site (e no ML se ligado) os produtos de um lote pronto: prata + dourado da mesma foto = um produto com variações de cor. replace=true apaga antes os produtos antigos desse lote. Roda ~100 s por chamada: repita até pending = 0.",
+    input: z.object({ id: z.string(), replace: z.boolean().optional() }),
+    run: async (ctx: Ctx, input: { id: string; replace?: boolean }) => publishPhotoJob(ctx.db, ctx.userId, input.id, input.replace ?? true),
   },
   set_store_stock: {
     description: "Muda o estoque de um produto da loja (todas as variações) e do anúncio do Mercado Livre ligado a ele. stock null = sem controle de estoque.",
