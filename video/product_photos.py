@@ -163,7 +163,30 @@ def products(im, kit=False):
         colors = [metal_color(p) for p in pieces]
         if len(set(colors)) > 1:
             return list(zip(pieces, colors))
+    halves = split_touching(whole)
+    if halves:
+        return halves
     return [(whole, metal_color(whole))]
+
+
+def split_touching(piece):
+    """Dois pins encostados viram uma peça só no recorte. Se a peça é larga, corta na coluna mais "fina" do meio
+    e, se um lado é bem mais quente (dourado) que o outro, devolve os dois lados."""
+    import numpy as np
+
+    if piece.width < piece.height * 1.25:
+        return None
+    a = np.asarray(piece.getchannel("A")) > 128
+    cols = a.sum(0).astype(float)
+    lo, hi = int(piece.width * 0.3), int(piece.width * 0.7)
+    cut = lo + int(np.argmin(cols[lo:hi]))
+    if cols[cut] > a.shape[0] * 0.45:  # o meio é cheio: é uma peça larga só, não dois pins
+        return None
+    left, right = trim(piece.crop((0, 0, cut, piece.height))), trim(piece.crop((cut, 0, piece.width, piece.height)))
+    wl, wr = warmth(left), warmth(right)
+    if abs(wl - wr) <= 0.08:
+        return None
+    return [(left, "dourado" if wl > wr else "prata"), (right, "dourado" if wr > wl else "prata")]
 
 
 def warmth(piece):
@@ -285,36 +308,119 @@ def title(canvas, text, cy):
 
 
 def on_theme(piece, bg, name=None):
-    """Foto do tema: cenário gerado + produto colado por cima (com sombra e reflexo) + nome no alto."""
-    from PIL import Image
+    """Foto do tema no estilo "produto herói" (referência do dono: pin do SAMU na frente da ambulância):
+    pin grande e nítido em pé na frente, cenário bem desfocado atrás, chão claro e brilhante com o reflexo do pin,
+    luz/cor do cenário puxada para o pin (light wrap) e sombra de contato. Nome opcional no alto."""
+    import numpy as np
+    from PIL import Image, ImageDraw, ImageFilter
 
-    canvas = bg.convert("RGBA").resize((SIZE, SIZE), Image.LANCZOS)
-    top = 0.25 if name else 0.1
-    p = fit(piece, SIZE * 0.7, SIZE * (0.9 - top))
-    layer, (ox, oy) = shadowed(p, SIZE, SIZE, reflect=True)
-    x = (SIZE - p.width) // 2 - ox
-    y = int(SIZE * top + (SIZE * (0.92 - top) - p.height) / 2) - oy
-    canvas.alpha_composite(layer, (x, y))
+    S = SIZE
+    base = bg.convert("RGB").resize((S, S), Image.LANCZOS)
+    # profundidade de campo: o cenário fica bem desfocado (o pin é a única coisa nítida)
+    canvas = base.filter(ImageFilter.GaussianBlur(9)).convert("RGBA")
+    floor_y = int(S * 0.80)  # onde o pin "pisa"
+    # chão claro e brilhante: degradê suave do horizonte para baixo
+    floor = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    fa = np.zeros((S, S), dtype=np.uint8)
+    ramp = np.clip((np.arange(S) - (floor_y - S * 0.10)) / (S * 0.22), 0, 1) * 150
+    fa[:, :] = ramp[:, None].astype(np.uint8)
+    tone = np.asarray(base.resize((1, 1))).reshape(3)
+    floor_rgb = (tone * 0.15 + np.array([246, 246, 248]) * 0.85).astype(int)
+    floor.paste(tuple(floor_rgb) + (255,), (0, 0, S, S), Image.fromarray(fa))
+    canvas.alpha_composite(floor)
+
+    top = 0.2 if name else 0.07
+    p = fit(piece, S * 0.74, (floor_y - S * top) * 0.98)
+    x = (S - p.width) // 2
+    y = floor_y - p.height
+    # cor do cenário um pouco por cima do pin (sem mudar o desenho) + brilho nas bordas vindo do cenário
+    rgb = np.asarray(p.convert("RGB")).astype(float)
+    a = np.asarray(p.getchannel("A")).astype(float) / 255
+    env = np.asarray(canvas.convert("RGB").crop((x, y, x + p.width, y + p.height)).filter(ImageFilter.GaussianBlur(30))).astype(float)
+    rgb = rgb * 0.94 + env * 0.06
+    edge = np.asarray(p.getchannel("A").filter(ImageFilter.GaussianBlur(6))).astype(float) / 255
+    wrap = np.clip((1 - edge) * a, 0, 1)[..., None] * 0.35  # só a beirada do pin pega a luz do cenário
+    rgb = rgb * (1 - wrap) + env * wrap
+    lit = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8))
+    lit.putalpha(p.getchannel("A"))
+
+    # reflexo no chão (mais forte perto do pin, some para baixo) e sombra de contato
+    ref = lit.transpose(Image.FLIP_TOP_BOTTOM)
+    fade = (np.linspace(0.42, 0, ref.height) ** 1.6)[:, None]
+    ref.putalpha(Image.fromarray((np.asarray(ref.getchannel("A")).astype(float) * fade).astype(np.uint8)))
+    canvas.alpha_composite(ref.filter(ImageFilter.GaussianBlur(3)), (x, floor_y + 2))
+    sh = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(sh).ellipse((x + p.width * 0.18, floor_y - p.height * 0.015, x + p.width * 0.82, floor_y + p.height * 0.035), fill=150)
+    sh = sh.filter(ImageFilter.GaussianBlur(max(5, p.height // 50)))
+    shadow = Image.new("RGBA", (S, S), (25, 25, 30, 0))
+    shadow.putalpha(sh)
+    canvas.alpha_composite(shadow)
+    canvas.alpha_composite(lit, (x, y))
     if name:
-        title(canvas, name, int(SIZE * 0.13))
+        title(canvas, name, int(S * 0.1))
     return canvas.convert("RGB")
 
 
 # ------------------------------------------------------------------------------------------- cenário
 
-def background(theme, seed, folder):
+def scene_prompt(theme, sample=None):
+    """A IA (Claude) transforma o tema do dono (em português, curto) numa cena de fundo em inglês, no estilo da
+    foto de referência: objetos do tema atrás e nos cantos, centro vazio, chão claro e brilhante. Sem chave = texto fixo."""
+    fixed = (f"Professional product photography background, theme: {theme}. Themed objects and scenery related to "
+             f"{theme} in the far background and at the left and right edges, the center foreground EMPTY, glossy light "
+             "reflective table surface, soft studio light, shallow depth of field, bokeh")
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key or not theme:
+        return fixed
+    import base64
+    import json
+
+    content = []
+    if sample is not None:
+        buf = io.BytesIO()
+        sample.convert("RGB").resize((384, 384)).save(buf, "JPEG", quality=80)
+        content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.b64encode(buf.getvalue()).decode()}})
+    content.append({"type": "text", "text": (
+        "You write prompts for an AI image generator. Write ONE English prompt (max 70 words) for the BACKGROUND of a "
+        "product photo of an enamel pin (shown in the image, it will be pasted later in the center, so do NOT include it). "
+        f"Theme from the shop owner (Portuguese): \"{theme}\". Style reference: a pin standing on a glossy white table, "
+        "behind it a blurred themed scene (e.g. theme SAMU: a white ambulance with red stripes on the left, a red star of life "
+        "on the wall at right, a stethoscope in the bottom-left corner, a red rescue bag in the bottom-right corner). "
+        "Pick 3-4 concrete, recognizable objects of the theme, place them at the far background and the corners, keep the "
+        "center empty, match colors that suit the pin, bright clean light, shallow depth of field, photorealistic. "
+        "No text, no letters, no logos, no people. Reply with the prompt only.")})
+    body = json.dumps({"model": os.environ.get("CLAUDE_MODEL") or "claude-opus-5-5", "max_tokens": 300,
+                       "messages": [{"role": "user", "content": content}]}).encode()
+    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
+        "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            data = json.loads(r.read())
+        try:
+            u = data.get("usage") or {}
+            rest("POST", "ai_usage", {"source": "fotos-de-produto", "model": data.get("model"),
+                                      "input_tokens": u.get("input_tokens") or 0, "output_tokens": u.get("output_tokens") or 0})
+        except Exception:  # noqa: BLE001
+            pass
+        text = " ".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
+        if text:
+            log(f"   cena: {text[:200]}")
+            return text
+    except Exception as e:  # noqa: BLE001
+        log(f"   cena pela IA falhou ({e}); usando o texto fixo")
+    return fixed
+
+
+def background(theme, seed, folder, sample=None):
     """Cenário do tema sem produto (Cloudflare/Pollinations grátis, as mesmas do canal do YouTube)."""
     from PIL import Image
 
-    prompt = (f"Product photography backdrop for jewelry, theme: {theme}. Empty soft-focus scene, "
-              "a clean reflective surface in the foreground center left EMPTY for a product, "
-              "decorative elements only at the edges and corners, soft natural light, shallow depth of field, "
-              "high-end advertising photo, no text, no letters, no people, no products, no pins")
+    prompt = scene_prompt(theme, sample)
     path = os.path.join(folder, f"bg-{seed}.jpg")
     try:
         import youtube
 
-        got = youtube.image(prompt, SIZE, SIZE, path, seed, style="photorealistic, 85mm lens, bokeh")
+        got = youtube.image(prompt, SIZE, SIZE, path, seed, style="photorealistic commercial product photography, 85mm lens, soft bokeh, no text")
     except Exception as e:  # noqa: BLE001
         log(f"   cenário: {e}")
         got = None
@@ -361,13 +467,15 @@ def process(job, folder):
     kits = job.get("kits") or []
     sources = job.get("source_urls") or []
     bg_seed = job.get("seed") or random.randint(1, 10**6)
-    bg = background(job.get("theme") or "elegant soft studio", bg_seed, folder)
+    bg = None
     results = []
     stamp = int(time.time())
     for si, src in enumerate(sources):
         log(f"  foto {si + 1}/{len(sources)}")
         im = download(src)
         for pi, (piece, color) in enumerate(products(im, si < len(kits) and bool(kits[si]))):
+            if bg is None:  # um cenário por lote, escrito vendo o 1º produto
+                bg = background(job.get("theme") or "elegant soft studio", bg_seed, folder, piece)
             name = (names[si] if si < len(names) else "") or None
             base = f"{job['user_id']}/fotos/{job['id']}/{si}-{pi}-{stamp}"
             results.append({
@@ -387,10 +495,13 @@ def main():
         from PIL import Image
 
         out = os.path.dirname(os.path.abspath(src))
-        bg = background(theme, 7, out) if "--no-ai" not in sys.argv else gradient()
+        tag = os.path.splitext(os.path.basename(src))[0]
+        bg = None
         for pi, (piece, color) in enumerate(products(Image.open(src).convert("RGBA"), "--kit" in sys.argv)):
-            on_white(piece).save(os.path.join(out, f"r{pi}-{color}-branco.jpg"), quality=92)
-            on_theme(piece, bg, name).save(os.path.join(out, f"r{pi}-{color}-tema.jpg"), quality=92)
+            if bg is None:
+                bg = gradient() if "--no-ai" in sys.argv else background(theme, random.randint(1, 10**6), out, piece)
+            on_white(piece).save(os.path.join(out, f"{tag}-r{pi}-{color}-branco.jpg"), quality=92)
+            on_theme(piece, bg, name or None).save(os.path.join(out, f"{tag}-r{pi}-{color}-tema.jpg"), quality=92)
             log(f"produto {pi + 1}: {color}")
         return
     if not URL or not KEY:

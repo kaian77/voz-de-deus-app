@@ -135,9 +135,20 @@ function JobCard({ job }: { job: PhotoJob }) {
           images, name: g[0].name || job.names[g[0].source] || null, template_id: template.id, status: "pending",
           overrides: { social_images: g.map((r) => r.theme_url), ml_images: g.map((r) => r.white_url), ...(colors ? { colors } : {}) },
         });
-        const r = await api.invoke<{ product_url?: string | null; product?: { url?: string } }>("ai", { action: "product_create", draft_id: draft.id });
+        // grava o rascunho no lote ANTES de cadastrar: se a resposta demorar e der erro na tela, tocar de novo
+        // não cadastra o mesmo produto duas vezes (o cadastro continua no servidor)
+        results = results.map((x) => (x.source === g[0].source ? { ...x, draft_id: draft.id } : x));
+        await api.update("photo_jobs", job.id, { results });
+        const r = await api.invoke<{ product_url?: string | null; product?: { url?: string } }>("ai", { action: "product_create", draft_id: draft.id })
+          .catch(async (e) => {
+            // a função pode ter terminado mesmo com a tela recebendo erro (tempo esgotado): confere o rascunho
+            await new Promise((ok) => setTimeout(ok, 4000));
+            const d = (await api.list("product_drafts", { eq: { id: draft.id } }))[0];
+            if (d?.status === "created" || d?.status === "creating") return { product_url: d.product_url ?? null, product: undefined };
+            throw e;
+          });
         const url = r.product?.url ?? r.product_url ?? null;
-        results = results.map((x) => (x.source === g[0].source ? { ...x, draft_id: draft.id, product_url: url } : x));
+        results = results.map((x) => (x.source === g[0].source ? { ...x, product_url: url } : x));
         await api.update("photo_jobs", job.id, { results });
         ok++;
       } catch (e) {
