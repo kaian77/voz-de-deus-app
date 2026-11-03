@@ -340,7 +340,15 @@ def gradient():
 def upload(im, path):
     buf = io.BytesIO()
     im.save(buf, "JPEG", quality=92)
-    http("POST", f"{URL}/storage/v1/object/media/{path}", buf.getvalue(), {"Content-Type": "image/jpeg", "x-upsert": "true"}, raw=True)
+    for attempt in range(4):  # o storage às vezes dá 504: tenta de novo só esta foto, não o lote inteiro
+        try:
+            http("POST", f"{URL}/storage/v1/object/media/{path}", buf.getvalue(), {"Content-Type": "image/jpeg", "x-upsert": "true"}, raw=True)
+            break
+        except RuntimeError as e:
+            if attempt == 3 or not any(c in str(e) for c in ("-> 5", "timed out")):
+                raise
+            log(f"   envio falhou ({str(e)[:60]}), tentando de novo")
+            time.sleep(5 * (attempt + 1))
     return f"{URL}/storage/v1/object/public/media/{path}"
 
 
