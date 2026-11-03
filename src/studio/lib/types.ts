@@ -575,6 +575,9 @@ export interface PhotoResult {
   name: string | null;
   white_url: string;
   theme_url: string;
+  /** depois de "Cadastrar no site" */
+  product_url?: string | null;
+  draft_id?: string;
 }
 export interface PhotoJob {
   id: string;

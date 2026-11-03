@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Download, ImagePlus, Loader2, RefreshCw, Trash2, Upload } from "lucide-react";
+import { Check, Download, ExternalLink, ImagePlus, Loader2, RefreshCw, ShoppingBag, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -112,6 +112,43 @@ function JobCard({ job }: { job: PhotoJob }) {
   const invalidate = useInvalidate();
   const [busy, setBusy] = useState(false);
   const working = job.status === "queued" || job.status === "processing";
+  const { data: templates = [] } = useTable("product_templates", { order: "created_at", ascending: true });
+  const template = templates.find((t) => t.is_default) ?? templates[0];
+  // cada foto enviada vira um produto; prata + dourado da mesma foto = um produto com as 2 cores
+  const groups = [...new Set(job.results.map((r) => r.source))].map((source) => job.results.filter((r) => r.source === source));
+  const [skip, setSkip] = useState<number[]>([]);
+  const [creating, setCreating] = useState<string | null>(null);
+  const pendingGroups = groups.filter((g) => !g[0].draft_id && !skip.includes(g[0].source));
+
+  const createAll = async () => {
+    if (!template) return toast.error("Salve um modelo de cadastro em Produtos antes");
+    let results = job.results;
+    let ok = 0;
+    for (const [i, g] of pendingGroups.entries()) {
+      setCreating(`Cadastrando ${i + 1}/${pendingGroups.length}`);
+      const colors = g.length > 1 && g.some((r) => r.color === "prata") && g.some((r) => r.color === "dourado")
+        ? g.map((r) => ({ value: r.color === "dourado" ? "Dourado" : "Prata", image: r.white_url }))
+        : undefined;
+      const images = [...g.map((r) => r.white_url), ...g.map((r) => r.theme_url)];
+      try {
+        const draft = await api.insert("product_drafts", {
+          images, name: g[0].name || job.names[g[0].source] || null, template_id: template.id, status: "pending",
+          overrides: { social_images: g.map((r) => r.theme_url), ml_images: g.map((r) => r.white_url), ...(colors ? { colors } : {}) },
+        });
+        const r = await api.invoke<{ product_url?: string | null; product?: { url?: string } }>("ai", { action: "product_create", draft_id: draft.id });
+        const url = r.product?.url ?? r.product_url ?? null;
+        results = results.map((x) => (x.source === g[0].source ? { ...x, draft_id: draft.id, product_url: url } : x));
+        await api.update("photo_jobs", job.id, { results });
+        ok++;
+      } catch (e) {
+        toast.error(`${g[0].name || `Produto ${i + 1}`}: ${(e as Error).message}`);
+      }
+    }
+    setCreating(null);
+    invalidate("photo_jobs");
+    invalidate("product_drafts");
+    if (ok) toast.success(`${ok} produto${ok === 1 ? "" : "s"} no site. O que for novo também vai para o Mercado Livre.`);
+  };
 
   const redo = async () => {
     setBusy(true);
@@ -152,14 +189,34 @@ function JobCard({ job }: { job: PhotoJob }) {
       bodyClassName="p-4"
     >
       {job.error && job.status !== "ready" && <p className="mb-3 text-xs text-destructive">{job.error}</p>}
+      {!working && job.results.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 p-3 text-sm">
+          <span className="text-muted-foreground">
+            {pendingGroups.length ? `Desmarque o que não quer e cadastre o resto de uma vez${template ? ` (modelo “${template.name}”)` : ""}.` : "Tudo deste lote já está no site."}
+          </span>
+          <Button size="sm" disabled={!pendingGroups.length || !!creating} onClick={createAll}>
+            {creating ? <Loader2 className="animate-spin" /> : <ShoppingBag />} {creating ?? `Cadastrar no site (${pendingGroups.length})`}
+          </Button>
+        </div>
+      )}
       {working ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Recortando e montando as fotos (uns 5 minutos)…</p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {job.results.map((r, i) => {
             const base = slug(`${r.name || "produto"}-${i + 1}-${r.color}`);
+            const first = r.index === 0;
             return (
               <div key={`${r.source}-${r.index}`} className="space-y-2 rounded-md border p-2">
+                {first && (r.product_url !== undefined || r.draft_id ? (
+                  <p className="flex items-center gap-1.5 text-xs text-emerald-700"><Check className="h-3.5 w-3.5" /> No site
+                    {r.product_url && <a href={r.product_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline">ver <ExternalLink className="h-3 w-3" /></a>}</p>
+                ) : (
+                  <label className="flex items-center gap-1.5 text-xs">
+                    <Checkbox checked={!skip.includes(r.source)} onCheckedChange={(v) => setSkip((cur) => (v ? cur.filter((x) => x !== r.source) : [...cur, r.source]))} />
+                    Cadastrar no site{job.results.filter((x) => x.source === r.source).length > 1 ? " (as cores viram variações de um produto)" : ""}
+                  </label>
+                ))}
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium">{r.name || `Produto ${i + 1}`}</span>
                   {r.color === "kit" ? <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-800">Kit</span> : <button onClick={() => flip(r)} title="Tocar para trocar"

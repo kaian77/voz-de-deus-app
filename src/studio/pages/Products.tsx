@@ -744,7 +744,7 @@ export default function Products() {
   };
   const [grouped, setGrouped] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
-  const [bulk, setBulk] = useState(false);
+  const [bulk, setBulk] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const queue = drafts.filter((d) => d.status !== "created");
@@ -819,10 +819,17 @@ export default function Products() {
   };
 
   const createAll = async () => {
-    setBulk(true);
-    for (const d of queue.filter((d) => d.status !== "creating")) await createOne(d, true);
-    setBulk(false);
-    toast.success("Pronto. Confira os cadastrados abaixo.");
+    // espera o nome/preço que acabou de ser digitado ser salvo (sai do campo ao tocar no botão) e lê de novo
+    (document.activeElement as HTMLElement | null)?.blur();
+    setBulk("Salvando os nomes");
+    await new Promise((r) => setTimeout(r, 800));
+    const fresh = (await api.list("product_drafts", { limit: 100 })).filter((d) => d.status === "pending" || d.status === "failed");
+    for (const [i, d] of fresh.entries()) {
+      setBulk(`Cadastrando ${i + 1} de ${fresh.length}`);
+      await createOne(d, true);
+    }
+    setBulk(null);
+    toast.success(`Pronto: ${fresh.length} cadastrado${fresh.length === 1 ? "" : "s"}. Confira abaixo.`);
   };
 
   if (!isLoading && !connected) {
@@ -852,8 +859,8 @@ export default function Products() {
           title="Fotos para cadastrar"
           description={defaultTemplate ? `Usa o modelo “${defaultTemplate.name}”. Cada foto vira um produto, a não ser que você junte.` : "Salve um modelo de cadastro abaixo antes de cadastrar."}
           action={queue.length > 1 ? (
-            <Button size="sm" variant="outline" onClick={createAll} disabled={bulk || !defaultTemplate}>
-              {bulk && <Loader2 className="animate-spin" />}Cadastrar todos ({queue.length})
+            <Button size="sm" variant="outline" onClick={createAll} disabled={!!bulk || !defaultTemplate}>
+              {bulk && <Loader2 className="animate-spin" />}{bulk ?? `Cadastrar todos (${queue.length})`}
             </Button>
           ) : undefined}
           bodyClassName="p-0"
@@ -906,6 +913,15 @@ export default function Products() {
           ) : (
             <div className="divide-y">
               {queue.map((d) => <DraftRow key={d.id} draft={d} templates={templates} onCreate={(x) => createOne(x)} />)}
+              <div className="p-4">
+                <Button className="w-full" size="lg" onClick={createAll} disabled={!!bulk || !defaultTemplate}>
+                  {bulk ? <Loader2 className="animate-spin" /> : <ShoppingBag />}
+                  {bulk ?? `Cadastrar ${queue.length === 1 ? "" : `todos os ${queue.length} `}de uma vez`}
+                </Button>
+                <p className="mt-1.5 text-center text-xs text-muted-foreground">
+                  Usa o nome que você escreveu em cada um (vazio = a IA dá o nome).{settings?.marketplace_autopublish ? " Vai para o site e para o Mercado Livre." : ""}
+                </p>
+              </div>
             </div>
           )}
         </Panel>
