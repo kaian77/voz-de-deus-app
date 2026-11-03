@@ -9,6 +9,9 @@ on:
         description: "all (refazer + cadastrar), redo ou publish"
         required: true
         default: all
+      price:
+        description: "Preço quando o modelo de cadastro não tem (ex.: 17.99)"
+        required: false
 
 concurrency:
   group: photos-admin
@@ -45,4 +48,4 @@ jobs:
         with:
           deno-version: v2.x
       - name: Rodar
-        run: deno run -A --node-modules-dir=none scripts/photo-jobs.ts "${{ inputs.command }}"
+        run: deno run -A --node-modules-dir=none scripts/photo-jobs.ts "${{ inputs.command }}" "${{ inputs.price }}"

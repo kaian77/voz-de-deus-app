@@ -22,4 +22,6 @@ alter table public.photo_jobs enable row level security;
 drop policy if exists "own all" on public.photo_jobs;
 create policy "own all" on public.photo_jobs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 -- produtos do site que saíram deste lote antes de "refazer" (trocados quando o lote é cadastrado de novo)
+-- preço usado ao cadastrar o lote (o modelo não tem preço; vem do produto antigo trocado ou do pedido)
+alter table public.photo_jobs add column if not exists price numeric;
 alter table public.photo_jobs add column if not exists replace_products bigint[] not null default '{}';
