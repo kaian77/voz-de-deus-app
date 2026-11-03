@@ -214,12 +214,12 @@ Deno.serve(async (req) => {
         if (error) throw new HttpError(500, error.message);
         return json({ ok: true, dispatched: await dispatchRender("product-photos.yml") });
       }
-      const urls = (Array.isArray(input.urls) ? input.urls : []).map(String).filter((u) => /^https?:\/\//.test(u)).slice(0, 60);
+      const urls = (Array.isArray(input.urls) ? input.urls : []).map(String).filter((u: string) => /^https?:\/\//.test(u)).slice(0, 60);
       if (!urls.length) throw new HttpError(400, "Escolha as fotos");
-      const names = (Array.isArray(input.names) ? input.names : []).map((n) => String(n ?? "").trim().slice(0, 40));
+      const names = (Array.isArray(input.names) ? input.names : []).map((n: unknown) => String(n ?? "").trim().slice(0, 40));
       const { data, error } = await db.from("photo_jobs").insert({
         user_id: userId, source_urls: urls, names,
-        kits: (Array.isArray(input.kits) ? input.kits : []).map((k) => k === true),
+        kits: (Array.isArray(input.kits) ? input.kits : []).map((k: unknown) => k === true),
         theme: String(input.theme ?? "").trim().slice(0, 300) || null,
       }).select().single();
       if (error) throw new HttpError(500, error.message);

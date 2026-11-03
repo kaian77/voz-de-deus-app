@@ -260,12 +260,16 @@ export async function createFromDraft(db: SupabaseClient, userId: string, draftI
     const tpl = template?.data ?? {};
     // social_images: versões 4:5 das fotos (o Instagram recusa fotos muito altas), geradas no envio
     // ai: cadastro já gerado pelo botão "Sugerir" (evita gerar de novo)
-    const { social_images: socialImages, ai: cached, ...productOverrides } = { ...(draft.overrides ?? {}), ...extra } as ProductChanges & {
+    // colors: variações de cor com a foto de cada uma (Fotos de produto: o mesmo pin em prata e dourado)
+    // ml_images: fotos que podem ir para o Mercado Livre (sem texto: o ML recusa foto com nome escrito)
+    const { social_images: socialImages, ai: cached, colors, ml_images: mlImages, ...productOverrides } = { ...(draft.overrides ?? {}), ...extra } as ProductChanges & {
       social_images?: string[];
+      ml_images?: string[];
       ai?: ListingData;
+      colors?: { value: string; image: string }[];
     };
     const built = await buildProduct(db, userId, tpl, draft.images, (draft.name ?? "").trim() || undefined, productOverrides, cached);
-    const product = await nsCreateProduct(store.token, store.storeId, built.fields, draft.images, { ncm: tpl.fiscal_ncm });
+    const product = await nsCreateProduct(store.token, store.storeId, built.fields, draft.images, { ncm: tpl.fiscal_ncm }, colors);
     const { data } = await db.from("product_drafts").update({
       status: "created", name: built.fields.name ?? built.baseName, product_id: String(product.id), product_url: product.url ?? null, error: null,
     }).eq("id", draft.id).select().single();
@@ -284,7 +288,7 @@ export async function createFromDraft(db: SupabaseClient, userId: string, draftI
     const marketplaces = await publishToMarketplaces(db, userId, draft.id, {
       name: built.fields.name ?? built.baseName,
       description: built.fields.description,
-      images: draft.images,
+      images: mlImages?.length ? mlImages : draft.images,
       price: Number(built.fields.price),
       sku: built.fields.sku,
       stock: built.fields.stock,

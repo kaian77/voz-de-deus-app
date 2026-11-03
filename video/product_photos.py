@@ -153,10 +153,28 @@ def products(im, kit=False):
     if kit:
         return [(whole, "kit")]
     pieces = split(cut)
-    colors = [metal_color(p) for p in pieces]
-    if len(pieces) > 1 and len(set(colors)) > 1:
-        return list(zip(pieces, colors))
-    return [(whole, colors[0] if len(set(colors)) == 1 else metal_color(whole))]
+    if len(pieces) > 1:
+        # compara as peças entre si: dourado claro (champanhe) não passa no teste absoluto, mas é bem mais
+        # "quente" que o prata ao lado
+        w = [warmth(p) for p in pieces]
+        if max(w) - min(w) > 0.08:
+            mid = (max(w) + min(w)) / 2
+            return [(p, "dourado" if x > mid else "prata") for p, x in zip(pieces, w)]
+        colors = [metal_color(p) for p in pieces]
+        if len(set(colors)) > 1:
+            return list(zip(pieces, colors))
+    return [(whole, metal_color(whole))]
+
+
+def warmth(piece):
+    """Média de (vermelho - azul) no produto: positivo = dourado/quente, negativo = prata/frio."""
+    import numpy as np
+
+    rgb = np.asarray(piece.convert("RGB")).astype(float) / 255
+    a = np.asarray(piece.getchannel("A")) > 200
+    if not a.any():
+        return 0.0
+    return float((rgb[..., 0][a] - rgb[..., 2][a]).mean())
 
 
 def metal_color(piece):
@@ -173,7 +191,9 @@ def metal_color(piece):
     gold = a & (sat > 0.28) & (mx > 0.35) & (hue > 28) & (hue < 62) & (r > b + 0.12)
     silver = a & (sat < 0.12) & (mx > 0.3) & (mx < 0.93)  # cinza do metal (sem o branco do esmalte)
     ng, ns = int(gold.sum()), int(silver.sum())
-    return "dourado" if ng > ns * 0.6 and ng > a.sum() * 0.03 else "prata"
+    if ng > ns * 0.6 and ng > a.sum() * 0.03:
+        return "dourado"
+    return "dourado" if warmth(piece) > 0.07 else "prata"
 
 
 # ------------------------------------------------------------------------------------------- montagem

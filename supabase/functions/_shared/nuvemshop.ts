@@ -294,17 +294,45 @@ function productSummary(p: any) {
   };
 }
 
-export async function nsCreateProduct(token: string, storeId: string, fields: ProductChanges, images: string[], fiscal?: { ncm?: string }) {
+export async function nsCreateProduct(
+  token: string, storeId: string, fields: ProductChanges, images: string[], fiscal?: { ncm?: string },
+  colors?: { value: string; image: string }[],
+) {
   if (!fields.name) throw new Error("O produto precisa de um nome");
   if (fields.price === undefined) throw new Error("O produto precisa de um preço (defina no modelo ou informe price)");
+  // Variações de cor (ex.: Prata e Dourado): um produto com o atributo "Cor" e a foto de cada variação
+  const multi = (colors ?? []).filter((c) => c.value && c.image);
+  const base = variantFields(fields);
   const body = {
     ...productFields(fields),
-    variants: [variantFields(fields)],
+    ...(multi.length > 1 ? { attributes: [{ pt: "Cor" }] } : {}),
+    variants: multi.length > 1
+      ? multi.map((c) => ({ ...base, values: [{ pt: c.value }], ...(base.sku ? { sku: `${base.sku}-${slugUpper(c.value)}` } : {}) }))
+      : [base],
     images: images.slice(0, 50).map((src, i) => ({ src, position: i + 1 })),
   };
   const created = await ns(token, storeId, "products", { method: "POST", body });
+  if (multi.length > 1) await linkVariantImages(token, storeId, created, images, multi);
   const shopping = await applyShopping(token, storeId, created, { mpn: fields.mpn ?? fields.sku, age_group: fields.age_group, gender: fields.gender });
   return { ...productSummary(created), fiscal: await applyFiscal(token, storeId, created, fiscal), shopping };
+}
+
+const slugUpper = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "").toUpperCase().slice(0, 12);
+
+/** Liga cada variação de cor à foto dela (quem escolhe "Dourado" no site vê a foto dourada). Nunca derruba o cadastro. */
+async function linkVariantImages(token: string, storeId: string, product: any, images: string[], colors: { value: string; image: string }[]) {
+  try {
+    const imgs: any[] = [...(product.images ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+    for (const v of product.variants ?? []) {
+      const value = String(v.values?.[0]?.pt ?? "");
+      const color = colors.find((c) => c.value === value);
+      const pos = color ? images.indexOf(color.image) : -1;
+      const img = pos >= 0 ? imgs[pos] : null;
+      if (img?.id) await ns(token, storeId, `products/${product.id}/variants/${v.id}`, { method: "PUT", body: { image_id: img.id } });
+    }
+  } catch (e) {
+    console.error("foto da variação", e);
+  }
 }
 
 /** Campos do "Instagram e Google Shopping" (MPN, faixa etária e gênero) de cada variação. Nunca derruba o cadastro. */
