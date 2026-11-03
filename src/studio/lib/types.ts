@@ -571,7 +571,7 @@ export interface QuizEpisode {
 export interface PhotoResult {
   source: number;
   index: number;
-  color: "prata" | "dourado";
+  color: "prata" | "dourado" | "kit";
   name: string | null;
   white_url: string;
   theme_url: string;
@@ -580,6 +580,7 @@ export interface PhotoJob {
   id: string;
   theme: string | null;
   names: string[];
+  kits: boolean[];
   source_urls: string[];
   status: "queued" | "processing" | "ready" | "failed";
   results: PhotoResult[];

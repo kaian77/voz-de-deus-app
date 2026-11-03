@@ -3,13 +3,14 @@
 
 O dono sobe várias fotos de uma vez com um tema. Para cada foto:
 - recorta o fundo (rembg) SEM redesenhar o produto (os pixels do pin são os da foto original);
-- separa cada produto da foto (2 pins na mesma foto = 2 produtos) e diz se o metal é prata ou dourado;
+- separa os produtos da foto só quando são o mesmo produto em cores diferentes (prata e dourado); vários da
+  mesma cor, ou a foto marcada como Kit, ficam juntos numa foto só;
 - faz 2 fotos de cada produto: fundo branco (1200x1200, padrão de loja) e fundo do tema (cenário gerado por IA
   grátis, sem produto, com o pin colado por cima com sombra e reflexo; nome em cima, se houver).
 O cenário é gerado uma vez por lote (todas as fotos do lote combinam) e reaproveitado.
 
 Fila: tabela photo_jobs (status "queued"). Resultado em photo_jobs.results:
-  [{source, index, color: "prata"|"dourado", name, white_url, theme_url}]
+  [{source, index, color: "prata"|"dourado"|"kit", name, white_url, theme_url}]
 
 Variáveis: SUPABASE_URL, SUPABASE_SERVICE_KEY (opcionais: CF_ACCOUNT_ID, CF_API_TOKEN, POLLINATIONS_TOKEN).
 Uso: python3 video/product_photos.py [--check] | --local <foto> <tema> [nome]  (teste sem banco)
@@ -142,6 +143,20 @@ def trim(im, pad=6):
         return im
     l, t, r, b = bbox
     return im.crop((max(0, l - pad), max(0, t - pad), min(im.width, r + pad), min(im.height, b + pad)))
+
+
+def products(im, kit=False):
+    """[(recorte, cor)] da foto. Kit = tudo junto numa foto só. Sem marcar kit, só separa quando são cores
+    diferentes (o mesmo produto em prata e dourado); vários da mesma cor ficam juntos (é um kit)."""
+    cut = cutout(im)
+    whole = trim(cut)
+    if kit:
+        return [(whole, "kit")]
+    pieces = split(cut)
+    colors = [metal_color(p) for p in pieces]
+    if len(pieces) > 1 and len(set(colors)) > 1:
+        return list(zip(pieces, colors))
+    return [(whole, colors[0] if len(set(colors)) == 1 else metal_color(whole))]
 
 
 def metal_color(piece):
@@ -315,6 +330,7 @@ def queued(limit=5):
 
 def process(job, folder):
     names = job.get("names") or []
+    kits = job.get("kits") or []
     sources = job.get("source_urls") or []
     bg_seed = job.get("seed") or random.randint(1, 10**6)
     bg = background(job.get("theme") or "elegant soft studio", bg_seed, folder)
@@ -323,9 +339,7 @@ def process(job, folder):
     for si, src in enumerate(sources):
         log(f"  foto {si + 1}/{len(sources)}")
         im = download(src)
-        pieces = split(cutout(im))
-        for pi, piece in enumerate(pieces):
-            color = metal_color(piece)
+        for pi, (piece, color) in enumerate(products(im, si < len(kits) and bool(kits[si]))):
             name = (names[si] if si < len(names) else "") or None
             base = f"{job['user_id']}/fotos/{job['id']}/{si}-{pi}-{stamp}"
             results.append({
@@ -346,8 +360,7 @@ def main():
 
         out = os.path.dirname(os.path.abspath(src))
         bg = background(theme, 7, out) if "--no-ai" not in sys.argv else gradient()
-        for pi, piece in enumerate(split(cutout(Image.open(src).convert("RGBA")))):
-            color = metal_color(piece)
+        for pi, (piece, color) in enumerate(products(Image.open(src).convert("RGBA"), "--kit" in sys.argv)):
             on_white(piece).save(os.path.join(out, f"r{pi}-{color}-branco.jpg"), quality=92)
             on_theme(piece, bg, name).save(os.path.join(out, f"r{pi}-{color}-tema.jpg"), quality=92)
             log(f"produto {pi + 1}: {color}")

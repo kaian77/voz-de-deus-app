@@ -219,6 +219,7 @@ Deno.serve(async (req) => {
       const names = (Array.isArray(input.names) ? input.names : []).map((n) => String(n ?? "").trim().slice(0, 40));
       const { data, error } = await db.from("photo_jobs").insert({
         user_id: userId, source_urls: urls, names,
+        kits: (Array.isArray(input.kits) ? input.kits : []).map((k) => k === true),
         theme: String(input.theme ?? "").trim().slice(0, 300) || null,
       }).select().single();
       if (error) throw new HttpError(500, error.message);

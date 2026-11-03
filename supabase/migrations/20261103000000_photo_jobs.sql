@@ -15,6 +15,8 @@ create table if not exists public.photo_jobs (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- kits[i] = foto i é um kit (não separa os produtos)
+alter table public.photo_jobs add column if not exists kits boolean[] not null default '{}';
 create index if not exists photo_jobs_status on public.photo_jobs (status);
 alter table public.photo_jobs enable row level security;
 drop policy if exists "own all" on public.photo_jobs;
