@@ -6,6 +6,7 @@ import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
 import { readWebPage, runTool } from "../_shared/agent-tools.ts";
 import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStore, storeFor, txt } from "../_shared/nuvemshop.ts";
 import { deleteProduct, setStock } from "../_shared/store-manage.ts";
+import { publishPhotoJob, redoPhotoJobs } from "../_shared/photo-jobs.ts";
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
@@ -209,12 +210,7 @@ Deno.serve(async (req) => {
 
     if (action === "photos_run") {
       // Fotos de produto: lote novo (fotos + tema + nomes) ou "Refazer fundo" de um lote (id) → workflow product-photos.yml
-      if (input.id) {
-        const { error } = await db.from("photo_jobs").update({ status: "queued", seed: null, attempts: 0, error: null, updated_at: new Date().toISOString() })
-          .eq("id", String(input.id)).eq("user_id", userId);
-        if (error) throw new HttpError(500, error.message);
-        return json({ ok: true, dispatched: await dispatchRender("product-photos.yml") });
-      }
+      if (input.id) return json({ ok: true, ...(await redoPhotoJobs(db, userId, [String(input.id)])) });
       const urls = (Array.isArray(input.urls) ? input.urls : []).map(String).filter((u: string) => /^https?:\/\//.test(u)).slice(0, 60);
       if (!urls.length) throw new HttpError(400, "Escolha as fotos");
       const names = (Array.isArray(input.names) ? input.names : []).map((n: unknown) => String(n ?? "").trim().slice(0, 40));
@@ -225,6 +221,12 @@ Deno.serve(async (req) => {
       }).select().single();
       if (error) throw new HttpError(500, error.message);
       return json({ ...data, dispatched: await dispatchRender("product-photos.yml") });
+    }
+
+    if (action === "photos_publish") {
+      // Cadastrar no site o lote (troca os produtos antigos dele, se foi refeito); repetir até pending = 0
+      const skip = (Array.isArray(input.skip) ? input.skip : []).map((n: unknown) => Number(n));
+      return json(await publishPhotoJob(db, userId, String(input.id), true, skip));
     }
 
     if (action === "clips_add_source") {

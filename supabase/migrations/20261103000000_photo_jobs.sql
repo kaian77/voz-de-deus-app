@@ -21,3 +21,5 @@ create index if not exists photo_jobs_status on public.photo_jobs (status);
 alter table public.photo_jobs enable row level security;
 drop policy if exists "own all" on public.photo_jobs;
 create policy "own all" on public.photo_jobs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- produtos do site que saíram deste lote antes de "refazer" (trocados quando o lote é cadastrado de novo)
+alter table public.photo_jobs add column if not exists replace_products bigint[] not null default '{}';
