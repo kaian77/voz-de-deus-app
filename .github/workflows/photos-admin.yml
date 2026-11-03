@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: "all (refazer + cadastrar), redo ou publish"
+        description: "all (refazer + cadastrar), redo, publish ou show"
         required: true
         default: all
       price:

@@ -16,6 +16,11 @@ async function users() {
   return [...new Set((data ?? []).map((r) => r.user_id as string))];
 }
 
+if (cmd === "show") {
+  const { data } = await db.from("photo_jobs").select("id,theme,status,source_urls,names,kits,results").order("created_at", { ascending: false }).limit(5);
+  for (const j of data ?? []) console.log(JSON.stringify(j, null, 1));
+}
+
 if (cmd === "redo" || cmd === "all") {
   for (const u of await users()) console.log("refazer", u, JSON.stringify(await redoPhotoJobs(db, u)));
 }
