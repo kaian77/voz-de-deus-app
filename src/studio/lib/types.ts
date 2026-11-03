@@ -567,6 +567,27 @@ export interface QuizEpisode {
   updated_at: string;
 }
 
+/** Lote de fotos de produto (Loja → Fotos de produto): fundo branco + fundo do tema, prata/dourado separados. */
+export interface PhotoResult {
+  source: number;
+  index: number;
+  color: "prata" | "dourado";
+  name: string | null;
+  white_url: string;
+  theme_url: string;
+}
+export interface PhotoJob {
+  id: string;
+  theme: string | null;
+  names: string[];
+  source_urls: string[];
+  status: "queued" | "processing" | "ready" | "failed";
+  results: PhotoResult[];
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ClipSource {
   id: string;
   channel_ref: string;
@@ -666,6 +687,7 @@ export interface TableMap {
   yt_videos: YtVideo;
   clip_sources: ClipSource;
   quiz_episodes: QuizEpisode;
+  photo_jobs: PhotoJob;
   deals: Deal;
   strategies: Strategy;
   site_reviews: SiteReview;

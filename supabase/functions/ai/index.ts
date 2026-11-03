@@ -206,6 +206,25 @@ Deno.serve(async (req) => {
       return json({ ok: true, dispatched });
     }
 
+    if (action === "photos_run") {
+      // Fotos de produto: lote novo (fotos + tema + nomes) ou "Refazer fundo" de um lote (id) → workflow product-photos.yml
+      if (input.id) {
+        const { error } = await db.from("photo_jobs").update({ status: "queued", seed: null, attempts: 0, error: null, updated_at: new Date().toISOString() })
+          .eq("id", String(input.id)).eq("user_id", userId);
+        if (error) throw new HttpError(500, error.message);
+        return json({ ok: true, dispatched: await dispatchRender("product-photos.yml") });
+      }
+      const urls = (Array.isArray(input.urls) ? input.urls : []).map(String).filter((u) => /^https?:\/\//.test(u)).slice(0, 60);
+      if (!urls.length) throw new HttpError(400, "Escolha as fotos");
+      const names = (Array.isArray(input.names) ? input.names : []).map((n) => String(n ?? "").trim().slice(0, 40));
+      const { data, error } = await db.from("photo_jobs").insert({
+        user_id: userId, source_urls: urls, names,
+        theme: String(input.theme ?? "").trim().slice(0, 300) || null,
+      }).select().single();
+      if (error) throw new HttpError(500, error.message);
+      return json({ ...data, dispatched: await dispatchRender("product-photos.yml") });
+    }
+
     if (action === "clips_add_source") {
       // Cortes: nova fonte (pasta/arquivo do Drive de uma campanha) entra na fila do workflow "Cortes"; com id, só atualiza os dados salvos
       const { data: channel } = await db.from("yt_channels").select("id").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();
