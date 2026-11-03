@@ -76,5 +76,6 @@ export async function deleteProduct(db: SupabaseClient, userId: string, product:
     await db.from("social_accounts").update({ meta: { ...acc.meta, ml_sync: next } }).eq("id", acc.id);
   }
   await db.from("product_drafts").update({ product_url: null }).eq("user_id", userId).eq("product_id", String(p.id));
-  return { id: p.id, name: txt(p.name), deleted: true, mercadolivre: ml_ };
+  const price = Number(p.variants?.[0]?.price) || undefined;
+  return { id: p.id, name: txt(p.name), price, deleted: true, mercadolivre: ml_ };
 }

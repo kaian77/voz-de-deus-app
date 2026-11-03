@@ -41,7 +41,7 @@ export async function redoPhotoJobs(db: SupabaseClient, userId: string, ids?: st
  * replace: antes apaga os produtos que já tinham subido desse lote (site + anúncio do ML). Roda até ~100 s;
  * devolve quantos faltam (chamar de novo até pending = 0).
  */
-export async function publishPhotoJob(db: SupabaseClient, userId: string, id: string, replace = true, skip: number[] = []) {
+export async function publishPhotoJob(db: SupabaseClient, userId: string, id: string, replace = true, skip: number[] = [], price?: number) {
   const started = Date.now();
   const { data: job } = await db.from("photo_jobs").select("*").eq("id", id).eq("user_id", userId).single();
   if (!job) throw new Error("Lote não encontrado");
@@ -62,13 +62,18 @@ export async function publishPhotoJob(db: SupabaseClient, userId: string, id: st
     const fromJob = (old ?? []).filter((d) => !linked.includes(d.id) && (d.images ?? []).some((u: string) => u.includes(`/fotos/${id}/`)));
     const ids = [...new Set([...(job.replace_products ?? []).map(Number), ...fromJob.map((d) => Number(d.product_id))])].filter(Boolean);
     for (const pid of ids) {
-      deleted.push(await deleteProduct(db, userId, pid).catch((e) => ({ id: pid, error: e instanceof Error ? e.message : String(e) })));
+      const d = await deleteProduct(db, userId, pid).catch((e) => ({ id: pid, price: undefined, error: e instanceof Error ? e.message : String(e) }));
+      deleted.push(d);
+      // sem preço no modelo: usa o preço que o produto antigo tinha
+      if (!price && d.price) price = d.price;
     }
     if (fromJob.length) await db.from("product_drafts").update({ product_id: null, product_url: null }).in("id", fromJob.map((d) => d.id));
     if (job.replace_products?.length) await db.from("photo_jobs").update({ replace_products: [] }).eq("id", id);
   }
   const template = await templateFor(db, userId);
   if (!template) throw new Error("Salve um modelo de cadastro em Produtos antes");
+  if (!price && template.data.price == null) price = job.price ?? undefined;
+  if (price && price !== job.price) await db.from("photo_jobs").update({ price }).eq("id", id);
   const done = (s: number) => results.some((r) => r.source === s && r.draft_id && statusOf.get(r.draft_id) === "created");
   const sources = [...new Set(results.map((r) => r.source))].filter((s) => !skip.includes(s) && !done(s));
   const created: unknown[] = [];
@@ -82,7 +87,10 @@ export async function publishPhotoJob(db: SupabaseClient, userId: string, id: st
     const fields = {
       images: [...g.map((r) => r.white_url), ...g.map((r) => r.theme_url)],
       name: g[0].name || (job.names ?? [])[s] || null, template_id: template.id,
-      overrides: { social_images: g.map((r) => r.theme_url), ml_images: g.map((r) => r.white_url), ...(colors ? { colors } : {}) },
+      overrides: {
+        social_images: g.map((r) => r.theme_url), ml_images: g.map((r) => r.white_url), ...(colors ? { colors } : {}),
+        ...(price ? { price } : {}),
+      },
     };
     // rascunho que falhou antes: reaproveita (com as fotos atuais do lote)
     let draftId = g.find((r) => r.draft_id && ["failed", "pending"].includes(statusOf.get(r.draft_id) ?? ""))?.draft_id;

@@ -8,6 +8,7 @@ import { publishPhotoJob, redoPhotoJobs } from "../supabase/functions/_shared/ph
 
 const db = adminClient();
 const cmd = Deno.args[0] ?? "all";
+const price = Number(Deno.args[1]) || undefined; // preço quando o modelo não tem (ex.: 17.99)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function users() {
@@ -34,7 +35,7 @@ if (cmd === "publish" || cmd === "all") {
   for (const j of jobs ?? []) {
     console.log(`▶ lote ${j.id} (${j.theme ?? "sem tema"})`);
     for (let round = 0; round < 30; round++) {
-      const r = await publishPhotoJob(db, j.user_id, j.id, true);
+      const r = await publishPhotoJob(db, j.user_id, j.id, true, [], price);
       for (const d of r.deleted) console.log("  apagado", JSON.stringify(d));
       for (const c of r.created) console.log("  no site", JSON.stringify(c));
       for (const e of r.errors) console.log("  ERRO", JSON.stringify(e));
