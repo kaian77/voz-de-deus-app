@@ -4,7 +4,8 @@ import { z } from "npm:zod@4";
 import { adminClient, corsHeaders, handleError, HttpError, json, requireUser } from "../_shared/util.ts";
 import { aiEnabled, brandContext, generateJSON } from "../_shared/claude.ts";
 import { readWebPage, runTool } from "../_shared/agent-tools.ts";
-import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "../_shared/nuvemshop.ts";
+import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStore, storeFor, txt } from "../_shared/nuvemshop.ts";
+import { deleteProduct, setStock } from "../_shared/store-manage.ts";
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
@@ -424,6 +425,29 @@ Deno.serve(async (req) => {
       if (!store) throw new HttpError(400, "Conecte a Nuvemshop em Contas");
       const list = await nsProducts(store.token, store.storeId, { q: input.q ? String(input.q).slice(0, 80) : undefined, limit: 24 });
       return json(list.map((p) => ({ id: p.id, name: p.name, image: p.image, url: p.url })));
+    }
+    if (action === "store_stock" || action === "store_delete") {
+      // Produtos da loja: mudar estoque / apagar, no site e no anúncio do Mercado Livre ligado
+      const id = Number(input.id);
+      if (!id) throw new HttpError(400, "Produto inválido");
+      if (action === "store_delete") return json(await deleteProduct(db, userId, id));
+      const raw = input.stock;
+      const stock = raw === null || raw === "" || raw === undefined ? null : Math.max(0, Math.round(Number(raw)));
+      if (stock !== null && Number.isNaN(stock)) throw new HttpError(400, "Estoque inválido");
+      return json(await setStock(db, userId, id, stock));
+    }
+    if (action === "store_manage_list") {
+      // Lista para a tela "Produtos da loja" (inclui os não publicados)
+      const store = await storeFor(db, userId);
+      if (!store) throw new HttpError(400, "Conecte a Nuvemshop em Contas");
+      const params = new URLSearchParams({ per_page: "50", fields: "id,name,variants,images,canonical_url,published" });
+      if (input.q) params.set("q", String(input.q).slice(0, 80));
+      const list = await ns<any[]>(store.token, store.storeId, `products?${params}`).catch(() => []);
+      return json((Array.isArray(list) ? list : []).map((p) => {
+        const vs = p.variants ?? [];
+        const stock = vs.some((v: any) => v.stock == null) ? null : vs.reduce((s: number, v: any) => s + Number(v.stock ?? 0), 0);
+        return { id: p.id, name: txt(p.name), image: p.images?.[0]?.src ?? null, url: p.canonical_url, published: p.published, stock, variants: vs.length };
+      }));
     }
     if (action === "store_product_pick") {
       // Produto escolhido: copia as fotos para o storage do Studio (o carrossel desenha no navegador e o post publica de lá)

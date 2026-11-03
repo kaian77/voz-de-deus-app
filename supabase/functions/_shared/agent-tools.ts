@@ -14,6 +14,7 @@ import { analyzeMarketplace, mercadoLivreListings, publishToMercadoLivre } from 
 import { fixSharedListings, mlSyncStatus, queueKits, retryMlProblems, startMlSync } from "./ml-sync.ts";
 import { improveMlShowcase, mlReviews, setMlPremium } from "./ml-quality.ts";
 import { generateIdeas } from "./content-ideas.ts";
+import { deleteProduct, setStock } from "./store-manage.ts";
 
 type Ctx = { db: SupabaseClient; userId: string };
 
@@ -864,6 +865,16 @@ const tools = {
       const s = await store(ctx);
       return nsUpdateProduct(s.token, s.storeId, product, { ...changes, ...(new_name ? { name: new_name } : {}) }, add_image_urls);
     },
+  },
+  set_store_stock: {
+    description: "Muda o estoque de um produto da loja (todas as variações) e do anúncio do Mercado Livre ligado a ele. stock null = sem controle de estoque.",
+    input: z.object({ product: z.union([z.string(), z.number()]).describe("Nome do produto ou id"), stock: z.number().int().min(0).nullable() }),
+    run: async (ctx: Ctx, input: { product: string | number; stock: number | null }) => setStock(ctx.db, ctx.userId, input.product, input.stock),
+  },
+  delete_store_product: {
+    description: "APAGA um produto da loja (Nuvemshop) e ENCERRA o anúncio do Mercado Livre ligado. Não tem volta: confirme com o usuário o nome exato antes. Para só tirar de venda, prefira estoque 0.",
+    input: z.object({ product: z.union([z.string(), z.number()]).describe("Nome completo do produto ou id") }),
+    run: async (ctx: Ctx, input: { product: string | number }) => deleteProduct(ctx.db, ctx.userId, input.product),
   },
 } satisfies Record<string, { description: string; input: z.ZodTypeAny; run: (ctx: Ctx, input: any) => Promise<unknown> }>;
 
