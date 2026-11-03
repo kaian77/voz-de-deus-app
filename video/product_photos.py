@@ -149,6 +149,10 @@ def products(im, kit=False):
     """[(recorte, cor)] da foto. Kit = tudo junto numa foto só. Sem marcar kit, só separa quando são cores
     diferentes (o mesmo produto em prata e dourado); vários da mesma cor ficam juntos (é um kit)."""
     cut = cutout(im)
+    box = backing_box(cut)
+    if box:  # pins presos num cartão: o recorte pegou o cartão; recorta de novo só a área dos pins
+        log("   cartão atrás dos pins: recortando de novo só os pins")
+        cut = cutout(im.crop(box))
     whole = trim(cut)
     if kit:
         return [(whole, "kit")]
@@ -163,10 +167,99 @@ def products(im, kit=False):
         colors = [metal_color(p) for p in pieces]
         if len(set(colors)) > 1:
             return list(zip(pieces, colors))
-    halves = split_touching(whole)
+    halves = split_by_color(whole) or split_touching(whole)
     if halves:
         return halves
     return [(whole, metal_color(whole))]
+
+
+def backing_box(cut):
+    """Foto de pins presos num cartão/papel: o rembg recorta o cartão inteiro. Se a maior parte do recorte é uma cor
+    lisa só (o cartão) e o que destoa dela (os pins) ocupa uma área pequena, devolve a caixa dos pins na foto."""
+    import numpy as np
+    from PIL import Image, ImageFilter
+
+    a = np.asarray(cut.getchannel("A")) > 128
+    if a.mean() < 0.2:
+        return None
+    rgb = np.asarray(cut.convert("RGB")).astype(float)
+    med = np.median(rgb[a], axis=0)
+    d = np.sqrt(((rgb - med) ** 2).sum(-1))
+    if (d[a] < 35).mean() < 0.4:
+        return None
+    m = Image.fromarray(((a & (d >= 42)) * 255).astype("uint8")).filter(ImageFilter.MinFilter(5)).filter(ImageFilter.MaxFilter(5))
+    keep, _, _ = components(np.asarray(m), min_share=0.15)
+    h, w = a.shape
+    keep = [b for b in keep if b[2][0] > 2 and b[2][1] > 2 and b[2][2] < w - 3 and b[2][3] < h - 3]  # borda do cartão/sombra
+    if not keep:
+        return None
+    x1, y1 = min(b[2][0] for b in keep), min(b[2][1] for b in keep)
+    x2, y2 = max(b[2][2] for b in keep), max(b[2][3] for b in keep)
+    ys, xs = np.nonzero(a)
+    cut_area = (xs.max() - xs.min() + 1) * (ys.max() - ys.min() + 1)
+    if (x2 - x1) * (y2 - y1) > cut_area * 0.55:  # o "destoante" é quase tudo: é o próprio produto, não um cartão
+        return None
+    pad = int(max(x2 - x1, y2 - y1) * 0.08)
+    return (max(0, x1 - pad), max(0, y1 - pad), min(w, x2 + pad), min(h, y2 + pad))
+
+
+def split_by_color(piece):
+    """Pin prata e pin dourado encostados/sobrepostos: separa ponto a ponto pela cor (dourado = mais quente e mais
+    claro), limpa os filetes de brilho e fica com a maior parte de cada cor. None se não forem dois pins."""
+    import numpy as np
+    from PIL import Image, ImageFilter
+
+    alpha0 = np.asarray(piece.getchannel("A"))
+    a = alpha0 > 128
+    if a.sum() < 500:
+        return None
+    rgb = np.asarray(piece.convert("RGB")).astype(float) / 255
+    feat = (rgb[..., 0] - rgb[..., 2]) + 0.5 * rgb.mean(-1)
+    k = max(3, int(max(piece.size) * 0.012)) | 1
+    blur = lambda x: np.asarray(Image.fromarray((x * 255).clip(0, 255).astype("uint8")).filter(ImageFilter.BoxBlur(k))).astype(float) / 255
+    den = blur(a.astype(float))
+    sw = np.where(den > 0.05, (blur(feat * a * 0.5 + 0.25) - 0.25 * den) / np.maximum(den, 1e-3) * 2, 0)
+    v = sw[a]
+    c1, c2 = np.percentile(v, 15), np.percentile(v, 85)
+    for _ in range(20):
+        t = (c1 + c2) / 2
+        lo, hi = v[v <= t], v[v > t]
+        if not len(lo) or not len(hi):
+            return None
+        c1, c2 = lo.mean(), hi.mean()
+    t = (c1 + c2) / 2
+    hot = a & (sw > t)
+    share = hot.sum() / a.sum()
+    if c2 - c1 < 0.12 or not 0.2 < share < 0.8:
+        return None
+    o = max(3, int(max(piece.size) * 0.009)) | 1  # some com o filete de brilho de um pin que encosta no outro
+    parts, boxes = [], []
+    for mask, color in ((a & ~hot, "prata"), (hot, "dourado")):
+        m = Image.fromarray((mask * 255).astype("uint8")).filter(ImageFilter.MinFilter(o)).filter(ImageFilter.MaxFilter(o))
+        keep, label, kk = components(np.asarray(m), min_share=0.5)
+        if not keep:
+            return None
+        big = max(keep, key=lambda b: b[0])
+        full = np.kron(label == big[1], np.ones((kk, kk), dtype=bool))[: a.shape[0], : a.shape[1]]
+        sel = np.zeros_like(a)
+        sel[: full.shape[0], : full.shape[1]] = full
+        grown = np.asarray(Image.fromarray((sel * 255).astype("uint8")).filter(ImageFilter.MaxFilter(kk * 2 + 1))) > 0
+        p = piece.copy()
+        p.putalpha(Image.fromarray(np.where(grown, alpha0, 0).astype("uint8")))
+        bb = Image.fromarray((grown & a).astype("uint8") * 255).getbbox()
+        if not bb:
+            return None
+        boxes.append(bb)
+        parts.append((trim(p), color))
+    # cada parte tem que ser um pin de verdade (não um detalhe dourado de um pin só): tamanho parecido e separados
+    area = lambda b: (b[2] - b[0]) * (b[3] - b[1])
+    if min(area(b) for b in boxes) < 0.35 * max(area(b) for b in boxes):
+        return None
+    cx = [(b[0] + b[2]) / 2 for b in boxes]
+    cy = [(b[1] + b[3]) / 2 for b in boxes]
+    if max(abs(cx[0] - cx[1]) / piece.width, abs(cy[0] - cy[1]) / piece.height) < 0.2:
+        return None
+    return parts
 
 
 def split_touching(piece):
@@ -462,7 +555,7 @@ def queued(limit=5):
     return rest("GET", f"photo_jobs?status=eq.queued&attempts=lt.{MAX_ATTEMPTS}&order=created_at&limit={limit}&select=*") or []
 
 
-def process(job, folder):
+def process(job, folder, only=None):
     names = job.get("names") or []
     kits = job.get("kits") or []
     sources = job.get("source_urls") or []
@@ -471,6 +564,8 @@ def process(job, folder):
     results = []
     stamp = int(time.time())
     for si, src in enumerate(sources):
+        if only is not None and si not in only:
+            continue
         log(f"  foto {si + 1}/{len(sources)}")
         im = download(src)
         for pi, (piece, color) in enumerate(products(im, si < len(kits) and bool(kits[si]))):
@@ -506,6 +601,22 @@ def main():
         return
     if not URL or not KEY:
         sys.exit("Defina SUPABASE_URL e SUPABASE_SERVICE_KEY")
+    if "--job" in sys.argv:  # refaz só algumas fotos de um lote: --job <id> --sources 11,3 [--theme "tema"]
+        arg = lambda k: sys.argv[sys.argv.index(k) + 1] if k in sys.argv else None
+        job = (rest("GET", f"photo_jobs?id=eq.{arg('--job')}&select=*") or [None])[0]
+        if not job:
+            sys.exit("lote não encontrado")
+        only = {int(x) for x in (arg("--sources") or "").split(",") if x.strip()}
+        if arg("--theme"):
+            job["theme"] = arg("--theme")
+        keep = [r for r in (job.get("results") or []) if r["source"] not in only]
+        with tempfile.TemporaryDirectory() as folder:
+            new, _ = process({**job, "source_urls": job["source_urls"]}, folder, only)
+        # as fotos refeitas ficam sem rascunho: o próximo "cadastrar" troca o produto antigo delas
+        results = sorted(keep + new, key=lambda r: (r["source"], r["index"]))
+        rest("PATCH", f"photo_jobs?id=eq.{job['id']}", {"results": results, "updated_at": now()})
+        log(f"refeitas: {sorted(only)} → {len(new)} produto(s)")
+        return
     if "--check" in sys.argv:
         print("queued" if queued(1) else "empty")
         return

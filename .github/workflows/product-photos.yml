@@ -4,6 +4,16 @@ name: Fotos de produto
 
 on:
   workflow_dispatch:
+    inputs:
+      job:
+        description: "Refazer só algumas fotos de um lote: id do lote (vazio = fila normal)"
+        required: false
+      sources:
+        description: "Números das fotos (0 = 1ª), separados por vírgula"
+        required: false
+      theme:
+        description: "Tema do fundo para essas fotos (opcional)"
+        required: false
 
 concurrency:
   group: product-photos
@@ -38,7 +48,9 @@ jobs:
 
       - name: Tem lote na fila?
         id: queue
-        run: echo "status=$(python3 video/product_photos.py --check)" >> "$GITHUB_OUTPUT"
+        run: |
+          if [[ -n "${{ inputs.job }}" ]]; then echo "status=queued" >> "$GITHUB_OUTPUT"
+          else echo "status=$(python3 video/product_photos.py --check)" >> "$GITHUB_OUTPUT"; fi
 
       - uses: actions/setup-python@v5
         if: steps.queue.outputs.status == 'queued'
@@ -60,4 +72,10 @@ jobs:
 
       - name: Processar fotos
         if: steps.queue.outputs.status == 'queued'
-        run: python3 video/product_photos.py
+        env:
+          JOB: ${{ inputs.job }}
+          SOURCES: ${{ inputs.sources }}
+          THEME: ${{ inputs.theme }}
+        run: |
+          if [[ -n "$JOB" ]]; then python3 video/product_photos.py --job "$JOB" --sources "$SOURCES" ${THEME:+--theme "$THEME"}
+          else python3 video/product_photos.py; fi
