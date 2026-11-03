@@ -1,0 +1,68 @@
+# Prévia do estilo das Fotos de produto: roda video/product_photos.py --local em fotos de exemplo (links) e
+# publica o resultado na branch photos-preview (para conferir o estilo antes de mexer no lote do dono).
+name: Prévia das fotos de produto
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: "Links das fotos, separados por espaço"
+        required: true
+      theme:
+        description: "Tema do fundo"
+        required: true
+      name:
+        description: "Nome em cima (opcional)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      POLLINATIONS_TOKEN: ${{ secrets.POLLINATIONS_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: video/requirements.txt
+      - run: pip install -q -r video/requirements.txt
+      - uses: actions/cache@v4
+        with:
+          path: ~/.u2net
+          key: u2net-v1
+      - name: Fazer as fotos
+        env:
+          URLS: ${{ inputs.urls }}
+          THEME: ${{ inputs.theme }}
+          NAME: ${{ inputs.name }}
+        run: |
+          mkdir -p out
+          i=0
+          for u in $URLS; do
+            i=$((i+1))
+            curl -sSfL -A "BraxStudio/1.0" -o "out/foto$i.jpg" "$u" || { echo "não baixou $u"; continue; }
+            python3 video/product_photos.py --local "$PWD/out/foto$i.jpg" "$THEME" "$NAME" || true
+          done
+          ls -la out
+      - name: Publicar na branch photos-preview
+        run: |
+          set -e
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          cp -r out /tmp/out
+          git checkout --orphan photos-preview-new
+          git rm -rfq .
+          cp /tmp/out/* .
+          git add -A
+          git commit -qm "Prévia: $THEME"
+          git push -f origin HEAD:photos-preview
