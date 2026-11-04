@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Vídeo explicativo "O cardápio do Studio" (9:16, ~80 s): tudo que o Social Studio faz, cena a cena, como itens de
-um cardápio, com motion feito por código (PIL), narração (edge-tts, via youtube.speak), legenda palavra a palavra,
-trilha e efeitos sintetizados (youtube.music_bed / sfx_*). Cores da Brax: vermelho, preto, dourado; títulos em Anton.
+"""Vídeo de venda do Social Studio (9:16, ~70 s) para oferecer o programa a outras lojas: cena a cena o que ele faz
+(postar com IA, agenda e piloto automático, vídeo de produto, link no direct, Nuvemshop + Mercado Livre, fotos,
+estoque/pedidos, aviso de venda) e chamada para o WhatsApp. Motion feito por código (PIL), narração (edge-tts, via
+youtube.speak), legenda palavra a palavra, trilha e efeitos sintetizados. Visual próprio do produto (não é da Brax):
+grafite, azul elétrico e verde-limão; títulos em Anton.
 
 Uso: python3 video/studio_tour.py saida.mp4 [--silent] [--frames 1.5,10,30]  (--frames só tira fotos para conferir)
 """
@@ -24,26 +26,27 @@ ANTON = os.path.join(FONTS, "Anton-Regular.woff")
 INTER = os.path.join(FONTS, "InterDisplay-Black.otf")
 INTER_B = os.path.join(FONTS, "InterDisplay-ExtraBold.otf")
 SERIF = os.path.join(FONTS, "PlayfairDisplay-Italic.ttf")
-RED, GOLD, INK, WHITE, PAPER = (227, 38, 46), (255, 199, 44), (17, 17, 17), (255, 255, 255), (246, 240, 228)
+# RED = cor principal (azul elétrico), GOLD = destaque (verde-limão): nomes antigos mantidos no código
+RED, GOLD, INK, WHITE, PAPER = (52, 110, 255), (198, 244, 50), (14, 15, 19), (255, 255, 255), (236, 240, 248)
+WHATSAPP = "(61) 99237-2216"
 GREY = (150, 150, 158)
 VOICE = "pt-BR-AntonioNeural"
 
 # ------------------------------------------------------------------------------------------- roteiro
 # Cada cena: seção do cardápio, título (com *destaque*), narração e o desenho (função abaixo)
 SCENES = [
-    ("", "O CARDÁPIO DO *STUDIO*", "Isso aqui é o Social Studio. Um app que faz o trabalho de uma agência inteira. Olha só o cardápio.", "intro"),
-    ("CARDÁPIO", "5 *SEÇÕES*", "São cinco seções: publicar, engajar, loja, crescer e renda extra.", "menu"),
-    ("PUBLICAR", "POSTA *NA HORA*", "Primeiro, publicar. Você manda a foto, diz o produto, e a inteligência artificial escreve a legenda. Story, post, carrossel ou reels, um ou vários de uma vez.", "post"),
-    ("PUBLICAR", "AGENDA E *PILOTO AUTOMÁTICO*", "Dá para agendar em massa, ver tudo no calendário, e o piloto automático cria posts para você só aprovar.", "calendar"),
-    ("PUBLICAR", "VÍDEO DE *PRODUTO*", "Ele também faz vídeo de produto sozinho, com animação e música, pronto para o reels e o TikTok.", "video"),
-    ("ENGAJAR", "COMENTOU, *RECEBEU*", "Engajar: quando alguém comenta a palavra do post, o Studio manda o link do produto direto no direct.", "dm"),
-    ("LOJA", "CADASTRO EM *1 TOQUE*", "Loja: cadastra os produtos no site e no Mercado Livre de uma vez, com prata e dourado como variações.", "shop"),
-    ("LOJA", "FOTOS DE *PRODUTO*", "Tira o fundo da foto, separa o pin prata do dourado e cria a foto de fundo branco e a foto com cenário.", "photos"),
-    ("LOJA", "ESTOQUE, PEDIDOS E *CUPOM*", "Muda o estoque, acompanha os pedidos e ainda dá cupom para quem avalia a compra.", "stock"),
-    ("CRESCER", "SABER O QUE *VENDE*", "Crescer: estratégia, vitrine e concorrentes, para saber o que vende e onde melhorar.", "grow"),
-    ("RENDA EXTRA", "DINHEIRO *A MAIS*", "E ainda gera renda extra: sites para clientes, canal no YouTube, cortes, jogos e o Desafio da Bíblia.", "extra"),
+    ("", "AINDA FAZ TUDO *NA MÃO*?", "Você ainda posta, responde cliente e cadastra produto tudo na mão? Isso acabou.", "intro"),
+    ("CONECTA TUDO", "UM LUGAR *SÓ*", "Conheça o Social Studio. Instagram, TikTok, Nuvemshop e Mercado Livre, tudo num lugar só.", "hub"),
+    ("POSTAR", "POSTA *NA HORA*", "Mande a foto, diga o produto, e a inteligência artificial escreve a legenda e posta na hora. Story, post, carrossel ou reels, um ou vários de uma vez.", "post"),
+    ("AGENDAR", "AGENDA E *PILOTO AUTOMÁTICO*", "Agende o mês inteiro em minutos. O piloto automático cria os posts e você só aprova.", "calendar"),
+    ("VÍDEOS", "VÍDEO DE *PRODUTO*", "Ele também faz vídeo de produto sozinho, com animação e música, pronto para o reels e o TikTok.", "video"),
+    ("DIRECT", "COMENTOU, *RECEBEU*", "Cliente comentou a palavra do post? O Studio manda o link do produto direto no direct, na hora.", "dm"),
+    ("LOJA", "CADASTRO EM *1 TOQUE*", "Cadastre o produto uma vez e ele vai para a sua loja na Nuvemshop e para o Mercado Livre, com as variações.", "shop"),
+    ("FOTOS", "FOTO DE *PROFISSIONAL*", "Tira o fundo da foto e cria a foto de fundo branco e a foto com cenário, sem mudar o seu produto.", "photos"),
+    ("GESTÃO", "ESTOQUE, PEDIDOS E *CUPOM*", "Estoque e pedidos sincronizados, e ainda dá cupom para quem avalia a compra.", "stock"),
+    ("RENDA EXTRA", "DINHEIRO *A MAIS*", "E ainda vem com ferramentas de renda extra: sites para clientes, canal no YouTube, cortes, jogos e quiz.", "extra"),
     ("NO CELULAR", "AVISO DE *CADA VENDA*", "Tudo no celular, com aviso a cada venda nova.", "phone"),
-    ("", "SUA LOJA NO *PILOTO AUTOMÁTICO*", "Social Studio. Sua loja no piloto automático.", "outro"),
+    ("", "QUER NA *SUA LOJA*?", "Quer o Social Studio na sua loja? Chama no WhatsApp e veja funcionando.", "outro"),
 ]
 
 # ------------------------------------------------------------------------------------------- utilidades
@@ -174,27 +177,42 @@ def menu_frame(c, d, t):
 
 
 def sc_intro(c, d, t, dur):
-    menu_frame(c, d, t)
-    cap = text_img("BRAX PINS MANIA APRESENTA", INTER_B, 34, GOLD)
-    paste_scaled(c, cap, W / 2, 580, 1, ease((t - 0.3) / 0.5))
-    big = title_img("O CARDÁPIO", 150)
-    paste_scaled(c, big, W / 2, 780, back((t - 0.5) / 0.5) * 1.0, clamp((t - 0.5) / 0.2))
-    s = title_img("DO *STUDIO*", 190)
-    paste_scaled(c, s, W / 2, 1000, back((t - 0.9) / 0.5), clamp((t - 0.9) / 0.2))
-    # talheres: garfo e faca estilizados
-    sub = text_img("tudo o que ele faz por você", SERIF, 60, PAPER)
-    paste_scaled(c, sub, W / 2, 1150, 1, ease((t - 2.0) / 0.5))
-    # garfo e faca embaixo, entrando de baixo
-    k = ease((t - 1.4) / 0.6)
-    if k > 0:
-        y = 1390 - 50 * k
-        x = W / 2 - 70
-        d.rounded_rectangle((x - 8, y - 40, x + 8, y + 50), 8, fill=GOLD)
-        for i in (-22, 0, 22):
-            d.rounded_rectangle((x + i - 5, y - 95, x + i + 5, y - 35), 5, fill=GOLD)
-        x = W / 2 + 70
-        d.rounded_rectangle((x - 8, y - 40, x + 8, y + 50), 8, fill=GOLD)
-        d.ellipse((x - 20, y - 100, x + 20, y - 20), fill=GOLD)
+    # pilha de tarefas "na mão" que vai caindo, e o título-gancho por cima
+    tasks = ["Postar no Instagram", "Responder direct", "Cadastrar no site", "Anunciar no Mercado Livre", "Atualizar estoque"]
+    for i, tx in enumerate(tasks):
+        k = back((t - 0.15 * i) / 0.35)
+        if k <= 0:
+            continue
+        tl = card(700, 96, fill=(30, 32, 40, 255), border=(70, 74, 86, 255), r=26)
+        g = ImageDraw.Draw(tl)
+        g.rounded_rectangle((26, 26, 70, 70), 10, outline=GREY, width=5)
+        g.text((96, 48), tx, font=font(INTER_B, 38), fill=WHITE, anchor="lm")
+        fall = max(0.0, t - 2.4) ** 2 * 900 * (1 + i * 0.15)
+        paste_scaled(c, tl, W / 2 + (i - 2) * 18, 430 + i * 105 + fall, k, clamp(k), rot=(i - 2) * 2 + min(25, fall / 40) * (1 if i % 2 else -1))
+    big = title_img("AINDA FAZ TUDO", 120)
+    paste_scaled(c, big, W / 2, 1120, back((t - 0.9) / 0.4), clamp((t - 0.9) / 0.2))
+    big2 = title_img("*NA MÃO?*", 190)
+    paste_scaled(c, big2, W / 2, 1285, back((t - 1.2) / 0.4), clamp((t - 1.2) / 0.2), rot=-3)
+
+
+def sc_hub(c, d, t, dur):
+    cx, cy = W / 2, 900
+    names = [("INSTAGRAM", (-1, -1)), ("TIKTOK", (1, -1)), ("NUVEMSHOP", (-1, 1)), ("MERCADO LIVRE", (1, 1))]
+    for i, (name, (sx, sy)) in enumerate(names):
+        k = ease((t - 0.6 - i * 0.3) / 0.4)
+        if k <= 0:
+            continue
+        px, py = cx + sx * 260, cy + sy * 300
+        d.line((cx, cy, lerp(cx, px, k), lerp(cy, py, k)), fill=(*GOLD, 255), width=8)
+        # bolinha correndo na linha (dados indo e voltando)
+        f = (t * 0.9 + i * 0.25) % 1
+        d.ellipse((lerp(cx, px, f) - 12, lerp(cy, py, f) - 12, lerp(cx, px, f) + 12, lerp(cy, py, f) + 12), fill=WHITE)
+        b = badge(name, (30, 32, 40), WHITE)
+        paste_scaled(c, b, px, py, back(k), 1)
+    k = back(t / 0.5)
+    hub = card(300, 300, fill=(*RED, 255), r=80)
+    ImageDraw.Draw(hub).text((150, 150), "S", font=font(ANTON, 200), fill=WHITE, anchor="mm")
+    paste_scaled(c, hub, cx, cy, k * (1 + 0.03 * math.sin(t * 5)), clamp(k))
 
 
 SECTIONS = [("01", "PUBLICAR"), ("02", "ENGAJAR"), ("03", "LOJA"), ("04", "CRESCER"), ("05", "RENDA EXTRA")]
@@ -270,7 +288,7 @@ def sc_post(c, d, t, dur):
         rrect(d2, (px, y0 + 450, px + tw, y0 + 492), 21, fill=RED if on else (225, 225, 228))
         d2.text((px + 13, y0 + 461), name, font=f, fill=WHITE if on else (90, 90, 95))
     # legenda sendo "digitada" pela IA
-    lines = ["Pin de Terapia Ocupacional", "Para quem ama a profissão,", "no jaleco ou no crachá.", "#terapiaocupacional #pins"]
+    lines = ["Chegou novidade na loja!", "Feito para quem ama", "qualidade e bom preço.", "#novidade #lojaonline"]
     shown = (t - 0.8) * 40
     yy = y0 + 520
     for ln in lines:
@@ -391,7 +409,7 @@ def sc_shop(c, d, t, dur):
     rrect(g, (30, 30, 530, 330), 24, fill=(240, 236, 228))
     pin_icon(g, 190, 180, 95, SILVER)
     pin_icon(g, 370, 180, 95, GOLD)
-    g.text((40, 355), "Pin Terapia Ocupacional", font=font(INTER, 36), fill=INK)
+    g.text((40, 355), "Seu produto", font=font(INTER, 36), fill=INK)
     sel = int(t * 1.2) % 2
     for i, (name, col) in enumerate((("Prata", SILVER), ("Dourado", GOLD))):
         x = 40 + i * 200
@@ -411,7 +429,6 @@ def sc_photos(c, d, t, dur):
     g = ImageDraw.Draw(orig)
     pin_icon(g, 100, 150, 60, SILVER)
     pin_icon(g, 200, 220, 60, GOLD)
-    g.text((40, 320), "S. Social", font=font(SERIF, 30), fill=(60, 50, 45))
     paste_scaled(c, orig, 250, 720, 1, k1)
     a = ease((t - 0.9) / 0.4)
     if a > 0:
@@ -517,6 +534,11 @@ def icon(g, kind, cx, cy, col=WHITE):
 
 
 def sc_extra(c, d, t, dur):
+    # moedas caindo (atrás dos quadros)
+    for i in range(7):
+        y = ((t * 380 + i * 270) % 1300) + 300
+        x = 120 + (i * 151) % 860
+        d.ellipse((x, y, x + 46, y + 46), fill=GOLD, outline=(200, 150, 20), width=4)
     for i, (name, ic) in enumerate(EXTRA):
         r, col = divmod(i, 2)
         cx, cy = 330 + col * 420, 560 + r * 270
@@ -526,11 +548,6 @@ def sc_extra(c, d, t, dur):
         icon(g, ic, 190, 85)
         g.text((190, 175), name, font=font(ANTON, 50), fill=GOLD if i % 3 else WHITE, anchor="mm")
         paste_scaled(c, tl, cx, cy, k, clamp(k), rot=math.sin(t * 2 + i) * 2)
-    # moedas caindo
-    for i in range(7):
-        y = ((t * 380 + i * 270) % 1300) + 300
-        x = 120 + (i * 151) % 860
-        d.ellipse((x, y, x + 46, y + 46), fill=GOLD, outline=(200, 150, 20), width=4)
 
 
 def sc_phone(c, d, t, dur):
@@ -538,7 +555,7 @@ def sc_phone(c, d, t, dur):
     x0, y0, x1, y1 = box
     g = ImageDraw.Draw(c)
     g.text(((x0 + x1) / 2, y0 + 130), "21:47", font=font(INTER, 96), fill=WHITE, anchor="mm")
-    notes = [("Venda nova", "Pin Medicina · site"), ("Venda nova", "Kit SUS · Mercado Livre"), ("Cliente chamando", "quer saber do prazo")]
+    notes = [("Venda nova", "Pedido pelo site"), ("Venda nova", "Pedido no Mercado Livre"), ("Cliente chamando", "quer saber do prazo")]
     for i, (a, b) in enumerate(notes):
         k = back((t - 0.4 - i * 0.7) / 0.45)
         if k <= 0:
@@ -558,17 +575,25 @@ def sc_phone(c, d, t, dur):
 
 
 def sc_outro(c, d, t, dur):
-    menu_frame(c, d, t)
-    k = back((t - 0.2) / 0.5)
-    logo = card(240, 240, fill=(*RED, 255), r=60)
-    ImageDraw.Draw(logo).text((120, 120), "S", font=font(ANTON, 170), fill=WHITE, anchor="mm")
-    paste_scaled(c, logo, W / 2, 700, k * (1 + 0.04 * math.sin(t * 4)), clamp(k))
-    paste_scaled(c, title_img("SOCIAL *STUDIO*", 120), W / 2, 930, back((t - 0.6) / 0.4), clamp((t - 0.6) / 0.2))
-    paste_scaled(c, text_img("feito para a Brax Pins Mania", SERIF, 56, PAPER), W / 2, 1060, 1, ease((t - 1.0) / 0.4))
-    paste_scaled(c, text_img("@braxpinsmania", INTER_B, 44, GOLD), W / 2, 1200, 1, ease((t - 1.4) / 0.4))
+    k = back((t - 0.1) / 0.5)
+    logo = card(220, 220, fill=(*RED, 255), r=60)
+    ImageDraw.Draw(logo).text((110, 110), "S", font=font(ANTON, 150), fill=WHITE, anchor="mm")
+    paste_scaled(c, logo, W / 2, 560, k * (1 + 0.04 * math.sin(t * 4)), clamp(k))
+    paste_scaled(c, title_img("SOCIAL *STUDIO*", 120), W / 2, 760, back((t - 0.4) / 0.4), clamp((t - 0.4) / 0.2))
+    paste_scaled(c, text_img("sua loja no piloto automático", SERIF, 58, PAPER), W / 2, 880, 1, ease((t - 0.8) / 0.4))
+    # botão do WhatsApp pulsando
+    k = back((t - 1.2) / 0.5)
+    btn = card(760, 150, fill=(37, 211, 102, 255), r=75)
+    g = ImageDraw.Draw(btn)
+    g.ellipse((40, 35, 120, 115), outline=WHITE, width=8)
+    g.polygon([(52, 112), (60, 92), (76, 108)], fill=WHITE)
+    g.text((420, 75), "CHAMA NO WHATSAPP", font=font(ANTON, 58), fill=WHITE, anchor="mm")
+    paste_scaled(c, btn, W / 2, 1100, k * (1 + 0.035 * math.sin(t * 6)), clamp(k))
+    paste_scaled(c, text_img(WHATSAPP, INTER, 64, GOLD), W / 2, 1260, 1, ease((t - 1.6) / 0.4))
+    paste_scaled(c, text_img("e veja funcionando na sua loja", INTER_B, 38, GREY), W / 2, 1340, 1, ease((t - 1.9) / 0.4))
 
 
-DRAW = {"intro": sc_intro, "menu": sc_menu, "post": sc_post, "calendar": sc_calendar, "video": sc_video, "dm": sc_dm,
+DRAW = {"intro": sc_intro, "hub": sc_hub, "menu": sc_menu, "post": sc_post, "calendar": sc_calendar, "video": sc_video, "dm": sc_dm,
         "shop": sc_shop, "photos": sc_photos, "stock": sc_stock, "grow": sc_grow, "extra": sc_extra, "phone": sc_phone,
         "outro": sc_outro}
 
@@ -593,7 +618,7 @@ def chrome(c, d, t, total, starts, si):
         return
     k = ease(lt / 0.35)
     if sec:
-        tag = badge(f"Nº {si:02d} · {sec}", RED, WHITE)
+        tag = badge(sec, RED, WHITE)
         paste_scaled(c, tag, W / 2, 230, 0.75, k)
     paste_scaled(c, title_img(title, 92), W / 2, 360, lerp(0.9, 1, back(lt / 0.4)), k)
 
@@ -613,11 +638,16 @@ def caption(c, words, t):
     g = next((g for g in groups if g[0]["t"] - 0.05 <= t <= g[-1]["t"] + g[-1]["d"] + 0.25), None)
     if not g:
         return
-    f = font(INTER, 58)
     words_txt = [w["w"].upper() for w in g]
-    widths = [f.getlength(x) for x in words_txt]
-    space = f.getlength(" ")
-    total = sum(widths) + space * (len(g) - 1)
+    size = 58
+    while True:  # frase comprida: letra menor para caber na tela
+        f = font(INTER, size)
+        widths = [f.getlength(x) for x in words_txt]
+        space = f.getlength(" ")
+        total = sum(widths) + space * (len(g) - 1)
+        if total + 70 <= W * 0.9 or size <= 36:
+            break
+        size -= 2
     bw, bh = total + 70, 100
     bx, by = (W - bw) / 2, H * 0.78
     d = ImageDraw.Draw(c)
