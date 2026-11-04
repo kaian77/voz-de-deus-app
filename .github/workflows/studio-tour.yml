@@ -1,0 +1,35 @@
+# Vídeo de venda do Social Studio (video/studio_tour.py): renderiza com narração e publica na branch studio-tour.
+name: Vídeo do Studio
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          pip install -q "pillow>=10" "numpy>=1.26" "edge-tts>=7.0"
+      - name: Renderizar
+        run: mkdir -p out && python3 video/studio_tour.py out/social-studio-venda.mp4
+      - name: Publicar na branch studio-tour
+        run: |
+          set -e
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          cp out/social-studio-venda.mp4 /tmp/
+          git checkout --orphan studio-tour-new
+          git rm -rfq .
+          cp /tmp/social-studio-venda.mp4 .
+          git add -A
+          git commit -qm "Vídeo de venda do Social Studio"
+          git push -f origin HEAD:studio-tour
