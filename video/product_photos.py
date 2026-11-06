@@ -484,6 +484,11 @@ def scene_prompt(theme, sample=None):
         "'Justiça' (justice) pin -> dark polished wood desk, judge's gavel, old law books, brass scales of justice, warm library light; "
         "religious pins (Jesus, Nossa Senhora) -> light beige stone slab, wooden rosary, gold candle holder with lit candle, small "
         "white flowers, soft golden light; nursing pin -> clean hospital setting, stethoscope, folded white towel, soft daylight. "
+        "Be literal and correct about objects: a football/soccer ball is a ROUND black-and-white association football "
+        "(never a rugby or American football); team pins -> that team's stadium, jersey colors and scarf. Many pins show the "
+        "mascot 'Zé Gotinha' (a white drop): he is only the drawing, build the scene from the variant in the name (team, "
+        "profession, region, character), not from vaccines, unless the name is about vaccination. Only props that clearly "
+        "belong to the subject; no random objects. "
         "Keep the center of the frame free for the pin. No text, no letters, no logos, no people, no other pins. "
         "Reply with the prompt only.")})
     body = json.dumps({"model": os.environ.get("CLAUDE_MODEL") or "claude-opus-5-5", "max_tokens": 300,
@@ -545,7 +550,9 @@ def fal_shot(piece, scene):
     # quadro 1200x1200 transparente com o pin grande, centralizado e um pouco abaixo do meio (placement "original")
     from PIL import ImageFilter
 
-    p = fit(piece, SIZE * 0.6, SIZE * 0.62)
+    # pin grande, mas sem ampliar mais que 2,2x (foto pequena ampliada demais fica borrada)
+    k = min(SIZE * 0.6 / piece.width, SIZE * 0.62 / piece.height, 2.2)
+    p = piece.resize((max(1, round(piece.width * k)), max(1, round(piece.height * k))), Image.LANCZOS)
     # tira 1 px da borda do recorte: some o halo cinza da sombra/fundo branco antigo
     p.putalpha(p.getchannel("A").filter(ImageFilter.MinFilter(3)))
     frame = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))

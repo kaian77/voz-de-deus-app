@@ -14,6 +14,9 @@ on:
       name:
         description: "Nome em cima (opcional)"
         required: false
+      themes:
+        description: "Um tema por foto, separados por | (opcional; senão usa theme para todas)"
+        required: false
 
 permissions:
   contents: write
@@ -46,13 +49,16 @@ jobs:
           URLS: ${{ inputs.urls }}
           THEME: ${{ inputs.theme }}
           NAME: ${{ inputs.name }}
+          THEMES: ${{ inputs.themes }}
         run: |
           mkdir -p out
+          IFS='|' read -ra TH <<< "$THEMES"
           i=0
           for u in $URLS; do
             i=$((i+1))
             curl -sSfL -A "BraxStudio/1.0" -o "out/foto$i.jpg" "$u" || { echo "não baixou $u"; continue; }
-            python3 video/product_photos.py --local "$PWD/out/foto$i.jpg" "$THEME" "$NAME" || true
+            t="${TH[$((i-1))]:-$THEME}"
+            python3 video/product_photos.py --local "$PWD/out/foto$i.jpg" "$t" "$NAME" || true
           done
           ls -la out
       - name: Publicar na branch photos-preview
