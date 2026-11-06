@@ -4,6 +4,11 @@ name: Fotos temáticas da loja
 
 on:
   workflow_dispatch:
+    inputs:
+      queue_all:
+        description: "Pôr a loja inteira na fila (só as capas de fundo branco) e aplicar sozinho"
+        type: boolean
+        default: false
 
 concurrency:
   group: store-photos
@@ -27,6 +32,9 @@ jobs:
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       POLLINATIONS_TOKEN: ${{ secrets.POLLINATIONS_TOKEN }}
       FAL_KEY: ${{ secrets.FAL_KEY }}
+      ML_APP_ID: ${{ secrets.ML_APP_ID }}
+      ML_CLIENT_SECRET: ${{ secrets.ML_CLIENT_SECRET }}
+      VIDEO_DISPATCH_TOKEN: ${{ secrets.VIDEO_DISPATCH_TOKEN }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CLAUDE_MODEL: ${{ secrets.CLAUDE_MODEL }}
     steps:
@@ -41,8 +49,17 @@ jobs:
           echo "::add-mask::$KEY"
           echo "SUPABASE_URL=https://$REF.supabase.co" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_KEY=$KEY" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$KEY" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Pôr a loja inteira na fila
+        if: inputs.queue_all && strategy.job-index == 0
+        run: deno run -A --node-modules-dir=none scripts/store-photos.ts queue-all
 
       - name: Tem lote na fila?
         id: queue
@@ -69,6 +86,10 @@ jobs:
       - name: Fazer as fotos temáticas
         if: steps.queue.outputs.status == 'queued'
         run: python3 video/store_photos.py
+
+      - name: Aplicar no site as automáticas (e mandar ao Mercado Livre)
+        if: always()
+        run: deno run -A --node-modules-dir=none scripts/store-photos.ts apply
 
       - name: Sobrou fila? Roda de novo
         if: always() && strategy.job-index == 0

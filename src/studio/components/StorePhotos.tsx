@@ -17,6 +17,7 @@ export function StorePhotos() {
   const working = jobs.filter((j) => j.status === "queued" || j.status === "processing").length;
   const failed = jobs.filter((j) => j.status === "failed");
   const applied = jobs.filter((j) => j.status === "applied").length;
+  const skipped = jobs.filter((j) => j.status === "skipped").length;
   if (!jobs.length) return null;
 
   const apply = async (ids: string[]) => {
@@ -57,7 +58,7 @@ export function StorePhotos() {
   return (
     <Panel
       title="Fotos temáticas"
-      description={`${working ? `${working} sendo feitas · ` : ""}${ready.length} para aprovar · ${applied} já no site${failed.length ? ` · ${failed.length} com erro` : ""}. Aprovar = vira a capa no site; o Mercado Livre continua com fundo branco.`}
+      description={`${working ? `${working} sendo feitas · ` : ""}${ready.length} para aprovar · ${applied} já no site${skipped ? ` · ${skipped} já tinham cenário` : ""}${failed.length ? ` · ${failed.length} com erro` : ""}. Aplicar = vira a capa no site; no Mercado Livre a capa fica branca com o pin grande e a temática vira a 2ª foto.`}
       action={ready.length > 1 ? (
         <Button size="sm" onClick={() => apply(ready.map((j) => j.id))} disabled={!!busy}>
           {busy === "all" ? <Loader2 className="animate-spin" /> : <Check />} Aplicar todas ({ready.length})

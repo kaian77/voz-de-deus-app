@@ -30,6 +30,18 @@ def queued(limit=10):
     return rest("GET", f"store_photo_jobs?status=eq.queued&attempts=lt.{MAX_ATTEMPTS}&order=created_at&limit={limit}&select=*") or []
 
 
+def white_background(im):
+    """Capa de fundo branco (as que o dono quer trocar): a moldura da foto (borda de 6%) é quase toda branca/clara."""
+    import numpy as np
+
+    a = np.asarray(im.convert("RGB")).astype(float)
+    h, w = a.shape[:2]
+    b = max(4, int(min(h, w) * 0.06))
+    frame = np.concatenate([a[:b].reshape(-1, 3), a[-b:].reshape(-1, 3), a[:, :b].reshape(-1, 3), a[:, -b:].reshape(-1, 3)])
+    light = (frame.min(axis=1) > 215) & (frame.max(axis=1) - frame.min(axis=1) < 30)
+    return light.mean() > 0.85
+
+
 def main():
     if not URL or not KEY:
         sys.exit("Defina SUPABASE_URL e SUPABASE_SERVICE_KEY")
@@ -53,6 +65,11 @@ def main():
                 pp.log(f"▶ {row['name']}")
                 try:
                     im = pp.download(row["source_url"])
+                    if row.get("auto_apply") and not white_background(im):
+                        # pedido "trocar todas as de fundo branco": esta capa já tem cenário, não gasta crédito
+                        rest("PATCH", f"store_photo_jobs?id=eq.{row['id']}", {"status": "skipped", "error": None, "updated_at": now()})
+                        pp.log("   capa já tem cenário: pulei")
+                        continue
                     piece = pp.products(im, kit=True)[0][0]  # a foto inteira do produto (kit fica junto)
                     theme = row.get("theme") or row.get("name") or "produto"
                     scene = pp.scene_prompt(theme, piece)

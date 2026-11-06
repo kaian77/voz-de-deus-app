@@ -433,7 +433,7 @@ Deno.serve(async (req) => {
       // Foto temática para produtos da loja (ids escolhidos ou todos) → workflow store-photos.yml
       const ids = (Array.isArray(input.ids) ? input.ids : []).map((n: unknown) => Number(n)).filter((n: number) => n > 0);
       if (!ids.length && input.all !== true) throw new HttpError(400, "Escolha os produtos");
-      return json(await queueStorePhotos(db, userId, { ids, all: input.all === true, theme: input.theme ? String(input.theme).slice(0, 200) : undefined }));
+      return json(await queueStorePhotos(db, userId, { ids, all: input.all === true, auto: input.auto === true, theme: input.theme ? String(input.theme).slice(0, 200) : undefined }));
     }
     if (action === "store_photos_apply") {
       const ids = (Array.isArray(input.ids) ? input.ids : []).map(String);
