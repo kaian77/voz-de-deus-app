@@ -474,14 +474,18 @@ def scene_prompt(theme, sample=None):
         sample.convert("RGB").resize((384, 384)).save(buf, "JPEG", quality=80)
         content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.b64encode(buf.getvalue()).decode()}})
     content.append({"type": "text", "text": (
-        "You write prompts for an AI image generator. Write ONE English prompt (max 70 words) for the BACKGROUND of a "
-        "product photo of an enamel pin (shown in the image, it will be pasted later in the center, so do NOT include it). "
-        f"Theme from the shop owner (Portuguese): \"{theme}\". Style reference: a pin standing on a glossy white table, "
-        "behind it a blurred themed scene (e.g. theme SAMU: a white ambulance with red stripes on the left, a red star of life "
-        "on the wall at right, a stethoscope in the bottom-left corner, a red rescue bag in the bottom-right corner). "
-        "Pick 3-4 concrete, recognizable objects of the theme, place them at the far background and the corners, keep the "
-        "center empty, match colors that suit the pin, bright clean light, shallow depth of field, photorealistic. "
-        "No text, no letters, no logos, no people. Reply with the prompt only.")})
+        "You write prompts for an AI image generator. Write ONE English prompt (max 80 words) for the SCENE around a product "
+        "photo of an enamel pin (shown in the image; it is placed in the center later, so do NOT describe the pin itself). "
+        f"Product name / theme from the shop owner (Portuguese): \"{theme}\". The scene must come from THIS product's own "
+        "subject (character, profession, cause, team, religion...), never a generic studio. House style, from the shop's best "
+        "photos: the pin stands on a themed surface in the foreground, 3-4 iconic props of the subject around it and in the "
+        "background, warm cinematic light, shallow depth of field with soft bokeh, photorealistic macro product shot. Examples: "
+        "'Indiana Jones' pin -> mossy stone in jungle temple ruins, old treasure map, brass compass, leather chest, warm torch glow; "
+        "'Justiça' (justice) pin -> dark polished wood desk, judge's gavel, old law books, brass scales of justice, warm library light; "
+        "religious pins (Jesus, Nossa Senhora) -> light beige stone slab, wooden rosary, gold candle holder with lit candle, small "
+        "white flowers, soft golden light; nursing pin -> clean hospital setting, stethoscope, folded white towel, soft daylight. "
+        "Keep the center of the frame free for the pin. No text, no letters, no logos, no people, no other pins. "
+        "Reply with the prompt only.")})
     body = json.dumps({"model": os.environ.get("CLAUDE_MODEL") or "claude-opus-5-5", "max_tokens": 300,
                        "messages": [{"role": "user", "content": content}]}).encode()
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
