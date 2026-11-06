@@ -553,8 +553,8 @@ def fal_shot(piece, scene):
     # pin grande, mas sem ampliar mais que 2,2x (foto pequena ampliada demais fica borrada)
     k = min(SIZE * 0.6 / piece.width, SIZE * 0.62 / piece.height, 2.2)
     p = piece.resize((max(1, round(piece.width * k)), max(1, round(piece.height * k))), Image.LANCZOS)
-    # tira 1 px da borda do recorte: some o halo cinza da sombra/fundo branco antigo
-    p.putalpha(p.getchannel("A").filter(ImageFilter.MinFilter(3)))
+    # tira ~2 px da borda do recorte: some a borda branca/cinza do fundo branco antigo
+    p.putalpha(p.getchannel("A").filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(0.8)))
     frame = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
     frame.alpha_composite(p, ((SIZE - p.width) // 2, int(SIZE * 0.58 - p.height / 2)))
     buf = io.BytesIO()
