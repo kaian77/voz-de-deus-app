@@ -63,7 +63,10 @@ jobs:
 
       - name: Tem lote na fila?
         id: queue
-        run: echo "status=$(python3 video/store_photos.py --check)" >> "$GITHUB_OUTPUT"
+        run: |
+          # com queue_all, o job 0 enche a fila: os outros esperam ele terminar antes de olhar
+          if [[ "${{ inputs.queue_all }}" == "true" && "${{ strategy.job-index }}" != "0" ]]; then sleep 45; fi
+          echo "status=$(python3 video/store_photos.py --check)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v5
         if: steps.queue.outputs.status == 'queued'
