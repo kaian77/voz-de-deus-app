@@ -2,6 +2,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ns, storeFor, txt } from "./nuvemshop.ts";
 import { dispatchRender } from "./product-video.ts";
+import { requeueProducts } from "./ml-sync.ts";
 
 async function store(db: SupabaseClient, userId: string) {
   const s = await storeFor(db, userId);
@@ -22,7 +23,7 @@ async function allProducts(token: string, storeId: string) {
 }
 
 /** Põe na fila: ids escolhidos ou a loja inteira (all). Refazer = mesmo produto de novo. */
-export async function queueStorePhotos(db: SupabaseClient, userId: string, opts: { ids?: number[]; all?: boolean; theme?: string }) {
+export async function queueStorePhotos(db: SupabaseClient, userId: string, opts: { ids?: number[]; all?: boolean; theme?: string; auto?: boolean }) {
   const s = await store(db, userId);
   let products: any[];
   if (opts.all) products = await allProducts(s.token, s.storeId);
@@ -38,6 +39,9 @@ export async function queueStorePhotos(db: SupabaseClient, userId: string, opts:
   if (opts.all) {
     const { data } = await db.from("store_photo_jobs").select("product_id").eq("user_id", userId).in("status", ["applied", "ready", "queued", "processing"]);
     skip = new Set((data ?? []).map((r) => Number(r.product_id)));
+    // "skipped" = a capa já tinha cenário: não refaz no "todos"
+    const { data: sk } = await db.from("store_photo_jobs").select("product_id").eq("user_id", userId).eq("status", "skipped");
+    for (const r of sk ?? []) skip.add(Number(r.product_id));
   }
   const rows = products
     .filter((p) => p.images?.length && !skip.has(Number(p.id)))
@@ -47,7 +51,7 @@ export async function queueStorePhotos(db: SupabaseClient, userId: string, opts:
       return {
         user_id: userId, product_id: Number(p.id), name: txt(p.name), url: p.canonical_url ?? null,
         source_url: String(imgs[0].src), theme: opts.theme?.trim() || null, status: "queued", result_url: null, error: null,
-        attempts: 0, updated_at: new Date().toISOString(),
+        attempts: 0, auto_apply: opts.auto === true, updated_at: new Date().toISOString(),
       };
     });
   for (let i = 0; i < rows.length; i += 200) {
@@ -64,18 +68,28 @@ export async function applyStorePhotos(db: SupabaseClient, userId: string, ids: 
   const { data: jobs } = await db.from("store_photo_jobs").select("*").eq("user_id", userId).eq("status", "ready").in("id", ids.slice(0, 200));
   let applied = 0;
   const errors: string[] = [];
+  const done: number[] = [];
   for (const j of jobs ?? []) {
     if (Date.now() - started > 100_000) break;
+    // trava: duas execuções ao mesmo tempo não põem a mesma foto duas vezes
+    const { data: claimed } = await db.from("store_photo_jobs").update({ status: "applying" }).eq("id", j.id).eq("status", "ready").select("id");
+    if (!claimed?.length) continue;
     try {
       await ns(s.token, s.storeId, `products/${j.product_id}/images`, { method: "POST", body: { src: j.result_url, position: 1 } });
       await db.from("store_photo_jobs").update({ status: "applied", error: null, updated_at: new Date().toISOString() }).eq("id", j.id);
       applied++;
+      done.push(Number(j.product_id));
       await new Promise((r) => setTimeout(r, 400)); // a Nuvemshop limita ~2 chamadas por segundo
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       errors.push(`${j.name}: ${msg}`);
-      await db.from("store_photo_jobs").update({ error: msg, updated_at: new Date().toISOString() }).eq("id", j.id);
+      await db.from("store_photo_jobs").update({ status: "ready", error: msg, updated_at: new Date().toISOString() }).eq("id", j.id);
     }
+  }
+  // Mercado Livre: os produtos alterados voltam para a sincronização (capa branca com o pin grande + foto temática)
+  if (done.length) {
+    const { data: accs } = await db.from("social_accounts").select("id").eq("user_id", userId).eq("platform", "mercadolivre");
+    for (const a of accs ?? []) await requeueProducts(db, a.id, done).catch((e) => console.error("ML requeue", e));
   }
   const pending = (jobs ?? []).length - applied - errors.length;
   return { applied, errors, pending };

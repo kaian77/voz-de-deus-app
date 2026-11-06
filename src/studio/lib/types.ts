@@ -600,7 +600,7 @@ export interface StorePhotoJob {
   url: string | null;
   source_url: string;
   theme: string | null;
-  status: "queued" | "processing" | "ready" | "applied" | "failed" | "discarded";
+  status: "queued" | "processing" | "ready" | "applying" | "applied" | "failed" | "discarded" | "skipped";
   result_url: string | null;
   error: string | null;
   created_at: string;

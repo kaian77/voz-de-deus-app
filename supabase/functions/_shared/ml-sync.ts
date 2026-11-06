@@ -372,7 +372,11 @@ export async function runMlSync(db: SupabaseClient) {
           // (os kits vivem em promoção; com o preço cheio sairiam bem mais caros no ML do que no site).
           const price = Number((kit && Number(v.promotional_price) > 0 ? v.promotional_price : v.price) || 0);
           // deno-lint-ignore no-explicit-any
-          const images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
+          let images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
+          // Capa temática aplicada pelo Studio: no ML a capa sai da foto de fundo branco (2ª) com o pin grande, e a
+          // temática vai como 2ª foto (o ML pune capa com cenário, mas aceita nas outras)
+          const { data: themed } = await db.from("store_photo_jobs").select("id").eq("user_id", acc.user_id).eq("product_id", id).eq("status", "applied").limit(1);
+          if (themed?.length && images.length > 1) images = [images[1], images[0], ...images.slice(2)];
           const blocked = blockedTwin(sellerItems, name);
           const skip = /\b(caixa misteriosa|surpresa)\b/i.test(name) ? "caixa surpresa é proibida no Mercado Livre"
             : blocked ? `o ML bloqueou um anúncio parecido como duplicado (${blocked}): exclua ele antes`

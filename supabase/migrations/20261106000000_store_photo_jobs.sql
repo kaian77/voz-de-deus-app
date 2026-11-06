@@ -22,3 +22,5 @@ create index if not exists store_photo_jobs_status on public.store_photo_jobs (s
 alter table public.store_photo_jobs enable row level security;
 drop policy if exists "own all" on public.store_photo_jobs;
 create policy "own all" on public.store_photo_jobs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- auto_apply: aplica sozinho no site quando fica pronta (pedido "trocar todas"); skipped = capa já não era fundo branco
+alter table public.store_photo_jobs add column if not exists auto_apply boolean not null default false;
