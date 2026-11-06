@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Clapperboard, Download, ExternalLink, ImagePlus, Loader2, Plus, ShoppingBag, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StoreManager } from "../components/StoreManager";
+import { StorePhotos } from "../components/StorePhotos";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -928,6 +929,8 @@ export default function Products() {
         </Panel>
 
         <StoreManager />
+
+        <StorePhotos />
 
         <VideosPanel />
 

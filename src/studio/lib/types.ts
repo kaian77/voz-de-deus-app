@@ -592,6 +592,21 @@ export interface PhotoJob {
   updated_at: string;
 }
 
+/** Foto temática de um produto que já está na loja (Produtos da loja → Foto temática). */
+export interface StorePhotoJob {
+  id: string;
+  product_id: number;
+  name: string | null;
+  url: string | null;
+  source_url: string;
+  theme: string | null;
+  status: "queued" | "processing" | "ready" | "applied" | "failed" | "discarded";
+  result_url: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ClipSource {
   id: string;
   channel_ref: string;
@@ -692,6 +707,7 @@ export interface TableMap {
   clip_sources: ClipSource;
   quiz_episodes: QuizEpisode;
   photo_jobs: PhotoJob;
+  store_photo_jobs: StorePhotoJob;
   deals: Deal;
   strategies: Strategy;
   site_reviews: SiteReview;

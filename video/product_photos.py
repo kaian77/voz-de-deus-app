@@ -539,7 +539,11 @@ def fal_shot(piece, scene):
     from PIL import Image
 
     # quadro 1200x1200 transparente com o pin grande, centralizado e um pouco abaixo do meio (placement "original")
+    from PIL import ImageFilter
+
     p = fit(piece, SIZE * 0.6, SIZE * 0.62)
+    # tira 1 px da borda do recorte: some o halo cinza da sombra/fundo branco antigo
+    p.putalpha(p.getchannel("A").filter(ImageFilter.MinFilter(3)))
     frame = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
     frame.alpha_composite(p, ((SIZE - p.width) // 2, int(SIZE * 0.58 - p.height / 2)))
     buf = io.BytesIO()

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ExternalLink, Loader2, Search, Trash2 } from "lucide-react";
+import { ExternalLink, ImagePlus, Loader2, Search, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useInvalidate } from "../lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "../lib/api";
@@ -22,13 +24,36 @@ export function StoreManager() {
   const qc = useQueryClient();
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
+  const invalidate = useInvalidate();
+  const [sel, setSel] = useState<number[]>([]);
+  const [queuing, setQueuing] = useState(false);
+  const queue = async (all: boolean) => {
+    if (all && !confirm("Criar foto temática para TODOS os produtos da loja? Cada foto custa uns US$ 0,04 na fal.ai. Os que já têm foto temática ficam de fora.")) return;
+    setQueuing(true);
+    try {
+      const r = await api.invoke<{ queued: number; skipped: number }>("ai", { action: "store_photos_queue", ...(all ? { all: true } : { ids: sel }) });
+      toast.success(`${r.queued} produto(s) na fila${r.skipped ? ` (${r.skipped} já tinham)` : ""}. As fotos aparecem em "Fotos temáticas" para você aprovar.`);
+      setSel([]);
+      invalidate("store_photo_jobs");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setQueuing(false);
+    }
+  };
   const list = useQuery({
     queryKey: ["store-manage", search],
     queryFn: () => api.invoke<Item[]>("ai", { action: "store_manage_list", q: search || undefined }),
     staleTime: 60_000,
   });
   return (
-    <Panel title="Produtos da loja" description="Mude o estoque ou apague. Vale para o site e para o anúncio do Mercado Livre." bodyClassName="p-0">
+    <Panel title="Produtos da loja" description="Mude o estoque, apague ou crie a foto temática. Estoque e apagar valem para o site e para o anúncio do Mercado Livre." bodyClassName="p-0">
+      <div className="flex flex-wrap gap-2 border-b p-3">
+        <Button size="sm" onClick={() => queue(false)} disabled={!sel.length || queuing}>
+          {queuing ? <Loader2 className="animate-spin" /> : <ImagePlus />} Foto temática ({sel.length})
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => queue(true)} disabled={queuing}>Foto temática em todos</Button>
+      </div>
       <form className="flex gap-2 border-b p-3" onSubmit={(e) => { e.preventDefault(); setSearch(q.trim()); }}>
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar pelo nome (vazio = os últimos)" className="h-9" />
         <Button type="submit" size="sm" variant="outline" className="h-9"><Search /></Button>
@@ -41,7 +66,12 @@ export function StoreManager() {
         <p className="p-4 text-sm text-muted-foreground">Nenhum produto encontrado.</p>
       ) : (
         <div className="divide-y">
-          {list.data.map((p) => <Row key={p.id} item={p} onChange={() => qc.invalidateQueries({ queryKey: ["store-manage"] })} />)}
+          {list.data.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 pl-3">
+              <Checkbox checked={sel.includes(p.id)} onCheckedChange={(v) => setSel((cur) => (v ? [...cur, p.id] : cur.filter((x) => x !== p.id)))} aria-label="Escolher" />
+              <div className="min-w-0 flex-1"><Row item={p} onChange={() => qc.invalidateQueries({ queryKey: ["store-manage"] })} /></div>
+            </div>
+          ))}
         </div>
       )}
     </Panel>
