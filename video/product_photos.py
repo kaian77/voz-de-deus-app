@@ -524,6 +524,78 @@ def background(theme, seed, folder, sample=None):
     return gradient()
 
 
+FAL_URL = "https://fal.run/fal-ai/bria/product-shot"
+
+
+def fal_shot(piece, scene):
+    """Foto temática pela fal.ai (Bria Product Shot, pago, ~US$ 0,04): o produto vai recortado, já posicionado no
+    quadro do jeito "produto herói", e a IA monta o cenário em volta com luz/sombra/reflexo de verdade, sem redesenhar
+    o produto. Sem FAL_KEY (ou erro/sem crédito) devolve None e quem chamou usa o fundo grátis."""
+    key = os.environ.get("FAL_KEY")
+    if not key:
+        return None
+    import base64
+    import json
+    from PIL import Image
+
+    # quadro 1200x1200 transparente com o pin grande, centralizado e um pouco abaixo do meio (placement "original")
+    p = fit(piece, SIZE * 0.6, SIZE * 0.62)
+    frame = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    frame.alpha_composite(p, ((SIZE - p.width) // 2, int(SIZE * 0.58 - p.height / 2)))
+    buf = io.BytesIO()
+    frame.save(buf, "PNG")
+    body = json.dumps({
+        "image_url": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(),
+        "scene_description": scene[:1000], "optimize_description": True, "num_results": 1, "fast": False,
+        "placement_type": "original", "shot_size": [SIZE, SIZE],
+    }).encode()
+    req = urllib.request.Request(FAL_URL, data=body, method="POST",
+                                 headers={"Authorization": f"Key {key}", "Content-Type": "application/json"})
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=240) as r:
+                data = json.loads(r.read())
+            url = ((data.get("images") or [{}])[0] or {}).get("url")
+            if not url:
+                raise RuntimeError(f"sem imagem na resposta: {str(data)[:200]}")
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "BraxStudio/1.0"}), timeout=120) as r:
+                out = Image.open(io.BytesIO(r.read())).convert("RGB")
+            log("   cenário pela fal.ai")
+            return out.resize((SIZE, SIZE), Image.LANCZOS) if out.size != (SIZE, SIZE) else out
+        except urllib.error.HTTPError as e:
+            log(f"   fal.ai {e.code}: {e.read()[:300].decode(errors='replace')}")
+            if e.code in (401, 402, 403, 422):  # chave errada, sem crédito ou pedido recusado: não adianta insistir
+                return None
+        except Exception as e:  # noqa: BLE001
+            log(f"   fal.ai: {e}")
+        time.sleep(5)
+    return None
+
+
+class Themer:
+    """Foto do tema: fal.ai quando tem FAL_KEY; senão (ou se falhar) cenário grátis + montagem nossa."""
+
+    def __init__(self, theme, seed, folder):
+        self.theme, self.seed, self.folder = theme or "elegant soft studio", seed, folder
+        self.scene, self.bg = None, None
+
+    def __call__(self, piece, name=None, theme=None):
+        if theme and theme != self.theme:  # tema por produto (Produtos da loja): cena própria
+            self.theme, self.scene, self.bg = theme, None, None
+        if os.environ.get("FAL_KEY"):
+            if self.scene is None:
+                self.scene = scene_prompt(self.theme, piece)
+            shot = fal_shot(piece, self.scene)
+            if shot is not None:
+                canvas = shot.convert("RGBA")
+                if name:
+                    title(canvas, name, int(SIZE * 0.1))
+                return canvas.convert("RGB")
+        if self.bg is None:
+            self.bg = background(self.theme, self.seed, self.folder, piece)
+        return on_theme(piece, self.bg, name)
+
+
 def gradient():
     import numpy as np
     from PIL import Image
@@ -560,7 +632,7 @@ def process(job, folder, only=None):
     kits = job.get("kits") or []
     sources = job.get("source_urls") or []
     bg_seed = job.get("seed") or random.randint(1, 10**6)
-    bg = None
+    themed = Themer(job.get("theme"), bg_seed, folder)
     results = []
     stamp = int(time.time())
     for si, src in enumerate(sources):
@@ -569,14 +641,12 @@ def process(job, folder, only=None):
         log(f"  foto {si + 1}/{len(sources)}")
         im = download(src)
         for pi, (piece, color) in enumerate(products(im, si < len(kits) and bool(kits[si]))):
-            if bg is None:  # um cenário por lote, escrito vendo o 1º produto
-                bg = background(job.get("theme") or "elegant soft studio", bg_seed, folder, piece)
             name = (names[si] if si < len(names) else "") or None
             base = f"{job['user_id']}/fotos/{job['id']}/{si}-{pi}-{stamp}"
             results.append({
                 "source": si, "index": pi, "color": color, "name": name,
                 "white_url": upload(on_white(piece), base + "-branco.jpg"),
-                "theme_url": upload(on_theme(piece, bg, name), base + "-tema.jpg"),
+                "theme_url": upload(themed(piece, name), base + "-tema.jpg"),
             })
             log(f"    produto {pi + 1}: {color}")
     return results, bg_seed
@@ -591,12 +661,13 @@ def main():
 
         out = os.path.dirname(os.path.abspath(src))
         tag = os.path.splitext(os.path.basename(src))[0]
-        bg = None
+        themed = Themer(theme, random.randint(1, 10**6), out)
+        if "--no-ai" in sys.argv:
+            os.environ.pop("FAL_KEY", None)
+            themed.bg = gradient()
         for pi, (piece, color) in enumerate(products(Image.open(src).convert("RGBA"), "--kit" in sys.argv)):
-            if bg is None:
-                bg = gradient() if "--no-ai" in sys.argv else background(theme, random.randint(1, 10**6), out, piece)
             on_white(piece).save(os.path.join(out, f"{tag}-r{pi}-{color}-branco.jpg"), quality=92)
-            on_theme(piece, bg, name or None).save(os.path.join(out, f"{tag}-r{pi}-{color}-tema.jpg"), quality=92)
+            themed(piece, name or None).save(os.path.join(out, f"{tag}-r{pi}-{color}-tema.jpg"), quality=92)
             log(f"produto {pi + 1}: {color}")
         return
     if not URL or not KEY:
