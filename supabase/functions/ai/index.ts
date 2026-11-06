@@ -7,6 +7,7 @@ import { readWebPage, runTool } from "../_shared/agent-tools.ts";
 import { ns, nsCategories, nsFillShopping, nsOrders, nsPages, nsProducts, nsStore, storeFor, txt } from "../_shared/nuvemshop.ts";
 import { deleteProduct, setStock } from "../_shared/store-manage.ts";
 import { publishPhotoJob, redoPhotoJobs } from "../_shared/photo-jobs.ts";
+import { applyStorePhotos, queueStorePhotos } from "../_shared/store-photos.ts";
 import { createFromDraft, publishToMarketplaces, suggestProduct, templateFor } from "../_shared/products.ts";
 import { dispatchRender, postVideo, queueProductVideo, videoOptions } from "../_shared/product-video.ts";
 import { aiVideoPost, aiVideoProviders, checkAiVideo, pollAiVideos, startAiVideo } from "../_shared/ai-video.ts";
@@ -427,6 +428,16 @@ Deno.serve(async (req) => {
       if (!store) throw new HttpError(400, "Conecte a Nuvemshop em Contas");
       const list = await nsProducts(store.token, store.storeId, { q: input.q ? String(input.q).slice(0, 80) : undefined, limit: 24 });
       return json(list.map((p) => ({ id: p.id, name: p.name, image: p.image, url: p.url })));
+    }
+    if (action === "store_photos_queue") {
+      // Foto temática para produtos da loja (ids escolhidos ou todos) → workflow store-photos.yml
+      const ids = (Array.isArray(input.ids) ? input.ids : []).map((n: unknown) => Number(n)).filter((n: number) => n > 0);
+      if (!ids.length && input.all !== true) throw new HttpError(400, "Escolha os produtos");
+      return json(await queueStorePhotos(db, userId, { ids, all: input.all === true, theme: input.theme ? String(input.theme).slice(0, 200) : undefined }));
+    }
+    if (action === "store_photos_apply") {
+      const ids = (Array.isArray(input.ids) ? input.ids : []).map(String);
+      return json(await applyStorePhotos(db, userId, ids));
     }
     if (action === "store_stock" || action === "store_delete") {
       // Produtos da loja: mudar estoque / apagar, no site e no anúncio do Mercado Livre ligado
