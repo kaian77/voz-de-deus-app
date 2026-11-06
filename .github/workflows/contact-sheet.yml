@@ -1,0 +1,36 @@
+# Folhas de contato de uma lista de imagens (JSON no repositório, na ref escolhida) → branch contact-sheet.
+# Uso: para o Claude conferir de longe as capas dos produtos da loja (o CDN da Nuvemshop não abre na sessão dele).
+name: Folhas de contato
+
+on:
+  workflow_dispatch:
+    inputs:
+      list:
+        description: "Caminho do JSON [{id, name, image}] no repositório"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  sheets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q pillow
+      - run: python3 scripts/contact_sheet.py "${{ inputs.list }}" /tmp/sheets
+      - name: Publicar na branch contact-sheet
+        run: |
+          set -e
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git checkout --orphan cs-new
+          git rm -rfq .
+          cp /tmp/sheets/* .
+          git add -A
+          git commit -qm "Folhas de contato"
+          git push -f origin HEAD:contact-sheet
