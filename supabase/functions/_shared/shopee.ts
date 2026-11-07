@@ -80,7 +80,9 @@ export async function shopee<T = any>(token: string, shopId: string, path: strin
 }
 
 export async function shopeeShopInfo(token: string, shopId: string) {
-  return shopee<{ shop_name?: string }>(token, shopId, "/api/v2/shop/get_shop_info").catch(() => ({} as { shop_name?: string }));
+  // Se a Shopee responder sem o bloco "response", devolve vazio em vez de quebrar a conexão.
+  const info = await shopee<{ shop_name?: string }>(token, shopId, "/api/v2/shop/get_shop_info").catch(() => undefined);
+  return info ?? ({} as { shop_name?: string });
 }
 
 export type ShopeeItem = {
@@ -124,3 +126,94 @@ export async function shopeeItems(token: string, shopId: string, max = 200): Pro
   }
   return items;
 }
+
+/**
+ * Só leitura: mostra o que a Shopee exige para publicar nesta loja
+ * (categorias, canais de envio e atributos de uma categoria de exemplo).
+ */
+// deno-lint-ignore no-explicit-any
+export async function shopeeReadiness(token: string, shopId: string, sampleCategoryId?: number) {
+  // deno-lint-ignore no-explicit-any
+  const cats = await shopee<{ category_list?: any[] }>(token, shopId, "/api/v2/product/get_category", { params: { language: "pt-br" } });
+  // deno-lint-ignore no-explicit-any
+  const channels = await shopee<{ logistics_channel_list?: any[] }>(token, shopId, "/api/v2/logistics/get_channel_list").catch((e) => ({ logistics_channel_list: [], error: String(e) }));
+  const list = cats.category_list ?? [];
+  const leaves = list.filter((c) => !c.has_children);
+  // Categoria de exemplo: a de um anúncio real da loja (se não houver, a primeira folha).
+  let categoriaExemplo = sampleCategoryId;
+  if (!categoriaExemplo) {
+    const [first] = await shopeeItems(token, shopId, 1).catch(() => []);
+    categoriaExemplo = first?.category_id ?? leaves[0]?.category_id;
+  }
+  let atributos: unknown[] = [];
+  if (categoriaExemplo) {
+    // Endereço atual da Shopee para atributos (get_attribute_tree); o antigo (get_attributes) deu erro.
+    // deno-lint-ignore no-explicit-any
+    const tree = await shopee<{ list?: any[] }>(token, shopId, "/api/v2/product/get_attribute_tree", {
+      params: { category_id_list: categoriaExemplo, language: "pt-br" },
+    }).catch((e) => ({ list: [{ erro: String(e) }] }));
+    // deno-lint-ignore no-explicit-any
+    const nodes: any[] = [];
+    // deno-lint-ignore no-explicit-any
+    const walk = (list: any[] | undefined) => {
+      for (const n of list ?? []) {
+        nodes.push(n);
+        walk(n.child_attribute_list ?? n.children ?? n.child_attribute_tree);
+      }
+    };
+    // deno-lint-ignore no-explicit-any
+    walk((tree.list ?? []).flatMap((c: any) => c.attribute_tree ?? c.attribute_list ?? [c]));
+    atributos = nodes.filter((n) => n.attribute_id !== undefined).map((n) => {
+      const pt = (n.multi_lang ?? []).find((m: { language: string }) => m.language === "pt-BR")?.value;
+      return { attribute_id: n.attribute_id, nome: pt ?? n.name, obrigatorio: !!n.mandatory };
+    });
+    if (!atributos.length) atributos = [{ resposta_crua: tree }];
+  }
+  return {
+    categorias_total: list.length,
+    folhas_total: leaves.length,
+    categorias_exemplo: leaves.slice(0, 10).map((c) => ({ category_id: c.category_id, nome: c.display_category_name ?? c.original_category_name })),
+    // deno-lint-ignore no-explicit-any
+    canais: (channels.logistics_channel_list ?? []).map((c: any) => ({ logistic_channel_id: c.logistics_channel_id, nome: c.logistics_channel_name, ativo: c.enabled })),
+    categoria_exemplo: categoriaExemplo ?? null,
+    atributos,
+  };
+}
+
+/** Sobe uma foto (URL pública) para a Shopee e devolve o image_id. */
+export async function shopeeUploadImage(token: string, shopId: string, imageUrl: string): Promise<string> {
+  const img = await fetch(imageUrl);
+  if (!img.ok) throw new Error("Não consegui baixar a foto do produto");
+  const url = await signed("/api/v2/media_space/upload_image", { token, shopId: Number(shopId) });
+  const form = new FormData();
+  form.append("image", await img.blob(), "foto.jpg");
+  const res = await fetch(url, { method: "POST", body: form });
+  // deno-lint-ignore no-explicit-any
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data.error) throw new Error(`Shopee (foto): ${data.message || data.error || res.status}`);
+  const id = data.response?.image_info?.image_id;
+  if (!id) throw new Error("Shopee não devolveu o id da foto");
+  return id;
+}
+
+/** Cria um anúncio na Shopee (body segue o formato de product/add_item). */
+// deno-lint-ignore no-explicit-any
+export async function shopeeAddItem(token: string, shopId: string, body: Record<string, any>) {
+  return shopee(token, shopId, "/api/v2/product/add_item", { body });
+}
+
+/** Tira um anúncio da vitrine (fica fora do ar sem ser apagado). */
+export async function shopeeUnlistItem(token: string, shopId: string, itemId: number) {
+  return shopee(token, shopId, "/api/v2/product/unlist_item", { body: { item_list: [{ item_id: itemId, unlist: true }] } });
+}
+
+/** Fiscal aceito pela Shopee para os pins (bijuteria de metal): CEST vai no campo "cest". */
+export const SHOPEE_PIN_TAX = {
+  ncm: "71171900",
+  cest: "2805800",
+  same_state_cfop: "5102",
+  diff_state_cfop: "6102",
+  csosn: "102",
+  origin: "0",
+  measure_unit: "UN",
+};

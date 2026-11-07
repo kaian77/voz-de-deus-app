@@ -136,8 +136,87 @@ function Analysis({ account }: { account: SocialAccount }) {
       <Button size="sm" variant="ghost" className="mt-1 h-7 px-2 text-xs" onClick={run} disabled={busy}>
         {busy && <Loader2 className="animate-spin" />}Analisar de novo
       </Button>
+      {account.platform === "shopee" && <ShopeeSync account={account} />}
+      {account.platform === "shopee" && <ShopeeReadiness />}
       {account.platform === "mercadolivre" && <MlSync account={account} />}
       {account.platform === "mercadolivre" && <MlQuality account={account} />}
+    </div>
+  );
+}
+
+/** Só leitura: mostra o que a Shopee exige para publicar nesta loja (não cria nem altera anúncio). */
+function ShopeeReadiness() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<unknown>(null);
+  const run = async () => {
+    setBusy(true);
+    try {
+      setResult(await api.invoke("ai", { action: "shopee_readiness" }));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-2 border-t pt-2">
+      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={run} disabled={busy}>
+        {busy && <Loader2 className="animate-spin" />}Ver o que a Shopee exige (só leitura)
+      </Button>
+      {result !== null && (
+        <pre className="mt-2 max-h-72 overflow-auto rounded bg-background p-2 text-[11px] leading-snug">{JSON.stringify(result, null, 2)}</pre>
+      )}
+    </div>
+  );
+}
+
+/** Publica na Shopee os produtos da loja que ainda não estão lá (o cron publica alguns por minuto). */
+function ShopeeSync({ account }: { account: SocialAccount }) {
+  const [busy, setBusy] = useState(false);
+  const { refetch } = useTable("social_accounts");
+  const s = account.meta.shopee_sync;
+  const left = (s?.queue.length ?? 0) + (s?.inflight?.ids.length ?? 0);
+  const running = left > 0;
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => void refetch(), 20_000);
+    return () => clearInterval(t);
+  }, [running, refetch]);
+  const start = async () => {
+    setBusy(true);
+    try {
+      const r = await api.invoke<{ store: number; on_shopee: number; missing: number; minutes: number }>("ai", { action: "shopee_sync_start" });
+      await refetch();
+      toast.success(r.missing ? `${r.missing} produtos vão para a Shopee (uns ${r.minutes} min)` : "Todos os produtos da loja já estão na Shopee");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-2 border-t pt-2">
+      {s && (
+        <>
+          <p>
+            <span className="font-medium">Publicação:</span>{" "}
+            {running ? `faltam ${left} produtos (uns ${Math.ceil(left / 3)} min)` : `concluída (${s.done.length} novos na Shopee)`}
+          </p>
+          <p className="text-muted-foreground">
+            {s.done.length} publicados · {s.skipped.length} fora · {s.errors.length} com erro
+          </p>
+          {s.errors.slice(-3).map((e) => (
+            <p key={e.id} className="truncate text-danger" title={e.error}>{e.name}: {e.error}</p>
+          ))}
+          {s.skipped.slice(-3).map((e) => (
+            <p key={e.id} className="truncate text-muted-foreground" title={e.reason}>{e.name}: {e.reason}</p>
+          ))}
+        </>
+      )}
+      <Button size="sm" className="mt-1 h-7 px-2 text-xs" onClick={start} disabled={busy || running}>
+        {(busy || running) && <Loader2 className="animate-spin" />}
+        {running ? "Publicando…" : "Publicar na Shopee os que faltam"}
+      </Button>
     </div>
   );
 }

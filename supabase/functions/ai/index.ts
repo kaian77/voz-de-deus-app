@@ -15,7 +15,9 @@ import { cleanDomain, DNS_RECORDS, importClientData, publishPatch, vercelDomain,
 import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, STICK_TRENDS, ytDeleteVideo, ytOwnHits, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
+import { SHOPEE_PIN_TAX, shopeeAddItem, shopeeItems, shopeeReadiness, shopeeTokenFor, shopeeUnlistItem, shopeeUploadImage } from "../_shared/shopee.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
+import { startShopeeSync } from "../_shared/shopee-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
 import { generatePaginasproIdeas } from "../_shared/paginaspro-content.ts";
@@ -516,8 +518,59 @@ Deno.serve(async (req) => {
     }
     if (action === "ml_sync_start") return json(await startMlSync(db, userId));
     if (action === "ml_sync_status") return json(await mlSyncStatus(db, userId));
+    if (action === "shopee_sync_start") return json(await startShopeeSync(db, userId));
     if (action === "ml_quality") return json(await improveMlShowcase(db, userId, { fix: input.fix !== false }));
     if (action === "ml_premium") return json(await setMlPremium(db, userId));
+    if (action === "shopee_readiness") {
+      // Só leitura: o que a Shopee exige para publicar (categorias, canais e atributos)
+      const { data: acc } = await db.from("social_accounts").select("*").eq("user_id", userId).eq("platform", "shopee").order("connected_at").limit(1).maybeSingle();
+      if (!acc) throw new HttpError(404, "Conecte a Shopee em Contas");
+      const token = await shopeeTokenFor(db, acc.id, acc.external_id);
+      return json(await shopeeReadiness(token, acc.external_id));
+    }
+    if (action === "shopee_test_publish") {
+      // Teste: cria UM anúncio do "Caboco de lança" na Shopee e tira da vitrine na mesma hora
+      const { data: acc } = await db.from("social_accounts").select("*").eq("user_id", userId).eq("platform", "shopee").order("connected_at").limit(1).maybeSingle();
+      if (!acc) throw new HttpError(404, "Conecte a Shopee em Contas");
+      const token = await shopeeTokenFor(db, acc.id, acc.external_id);
+      const store = await storeFor(db, userId);
+      // Procura "caboc..." ou "lança"/"lanca" (o nome da loja pode ser Caboco ou Caboclo)
+      // a Nuvemshop devolve no máximo 200 por página: lê todas até acabar
+      const lidos: any[] = [];
+      for (let pg = 1; pg <= 20; pg++) {
+        const lote = await ns<any[]>(store.token, store.storeId, `products?per_page=200&page=${pg}`);
+        const arr = Array.isArray(lote) ? lote : [];
+        lidos.push(...arr);
+        if (arr.length < 200) break;
+      }
+      const nomes = lidos.map((x) => ({ x, n: String(x.name?.pt ?? x.name ?? "") }));
+      const p = nomes.find(({ n }) => /cabo/i.test(n) && /lan[cç]a/i.test(n))?.x;
+      if (!p) throw new HttpError(404, `Não achei o produto da lança na loja (${nomes.length} produtos lidos em todas as páginas). Nomes parecidos: ${nomes.filter(({ n }) => /cabo|lan[cç]a|lanca/i.test(n)).map(({ n }) => n).slice(0, 5).join(" | ") || "nenhum"}`);
+      const name = String(p.name?.pt ?? p.name).slice(0, 120);
+      const price = Number(p.variants?.[0]?.promotional_price || p.variants?.[0]?.price);
+      const src = p.images?.[0]?.src;
+      if (!src || !(price > 0)) throw new HttpError(400, "O produto precisa de foto e preço na loja");
+      const imageId = await shopeeUploadImage(token, acc.external_id, src);
+      const body = {
+        original_price: price,
+        description: "Pin de metal esmaltado da Brax Pins Mania. Peça individual, com acabamento em esmalte e fecho para colar na roupa ou na mochila.",
+        item_name: name,
+        category_id: 100160,
+        image: { image_id_list: [imageId] },
+        weight: 0.4,
+        dimension: { package_height: 3, package_length: 4, package_width: 4 },
+        logistic_info: [{ logistic_id: 91003, enabled: true }],
+        tax_info: SHOPEE_PIN_TAX,
+        seller_stock: [{ stock: 1 }],
+        brand: { brand_id: 0, original_brand_name: "No Brand" },
+        condition: "NEW",
+        item_status: "UNLIST",
+      };
+      const created = await shopeeAddItem(token, acc.external_id, { ...body, tax_info: SHOPEE_PIN_TAX });
+      const itemId = Number(created.item_id);
+      const unlist = await shopeeUnlistItem(token, acc.external_id, itemId).then((r) => (r?.failure_list?.length ? `NÃO tirou da vitrine: ${JSON.stringify(r.failure_list)}` : "tirado da vitrine")).catch((e) => `aviso ao tirar da vitrine: ${(e as Error).message}`);
+      return json({ item_id: itemId, produto: name, preco: price, vitrine: unlist });
+    }
     if (action === "marketplace_analyze") return json(await analyzeMarketplace(db, userId, input.platform === "shopee" ? "shopee" : "mercadolivre"));
     if (action === "marketplace_publish") {
       // Publica no Mercado Livre um produto já cadastrado na loja pelo Studio
