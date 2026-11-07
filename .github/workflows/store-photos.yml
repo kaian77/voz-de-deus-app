@@ -32,7 +32,7 @@ jobs:
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       POLLINATIONS_TOKEN: ${{ secrets.POLLINATIONS_TOKEN }}
       FAL_KEY: ${{ secrets.FAL_KEY }}
-      ML_APP_ID: ${{ secrets.ML_APP_ID }}
+      ML_APP_ID: ${{ secrets.ML_APP_ID || '5226202533888505' }}
       ML_CLIENT_SECRET: ${{ secrets.ML_CLIENT_SECRET }}
       VIDEO_DISPATCH_TOKEN: ${{ secrets.VIDEO_DISPATCH_TOKEN }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
