@@ -80,7 +80,9 @@ export async function shopee<T = any>(token: string, shopId: string, path: strin
 }
 
 export async function shopeeShopInfo(token: string, shopId: string) {
-  return shopee<{ shop_name?: string }>(token, shopId, "/api/v2/shop/get_shop_info").catch(() => ({} as { shop_name?: string }));
+  // Se a Shopee responder sem o bloco "response", devolve vazio em vez de quebrar a conexão.
+  const info = await shopee<{ shop_name?: string }>(token, shopId, "/api/v2/shop/get_shop_info").catch(() => undefined);
+  return info ?? ({} as { shop_name?: string });
 }
 
 export type ShopeeItem = {
