@@ -206,3 +206,14 @@ export async function shopeeAddItem(token: string, shopId: string, body: Record<
 export async function shopeeUnlistItem(token: string, shopId: string, itemId: number) {
   return shopee(token, shopId, "/api/v2/product/unlist_item", { body: { item_list: [{ item_id: itemId, unlist: true }] } });
 }
+
+/** Fiscal aceito pela Shopee para os pins (bijuteria de metal): CEST vai no campo "cest". */
+export const SHOPEE_PIN_TAX = {
+  ncm: "71171900",
+  cest: "2805800",
+  same_state_cfop: "5102",
+  diff_state_cfop: "6102",
+  csosn: "102",
+  origin: "0",
+  measure_unit: "UN",
+};
