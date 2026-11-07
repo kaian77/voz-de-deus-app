@@ -15,7 +15,11 @@ const state = async () => (await db.from("social_accounts").select("meta").eq("i
 const ask = async (request: "all" | number[]) => {
   const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
   const meta = data?.meta ?? {};
-  await db.from("social_accounts").update({ meta: { ...meta, shopee_sync: { ...(meta.shopee_sync ?? { started_at: new Date().toISOString(), total: 0, queue: [], done: [], errors: [], skipped: [] }), request } } }).eq("id", acc.id);
+  const cur = meta.shopee_sync ?? { started_at: new Date().toISOString(), total: 0, queue: [], done: [], errors: [], skipped: [] };
+  // resultado antigo desses produtos sai, para o teste mostrar só o de agora
+  const keep = (x: { id: number }) => !Array.isArray(request) || !request.includes(x.id);
+  const next = { ...cur, request, done: cur.done.filter(keep), errors: cur.errors.filter(keep), skipped: cur.skipped.filter(keep) };
+  await db.from("social_accounts").update({ meta: { ...meta, shopee_sync: next } }).eq("id", acc.id);
 };
 const wait = (s: number) => new Promise((r) => setTimeout(r, s * 1000));
 
@@ -41,6 +45,7 @@ if (cmd === "one") {
     const e = s.errors.filter((x: { id: number }) => x.id === hit!.id || x.id === 0).at(-1);
     const k = s.skipped.find((x: { id: number }) => x.id === hit!.id);
     console.log(`${i * 20}s`, "pedido", JSON.stringify(s.request ?? null), "ligado", s.links?.[hit.id] ?? "-", "fila", s.queue.length, "inflight", JSON.stringify(s.inflight?.ids ?? []));
+    if (s.request) continue; // o cron ainda não pegou o pedido
     if (d || k || (e && !s.queue.includes(hit.id) && !s.inflight?.ids?.includes(hit.id))) {
       console.log("RESULTADO", JSON.stringify(d ?? k ?? e));
       break;
