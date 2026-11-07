@@ -16,6 +16,7 @@ import { runDailyVideos } from "../_shared/video-autopilot.ts";
 import { runPaginasproAutopilot } from "../_shared/paginaspro-content.ts";
 import { sendPendingReviewEmails } from "../_shared/reviews.ts";
 import { runMlSync, watchNewProducts } from "../_shared/ml-sync.ts";
+import { runShopeeSync } from "../_shared/shopee-sync.ts";
 import { ytAutopilot } from "../_shared/youtube.ts";
 import { runPaginasproJobs } from "../_shared/paginaspro-agent.ts";
 import { sendPendingPush } from "../_shared/push.ts";
@@ -75,6 +76,8 @@ Deno.serve(async (req) => {
       : undefined;
     // Sincronização da loja com o Mercado Livre (alguns produtos por minuto, enquanto houver fila)
     const mlsync = await runMlSync(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    // Publicação na Shopee dos produtos da loja que ainda não estão lá (alguns por minuto, enquanto houver fila)
+    const shopeesync = await runShopeeSync(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     // A cada 10 minutos: produto novo na loja entra na fila do Mercado Livre
     const mlnew = new Date().getUTCMinutes() % 10 === 3
       ? await watchNewProducts(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
@@ -99,7 +102,7 @@ Deno.serve(async (req) => {
     // PáginasPro: prévias pedidas pelo atendente (a IA leva ~1 min; roda em segundo plano)
     const paginaspro = runPaginasproJobs(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(paginaspro);
-    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, mlnew, sales, reviews, push });
+    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, shopeesync, mlnew, sales, reviews, push });
   } catch (err) {
     return handleError(err);
   }
