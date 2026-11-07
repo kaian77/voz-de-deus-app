@@ -31,6 +31,8 @@ export type ShopeeSync = {
   retries?: Record<string, number>;
   /** Produto da loja → anúncio da Shopee */
   links?: Record<string, number>;
+  /** Pedido para a próxima rodada do cron (scripts sem as chaves da Shopee): "all" = loja inteira, ou alguns produtos */
+  request?: "all" | number[] | null;
 };
 
 /** Nome comparável: sem "| Brax Pins Mania", sem acento, sem pontuação. */
@@ -218,7 +220,18 @@ export async function runShopeeSync(db: SupabaseClient) {
       out.push({ account: acc.id, started: r });
       continue;
     }
-    const sync = acc.meta.shopee_sync as ShopeeSync;
+    let sync = acc.meta.shopee_sync as ShopeeSync;
+    // Pedido de sincronizar (loja inteira ou alguns produtos), ou fila antiga sem a ligação produto → anúncio
+    if (sync.request || !sync.links) {
+      const r = await startShopeeSync(db, acc.user_id, Array.isArray(sync.request) ? sync.request : sync.request === "all" ? undefined : [])
+        .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+      const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
+      sync = data?.meta?.shopee_sync as ShopeeSync;
+      sync.request = null;
+      await saveSync(db, acc.id, sync);
+      out.push({ account: acc.id, started: r });
+      continue;
+    }
     // Rodada anterior morreu no meio: devolve os produtos para a fila (na 3ª vez vira erro)
     if (sync.inflight?.ids.length) {
       if (Date.now() - new Date(sync.inflight.at).getTime() < 3 * 60_000) continue;
