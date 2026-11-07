@@ -533,10 +533,17 @@ Deno.serve(async (req) => {
       const token = await shopeeTokenFor(db, acc.id, acc.external_id);
       const store = await storeFor(db, userId);
       // Procura "caboc..." ou "lança"/"lanca" (o nome da loja pode ser Caboco ou Caboclo)
-      const found = await ns<any[]>(store.token, store.storeId, "products?per_page=200");
-      const nomes = (Array.isArray(found) ? found : []).map((x) => ({ x, n: String(x.name?.pt ?? x.name ?? "") }));
+      // a Nuvemshop devolve no máximo 200 por página: lê todas até acabar
+      const lidos: any[] = [];
+      for (let pg = 1; pg <= 20; pg++) {
+        const lote = await ns<any[]>(store.token, store.storeId, `products?per_page=200&page=${pg}`);
+        const arr = Array.isArray(lote) ? lote : [];
+        lidos.push(...arr);
+        if (arr.length < 200) break;
+      }
+      const nomes = lidos.map((x) => ({ x, n: String(x.name?.pt ?? x.name ?? "") }));
       const p = nomes.find(({ n }) => /cabo/i.test(n) && /lan[cç]a/i.test(n))?.x;
-      if (!p) throw new HttpError(404, `Não achei o produto da lança na loja (${nomes.length} produtos lidos). Nomes parecidos: ${nomes.filter(({ n }) => /cabo|lan[cç]a|lanca/i.test(n)).map(({ n }) => n).slice(0, 5).join(" | ") || "nenhum"}`);
+      if (!p) throw new HttpError(404, `Não achei o produto da lança na loja (${nomes.length} produtos lidos em todas as páginas). Nomes parecidos: ${nomes.filter(({ n }) => /cabo|lan[cç]a|lanca/i.test(n)).map(({ n }) => n).slice(0, 5).join(" | ") || "nenhum"}`);
       const name = String(p.name?.pt ?? p.name).slice(0, 120);
       const price = Number(p.variants?.[0]?.promotional_price || p.variants?.[0]?.price);
       const src = p.images?.[0]?.src;
