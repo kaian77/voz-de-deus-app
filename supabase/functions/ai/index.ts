@@ -15,7 +15,7 @@ import { cleanDomain, DNS_RECORDS, importClientData, publishPatch, vercelDomain,
 import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, STICK_TRENDS, ytDeleteVideo, ytOwnHits, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
-import { shopeeAddItem, shopeeReadiness, shopeeTokenFor, shopeeUnlistItem, shopeeUploadImage } from "../_shared/shopee.ts";
+import { shopeeAddItem, shopeeItems, shopeeReadiness, shopeeTokenFor, shopeeUnlistItem, shopeeUploadImage } from "../_shared/shopee.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
@@ -549,7 +549,7 @@ Deno.serve(async (req) => {
       const src = p.images?.[0]?.src;
       if (!src || !(price > 0)) throw new HttpError(400, "O produto precisa de foto e preço na loja");
       const imageId = await shopeeUploadImage(token, acc.external_id, src);
-      const created = await shopeeAddItem(token, acc.external_id, {
+      const body = {
         original_price: price,
         description: "Pin de metal esmaltado da Brax Pins Mania. Peça individual, com acabamento em esmalte e fecho para colar na roupa ou na mochila.",
         item_name: name,
@@ -563,7 +563,15 @@ Deno.serve(async (req) => {
         brand: { brand_id: 0, original_brand_name: "No Brand" },
         condition: "NEW",
         item_status: "UNLIST",
-      });
+      };
+      let created: any;
+      try {
+        created = await shopeeAddItem(token, acc.external_id, body);
+      } catch (e) {
+        // diagnóstico: fiscal dos anúncios que já estão na loja, para copiar o NCM/CEST que a Shopee aceita
+        const exemplos = await shopeeItems(token, acc.external_id, 3).then((arr) => arr.map((i: any) => ({ item: i.item_name, tax_info: i.tax_info ?? null })).slice(0, 3)).catch((x) => `erro ao ler: ${(x as Error).message}`);
+        throw new HttpError(400, `${(e as Error).message} | Fiscal dos anúncios da loja: ${JSON.stringify(exemplos)}`);
+      }
       const itemId = Number(created.item_id);
       const unlist = await shopeeUnlistItem(token, acc.external_id, itemId).then((r) => (r?.failure_list?.length ? `NÃO tirou da vitrine: ${JSON.stringify(r.failure_list)}` : "tirado da vitrine")).catch((e) => `aviso ao tirar da vitrine: ${(e as Error).message}`);
       return json({ item_id: itemId, produto: name, preco: price, vitrine: unlist });
