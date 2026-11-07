@@ -32,7 +32,7 @@ export type ShopeeSync = {
   /** Produto da loja → anúncio da Shopee */
   links?: Record<string, number>;
   /** Pedido para a próxima rodada do cron (scripts sem as chaves da Shopee): "all" = loja inteira, ou alguns produtos */
-  request?: "all" | "audit" | number[] | null;
+  request?: "all" | "audit" | "dedupe" | number[] | null;
   /** Conferência de anúncios repetidos (mesmo nome) na Shopee */
   audit?: { at: string; total: number; dupes: { name: string; items: { item_id: number; status?: string; created_by_sync: boolean }[] }[] };
 };
@@ -224,6 +224,25 @@ export async function runShopeeSync(db: SupabaseClient) {
     }
     let sync = acc.meta.shopee_sync as ShopeeSync;
     // Pedido de sincronizar (loja inteira ou alguns produtos), ou fila antiga sem a ligação produto → anúncio
+    // Apaga as cópias repetidas que a fila criou (fica o anúncio antigo; sem antigo, o de id menor)
+    if (sync.request === "dedupe" && sync.audit?.dupes.length) {
+      const token = await shopeeTokenFor(db, acc.id, acc.external_id);
+      const removed: number[] = [];
+      for (const g of sync.audit.dupes) {
+        const keep = g.items.find((i) => !i.created_by_sync) ?? [...g.items].sort((a, b) => a.item_id - b.item_id)[0];
+        for (const i of g.items) {
+          if (i.item_id === keep.item_id || !i.created_by_sync) continue;
+          await shopeeDeleteItem(token, acc.external_id, i.item_id).then(() => removed.push(i.item_id)).catch((e) => console.error("apagar repetido", e));
+        }
+        for (const [pid, item] of Object.entries(sync.links ?? {})) if (removed.includes(item)) sync.links![pid] = keep.item_id;
+      }
+      sync.done = sync.done.filter((d) => !d.item_id || !removed.includes(d.item_id));
+      sync.audit = { ...sync.audit, dupes: [] };
+      sync.request = null;
+      await saveSync(db, acc.id, sync);
+      out.push({ account: acc.id, removed });
+      continue;
+    }
     if (sync.request === "audit") {
       try {
         const token = await shopeeTokenFor(db, acc.id, acc.external_id);
