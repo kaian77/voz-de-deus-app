@@ -558,7 +558,7 @@ Deno.serve(async (req) => {
         weight: 0.4,
         dimension: { package_height: 3, package_length: 4, package_width: 4 },
         logistic_info: [{ logistic_id: 91003, enabled: true }],
-        tax_info: { ncm: "71171900", same_state_cfop: "5102", different_state_cfop: "6102", csosn_number: "102", measure_unit: "UN" },
+        tax_info: { ncm: "71171900", cest_list: ["2805800"], same_state_cfop: "5102", different_state_cfop: "6102", csosn_number: "102", measure_unit: "UN" },
         seller_stock: [{ stock: 1 }],
         brand: { brand_id: 0, original_brand_name: "No Brand" },
         condition: "NEW",
