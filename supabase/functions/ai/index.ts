@@ -532,9 +532,11 @@ Deno.serve(async (req) => {
       if (!acc) throw new HttpError(404, "Conecte a Shopee em Contas");
       const token = await shopeeTokenFor(db, acc.id, acc.external_id);
       const store = await storeFor(db, userId);
-      const found = await ns<any[]>(store.token, store.storeId, "products?q=Caboco&per_page=10&published=true");
-      const p = (Array.isArray(found) ? found : []).find((x) => String(x.name?.pt ?? x.name ?? "").toLowerCase().includes("caboco"));
-      if (!p) throw new HttpError(404, "Não achei o Caboco de lança publicado na loja");
+      // Procura "caboc..." ou "lança"/"lanca" (o nome da loja pode ser Caboco ou Caboclo)
+      const found = await ns<any[]>(store.token, store.storeId, "products?per_page=200&published=true");
+      const nomes = (Array.isArray(found) ? found : []).map((x) => ({ x, n: String(x.name?.pt ?? x.name ?? "") }));
+      const p = nomes.find(({ n }) => /cabo[cs]lo?/i.test(n) && /lan[cç]a/i.test(n))?.x;
+      if (!p) throw new HttpError(404, `Não achei o produto da lança na loja. Nomes parecidos: ${nomes.filter(({ n }) => /cabo|lan[cç]a/i.test(n)).map(({ n }) => n).slice(0, 5).join(" | ") || "nenhum"}`);
       const name = String(p.name?.pt ?? p.name).slice(0, 120);
       const price = Number(p.variants?.[0]?.promotional_price || p.variants?.[0]?.price);
       const src = p.images?.[0]?.src;
