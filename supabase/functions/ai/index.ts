@@ -565,11 +565,11 @@ Deno.serve(async (req) => {
         item_status: "UNLIST",
       };
       const base = { ncm: "71171900", measure_unit: "UN" } as Record<string, unknown>;
+      // o único envio aceito tinha o campo "cest" (mesmo nome que a Shopee devolve na leitura)
       const variantes: Record<string, unknown>[] = [
-        // o envio que deu certo antes usava csosn_number
-        { ncm: "71171900", cest_list: ["2805800"], same_state_cfop: "5102", different_state_cfop: "6102", csosn_number: "102", measure_unit: "UN" },
-        { ncm: "71171900", cest_list: ["2805800"], same_state_cfop: "5102", diff_state_cfop: "6102", csosn_number: "102", measure_unit: "UN" },
-        { ncm: "71171900", cest_list: ["2805800"], same_state_cfop: "5102", diff_state_cfop: "6102", csosn_number: "102", origin: "0", measure_unit: "UN" },
+        { ncm: "71171900", cest: "2805800", same_state_cfop: "5102", diff_state_cfop: "6102", csosn: "102", origin: "0", measure_unit: "UN" },
+        { ncm: "71171900", cest: "2805800", cest_list: ["2805800"], same_state_cfop: "5102", diff_state_cfop: "6102", csosn: "102", origin: "0", measure_unit: "UN" },
+        { ncm: "71171900", cest: "2805800", cest_list: ["2805800"], same_state_cfop: "5102", different_state_cfop: "6102", csosn_number: "102", measure_unit: "UN" },
       ];
       let created: any = null;
       let usada = -1;
