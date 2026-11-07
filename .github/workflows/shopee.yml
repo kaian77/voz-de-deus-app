@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       cmd:
-        description: "one | start | status"
+        description: "one | start | status | audit"
         default: status
       arg:
         description: "nome do produto (one)"

@@ -12,7 +12,7 @@ const userId = acc.user_id as string;
 const state = async () => (await db.from("social_accounts").select("meta").eq("id", acc.id).single()).data?.meta?.shopee_sync;
 
 // O GitHub não tem as chaves da Shopee: o script só faz o pedido (shopee_sync.request) e o cron das functions executa
-const ask = async (request: "all" | number[]) => {
+const ask = async (request: "all" | "audit" | number[]) => {
   const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
   const meta = data?.meta ?? {};
   const cur = meta.shopee_sync ?? { started_at: new Date().toISOString(), total: 0, queue: [], done: [], errors: [], skipped: [] };
@@ -56,6 +56,18 @@ if (cmd === "one") {
 if (cmd === "start") {
   await ask("all");
   await wait(90);
+}
+
+if (cmd === "audit") {
+  await ask("audit");
+  for (let i = 0; i < 12; i++) {
+    await wait(20);
+    const s = await state();
+    if (s.request) continue;
+    console.log("anúncios na Shopee", s.audit?.total, "| nomes repetidos", s.audit?.dupes.length);
+    for (const d of s.audit?.dupes ?? []) console.log("REPETIDO", d.name, JSON.stringify(d.items));
+    break;
+  }
 }
 
 if (cmd === "status" || cmd === "start") {
