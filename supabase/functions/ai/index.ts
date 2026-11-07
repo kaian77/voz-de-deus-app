@@ -564,17 +564,32 @@ Deno.serve(async (req) => {
         condition: "NEW",
         item_status: "UNLIST",
       };
-      let created: any;
-      try {
-        created = await shopeeAddItem(token, acc.external_id, body);
-      } catch (e) {
-        // diagnóstico: o fiscal que foi enviado e o fiscal dos anúncios que já estão na loja
+      const base = { ncm: "71171900", measure_unit: "UN" } as Record<string, unknown>;
+      const variantes: Record<string, unknown>[] = [
+        { ...base, cest_list: ["2805800"], same_state_cfop: "5102" },
+        { ...base, cest_list: ["2805800"], same_state_cfop: "5102", diff_state_cfop: "6102" },
+        { ...base, cest_list: ["2805800"], same_state_cfop: "5102", csosn: "102", origin: "0" },
+        { ...base, cest_list: ["2805800"], same_state_cfop: "5102", diff_state_cfop: "6102", csosn: "102", origin: "0" },
+      ];
+      let created: any = null;
+      let usada = -1;
+      const erros: string[] = [];
+      for (let i = 0; i < variantes.length; i++) {
+        try {
+          created = await shopeeAddItem(token, acc.external_id, { ...body, tax_info: variantes[i] });
+          usada = i;
+          break;
+        } catch (e) {
+          erros.push(`variante ${i + 1} ${JSON.stringify(variantes[i])} → ${(e as Error).message}`);
+        }
+      }
+      if (!created) {
         const exemplos = await shopeeItems(token, acc.external_id, 3).then((arr) => arr.map((i: any) => ({ item: i.item_name, tax_info: i.tax_info ?? null }))).catch((x) => `erro ao ler: ${(x as Error).message}`);
-        throw new HttpError(400, `Shopee: ${(e as Error).message} | Enviado tax_info: ${JSON.stringify(body.tax_info)} | Fiscal da loja: ${JSON.stringify(exemplos)}`);
+        throw new HttpError(400, `Nenhuma variante passou. ${erros.join(" || ")} | Fiscal da loja: ${JSON.stringify(exemplos)}`);
       }
       const itemId = Number(created.item_id);
       const unlist = await shopeeUnlistItem(token, acc.external_id, itemId).then((r) => (r?.failure_list?.length ? `NÃO tirou da vitrine: ${JSON.stringify(r.failure_list)}` : "tirado da vitrine")).catch((e) => `aviso ao tirar da vitrine: ${(e as Error).message}`);
-      return json({ item_id: itemId, produto: name, preco: price, vitrine: unlist });
+      return json({ item_id: itemId, produto: name, preco: price, vitrine: unlist, variante_que_passou: usada + 1, erros_das_outras: erros });
     }
     if (action === "marketplace_analyze") return json(await analyzeMarketplace(db, userId, input.platform === "shopee" ? "shopee" : "mercadolivre"));
     if (action === "marketplace_publish") {
