@@ -19,6 +19,13 @@ const call = async (method: string, path: string, body?: BodyInit) => {
   return { status: res.status, text };
 };
 
+if (Deno.args[0] === "sync") {
+  const sy = acc.meta?.ml_sync;
+  console.log("total", sy.total, "fila", sy.queue.length, "feitos", sy.done.length, "únicos", new Set(sy.done.map((d: { id: number }) => d.id)).size, "inflight", JSON.stringify(sy.inflight));
+  for (const e of sy.errors.slice(-15)) console.log("ERRO", e.name, "|", e.error);
+  for (const d of sy.done.slice(-10)) console.log("FEITO", d.name, d.ml_id, d.status, d.updated, d.error ?? "");
+  Deno.exit(0);
+}
 const done = (acc.meta?.ml_sync?.done ?? []).filter((d: { ml_id?: string }) => d.ml_id);
 const item = done[0];
 console.log("anúncios na sincronização:", done.length, "| teste com", item?.ml_id, item?.name);
