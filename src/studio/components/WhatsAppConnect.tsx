@@ -66,6 +66,7 @@ export default function WhatsAppConnect() {
       </div>
 
       <div className="space-y-3">
+        {!list.some((a) => a.meta.brand === "brax" && a.meta.coexistence) && <PaginasProWhatsApp brand="brax" />}
         {!list.some((a) => a.meta.brand === "paginaspro") && <PaginasProWhatsApp />}
         {list.map((a) => (
           <div key={a.id} className="space-y-1.5">
