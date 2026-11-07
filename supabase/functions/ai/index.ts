@@ -17,6 +17,7 @@ import { planDay, STICK_TRENDS, ytDeleteVideo, ytOwnHits, ytResearch, ytToken } 
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
 import { SHOPEE_PIN_TAX, shopeeAddItem, shopeeItems, shopeeReadiness, shopeeTokenFor, shopeeUnlistItem, shopeeUploadImage } from "../_shared/shopee.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
+import { startShopeeSync } from "../_shared/shopee-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
 import { generatePaginasproIdeas } from "../_shared/paginaspro-content.ts";
@@ -517,6 +518,7 @@ Deno.serve(async (req) => {
     }
     if (action === "ml_sync_start") return json(await startMlSync(db, userId));
     if (action === "ml_sync_status") return json(await mlSyncStatus(db, userId));
+    if (action === "shopee_sync_start") return json(await startShopeeSync(db, userId));
     if (action === "ml_quality") return json(await improveMlShowcase(db, userId, { fix: input.fix !== false }));
     if (action === "ml_premium") return json(await setMlPremium(db, userId));
     if (action === "shopee_readiness") {
