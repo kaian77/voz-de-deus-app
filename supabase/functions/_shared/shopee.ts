@@ -163,12 +163,15 @@ export async function shopeeReadiness(token: string, shopId: string, sampleCateg
     };
     // deno-lint-ignore no-explicit-any
     walk((tree.list ?? []).flatMap((c: any) => c.attribute_tree ?? c.attribute_list ?? [c]));
+    const info = (n: any) => n.attribute_info ?? n.attribute ?? n;
     atributos = nodes.filter((n) => n.attribute_id !== undefined).map((n) => ({
       attribute_id: n.attribute_id,
-      nome: n.display_attribute_name ?? n.original_attribute_name,
-      obrigatorio: !!n.is_mandatory,
-      erro: n.erro,
+      nome: info(n).display_attribute_name ?? info(n).original_attribute_name ?? n.display_attribute_name ?? n.original_attribute_name ?? n.name,
+      obrigatorio: !!(info(n).is_mandatory ?? n.is_mandatory ?? n.mandatory),
+      campos: Object.keys(n),
     }));
+    // deno-lint-ignore no-explicit-any
+    if (nodes[0]) (atributos[0] as any).exemplo_cru = nodes[0];
     if (!atributos.length) atributos = [{ resposta_crua: tree }];
   }
   return {
