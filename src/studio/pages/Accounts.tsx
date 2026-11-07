@@ -170,7 +170,7 @@ function ShopeeReadiness() {
   );
 }
 
-/** Publica na Shopee os produtos da loja que ainda não estão lá (o cron publica alguns por minuto). */
+/** Sincroniza a loja com a Shopee: atualiza os anúncios que já existem e cria os que faltam (o cron faz alguns por minuto). */
 function ShopeeSync({ account }: { account: SocialAccount }) {
   const [busy, setBusy] = useState(false);
   const { refetch } = useTable("social_accounts");
@@ -185,9 +185,9 @@ function ShopeeSync({ account }: { account: SocialAccount }) {
   const start = async () => {
     setBusy(true);
     try {
-      const r = await api.invoke<{ store: number; on_shopee: number; missing: number; minutes: number }>("ai", { action: "shopee_sync_start" });
+      const r = await api.invoke<{ update: number; create: number; minutes: number }>("ai", { action: "shopee_sync_start" });
       await refetch();
-      toast.success(r.missing ? `${r.missing} produtos vão para a Shopee (uns ${r.minutes} min)` : "Todos os produtos da loja já estão na Shopee");
+      toast.success(`${r.update} anúncios para atualizar e ${r.create} para criar na Shopee (uns ${r.minutes} min)`);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -200,11 +200,14 @@ function ShopeeSync({ account }: { account: SocialAccount }) {
         <>
           <p>
             <span className="font-medium">Publicação:</span>{" "}
-            {running ? `faltam ${left} produtos (uns ${Math.ceil(left / 3)} min)` : `concluída (${s.done.length} novos na Shopee)`}
+            {running ? `faltam ${left} produtos (uns ${Math.ceil(left / 3)} min)` : `concluída (${Object.keys(s.links ?? {}).length || s.done.length} produtos na Shopee)`}
           </p>
           <p className="text-muted-foreground">
-            {s.done.length} publicados · {s.skipped.length} fora · {s.errors.length} com erro
+            {s.done.filter((d) => d.updated).length} atualizados · {s.done.filter((d) => !d.updated).length} criados · {s.skipped.length} fora · {s.errors.length} com erro
           </p>
+          {s.done.filter((d) => d.error).slice(-3).map((d) => (
+            <p key={`w${d.id}`} className="truncate text-muted-foreground" title={d.error}>{d.name}: {d.error}</p>
+          ))}
           {s.errors.slice(-3).map((e) => (
             <p key={e.id} className="truncate text-danger" title={e.error}>{e.name}: {e.error}</p>
           ))}
@@ -215,7 +218,7 @@ function ShopeeSync({ account }: { account: SocialAccount }) {
       )}
       <Button size="sm" className="mt-1 h-7 px-2 text-xs" onClick={start} disabled={busy || running}>
         {(busy || running) && <Loader2 className="animate-spin" />}
-        {running ? "Publicando…" : "Publicar na Shopee os que faltam"}
+        {running ? "Sincronizando…" : "Sincronizar com a loja"}
       </Button>
     </div>
   );

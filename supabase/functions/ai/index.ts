@@ -534,6 +534,7 @@ Deno.serve(async (req) => {
       if (!acc) throw new HttpError(404, "Conecte a Shopee em Contas");
       const token = await shopeeTokenFor(db, acc.id, acc.external_id);
       const store = await storeFor(db, userId);
+      if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
       // Procura "caboc..." ou "lança"/"lanca" (o nome da loja pode ser Caboco ou Caboclo)
       // a Nuvemshop devolve no máximo 200 por página: lê todas até acabar
       const lidos: any[] = [];

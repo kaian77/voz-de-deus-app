@@ -6,6 +6,7 @@ import { ns, storeFor, txt } from "./nuvemshop.ts";
 import { ML_LOOKUP_FIELDS, mlSellerItems, mlTokenFor } from "./mercadolivre.ts";
 import { norm, publishToMercadoLivre } from "./marketplaces.ts";
 import { dispatchRender } from "./product-video.ts";
+import { requeueShopee } from "./shopee-sync.ts";
 
 /** Produtos por rodada do cron (cada um faz várias chamadas ao ML). */
 const PER_RUN = 3;
@@ -562,6 +563,8 @@ export async function watchNewProducts(db: SupabaseClient) {
           : { started_at: new Date().toISOString(), finished_at: null, total: add.length, queue: add, done: [], errors: [], skipped: [] };
         await queuePhotos(db, acc.user_id, products.filter((p) => add.includes(p.id))).catch((e) => console.error("fotos ML", e));
         out.push({ account: acc.id, queued: add });
+        // produto novo também vai para a Shopee
+        await requeueShopee(db, acc.user_id, add).catch((e) => console.error("Shopee novos", e));
       }
       await db.from("social_accounts").update({
         meta: { ...meta, ml_known: [...new Set([...(known ?? []), ...ids])], ...(sync ? { ml_sync: sync } : {}) },
