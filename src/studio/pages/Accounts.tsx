@@ -136,8 +136,35 @@ function Analysis({ account }: { account: SocialAccount }) {
       <Button size="sm" variant="ghost" className="mt-1 h-7 px-2 text-xs" onClick={run} disabled={busy}>
         {busy && <Loader2 className="animate-spin" />}Analisar de novo
       </Button>
+      {account.platform === "shopee" && <ShopeeReadiness />}
       {account.platform === "mercadolivre" && <MlSync account={account} />}
       {account.platform === "mercadolivre" && <MlQuality account={account} />}
+    </div>
+  );
+}
+
+/** Só leitura: mostra o que a Shopee exige para publicar nesta loja (não cria nem altera anúncio). */
+function ShopeeReadiness() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<unknown>(null);
+  const run = async () => {
+    setBusy(true);
+    try {
+      setResult(await api.invoke("ai", { action: "shopee_readiness" }));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-2 border-t pt-2">
+      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={run} disabled={busy}>
+        {busy && <Loader2 className="animate-spin" />}Ver o que a Shopee exige (só leitura)
+      </Button>
+      {result !== null && (
+        <pre className="mt-2 max-h-72 overflow-auto rounded bg-background p-2 text-[11px] leading-snug">{JSON.stringify(result, null, 2)}</pre>
+      )}
     </div>
   );
 }
