@@ -81,7 +81,9 @@ export async function ml<T = any>(token: string, path: string, init: { method?: 
     const causes = Array.isArray(data.cause)
       ? data.cause.filter((c: { type?: string }) => c.type !== "warning").map((c: { message?: string; code?: string }) => c.message ?? c.code).join("; ")
       : "";
-    throw new Error(`Mercado Livre: ${data.message ?? data.error ?? res.status}${causes ? ` (${causes})` : ""}`);
+    const msg = `${data.message ?? data.error ?? res.status}${causes ? ` (${causes})` : ""}`;
+    // recurso desligado pelo ML: diz qual chamada, para dar para trocar
+    throw new Error(`Mercado Livre: ${msg}${/deprecated/i.test(msg) ? ` [${init.method ?? "GET"} ${path.split("?")[0]}]` : ""}`);
   }
   return data as T;
 }
