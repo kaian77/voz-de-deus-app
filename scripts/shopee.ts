@@ -1,10 +1,8 @@
 // Shopee pelo GitHub Actions (workflow "Shopee"):
-//   deno run -A scripts/shopee.ts one "Pin Medicina"  → põe só esse produto no começo da fila, roda uma rodada e mostra o anúncio
+//   deno run -A scripts/shopee.ts one "Pin Medicina"  → pede ao cron para pôr só esse produto no começo da fila e acompanha o resultado
 //   deno run -A scripts/shopee.ts start               → loja inteira na fila (atualiza os que existem, cria os que faltam)
 //   deno run -A scripts/shopee.ts status              → estado da fila
 import { adminClient } from "../supabase/functions/_shared/util.ts";
-import { shopee, shopeeTokenFor } from "../supabase/functions/_shared/shopee.ts";
-import { runShopeeSync, startShopeeSync } from "../supabase/functions/_shared/shopee-sync.ts";
 import { ns, storeFor, txt } from "../supabase/functions/_shared/nuvemshop.ts";
 
 const db = adminClient();
@@ -13,9 +11,17 @@ const { data: acc } = await db.from("social_accounts").select("*").eq("platform"
 const userId = acc.user_id as string;
 const state = async () => (await db.from("social_accounts").select("meta").eq("id", acc.id).single()).data?.meta?.shopee_sync;
 
+// O GitHub não tem as chaves da Shopee: o script só faz o pedido (shopee_sync.request) e o cron das functions executa
+const ask = async (request: "all" | number[]) => {
+  const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
+  const meta = data?.meta ?? {};
+  await db.from("social_accounts").update({ meta: { ...meta, shopee_sync: { ...(meta.shopee_sync ?? { started_at: new Date().toISOString(), total: 0, queue: [], done: [], errors: [], skipped: [] }), request } } }).eq("id", acc.id);
+};
+const wait = (s: number) => new Promise((r) => setTimeout(r, s * 1000));
+
 if (cmd === "one") {
   const store = (await storeFor(db, userId))!;
-  const key = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const key = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   let hit: { id: number; name: string } | null = null;
   for (let page = 1; page <= 10 && !hit; page++) {
     // deno-lint-ignore no-explicit-any
@@ -27,23 +33,25 @@ if (cmd === "one") {
   }
   if (!hit) throw new Error(`não achei "${arg}" na loja`);
   console.log("produto", hit);
-  console.log("fila", JSON.stringify(await startShopeeSync(db, userId, [hit.id])));
-  const s0 = await state();
-  console.log("anúncio ligado", s0?.links?.[hit.id] ?? "nenhum (vai criar)");
-  console.log("rodada", JSON.stringify(await runShopeeSync(db)));
-  const s1 = await state();
-  console.log("resultado", JSON.stringify(s1.done.find((d: { id: number }) => d.id === hit!.id) ?? s1.errors.filter((e: { id: number }) => e.id === hit!.id || e.id === 0).slice(-2)));
-  const item = s1.links?.[hit.id];
-  if (item) {
-    const token = await shopeeTokenFor(db, acc.id, acc.external_id);
-    const r = await shopee(token, acc.external_id, "/api/v2/product/get_item_base_info", { params: { item_id_list: item } });
-    // deno-lint-ignore no-explicit-any
-    const it: any = r.item_list?.[0] ?? {};
-    console.log("na Shopee", JSON.stringify({ item, name: it.item_name, status: it.item_status, price: it.price_info, stock: it.stock_info_v2?.summary_info, fotos: it.image?.image_url_list?.length }));
+  await ask([hit.id]);
+  for (let i = 0; i < 30; i++) {
+    await wait(20);
+    const s = await state();
+    const d = s.done.find((x: { id: number }) => x.id === hit!.id);
+    const e = s.errors.filter((x: { id: number }) => x.id === hit!.id || x.id === 0).at(-1);
+    const k = s.skipped.find((x: { id: number }) => x.id === hit!.id);
+    console.log(`${i * 20}s`, "pedido", JSON.stringify(s.request ?? null), "ligado", s.links?.[hit.id] ?? "-", "fila", s.queue.length, "inflight", JSON.stringify(s.inflight?.ids ?? []));
+    if (d || k || (e && !s.queue.includes(hit.id) && !s.inflight?.ids?.includes(hit.id))) {
+      console.log("RESULTADO", JSON.stringify(d ?? k ?? e));
+      break;
+    }
   }
 }
 
-if (cmd === "start") console.log(JSON.stringify(await startShopeeSync(db, userId)));
+if (cmd === "start") {
+  await ask("all");
+  await wait(90);
+}
 
 if (cmd === "status" || cmd === "start") {
   const s = await state();
