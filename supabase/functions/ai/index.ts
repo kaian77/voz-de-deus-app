@@ -564,7 +564,6 @@ Deno.serve(async (req) => {
         condition: "NEW",
         item_status: "UNLIST",
       };
-      const base = { ncm: "71171900", measure_unit: "UN" } as Record<string, unknown>;
       const created = await shopeeAddItem(token, acc.external_id, { ...body, tax_info: SHOPEE_PIN_TAX });
       const itemId = Number(created.item_id);
       const unlist = await shopeeUnlistItem(token, acc.external_id, itemId).then((r) => (r?.failure_list?.length ? `NÃO tirou da vitrine: ${JSON.stringify(r.failure_list)}` : "tirado da vitrine")).catch((e) => `aviso ao tirar da vitrine: ${(e as Error).message}`);
