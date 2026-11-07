@@ -36,7 +36,8 @@ function loadSdk(appId: string) {
  * WhatsApp Business da PáginasPro em coexistência: o número continua no app do celular (você manda a 1ª mensagem
  * para o lead) e a IA da PáginasPro responde pela API oficial quando o cliente fala.
  */
-export default function PaginasProWhatsApp() {
+export default function PaginasProWhatsApp({ brand = "paginaspro" }: { brand?: "paginaspro" | "brax" }) {
+  const brax = brand === "brax";
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [missing, setMissing] = useState(false);
@@ -80,10 +81,10 @@ export default function PaginasProWhatsApp() {
       for (let i = 0; i < 20 && !finished; i++) await new Promise((r) => setTimeout(r, 250));
       window.removeEventListener("message", onMessage);
       if (!code) return;
-      if (!ids.phone_number_id || !ids.waba_id) throw new Error("O Facebook não devolveu o número. Tente de novo e escolha o número da PáginasPro até o fim.");
-      await api.invoke("inbox", { action: "connect_whatsapp_signup", code, phone_number_id: ids.phone_number_id, waba_id: ids.waba_id });
+      if (!ids.phone_number_id || !ids.waba_id) throw new Error(`O Facebook não devolveu o número. Tente de novo e escolha o número da ${brax ? "Brax" : "PáginasPro"} até o fim.`);
+      await api.invoke("inbox", { action: "connect_whatsapp_signup", code, phone_number_id: ids.phone_number_id, waba_id: ids.waba_id, brand });
       await qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
-      toast.success("WhatsApp da PáginasPro conectado! A IA já responde quem chamar.");
+      toast.success(brax ? "WhatsApp da Brax conectado!" : "WhatsApp da PáginasPro conectado! A IA já responde quem chamar.");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -93,11 +94,23 @@ export default function PaginasProWhatsApp() {
 
   return (
     <div className="rounded-md border border-dashed p-3">
-      <p className="text-[13px] font-medium">WhatsApp da PáginasPro (app + IA)</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        O número continua no app do WhatsApp Business do seu celular. Você manda a primeira mensagem para o lead pelo app e, quando ele responder,
-        a IA da PáginasPro conversa, pede os dados, monta a prévia e manda os planos. Se você responder pelo app, a IA espera 3 horas.
-      </p>
+      {brax ? (
+        <>
+          <p className="text-[13px] font-medium">WhatsApp Business da Brax Pins</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            O número continua no app do WhatsApp Business do celular e nenhuma IA responde clientes. No Facebook, use a mesma conta e o mesmo
+            portfólio da Brax e escolha "Conectar o app WhatsApp Business" com o número da loja (um portfólio pode ter mais de um número).
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="text-[13px] font-medium">WhatsApp da PáginasPro (app + IA)</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            O número continua no app do WhatsApp Business do seu celular. Você manda a primeira mensagem para o lead pelo app e, quando ele responder,
+            a IA da PáginasPro conversa, pede os dados, monta a prévia e manda os planos. Se você responder pelo app, a IA espera 3 horas.
+          </p>
+        </>
+      )}
       <Button size="sm" className="mt-2 w-full" onClick={connect} disabled={busy}>
         {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}Conectar com Facebook
       </Button>

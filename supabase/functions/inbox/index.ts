@@ -92,14 +92,18 @@ Deno.serve(async (req) => {
         const code = String(body.code ?? "");
         const phoneId = String(body.phone_number_id ?? "");
         const wabaId = String(body.waba_id ?? "");
+        const brax = body.brand === "brax";
         if (!code || !phoneId || !wabaId) throw new HttpError(400, "A conexão não terminou: tente de novo e vá até o fim no Facebook");
         const token = await waExchangeCode(code);
         const info = await waPhoneInfo(token, phoneId);
         await waSubscribeApp(token, wabaId);
         const { data: account, error } = await db.from("social_accounts").upsert({
           user_id: userId, platform: "whatsapp", external_id: phoneId,
-          username: info.display_phone_number, display_name: info.verified_name || "PáginasPro",
-          meta: { provider: "meta", brand: "paginaspro", coexistence: true, waba_id: wabaId, label: "PáginasPro", agent: true },
+          username: info.display_phone_number, display_name: info.verified_name || (brax ? "Brax Pins Mania" : "PáginasPro"),
+          // Brax: número da loja, sem IA respondendo cliente (só os comandos do dono); PáginasPro: atendente de IA
+          meta: brax
+            ? { provider: "meta", brand: "brax", coexistence: true, waba_id: wabaId, label: "Brax Pins", agent: false }
+            : { provider: "meta", brand: "paginaspro", coexistence: true, waba_id: wabaId, label: "PáginasPro", agent: true },
           connected_at: new Date().toISOString(),
         }, { onConflict: "platform,external_id" }).select().single();
         if (error) throw error;
