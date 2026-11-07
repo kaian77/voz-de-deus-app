@@ -15,6 +15,7 @@ import { cleanDomain, DNS_RECORDS, importClientData, publishPatch, vercelDomain,
 import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, STICK_TRENDS, ytDeleteVideo, ytOwnHits, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
+import { shopeeReadiness, shopeeTokenFor } from "../_shared/shopee.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
@@ -518,6 +519,13 @@ Deno.serve(async (req) => {
     if (action === "ml_sync_status") return json(await mlSyncStatus(db, userId));
     if (action === "ml_quality") return json(await improveMlShowcase(db, userId, { fix: input.fix !== false }));
     if (action === "ml_premium") return json(await setMlPremium(db, userId));
+    if (action === "shopee_readiness") {
+      // Só leitura: o que a Shopee exige para publicar (categorias, canais e atributos)
+      const { data: acc } = await db.from("social_accounts").select("*").eq("user_id", userId).eq("platform", "shopee").order("connected_at").limit(1).maybeSingle();
+      if (!acc) throw new HttpError(404, "Conecte a Shopee em Contas");
+      const token = await shopeeTokenFor(db, acc.id, acc.external_id);
+      return json(await shopeeReadiness(token, acc.external_id));
+    }
     if (action === "marketplace_analyze") return json(await analyzeMarketplace(db, userId, input.platform === "shopee" ? "shopee" : "mercadolivre"));
     if (action === "marketplace_publish") {
       // Publica no Mercado Livre um produto já cadastrado na loja pelo Studio

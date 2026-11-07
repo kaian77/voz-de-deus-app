@@ -124,3 +124,38 @@ export async function shopeeItems(token: string, shopId: string, max = 200): Pro
   }
   return items;
 }
+
+/**
+ * Só leitura: mostra o que a Shopee exige para publicar nesta loja
+ * (categorias, canais de envio e atributos de uma categoria de exemplo).
+ */
+// deno-lint-ignore no-explicit-any
+export async function shopeeReadiness(token: string, shopId: string, sampleCategoryId?: number) {
+  // deno-lint-ignore no-explicit-any
+  const cats = await shopee<{ category_list?: any[] }>(token, shopId, "/api/v2/product/get_category", { params: { language: "pt-br" } });
+  // deno-lint-ignore no-explicit-any
+  const channels = await shopee<{ logistics_channel_list?: any[] }>(token, shopId, "/api/v2/logistics/get_channel_list").catch((e) => ({ logistics_channel_list: [], error: String(e) }));
+  const list = cats.category_list ?? [];
+  const leaves = list.filter((c) => !c.has_children);
+  let categoriaExemplo = sampleCategoryId ?? leaves[0]?.category_id;
+  let atributos: unknown[] = [];
+  if (categoriaExemplo) {
+    const attrs = await shopee<{ attribute_list?: unknown[] }>(token, shopId, "/api/v2/product/get_attributes", {
+      params: { category_id: categoriaExemplo, language: "pt-br" },
+    }).catch((e) => ({ attribute_list: [{ erro: String(e) }] }));
+    atributos = (attrs.attribute_list ?? []).map((a) => {
+      // deno-lint-ignore no-explicit-any
+      const x = a as any;
+      return { attribute_id: x.attribute_id, nome: x.display_attribute_name ?? x.original_attribute_name, obrigatorio: !!x.is_mandatory, erro: x.erro };
+    });
+  }
+  return {
+    categorias_total: list.length,
+    folhas_total: leaves.length,
+    categorias_exemplo: leaves.slice(0, 10).map((c) => ({ category_id: c.category_id, nome: c.display_category_name ?? c.original_category_name })),
+    // deno-lint-ignore no-explicit-any
+    canais: (channels.logistics_channel_list ?? []).map((c: any) => ({ logistic_channel_id: c.logistics_channel_id, nome: c.logistics_channel_name, ativo: c.enabled })),
+    categoria_exemplo: categoriaExemplo ?? null,
+    atributos,
+  };
+}
