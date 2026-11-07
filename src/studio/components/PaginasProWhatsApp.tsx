@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -41,16 +41,30 @@ export default function PaginasProWhatsApp({ brand = "paginaspro" }: { brand?: "
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [missing, setMissing] = useState(false);
+  // Carrega a configuração e o SDK do Facebook antes do toque: a janela do login precisa abrir logo no clique,
+  // senão o navegador do celular bloqueia como pop-up
+  const ready = useRef<Config | null>(null);
+  useEffect(() => {
+    api.invoke<Config>("inbox", { action: "wa_signup_config" })
+      .then(async (cfg) => {
+        if (cfg.ready) await loadSdk(cfg.app_id);
+        ready.current = cfg;
+      })
+      .catch(() => {});
+  }, []);
 
   const connect = async () => {
     setBusy(true);
     try {
-      const cfg = await api.invoke<Config>("inbox", { action: "wa_signup_config" });
+      let cfg = ready.current;
+      if (!cfg) {
+        cfg = await api.invoke<Config>("inbox", { action: "wa_signup_config" });
+        if (cfg.ready) await loadSdk(cfg.app_id);
+      }
       if (!cfg.ready) {
         setMissing(true);
         return;
       }
-      await loadSdk(cfg.app_id);
       // O Facebook manda os ids do número e da conta por mensagem da janela; o código vem no retorno do login
       let ids: { phone_number_id?: string; waba_id?: string } = {};
       let finished = false;
