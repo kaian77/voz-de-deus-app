@@ -130,8 +130,13 @@ export async function runShopeeSync(db: SupabaseClient) {
   const { data: accounts } = await db.from("social_accounts").select("id,user_id,external_id,meta").eq("platform", "shopee");
   const out: unknown[] = [];
   for (const acc of accounts ?? []) {
-    const sync = acc.meta?.shopee_sync as ShopeeSync | undefined;
-    if (!sync) continue;
+    // Primeira vez: monta a fila sozinho (o dono pediu para publicar todos os que faltam)
+    if (!acc.meta?.shopee_sync) {
+      const r = await startShopeeSync(db, acc.user_id).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+      out.push({ account: acc.id, started: r });
+      continue;
+    }
+    const sync = acc.meta.shopee_sync as ShopeeSync;
     // Rodada anterior morreu no meio: devolve os produtos para a fila (na 3ª vez vira erro)
     if (sync.inflight?.ids.length) {
       if (Date.now() - new Date(sync.inflight.at).getTime() < 3 * 60_000) continue;
