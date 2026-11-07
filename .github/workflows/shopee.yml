@@ -1,0 +1,43 @@
+# Shopee pelo GitHub (scripts/shopee.ts): probe, teste de um produto, sincronização em lote
+name: Shopee
+
+on:
+  workflow_dispatch:
+    inputs:
+      cmd:
+        description: "probe | one | ..."
+        default: probe
+      arg:
+        description: "nome do produto (one)"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}
+      SHOPEE_PARTNER_ID: ${{ secrets.SHOPEE_PARTNER_ID }}
+      SHOPEE_PARTNER_KEY: ${{ secrets.SHOPEE_PARTNER_KEY }}
+      ML_APP_ID: ${{ secrets.ML_APP_ID || '5226202533888505' }}
+      ML_CLIENT_SECRET: ${{ secrets.ML_CLIENT_SECRET }}
+    steps:
+      - name: Chaves do Supabase
+        run: |
+          set -euo pipefail
+          api() { curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1$1"; }
+          REF=$(api /projects | jq -r --arg n "$SUPABASE_PROJECT_NAME" '.[] | select(.name == $n) | .id' | head -1)
+          KEY=$(api "/projects/$REF/api-keys?reveal=true" | jq -r '[.[] | select(.name == "service_role" or .type == "secret") | .api_key][0] // empty')
+          echo "::add-mask::$KEY"
+          echo "SUPABASE_URL=https://$REF.supabase.co" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_KEY=$KEY" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$KEY" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno run -A --node-modules-dir=none scripts/shopee.ts "${{ inputs.cmd }}" "${{ inputs.arg }}"
