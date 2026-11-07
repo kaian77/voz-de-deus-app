@@ -564,7 +564,14 @@ Deno.serve(async (req) => {
         condition: "NEW",
         item_status: "UNLIST",
       };
-      const created = await shopeeAddItem(token, acc.external_id, body);
+      let created: any;
+      try {
+        created = await shopeeAddItem(token, acc.external_id, body);
+      } catch (e) {
+        // diagnóstico: o fiscal que foi enviado e o fiscal dos anúncios que já estão na loja
+        const exemplos = await shopeeItems(token, acc.external_id, 3).then((arr) => arr.map((i: any) => ({ item: i.item_name, tax_info: i.tax_info ?? null }))).catch((x) => `erro ao ler: ${(x as Error).message}`);
+        throw new HttpError(400, `Shopee: ${(e as Error).message} | Enviado tax_info: ${JSON.stringify(body.tax_info)} | Fiscal da loja: ${JSON.stringify(exemplos)}`);
+      }
       const itemId = Number(created.item_id);
       const unlist = await shopeeUnlistItem(token, acc.external_id, itemId).then((r) => (r?.failure_list?.length ? `NÃO tirou da vitrine: ${JSON.stringify(r.failure_list)}` : "tirado da vitrine")).catch((e) => `aviso ao tirar da vitrine: ${(e as Error).message}`);
       return json({ item_id: itemId, produto: name, preco: price, vitrine: unlist });
