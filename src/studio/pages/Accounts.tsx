@@ -165,15 +165,18 @@ function MlSync({ account }: { account: SocialAccount }) {
       setBusy(false);
     }
   };
-  const updated = s?.done.filter((d) => d.updated).length ?? 0;
-  const created = (s?.done.length ?? 0) - updated;
+  // um produto que voltou para a fila aparece várias vezes em done: conta só o último resultado de cada um
+  const latest = [...new Map((s?.done ?? []).map((d) => [d.id, d])).values()];
+  const updated = latest.filter((d) => d.updated).length;
+  const created = latest.length - updated;
+  const left = (s?.queue.length ?? 0) + (s?.inflight?.ids.length ?? 0);
   return (
     <div className="mt-2 border-t pt-2">
       {s && (
         <>
           <p>
             <span className="font-medium">Sincronização:</span>{" "}
-            {running ? `${s.total - s.queue.length} de ${s.total} produtos` : `concluída (${s.total} produtos)`}
+            {running ? `faltam ${left} produtos (uns ${Math.ceil(left / 3)} min)` : `concluída (${latest.length} produtos no ML)`}
           </p>
           <p className="text-muted-foreground">
             {updated} atualizados · {created} criados · {s.skipped.length} fora (kits/teste) · {s.errors.length} com erro
