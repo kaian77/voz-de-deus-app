@@ -3,6 +3,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ns, storeFor, txt } from "./nuvemshop.ts";
 import { dispatchRender } from "./product-video.ts";
 import { requeueProducts } from "./ml-sync.ts";
+import { requeueShopee } from "./shopee-sync.ts";
 
 async function store(db: SupabaseClient, userId: string) {
   const s = await storeFor(db, userId);
@@ -90,6 +91,7 @@ export async function applyStorePhotos(db: SupabaseClient, userId: string, ids: 
   if (done.length) {
     const { data: accs } = await db.from("social_accounts").select("id").eq("user_id", userId).eq("platform", "mercadolivre");
     for (const a of accs ?? []) await requeueProducts(db, a.id, done).catch((e) => console.error("ML requeue", e));
+    await requeueShopee(db, userId, done).catch((e) => console.error("Shopee requeue", e));
   }
   const pending = (jobs ?? []).length - applied - errors.length;
   return { applied, errors, pending };

@@ -800,8 +800,9 @@ export type ShopeeSyncState = {
   finished_at?: string | null;
   total: number;
   queue: number[];
-  done: { id: number; name: string; item_id?: number; price?: number }[];
+  done: { id: number; name: string; item_id?: number; price?: number; updated?: boolean; error?: string }[];
   errors: { id: number; name: string; error?: string }[];
   skipped: { id: number; name: string; reason?: string }[];
   inflight?: { ids: number[]; at: string } | null;
+  links?: Record<string, number>;
 };

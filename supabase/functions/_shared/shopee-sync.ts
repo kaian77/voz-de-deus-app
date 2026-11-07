@@ -1,11 +1,15 @@
-// Publicação dos produtos da loja Nuvemshop na Shopee, em fila e em segundo plano (igual ao Mercado Livre):
-// só entram os produtos que ainda NÃO têm anúncio na Shopee (comparação por nome e SKU com todos os anúncios,
-// inclusive os fora da vitrine). A fila fica em social_accounts.meta.shopee_sync e o cron publica alguns por minuto.
+// Sincronização da loja Nuvemshop com a Shopee, em fila e em segundo plano (igual ao Mercado Livre):
+// produto que já tem anúncio (achado por nome ou SKU entre todos os anúncios, inclusive os fora da vitrine, e guardado
+// em shopee_sync.links) é atualizado (fotos, descrição, preço pela regra e estoque); o que não tem vira anúncio novo.
+// A fila fica em social_accounts.meta.shopee_sync e o cron faz alguns por minuto.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ns, storeFor, txt } from "./nuvemshop.ts";
 import { applyRule, type PriceRule } from "./marketplaces.ts";
 import { isKit, kitUnits, mlListingDescription, pinSku } from "./ml-sync.ts";
-import { SHOPEE_PIN_TAX, shopee, shopeeAddItem, shopeeTokenFor, shopeeUploadImage } from "./shopee.ts";
+import {
+  SHOPEE_PIN_TAX, shopee, shopeeAddItem, shopeeDeleteItem, shopeeModels, shopeeRelistItem, shopeeSetPrice, shopeeSetStock,
+  shopeeTokenFor, shopeeUpdateItem, shopeeUploadImage,
+} from "./shopee.ts";
 
 /** Produtos por rodada do cron (cada um sobe várias fotos). */
 const PER_RUN = 3;
@@ -14,7 +18,7 @@ const MAX_PHOTOS = 9;
 /** Regra que a loja já usa na Shopee: preço da loja + R$ 7,01, terminando em ,00 (R$ 17,99 → R$ 25,00). */
 const DEFAULT_RULE: PriceRule = { type: "add", value: 7.01, ending: 0 };
 
-type Result = { id: number; name: string; item_id?: number; price?: number; error?: string; reason?: string };
+type Result = { id: number; name: string; item_id?: number; price?: number; updated?: boolean; error?: string; reason?: string };
 export type ShopeeSync = {
   started_at: string;
   finished_at?: string | null;
@@ -25,6 +29,8 @@ export type ShopeeSync = {
   skipped: Result[];
   inflight?: { ids: number[]; at: string } | null;
   retries?: Record<string, number>;
+  /** Produto da loja → anúncio da Shopee */
+  links?: Record<string, number>;
 };
 
 /** Nome comparável: sem "| Brax Pins Mania", sem acento, sem pontuação. */
@@ -52,9 +58,9 @@ async function shopeeAllItems(token: string, shopId: string) {
       offset = page.next_offset;
     }
   }
-  const items: { item_id: number; item_name: string; item_sku?: string }[] = [];
+  const items: { item_id: number; item_name: string; item_sku?: string; item_status?: string }[] = [];
   for (let i = 0; i < ids.length; i += 50) {
-    const r = await shopee<{ item_list?: { item_id: number; item_name: string; item_sku?: string }[] }>(
+    const r = await shopee<{ item_list?: { item_id: number; item_name: string; item_sku?: string; item_status?: string }[] }>(
       token, shopId, "/api/v2/product/get_item_base_info", { params: { item_id_list: ids.slice(i, i + 50).join(",") } },
     );
     items.push(...(r?.item_list ?? []));
@@ -80,23 +86,96 @@ async function storeList(token: string, storeId: string) {
   return out;
 }
 
-/** Monta a fila com os produtos da loja que ainda não estão na Shopee. */
-export async function startShopeeSync(db: SupabaseClient, userId: string) {
+/** Liga cada produto da loja ao anúncio dele na Shopee (pelo SKU, depois pelo nome). */
+function linkItems(products: { id: number; name: string; skus: string[] }[], items: { item_id: number; item_name: string; item_sku?: string }[], known: Record<string, number> = {}) {
+  const exists = new Set(items.map((i) => i.item_id));
+  const byName = new Map(items.map((i) => [words(i.item_name), i.item_id]));
+  const bySku = new Map(items.filter((i) => i.item_sku).map((i) => [String(i.item_sku).trim(), i.item_id]));
+  const links: Record<string, number> = {};
+  for (const p of products) {
+    const old = known[p.id];
+    const hit = (old && exists.has(old) ? old : undefined) ?? p.skus.map((x) => bySku.get(x)).find(Boolean) ?? byName.get(words(p.name));
+    if (hit) links[p.id] = hit;
+  }
+  return links;
+}
+
+/**
+ * Monta a fila com todos os produtos da loja: os que já estão na Shopee são atualizados (fotos, preço, estoque,
+ * descrição) e os que faltam viram anúncio. `ids` limita a alguns produtos (sem apagar o resto da fila).
+ */
+export async function startShopeeSync(db: SupabaseClient, userId: string, ids?: number[]) {
   const acc = await shopeeAccount(db, userId);
   if (!acc) throw new Error("Conecte a Shopee em Contas");
   const store = await storeFor(db, userId);
   if (!store) throw new Error("Conecte a Nuvemshop em Contas");
   const token = await shopeeTokenFor(db, acc.id, acc.external_id);
   const [products, items] = await Promise.all([storeList(store.token, store.storeId), shopeeAllItems(token, acc.external_id)]);
-  const names = new Set(items.map((i) => words(i.item_name)));
-  const skus = new Set(items.map((i) => String(i.item_sku ?? "").trim()).filter(Boolean));
-  const missing = products.filter((p) => !names.has(words(p.name)) && !p.skus.some((s) => skus.has(s)));
-  const sync: ShopeeSync = {
-    started_at: new Date().toISOString(), finished_at: missing.length ? null : new Date().toISOString(),
-    total: missing.length, queue: missing.map((p) => p.id), done: [], errors: [], skipped: [],
-  };
+  const prev = acc.meta?.shopee_sync as ShopeeSync | undefined;
+  const links = linkItems(products, items, prev?.links);
+  const chosen = ids ? products.filter((p) => ids.includes(p.id)) : products;
+  const queue = chosen.map((p) => p.id);
+  const sync: ShopeeSync = ids && prev
+    ? { ...prev, links, finished_at: null, total: prev.queue.length + queue.length, queue: [...queue, ...prev.queue.filter((x) => !queue.includes(x))] }
+    : {
+      started_at: new Date().toISOString(), finished_at: queue.length ? null : new Date().toISOString(),
+      total: queue.length, queue, done: [], errors: [], skipped: [], links,
+    };
   await saveSync(db, acc.id, sync);
-  return { store: products.length, on_shopee: items.length, missing: missing.length, minutes: Math.ceil(missing.length / PER_RUN) };
+  const linked = chosen.filter((p) => links[p.id]).length;
+  return { store: products.length, on_shopee: items.length, update: linked, create: chosen.length - linked, minutes: Math.ceil(queue.length / PER_RUN) };
+}
+
+/** Devolve produtos para a fila da Shopee (foto nova aplicada, produto novo na loja). Sem fila ainda: não faz nada. */
+export async function requeueShopee(db: SupabaseClient, userId: string, ids: number[]) {
+  const acc = await shopeeAccount(db, userId);
+  const sync = acc?.meta?.shopee_sync as ShopeeSync | undefined;
+  if (!acc || !sync || !ids.length) return 0;
+  const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
+  const cur = (data?.meta?.shopee_sync ?? sync) as ShopeeSync;
+  const add = ids.filter((id) => !cur.queue.includes(id));
+  if (!cur.queue.length && !cur.inflight?.ids.length) cur.total = 0; // rodada nova: o contador recomeça
+  cur.queue = [...cur.queue, ...add];
+  cur.total += add.length;
+  cur.finished_at = null;
+  await saveSync(db, acc.id, cur);
+  return add.length;
+}
+
+/** Anúncio da Shopee do produto da loja (pela fila; se não estiver lá, procura pelo nome). */
+async function linkFor(db: SupabaseClient, acc: { id: string; external_id: string; meta: Record<string, unknown> }, token: string, productId: number, name: string) {
+  const sync = acc.meta?.shopee_sync as ShopeeSync | undefined;
+  if (sync?.links?.[productId]) return sync.links[productId];
+  const items = await shopeeAllItems(token, acc.external_id);
+  return items.find((i) => words(i.item_name) === words(name))?.item_id ?? null;
+}
+
+/** Estoque do produto na Shopee (null = sem controle no site → 200). */
+export async function shopeeStockFor(db: SupabaseClient, userId: string, productId: number, name: string, stock: number | null) {
+  const acc = await shopeeAccount(db, userId);
+  if (!acc) return null;
+  const token = await shopeeTokenFor(db, acc.id, acc.external_id);
+  const item = await linkFor(db, acc, token, productId, name);
+  if (!item) return { error: "sem anúncio na Shopee" };
+  await shopeeSetStock(token, acc.external_id, item, stock ?? 200);
+  return { item_id: item, stock: stock ?? 200 };
+}
+
+/** Apaga o anúncio do produto na Shopee e tira ele da fila (para não ser recriado). */
+export async function shopeeDeleteFor(db: SupabaseClient, userId: string, productId: number, name: string) {
+  const acc = await shopeeAccount(db, userId);
+  if (!acc) return null;
+  const token = await shopeeTokenFor(db, acc.id, acc.external_id);
+  const item = await linkFor(db, acc, token, productId, name);
+  if (item) await shopeeDeleteItem(token, acc.external_id, item);
+  const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
+  const sync = data?.meta?.shopee_sync as ShopeeSync | undefined;
+  if (sync) {
+    sync.queue = sync.queue.filter((x) => x !== productId);
+    if (sync.links) delete sync.links[productId];
+    await saveSync(db, acc.id, sync);
+  }
+  return item ? { item_id: item, deleted: true } : { error: "sem anúncio na Shopee" };
 }
 
 async function saveSync(db: SupabaseClient, accountId: string, sync: ShopeeSync) {
@@ -108,7 +187,10 @@ async function record(db: SupabaseClient, accountId: string, id: number, r: { do
   const { data } = await db.from("social_accounts").select("meta").eq("id", accountId).single();
   const sync = data?.meta?.shopee_sync as ShopeeSync | undefined;
   if (!sync) return;
-  if (r.done) sync.done.push(r.done);
+  if (r.done) {
+    sync.done = [...sync.done.filter((d) => d.id !== id), r.done]; // um resultado por produto
+    if (r.done.item_id) sync.links = { ...(sync.links ?? {}), [id]: r.done.item_id };
+  }
   if (r.error) sync.errors.push(r.error);
   if (r.skipped) sync.skipped.push(r.skipped);
   if (sync.inflight) sync.inflight.ids = sync.inflight.ids.filter((x) => x !== id);
@@ -180,6 +262,13 @@ export async function runShopeeSync(db: SupabaseClient) {
           // deno-lint-ignore no-explicit-any
           const images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
           const stock = v.stock === null || v.stock === undefined ? 200 : Number(v.stock);
+          const linked = sync.links?.[id];
+          // Já tem anúncio e o site está sem estoque: zera na Shopee também (sai de venda)
+          if (linked && !(stock > 0) && base && !/\bteste\b/i.test(name)) {
+            await shopeeSetStock(token, acc.external_id, linked, 0);
+            await record(db, acc.id, id, { done: { id, name, item_id: linked, price: applyRule(base, rule), updated: true } });
+            continue;
+          }
           const skip = /\bteste\b/i.test(name) ? "produto de teste"
             : !base ? "sem preço"
             : !images.length ? "sem foto"
@@ -198,9 +287,21 @@ export async function runShopeeSync(db: SupabaseClient) {
           if (!imageIds.length) throw new Error("a Shopee não aceitou nenhuma foto");
           const about = txt(p.description).replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
           const units = kit ? kitUnits(name, about, Number(v.price || 0)) : null;
+          const description = mlListingDescription({ name, about, units }).slice(0, 2900);
+          if (linked) {
+            const warn: string[] = [];
+            const note = (what: string) => (e: unknown) => warn.push(`${what}: ${e instanceof Error ? e.message : e}`);
+            await shopeeUpdateItem(token, acc.external_id, linked, { image: { image_id_list: imageIds }, description }).catch(note("fotos/descrição"));
+            const models = await shopeeModels(token, acc.external_id, linked);
+            await shopeeSetPrice(token, acc.external_id, linked, price, models).catch(note("preço"));
+            await shopeeSetStock(token, acc.external_id, linked, stock, models).catch(note("estoque"));
+            await shopeeRelistItem(token, acc.external_id, linked).catch(() => {}); // estava fora da vitrine: volta
+            await record(db, acc.id, id, { done: { id, name, item_id: linked, price, updated: true, ...(warn.length ? { error: warn.join("; ") } : {}) } });
+            continue;
+          }
           const created = await shopeeAddItem(token, acc.external_id, {
             original_price: price,
-            description: mlListingDescription({ name, about, units }).slice(0, 2900),
+            description,
             item_name: name.slice(0, 120),
             item_sku: String(v.sku ?? "").trim() || pinSku(name),
             category_id: 100160,

@@ -217,3 +217,42 @@ export const SHOPEE_PIN_TAX = {
   origin: "0",
   measure_unit: "UN",
 };
+
+/** Variações do anúncio (pin avulso normalmente não tem; aí preço/estoque vão sem model_id). */
+export async function shopeeModels(token: string, shopId: string, itemId: number): Promise<number[]> {
+  const r = await shopee<{ model?: { model_id: number }[] }>(token, shopId, "/api/v2/product/get_model_list", { params: { item_id: itemId } })
+    .catch(() => ({ model: [] as { model_id: number }[] }));
+  return (r?.model ?? []).map((m) => m.model_id).filter(Boolean);
+}
+
+/** Preço do anúncio (em todas as variações, se tiver). */
+export async function shopeeSetPrice(token: string, shopId: string, itemId: number, price: number, models?: number[]) {
+  models ??= await shopeeModels(token, shopId, itemId);
+  const price_list = models.length ? models.map((model_id) => ({ model_id, original_price: price })) : [{ original_price: price }];
+  return shopee(token, shopId, "/api/v2/product/update_price", { body: { item_id: itemId, price_list } });
+}
+
+/** Estoque do anúncio (em todas as variações, se tiver). */
+export async function shopeeSetStock(token: string, shopId: string, itemId: number, stock: number, models?: number[]) {
+  models ??= await shopeeModels(token, shopId, itemId);
+  const stock_list = models.length
+    ? models.map((model_id) => ({ model_id, seller_stock: [{ stock }] }))
+    : [{ seller_stock: [{ stock }] }];
+  return shopee(token, shopId, "/api/v2/product/update_stock", { body: { item_id: itemId, stock_list } });
+}
+
+/** Atualiza campos do anúncio (fotos, descrição, SKU...) no formato de product/update_item. */
+// deno-lint-ignore no-explicit-any
+export async function shopeeUpdateItem(token: string, shopId: string, itemId: number, body: Record<string, any>) {
+  return shopee(token, shopId, "/api/v2/product/update_item", { body: { item_id: itemId, ...body } });
+}
+
+/** Volta o anúncio para a vitrine (estava fora). */
+export async function shopeeRelistItem(token: string, shopId: string, itemId: number) {
+  return shopee(token, shopId, "/api/v2/product/unlist_item", { body: { item_list: [{ item_id: itemId, unlist: false }] } });
+}
+
+/** Apaga o anúncio da Shopee (não volta). */
+export async function shopeeDeleteItem(token: string, shopId: string, itemId: number) {
+  return shopee(token, shopId, "/api/v2/product/delete_item", { body: { item_id: itemId } });
+}

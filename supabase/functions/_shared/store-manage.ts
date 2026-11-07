@@ -3,6 +3,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ns, nsFindProduct, storeFor, txt } from "./nuvemshop.ts";
 import { ml, mlTokenFor } from "./mercadolivre.ts";
+import { shopeeDeleteFor, shopeeStockFor } from "./shopee-sync.ts";
 
 /** Anúncios do ML ligados a um produto da loja: os da sincronização (meta.ml_sync.done) e os cadastrados pelo Studio. */
 async function mlListings(db: SupabaseClient, userId: string, productId: number) {
@@ -47,7 +48,9 @@ export async function setStock(db: SupabaseClient, userId: string, product: stri
       ml_[l.id] = e instanceof Error ? e.message : String(e);
     }
   }
-  return { id: p.id, name: txt(p.name), stock, mercadolivre: ml_ };
+  const shopee = await shopeeStockFor(db, userId, Number(p.id), txt(p.name), stock)
+    .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return { id: p.id, name: txt(p.name), stock, mercadolivre: ml_, shopee };
 }
 
 /** Apaga o produto do site e encerra o anúncio do ML (encerrado não volta; para pausar, use estoque 0). */
@@ -75,7 +78,9 @@ export async function deleteProduct(db: SupabaseClient, userId: string, product:
     const next = { ...sync, queue: (sync.queue ?? []).filter((id: number) => id !== pid), done: (sync.done ?? []).filter((d: { id: number }) => d.id !== pid) };
     await db.from("social_accounts").update({ meta: { ...acc.meta, ml_sync: next } }).eq("id", acc.id);
   }
+  const shopee = await shopeeDeleteFor(db, userId, Number(p.id), txt(p.name))
+    .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
   await db.from("product_drafts").update({ product_url: null }).eq("user_id", userId).eq("product_id", String(p.id));
   const price = Number(p.variants?.[0]?.price) || undefined;
-  return { id: p.id, name: txt(p.name), price, deleted: true, mercadolivre: ml_ };
+  return { id: p.id, name: txt(p.name), price, deleted: true, mercadolivre: ml_, shopee };
 }
