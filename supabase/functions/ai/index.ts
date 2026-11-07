@@ -15,7 +15,7 @@ import { cleanDomain, DNS_RECORDS, importClientData, publishPatch, vercelDomain,
 import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, STICK_TRENDS, ytDeleteVideo, ytOwnHits, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
-import { shopeeAddItem, shopeeItems, shopeeReadiness, shopeeTokenFor, shopeeUnlistItem, shopeeUploadImage } from "../_shared/shopee.ts";
+import { SHOPEE_PIN_TAX, shopeeAddItem, shopeeItems, shopeeReadiness, shopeeTokenFor, shopeeUnlistItem, shopeeUploadImage } from "../_shared/shopee.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
@@ -558,38 +558,17 @@ Deno.serve(async (req) => {
         weight: 0.4,
         dimension: { package_height: 3, package_length: 4, package_width: 4 },
         logistic_info: [{ logistic_id: 91003, enabled: true }],
-        tax_info: { ncm: "71171900", cest_list: ["2805800"], same_state_cfop: "5102", diff_state_cfop: "6102", csosn: "102", origin: "0", measure_unit: "UN" },
+        tax_info: SHOPEE_PIN_TAX,
         seller_stock: [{ stock: 1 }],
         brand: { brand_id: 0, original_brand_name: "No Brand" },
         condition: "NEW",
         item_status: "UNLIST",
       };
       const base = { ncm: "71171900", measure_unit: "UN" } as Record<string, unknown>;
-      // o único envio aceito tinha o campo "cest" (mesmo nome que a Shopee devolve na leitura)
-      const variantes: Record<string, unknown>[] = [
-        { ncm: "71171900", cest: "2805800", same_state_cfop: "5102", diff_state_cfop: "6102", csosn: "102", origin: "0", measure_unit: "UN" },
-        { ncm: "71171900", cest: "2805800", cest_list: ["2805800"], same_state_cfop: "5102", diff_state_cfop: "6102", csosn: "102", origin: "0", measure_unit: "UN" },
-        { ncm: "71171900", cest: "2805800", cest_list: ["2805800"], same_state_cfop: "5102", different_state_cfop: "6102", csosn_number: "102", measure_unit: "UN" },
-      ];
-      let created: any = null;
-      let usada = -1;
-      const erros: string[] = [];
-      for (let i = 0; i < variantes.length; i++) {
-        try {
-          created = await shopeeAddItem(token, acc.external_id, { ...body, tax_info: variantes[i] });
-          usada = i;
-          break;
-        } catch (e) {
-          erros.push(`variante ${i + 1} ${JSON.stringify(variantes[i])} → ${(e as Error).message}`);
-        }
-      }
-      if (!created) {
-        const exemplos = await shopeeItems(token, acc.external_id, 3).then((arr) => arr.map((i: any) => ({ item: i.item_name, tax_info: i.tax_info ?? null }))).catch((x) => `erro ao ler: ${(x as Error).message}`);
-        throw new HttpError(400, `Nenhuma variante passou. ${erros.join(" || ")} | Fiscal da loja: ${JSON.stringify(exemplos)}`);
-      }
+      const created = await shopeeAddItem(token, acc.external_id, { ...body, tax_info: SHOPEE_PIN_TAX });
       const itemId = Number(created.item_id);
       const unlist = await shopeeUnlistItem(token, acc.external_id, itemId).then((r) => (r?.failure_list?.length ? `NÃO tirou da vitrine: ${JSON.stringify(r.failure_list)}` : "tirado da vitrine")).catch((e) => `aviso ao tirar da vitrine: ${(e as Error).message}`);
-      return json({ item_id: itemId, produto: name, preco: price, vitrine: unlist, variante_que_passou: usada + 1, erros_das_outras: erros });
+      return json({ item_id: itemId, produto: name, preco: price, vitrine: unlist });
     }
     if (action === "marketplace_analyze") return json(await analyzeMarketplace(db, userId, input.platform === "shopee" ? "shopee" : "mercadolivre"));
     if (action === "marketplace_publish") {
