@@ -32,7 +32,9 @@ export type ShopeeSync = {
   /** Produto da loja → anúncio da Shopee */
   links?: Record<string, number>;
   /** Pedido para a próxima rodada do cron (scripts sem as chaves da Shopee): "all" = loja inteira, ou alguns produtos */
-  request?: "all" | number[] | null;
+  request?: "all" | "audit" | number[] | null;
+  /** Conferência de anúncios repetidos (mesmo nome) na Shopee */
+  audit?: { at: string; total: number; dupes: { name: string; items: { item_id: number; status?: string; created_by_sync: boolean }[] }[] };
 };
 
 /** Nome comparável: sem "| Brax Pins Mania", sem acento, sem pontuação. */
@@ -222,6 +224,26 @@ export async function runShopeeSync(db: SupabaseClient) {
     }
     let sync = acc.meta.shopee_sync as ShopeeSync;
     // Pedido de sincronizar (loja inteira ou alguns produtos), ou fila antiga sem a ligação produto → anúncio
+    if (sync.request === "audit") {
+      try {
+        const token = await shopeeTokenFor(db, acc.id, acc.external_id);
+        const items = await shopeeAllItems(token, acc.external_id);
+        const created = new Set(sync.done.filter((d) => !d.updated && d.item_id).map((d) => d.item_id));
+        const groups = new Map<string, typeof items>();
+        for (const it of items) groups.set(words(it.item_name), [...(groups.get(words(it.item_name)) ?? []), it]);
+        const dupes = [...groups.values()].filter((g) => g.length > 1).map((g) => ({
+          name: g[0].item_name,
+          items: g.map((i) => ({ item_id: i.item_id, status: i.item_status, created_by_sync: created.has(i.item_id) })),
+        }));
+        sync.audit = { at: new Date().toISOString(), total: items.length, dupes };
+      } catch (e) {
+        sync.audit = { at: new Date().toISOString(), total: -1, dupes: [{ name: e instanceof Error ? e.message : String(e), items: [] }] };
+      }
+      sync.request = null;
+      await saveSync(db, acc.id, sync);
+      out.push({ account: acc.id, audit: sync.audit.dupes.length });
+      continue;
+    }
     if (sync.request || !sync.links) {
       const r = await startShopeeSync(db, acc.user_id, Array.isArray(sync.request) ? sync.request : sync.request === "all" ? undefined : [])
         .catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
