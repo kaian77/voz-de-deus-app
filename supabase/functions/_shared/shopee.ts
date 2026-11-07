@@ -139,16 +139,28 @@ export async function shopeeReadiness(token: string, shopId: string, sampleCateg
   const channels = await shopee<{ logistics_channel_list?: any[] }>(token, shopId, "/api/v2/logistics/get_channel_list").catch((e) => ({ logistics_channel_list: [], error: String(e) }));
   const list = cats.category_list ?? [];
   const leaves = list.filter((c) => !c.has_children);
-  let categoriaExemplo = sampleCategoryId ?? leaves[0]?.category_id;
+  // Categoria de exemplo: a de um anúncio real da loja (se não houver, a primeira folha).
+  let categoriaExemplo = sampleCategoryId;
+  if (!categoriaExemplo) {
+    const [first] = await shopeeItems(token, shopId, 1).catch(() => []);
+    categoriaExemplo = first?.category_id ?? leaves[0]?.category_id;
+  }
   let atributos: unknown[] = [];
   if (categoriaExemplo) {
-    const attrs = await shopee<{ attribute_list?: unknown[] }>(token, shopId, "/api/v2/product/get_attributes", {
-      params: { category_id: categoriaExemplo, language: "pt-br" },
-    }).catch((e) => ({ attribute_list: [{ erro: String(e) }] }));
-    atributos = (attrs.attribute_list ?? []).map((a) => {
-      // deno-lint-ignore no-explicit-any
-      const x = a as any;
-      return { attribute_id: x.attribute_id, nome: x.display_attribute_name ?? x.original_attribute_name, obrigatorio: !!x.is_mandatory, erro: x.erro };
+    // Endereço atual da Shopee para atributos (get_attribute_tree); o antigo (get_attributes) deu erro.
+    // deno-lint-ignore no-explicit-any
+    const tree = await shopee<{ list?: any[] }>(token, shopId, "/api/v2/product/get_attribute_tree", {
+      params: { category_id_list: categoriaExemplo, language: "pt-br" },
+    }).catch((e) => ({ list: [{ erro: String(e) }] }));
+    // deno-lint-ignore no-explicit-any
+    atributos = (tree.list ?? []).map((a: any) => {
+      const x = a.attribute ?? a;
+      return {
+        attribute_id: x.attribute_id ?? a.attribute_id,
+        nome: x.display_attribute_name ?? x.original_attribute_name ?? a.erro,
+        obrigatorio: !!(x.is_mandatory ?? a.is_mandatory),
+        erro: a.erro,
+      };
     });
   }
   return {
