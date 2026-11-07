@@ -153,15 +153,23 @@ export async function shopeeReadiness(token: string, shopId: string, sampleCateg
       params: { category_id_list: categoriaExemplo, language: "pt-br" },
     }).catch((e) => ({ list: [{ erro: String(e) }] }));
     // deno-lint-ignore no-explicit-any
-    atributos = (tree.list ?? []).map((a: any) => {
-      const x = a.attribute ?? a;
-      return {
-        attribute_id: x.attribute_id ?? a.attribute_id,
-        nome: x.display_attribute_name ?? x.original_attribute_name ?? a.erro,
-        obrigatorio: !!(x.is_mandatory ?? a.is_mandatory),
-        erro: a.erro,
-      };
-    });
+    const nodes: any[] = [];
+    // deno-lint-ignore no-explicit-any
+    const walk = (list: any[] | undefined) => {
+      for (const n of list ?? []) {
+        nodes.push(n);
+        walk(n.child_attribute_list ?? n.children ?? n.child_attribute_tree);
+      }
+    };
+    // deno-lint-ignore no-explicit-any
+    walk((tree.list ?? []).flatMap((c: any) => c.attribute_tree ?? c.attribute_list ?? [c]));
+    atributos = nodes.filter((n) => n.attribute_id !== undefined).map((n) => ({
+      attribute_id: n.attribute_id,
+      nome: n.display_attribute_name ?? n.original_attribute_name,
+      obrigatorio: !!n.is_mandatory,
+      erro: n.erro,
+    }));
+    if (!atributos.length) atributos = [{ resposta_crua: tree }];
   }
   return {
     categorias_total: list.length,
