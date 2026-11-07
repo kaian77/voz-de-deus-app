@@ -162,9 +162,35 @@ function ShopeeReadiness() {
       <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={run} disabled={busy}>
         {busy && <Loader2 className="animate-spin" />}Ver o que a Shopee exige (só leitura)
       </Button>
+      <TestPublish />
       {result !== null && (
         <pre className="mt-2 max-h-72 overflow-auto rounded bg-background p-2 text-[11px] leading-snug">{JSON.stringify(result, null, 2)}</pre>
       )}
+    </div>
+  );
+}
+
+/** Teste: cria UM anúncio do Caboco de lança na Shopee e tira da vitrine na mesma hora. */
+function TestPublish() {
+  const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState<string | null>(null);
+  const run = async () => {
+    if (!window.confirm("Criar um anúncio de teste do Caboco de lança na loja Brax e tirar da vitrine?")) return;
+    setBusy(true);
+    try {
+      setOut(JSON.stringify(await api.invoke("ai", { action: "shopee_test_publish" }), null, 2));
+    } catch (e) {
+      setOut((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-2">
+      <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={run} disabled={busy}>
+        {busy && <Loader2 className="animate-spin" />}Teste: anúncio do Caboco (sem vitrine)
+      </Button>
+      {out && <pre className="mt-2 max-h-48 overflow-auto rounded bg-background p-2 text-[11px]">{out}</pre>}
     </div>
   );
 }
