@@ -179,3 +179,30 @@ export async function shopeeReadiness(token: string, shopId: string, sampleCateg
     atributos,
   };
 }
+
+/** Sobe uma foto (URL pública) para a Shopee e devolve o image_id. */
+export async function shopeeUploadImage(token: string, shopId: string, imageUrl: string): Promise<string> {
+  const img = await fetch(imageUrl);
+  if (!img.ok) throw new Error("Não consegui baixar a foto do produto");
+  const url = await signed("/api/v2/media_space/upload_image", { token, shopId: Number(shopId) });
+  const form = new FormData();
+  form.append("image", await img.blob(), "foto.jpg");
+  const res = await fetch(url, { method: "POST", body: form });
+  // deno-lint-ignore no-explicit-any
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok || data.error) throw new Error(`Shopee (foto): ${data.message || data.error || res.status}`);
+  const id = data.response?.image_info?.image_id;
+  if (!id) throw new Error("Shopee não devolveu o id da foto");
+  return id;
+}
+
+/** Cria um anúncio na Shopee (body segue o formato de product/add_item). */
+// deno-lint-ignore no-explicit-any
+export async function shopeeAddItem(token: string, shopId: string, body: Record<string, any>) {
+  return shopee(token, shopId, "/api/v2/product/add_item", { body });
+}
+
+/** Tira um anúncio da vitrine (fica fora do ar sem ser apagado). */
+export async function shopeeUnlistItem(token: string, shopId: string, itemId: number) {
+  return shopee(token, shopId, "/api/v2/product/unlist_item", { body: { item_list: [{ item_id: itemId, unlist: true }] } });
+}

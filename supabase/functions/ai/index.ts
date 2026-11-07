@@ -15,7 +15,7 @@ import { cleanDomain, DNS_RECORDS, importClientData, publishPatch, vercelDomain,
 import { optimizeStorage, removeStudioFiles } from "../_shared/storage-cleanup.ts";
 import { planDay, STICK_TRENDS, ytDeleteVideo, ytOwnHits, ytResearch, ytToken } from "../_shared/youtube.ts";
 import { analyzeMarketplace } from "../_shared/marketplaces.ts";
-import { shopeeReadiness, shopeeTokenFor } from "../_shared/shopee.ts";
+import { shopeeAddItem, shopeeReadiness, shopeeTokenFor, shopeeUnlistItem, shopeeUploadImage } from "../_shared/shopee.ts";
 import { mlSyncStatus, startMlSync } from "../_shared/ml-sync.ts";
 import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
@@ -525,6 +525,39 @@ Deno.serve(async (req) => {
       if (!acc) throw new HttpError(404, "Conecte a Shopee em Contas");
       const token = await shopeeTokenFor(db, acc.id, acc.external_id);
       return json(await shopeeReadiness(token, acc.external_id));
+    }
+    if (action === "shopee_test_publish") {
+      // Teste: cria UM anúncio do "Caboco de lança" na Shopee e tira da vitrine na mesma hora
+      const { data: acc } = await db.from("social_accounts").select("*").eq("user_id", userId).eq("platform", "shopee").order("connected_at").limit(1).maybeSingle();
+      if (!acc) throw new HttpError(404, "Conecte a Shopee em Contas");
+      const token = await shopeeTokenFor(db, acc.id, acc.external_id);
+      const store = await storeFor(db, userId);
+      const found = await ns<any[]>(store.token, store.storeId, "products?q=Caboco&per_page=10&published=true");
+      const p = (Array.isArray(found) ? found : []).find((x) => String(x.name?.pt ?? x.name ?? "").toLowerCase().includes("caboco"));
+      if (!p) throw new HttpError(404, "Não achei o Caboco de lança publicado na loja");
+      const name = String(p.name?.pt ?? p.name).slice(0, 120);
+      const price = Number(p.variants?.[0]?.promotional_price || p.variants?.[0]?.price);
+      const src = p.images?.[0]?.src;
+      if (!src || !(price > 0)) throw new HttpError(400, "O produto precisa de foto e preço na loja");
+      const imageId = await shopeeUploadImage(token, acc.external_id, src);
+      const created = await shopeeAddItem(token, acc.external_id, {
+        original_price: price,
+        description: "Pin de metal esmaltado da Brax Pins Mania. Peça individual, com acabamento em esmalte e fecho para colar na roupa ou na mochila.",
+        item_name: name,
+        category_id: 100160,
+        image: { image_id_list: [imageId] },
+        weight: 0.4,
+        dimension: { package_height: 3, package_length: 4, package_width: 4 },
+        logistic_info: [{ logistic_id: 91003, enabled: true }],
+        tax_info: { ncm: "71171900", same_state_cfop: "5102", different_state_cfop: "6102", csosn_number: "102", measure_unit: "UN" },
+        seller_stock: [{ stock: 1 }],
+        brand: { brand_id: 0, original_brand_name: "No Brand" },
+        condition: "NEW",
+        item_status: "UNLIST",
+      });
+      const itemId = Number(created.item_id);
+      const unlist = await shopeeUnlistItem(token, acc.external_id, itemId).then((r) => (r?.failure_list?.length ? `NÃO tirou da vitrine: ${JSON.stringify(r.failure_list)}` : "tirado da vitrine")).catch((e) => `aviso ao tirar da vitrine: ${(e as Error).message}`);
+      return json({ item_id: itemId, produto: name, preco: price, vitrine: unlist });
     }
     if (action === "marketplace_analyze") return json(await analyzeMarketplace(db, userId, input.platform === "shopee" ? "shopee" : "mercadolivre"));
     if (action === "marketplace_publish") {
