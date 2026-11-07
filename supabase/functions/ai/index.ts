@@ -565,12 +565,26 @@ Deno.serve(async (req) => {
         item_status: "UNLIST",
       };
       let created: any;
-      try {
-        created = await shopeeAddItem(token, acc.external_id, body);
-      } catch (e) {
-        // diagnóstico: fiscal dos anúncios que já estão na loja, para copiar o NCM/CEST que a Shopee aceita
+      const cestTentativas: Record<string, unknown>[] = [
+        { cest_list: ["2805800"] },
+        { cest_list: ["28.058.00"] },
+        { cest_list: ["2805800"], cest: "2805800" },
+        { cest: "2805800" },
+      ];
+      const erros: string[] = [];
+      for (const extra of cestTentativas) {
+        try {
+          created = await shopeeAddItem(token, acc.external_id, { ...body, tax_info: { ...body.tax_info, ...extra } });
+          erros.length = 0;
+          erros.push(`ok com ${JSON.stringify(extra)}`);
+          break;
+        } catch (e) {
+          erros.push(`${JSON.stringify(extra)} → ${(e as Error).message}`);
+        }
+      }
+      if (!created) {
         const exemplos = await shopeeItems(token, acc.external_id, 3).then((arr) => arr.map((i: any) => ({ item: i.item_name, tax_info: i.tax_info ?? null })).slice(0, 3)).catch((x) => `erro ao ler: ${(x as Error).message}`);
-        throw new HttpError(400, `${(e as Error).message} | Fiscal dos anúncios da loja: ${JSON.stringify(exemplos)}`);
+        throw new HttpError(400, `Tentativas de CEST: ${erros.join(" || ")} | Fiscal dos anúncios da loja: ${JSON.stringify(exemplos)}`);
       }
       const itemId = Number(created.item_id);
       const unlist = await shopeeUnlistItem(token, acc.external_id, itemId).then((r) => (r?.failure_list?.length ? `NÃO tirou da vitrine: ${JSON.stringify(r.failure_list)}` : "tirado da vitrine")).catch((e) => `aviso ao tirar da vitrine: ${(e as Error).message}`);
