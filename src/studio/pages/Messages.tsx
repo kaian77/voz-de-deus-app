@@ -145,7 +145,8 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
 
   const subtitle = conversation.contact_username
     ? `@${conversation.contact_username}`
-    : conversation.channel === "whatsapp" ? `+${conversation.contact_id.split("@")[0]}` : "";
+    : conversation.channel === "whatsapp" ? `+${conversation.contact_id.split("@")[0]}`
+    : conversation.channel === "mercadolivre" ? (conversation.meta?.kind === "question" ? "Pergunta no anúncio · a resposta fica pública" : "Mensagem do pedido · até 350 letras por mensagem") : "";
 
   return (
     <section className="flex h-[calc(100dvh-306px)] min-h-[400px] lg:h-[calc(100vh-200px)] lg:min-h-[520px] flex-col overflow-hidden rounded-lg border bg-card">

@@ -12,6 +12,7 @@ import { cleanupStorage, optimizeStorage } from "../_shared/storage-cleanup.ts";
 import { wahaKeepAlive } from "../_shared/whatsapp.ts";
 import { runSaleAlerts } from "../_shared/sale-alerts.ts";
 import { runDailyDigest } from "../_shared/daily.ts";
+import { runMlInbox } from "../_shared/ml-inbox.ts";
 import { runDailyVideos } from "../_shared/video-autopilot.ts";
 import { runPaginasproAutopilot } from "../_shared/paginaspro-content.ts";
 import { sendPendingReviewEmails } from "../_shared/reviews.ts";
@@ -90,6 +91,8 @@ Deno.serve(async (req) => {
     const sales = new Date().getUTCMinutes() % 2 === 1
       ? await runSaleAlerts(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }])
       : undefined;
+    // Perguntas e mensagens de pedido do Mercado Livre na caixa de entrada (a função controla o intervalo de 3 min)
+    const mlinbox = await runMlInbox(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Avisos no celular (Studio instalado como app)
     const push = await sendPendingPush(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Resumo do dia no WhatsApp (só às 8h de Brasília, uma vez por dia)
@@ -102,7 +105,7 @@ Deno.serve(async (req) => {
     // PáginasPro: prévias pedidas pelo atendente (a IA leva ~1 min; roda em segundo plano)
     const paginaspro = runPaginasproJobs(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(paginaspro);
-    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, shopeesync, mlnew, sales, reviews, push });
+    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, shopeesync, mlnew, sales, reviews, push, mlinbox });
   } catch (err) {
     return handleError(err);
   }

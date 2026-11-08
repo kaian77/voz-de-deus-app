@@ -643,7 +643,7 @@ export interface AiVideo {
   created_at: string;
 }
 
-export type Channel = "instagram" | "whatsapp";
+export type Channel = "instagram" | "whatsapp" | "mercadolivre";
 
 export interface Conversation {
   id: string;
@@ -659,6 +659,7 @@ export interface Conversation {
   last_message_at: string;
   last_inbound_at: string | null;
   created_at: string;
+  meta?: { kind: "question"; item_id: string; item_title?: string; buyer_id: number } | { kind: "pack"; pack_id: string; buyer_id: number; order_id?: number } | null;
 }
 
 export interface Message {

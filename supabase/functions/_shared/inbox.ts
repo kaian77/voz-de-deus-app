@@ -9,8 +9,9 @@ import { nsCoupons, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, storeFo
 import { notify } from "./push.ts";
 import { brandOf, isPaginasPro } from "./brand.ts";
 import { paginasproReply } from "./paginaspro-agent.ts";
+import { mlSend } from "./ml-inbox.ts";
 
-export type Channel = "instagram" | "whatsapp";
+export type Channel = "instagram" | "whatsapp" | "mercadolivre";
 type Sender = "contact" | "ai" | "human" | "agent";
 
 const WINDOW_MS = 24 * 3600 * 1000;
@@ -115,6 +116,13 @@ export async function sendMessage(db: SupabaseClient, conversationId: string, te
   if (!conv) throw new Error("Conversa não encontrada");
   // Defesa extra: a conta que envia precisa ser do mesmo dono da conversa
   if (conv.social_accounts?.user_id !== conv.user_id) throw new Error("Conta da conversa não pertence a este usuário");
+  if (conv.channel === "mercadolivre") {
+    // ML não tem janela de 24h; resposta vai para a pergunta aberta ou para a conversa do pedido
+    const externalId = await mlSend(db, conv, conv.social_accounts.external_id, text);
+    const { data: msg } = await db.from("messages").insert({ user_id: conv.user_id, conversation_id: conv.id, direction: "out", sender, text, external_id: externalId ?? null }).select().single();
+    await db.from("conversations").update({ last_message_at: new Date().toISOString(), unread: 0 }).eq("id", conv.id);
+    return msg;
+  }
   const isWaha = conv.social_accounts.meta?.provider === "waha";
   // Janela de 24h é regra das APIs oficiais da Meta (o WAHA não tem essa limitação)
   if (!isWaha && (!conv.last_inbound_at || Date.now() - new Date(conv.last_inbound_at).getTime() > WINDOW_MS)) {
@@ -330,7 +338,11 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
     },
   });
   const system =
-    `Você é o atendente virtual da marca no ${conversation.channel === "whatsapp" ? "WhatsApp" : "direct do Instagram"}. ` +
+    `Você é o atendente virtual da marca no ${conversation.channel === "whatsapp" ? "WhatsApp" : conversation.channel === "mercadolivre" ? "Mercado Livre" : "direct do Instagram"}. ` +
+    (conversation.channel === "mercadolivre"
+      ? `REGRAS DO MERCADO LIVRE: ${conversation.meta?.kind === "question" ? `é uma pergunta no anúncio "${conversation.meta?.item_title ?? ""}" (antes da compra); ` : "é uma conversa de um pedido já feito; "}` +
+        `nunca passe telefone, e-mail, @, site, link ou qualquer contato fora do Mercado Livre (o ML pune o vendedor); seja curto e cordial. `
+      : "") +
     `Responda em português do Brasil, de forma calorosa, curta (até 3 frases), natural, sem parecer robô, no máximo 1 emoji.\n\n` +
     (conversation.channel === "instagram" ? `O QUE RESPONDER: só dúvidas sobre produtos e compras — produto que a pessoa quer (pelo nome ou tema), se tem, link para comprar, ` +
     `como comprar, frete, entrega, trocas, cupom, pagamento e pedido/rastreio. Todo o resto você NÃO responde (ignore=true, reply vazio): ` +

@@ -34,15 +34,16 @@ export function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 /** Ícones de rede em tom neutro — a cor fica para estados, não para logos. */
-export function PlatformIcon({ platform, className }: { platform: Platform | "whatsapp" | "nuvemshop"; className?: string }) {
+export function PlatformIcon({ platform, className }: { platform: Platform | "whatsapp" | "nuvemshop" | "mercadolivre"; className?: string }) {
   const cls = cn("h-3.5 w-3.5 text-foreground/70", className);
+  if (platform === "mercadolivre") return <span className={cn("inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-sm bg-[#FFE600] px-0.5 text-[8px] font-black leading-none text-[#2D3277]", className)} aria-label="Mercado Livre">ML</span>;
   if (platform === "instagram") return <Instagram className={cls} strokeWidth={1.9} />;
   if (platform === "whatsapp") return <WhatsAppIcon className={cls} />;
   if (platform === "nuvemshop") return <ShoppingBag className={cls} strokeWidth={1.9} />;
   return <TikTokIcon className={cls} />;
 }
 
-export const PLATFORM_LABEL = { instagram: "Instagram", tiktok: "TikTok", whatsapp: "WhatsApp", nuvemshop: "Nuvemshop" } as const;
+export const PLATFORM_LABEL = { instagram: "Instagram", tiktok: "TikTok", whatsapp: "WhatsApp", nuvemshop: "Nuvemshop", mercadolivre: "Mercado Livre" } as const;
 
 export const KIND_LABEL: Record<PostKind, string> = {
   image: "Imagem",
