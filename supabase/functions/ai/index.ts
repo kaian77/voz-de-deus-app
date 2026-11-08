@@ -22,7 +22,7 @@ import { improveMlShowcase, setMlPremium } from "../_shared/ml-quality.ts";
 import { generateIdeas } from "../_shared/content-ideas.ts";
 import { generatePaginasproIdeas } from "../_shared/paginaspro-content.ts";
 import { finishStrategy, researchStrategy, startStrategy } from "../_shared/strategy.ts";
-import { brasiliaNow, digestMessage, salesSummary } from "../_shared/daily.ts";
+import { brasiliaNow, digestMessage, salesForPeriod, type SalesPeriod, salesSummary } from "../_shared/daily.ts";
 import { runVideosFor, videoAutopilotStatus } from "../_shared/video-autopilot.ts";
 import { sendWhatsAppTo } from "../_shared/sale-alerts.ts";
 import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
@@ -686,6 +686,11 @@ Deno.serve(async (req) => {
       return json(suggestion);
     }
     if (action === "sales_summary") return json(await salesSummary(db, userId));
+    if (action === "sales_period") {
+      const period = String(input.period ?? "month");
+      if (!["today", "yesterday", "week", "month", "last_month"].includes(period)) return json({ error: "período inválido" }, 400);
+      return json(await salesForPeriod(db, userId, period as SalesPeriod));
+    }
     // Vídeos diários do TikTok
     if (action === "video_autopilot_status") return json(await videoAutopilotStatus(db, userId));
     if (action === "video_autopilot_save") {
