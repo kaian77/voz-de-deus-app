@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  BarChart3, Bot, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Gauge, Inbox, Globe, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Star, Store, Workflow, Target, Youtube, Scissors, BookOpen, ImagePlus, Send,
+  BarChart3, Bot, Building2, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Gauge, Inbox, Globe, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Star, Store, Workflow, Target, Youtube, Scissors, BookOpen, ImagePlus, Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -14,7 +14,7 @@ import { AppInstall } from "./AppInstall";
 
 type Item = { to: string; label: string; icon: typeof Bot; end?: boolean; count?: "approvals" | "inbox" };
 const GROUPS: { label?: string; items: Item[] }[] = [
-  { items: [{ to: "/studio", label: "Visão geral", icon: LayoutGrid, end: true }] },
+  { items: [{ to: "/studio", label: "Visão geral", icon: LayoutGrid, end: true }, { to: "/studio/escritorio", label: "Escritório", icon: Building2 }] },
   {
     label: "Publicar",
     items: [
