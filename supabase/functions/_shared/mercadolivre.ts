@@ -127,11 +127,35 @@ export async function mlSellerItems(token: string, sellerId: string, max = 200, 
       if (offset + 50 >= page.paging.total) break;
     }
   }
+  return mlItemsByIds(token, [...ids], fields);
+}
+
+let multigetOff = false;
+
+/**
+ * Anúncios pelos ids. Usa a busca de 20 de uma vez (`/items?ids=`); o ML passou a recusar essa busca para alguns apps
+ * ("Resource deprecated"), aí cai para um anúncio por vez (`/items/{id}`), 5 em paralelo.
+ */
+export async function mlItemsByIds(token: string, list: string[], fields?: string[]): Promise<MlItem[]> {
+  const attrs = fields ? `attributes=${fields.join(",")}` : "";
   const items: MlItem[] = [];
-  const list = [...ids];
-  for (let i = 0; i < list.length; i += 20) {
-    const batch = await ml<{ code: number; body: MlItem }[]>(token, `/items?ids=${list.slice(i, i + 20).join(",")}${fields ? `&attributes=${fields.join(",")}` : ""}`);
-    for (const r of batch) if (r.code === 200) items.push(r.body);
+  for (let i = 0; i < list.length && !multigetOff; i += 20) {
+    try {
+      const batch = await ml<{ code: number; body: MlItem }[]>(token, `/items?ids=${list.slice(i, i + 20).join(",")}${attrs ? `&${attrs}` : ""}`);
+      for (const r of batch) if (r.code === 200) items.push(r.body);
+    } catch (e) {
+      if (!/deprecated/i.test(String((e as Error)?.message ?? e))) throw e;
+      multigetOff = true;
+    }
+  }
+  if (!multigetOff) return items;
+  const have = new Set(items.map((x) => x.id));
+  const rest = list.filter((id) => !have.has(id));
+  for (let i = 0; i < rest.length; i += 5) {
+    const got = await Promise.all(rest.slice(i, i + 5).map((id) =>
+      ml<MlItem>(token, `/items/${id}${attrs ? `?${attrs}` : ""}`).catch(() => null)
+    ));
+    for (const it of got) if (it) items.push(it);
   }
   return items;
 }
