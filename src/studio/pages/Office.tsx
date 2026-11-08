@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useTable } from "../lib/hooks";
@@ -9,6 +9,7 @@ import { PageHeader } from "../components/bits";
 /**
  * Escritório: cada setor do Studio é um bonequinho numa mesa (pixel art desenhada por código, sem imagens).
  * Trabalhando = digita e o monitor pisca; pronto = acordado esperando; dormindo = nada na fila; alerta = precisa de você.
+ * O chefe (Kaian) anda pela sala: toque no chão ou setas/WASD; perto de uma mesa o funcionário dá o relatório.
  */
 
 type State = "work" | "ready" | "sleep" | "alert";
@@ -133,7 +134,42 @@ function deskPos(i: number, total: number) {
   return { x, y: TOP + row * ROW + 14 };
 }
 
-function draw(ctx: CanvasRenderingContext2D, desks: Desk[], t: number) {
+type Boss = { x: number; y: number; tx: number | null; ty: number | null; dir: "down" | "up" | "left" | "right"; moving: boolean; step: number };
+
+const FLOOR = { x0: 6, x1: W - 6, y0: TOP + 2, y1: H - 3 };
+/** Onde o chefe não passa: mesa e o funcionário na cadeira. */
+function blocked(x: number, y: number, total: number) {
+  for (let i = 0; i < total; i++) {
+    const d = deskPos(i, total);
+    if (x > d.x - 32 && x < d.x + 32 && y > d.y - 6 && y < d.y + 22) return true;
+    if (x > d.x - 14 && x < d.x + 14 && y >= d.y + 22 && y < d.y + 48) return true;
+  }
+  return false;
+}
+/** Lugar ao lado da mesa onde o chefe para para ouvir o relatório. */
+function deskSpot(i: number, total: number) {
+  const d = deskPos(i, total);
+  const side = i % 2 === 0 && !(i === total - 1 && total % 2 === 1) ? -1 : 1;
+  return { x: d.x + side * 40, y: d.y + 30 };
+}
+function nearestDesk(b: Boss, total: number) {
+  let best = -1, dist = 44;
+  for (let i = 0; i < total; i++) {
+    const d = deskPos(i, total);
+    const k = Math.hypot(b.x - d.x, (b.y - (d.y + 24)) * 1.2);
+    if (k < dist) { dist = k; best = i; }
+  }
+  return best;
+}
+
+function report(d: Desk, awakeByBoss: boolean) {
+  if (d.state === "alert") return `Chefe, ${d.text.toLowerCase()}! Dá uma olhada?`;
+  if (d.state === "work") return `Tô no corre, chefe: ${d.text.toLowerCase()}.`;
+  if (d.state === "ready") return `Tudo certo, chefe. ${d.text}.`;
+  return awakeByBoss ? `Opa, chefe! Tava só descansando os olhos… ${d.text.toLowerCase()}.` : d.text;
+}
+
+function draw(ctx: CanvasRenderingContext2D, desks: Desk[], boss: Boss, near: number, t: number) {
   const px = (x: number, y: number, w: number, h: number, c: string) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), w, h); };
 
   // chão
@@ -153,8 +189,9 @@ function draw(ctx: CanvasRenderingContext2D, desks: Desk[], t: number) {
   const ang = (t / 1000) * (Math.PI / 30);
   px(148 + Math.round(Math.sin(ang) * 4), 18 - Math.round(Math.cos(ang) * 4), 1, 1, "#E3262E");
   px(148, 18, 1, 1, "#111");
+  // tapete do chefe
+  px(W / 2 - 22, TOP + 8, 44, 16, "#9e1c22"); px(W / 2 - 20, TOP + 10, 40, 12, "#c42a31"); px(W / 2 - 14, TOP + 15, 28, 2, "#FFC72C");
 
-  // plantas nos cantos
   const plant = (x: number, y: number) => {
     px(x + 2, y + 10, 10, 8, "#7a4b2a"); px(x + 2, y + 10, 10, 2, "#5e3820");
     [[0, 4], [4, 0], [8, 3], [2, 7], [9, 7], [5, 5]].forEach(([dx, dy]) => px(x + dx, y + dy, 5, 5, "#2f8f46"));
@@ -162,62 +199,174 @@ function draw(ctx: CanvasRenderingContext2D, desks: Desk[], t: number) {
   };
   plant(168, 30); plant(4, H - 22);
 
-  desks.forEach((d, i) => {
+  // alvo do toque
+  if (boss.tx !== null && boss.ty !== null) {
+    const r = 3 + (Math.floor(t / 150) % 3);
+    px(boss.tx - r, boss.ty, r * 2 + 1, 1, "rgba(255,255,255,.8)"); px(boss.tx, boss.ty - r / 2, 1, r + 1, "rgba(255,255,255,.8)");
+  }
+
+  const drawDesk = (d: Desk, i: number) => {
     const { x, y } = deskPos(i, desks.length);
-    const work = d.state === "work";
+    const watched = i === near;
+    const state: State = d.state === "sleep" && watched ? "work" : d.state; // o chefe chegou: acorda e finge trabalhar
+    const work = state === "work";
     const blink = Math.floor(t / 300) % 2 === 0;
 
-    // mesa e monitor
+    if (watched) { px(x - 31, y - 13, 62, 62, "rgba(255,199,44,.18)"); }
     px(x - 28, y + 2, 56, 14, "#ececec"); px(x - 28, y + 14, 56, 3, "#c8c8c8");
     px(x - 26, y + 17, 2, 6, "#6b6b6b"); px(x + 24, y + 17, 2, 6, "#6b6b6b");
     px(x - 11, y - 10, 22, 14, "#2b2b2b");
-    const screenColor = d.state === "sleep" ? "#1a1d22" : d.state === "alert" ? (blink ? "#ff3b3b" : "#7a1010") : d.screen;
+    const screenColor = state === "sleep" ? "#1a1d22" : state === "alert" ? (blink ? "#ff3b3b" : "#7a1010") : d.screen;
     px(x - 9, y - 8, 18, 10, screenColor);
     if (work) for (let l = 0; l < 3; l++) px(x - 7, y - 6 + l * 3, 4 + ((Math.floor(t / 120) + l * 5 + i) % 10), 1, "#ffffff");
     px(x - 2, y + 4, 4, 2, "#2b2b2b");
-    // teclado e caneca
     px(x - 8, y + 7, 16, 4, "#3d3d3d"); if (work && Math.floor(t / 90) % 2) px(x - 6 + ((Math.floor(t / 90) * 3) % 12), y + 8, 2, 2, "#9a9a9a");
     px(x + 17, y + 5, 5, 6, "#fff"); px(x + 22, y + 7, 2, 3, "#fff"); px(x + 18, y + 6, 3, 1, "#6b3e1f");
 
-    // cadeira
     px(x - 9, y + 30, 18, 12, "#2f3540"); px(x - 7, y + 42, 14, 3, "#1f242c"); px(x - 1, y + 45, 2, 3, "#1f242c");
 
-    // bonequinho de costas
-    const bob = work ? Math.floor(t / 180) % 2 : d.state === "sleep" ? 2 : 0;
+    const bob = work ? Math.floor(t / (watched ? 110 : 180)) % 2 : state === "sleep" ? 2 : 0;
     const by = y + 20 + bob;
     px(x - 9, by + 6, 18, 10, d.shirt); px(x - 9, by + 6, 18, 2, "rgba(255,255,255,.25)");
     if (work) {
-      const a = Math.floor(t / 120) % 2;
+      const a = Math.floor(t / (watched ? 80 : 120)) % 2;
       px(x - 11, by + 4 - a * 2, 4, 6, d.shirt); px(x + 7, by + 2 + a * 2, 4, 6, d.shirt);
       px(x - 11, by + 2 - a * 2, 4, 2, "#f1c27d"); px(x + 7, by + a * 2, 4, 2, "#f1c27d");
     } else {
       px(x - 11, by + 8, 3, 7, d.shirt); px(x + 8, by + 8, 3, 7, d.shirt);
     }
-    px(x - 6, by - 4, 12, 11, "#f1c27d");
-    px(x - 6, by - 5, 12, 8, d.hair); px(x - 7, by - 3, 1, 5, d.hair); px(x + 6, by - 3, 1, 5, d.hair);
+    // olha para o chefe quando ele está perto
+    const turn = watched ? Math.sign(boss.x - x) * 2 : 0;
+    px(x - 6 + turn, by - 4, 12, 11, "#f1c27d");
+    px(x - 6 + turn, by - 5, 12, 8, d.hair); px(x - 7 + turn, by - 3, 1, 5, d.hair); px(x + 6 + turn, by - 3, 1, 5, d.hair);
 
-    // Zzz / alerta
-    if (d.state === "sleep") {
+    if (state === "sleep") {
       const k = Math.floor(t / 500) % 3;
       for (let z = 0; z <= k; z++) { const zx = x + 8 + z * 4, zy = by - 8 - z * 5; px(zx, zy, 3, 1, "#eef2ff"); px(zx + 1, zy + 1, 1, 1, "#eef2ff"); px(zx, zy + 2, 3, 1, "#eef2ff"); }
     }
-    if (d.state === "alert" && blink) { px(x + 10, by - 14, 7, 9, "#E3262E"); px(x + 13, by - 12, 1, 4, "#fff"); px(x + 13, by - 7, 1, 1, "#fff"); }
-  });
+    if (state === "alert" && blink) { px(x + 10, by - 14, 7, 9, "#E3262E"); px(x + 13, by - 12, 1, 4, "#fff"); px(x + 13, by - 7, 1, 1, "#fff"); }
+    if (watched && d.state === "sleep" && Math.floor(t / 400) % 2) { px(x - 2, by - 16, 3, 6, "#FFC72C"); px(x - 2, by - 9, 3, 2, "#FFC72C"); } // susto
+  };
+
+  const drawBoss = () => {
+    const { x, y, dir, moving } = boss;
+    const leg = moving ? Math.floor(boss.step) % 2 : 0;
+    px(x - 6, y - 1, 12, 3, "rgba(0,0,0,.18)"); // sombra
+    // pernas e sapatos
+    px(x - 4, y - 8 - (leg ? 1 : 0), 3, 7, "#1d2433"); px(x + 1, y - 8 - (leg ? 0 : 1), 3, 7, "#1d2433");
+    px(x - 4, y - 2 - (leg ? 1 : 0), 3, 2, "#0b0b0b"); px(x + 1, y - 2 - (leg ? 0 : 1), 3, 2, "#0b0b0b");
+    // terno, camisa e gravata
+    px(x - 6, y - 19, 12, 12, "#222a3a");
+    if (dir !== "up") { px(x - 2, y - 19, 4, 7, "#fff"); px(x - 1, y - 18, 2, 7, "#E3262E"); }
+    const swing = moving ? (leg ? 1 : -1) : 0;
+    px(x - 8, y - 18 + swing, 2, 9, "#222a3a"); px(x + 6, y - 18 - swing, 2, 9, "#222a3a");
+    px(x - 8, y - 9 + swing, 2, 2, "#e0ac69"); px(x + 6, y - 9 - swing, 2, 2, "#e0ac69");
+    // cabeça
+    px(x - 5, y - 29, 10, 10, "#e0ac69");
+    px(x - 5, y - 30, 10, 4, "#2b1a10"); px(x - 6, y - 28, 1, 4, "#2b1a10"); px(x + 5, y - 28, 1, 4, "#2b1a10");
+    if (dir === "up") px(x - 5, y - 30, 10, 8, "#2b1a10");
+    else {
+      const ex = dir === "left" ? -1 : dir === "right" ? 1 : 0;
+      px(x - 3 + ex, y - 25, 2, 2, "#111"); px(x + 1 + ex, y - 25, 2, 2, "#111");
+      px(x - 1 + ex, y - 21, 3, 1, "#a0522d");
+    }
+    // coroa de chefe
+    px(x - 4, y - 33, 8, 3, "#FFC72C"); px(x - 4, y - 35, 2, 2, "#FFC72C"); px(x - 1, y - 36, 2, 3, "#FFC72C"); px(x + 2, y - 35, 2, 2, "#FFC72C");
+  };
+
+  // desenha de cima para baixo para o chefe passar na frente/atrás das mesas
+  const order = desks.map((d, i) => ({ y: deskPos(i, desks.length).y + 44, f: () => drawDesk(d, i) }));
+  order.push({ y: boss.y, f: drawBoss });
+  order.sort((a, b) => a.y - b.y).forEach((o) => o.f());
 }
 
-function Scene({ desks }: { desks: Desk[] }) {
+const SPEED = 46; // px lógicos por segundo
+
+function Scene({ desks, onNear }: { desks: Desk[]; onNear: (i: number) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const tagRef = useRef<HTMLDivElement>(null);
   const desksRef = useRef(desks);
   desksRef.current = desks;
+  const boss = useRef<Boss>({ x: W / 2, y: TOP + 22, tx: null, ty: null, dir: "down", moving: false, step: 0 });
+  const keys = useRef(new Set<string>());
+  const nearRef = useRef(-1);
+  const onNearRef = useRef(onNear);
+  onNearRef.current = onNear;
+
   useEffect(() => {
     const ctx = ref.current?.getContext("2d");
     if (!ctx) return;
     let raf = 0;
-    const loop = (t: number) => { draw(ctx, desksRef.current, t); raf = requestAnimationFrame(loop); };
+    let last = performance.now();
+    const loop = (t: number) => {
+      const dt = Math.min(0.05, (t - last) / 1000);
+      last = t;
+      const b = boss.current;
+      const total = desksRef.current.length;
+      let vx = 0, vy = 0;
+      const k = keys.current;
+      if (k.size) {
+        vx = (k.has("ArrowRight") || k.has("d") ? 1 : 0) - (k.has("ArrowLeft") || k.has("a") ? 1 : 0);
+        vy = (k.has("ArrowDown") || k.has("s") ? 1 : 0) - (k.has("ArrowUp") || k.has("w") ? 1 : 0);
+        if (vx || vy) { b.tx = null; b.ty = null; }
+      } else if (b.tx !== null && b.ty !== null) {
+        const dx = b.tx - b.x, dy = b.ty - b.y, dist = Math.hypot(dx, dy);
+        if (dist < 1.5) { b.tx = null; b.ty = null; } else { vx = dx / dist; vy = dy / dist; }
+      }
+      const len = Math.hypot(vx, vy);
+      b.moving = len > 0;
+      if (b.moving) {
+        vx /= len; vy /= len;
+        const nx = Math.min(FLOOR.x1, Math.max(FLOOR.x0, b.x + vx * SPEED * dt));
+        const ny = Math.min(FLOOR.y1, Math.max(FLOOR.y0, b.y + vy * SPEED * dt));
+        let moved = false;
+        if (!blocked(nx, ny, total)) { b.x = nx; b.y = ny; moved = true; }
+        else if (!blocked(nx, b.y, total)) { b.x = nx; moved = true; }
+        else if (!blocked(b.x, ny, total)) { b.y = ny; moved = true; }
+        if (!moved) { b.tx = null; b.ty = null; b.moving = false; }
+        b.dir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
+        b.step += dt * 7;
+      }
+      const near = nearestDesk(b, total);
+      if (near !== nearRef.current) { nearRef.current = near; onNearRef.current(near); }
+      draw(ctx, desksRef.current, b, near, t);
+      if (tagRef.current) { tagRef.current.style.left = `${Math.min(84, Math.max(16, (b.x / W) * 100))}%`; tagRef.current.style.top = `${((b.y - 46) / H) * 100}%`; }
+      raf = requestAnimationFrame(loop);
+    };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    const MOVE = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d"];
+    const down = (e: KeyboardEvent) => {
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (!MOVE.includes(key) || (e.target as HTMLElement)?.closest("input,textarea")) return;
+      e.preventDefault();
+      keys.current.add(key);
+    };
+    const up = (e: KeyboardEvent) => keys.current.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
   }, []);
-  return <canvas ref={ref} width={W} height={H} className="block h-auto w-full" style={{ imageRendering: "pixelated" }} />;
+
+  const tap = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * W;
+    const y = ((e.clientY - r.top) / r.height) * H;
+    const total = desksRef.current.length;
+    // toque numa mesa = vai até o lado dela
+    for (let i = 0; i < total; i++) {
+      const d = deskPos(i, total);
+      if (Math.abs(x - d.x) < 34 && y > d.y - 16 && y < d.y + 50) { const s = deskSpot(i, total); boss.current.tx = s.x; boss.current.ty = s.y; return; }
+    }
+    boss.current.tx = Math.min(FLOOR.x1, Math.max(FLOOR.x0, x));
+    boss.current.ty = Math.min(FLOOR.y1, Math.max(FLOOR.y0, y));
+  };
+
+  return (
+    <>
+      <canvas ref={ref} width={W} height={H} onPointerDown={tap} className="block h-auto w-full cursor-pointer touch-none" style={{ imageRendering: "pixelated" }} />
+      <div ref={tagRef} className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-full bg-[#FFC72C] px-1.5 py-px text-[10px] font-bold text-black shadow">Kaian · chefe</div>
+    </>
+  );
 }
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -226,6 +375,9 @@ const DOT: Record<State, string> = { work: "bg-emerald-400", ready: "bg-sky-300"
 export default function Office() {
   const navigate = useNavigate();
   const desks = useDesks();
+  const [near, setNear] = useState(-1);
+  const [woke, setWoke] = useState<Set<string>>(new Set());
+  const onNear = useCallback((i: number) => setNear(i), []);
   const { data: sales } = useQuery({
     queryKey: ["sales-summary"],
     queryFn: () => api.invoke<SalesSummary>("ai", { action: "sales_summary" }),
@@ -235,31 +387,28 @@ export default function Office() {
   });
   const working = desks.filter((d) => d.state === "work").length;
   const alerts = desks.filter((d) => d.state === "alert").length;
+  const current = near >= 0 ? desks[near] : null;
+  useEffect(() => { if (current?.state === "sleep") setWoke((s) => new Set(s).add(current.key)); }, [current]);
 
   return (
     <div className="mx-auto max-w-[560px] pb-24 lg:pb-0">
-      <PageHeader title="Escritório" description="Cada bonequinho é um setor do Studio. Toque numa mesa para abrir." />
-      <div className="relative overflow-hidden rounded-xl border-4 border-[#3a2a1a] bg-[#a9b1bd] font-mono shadow-lg">
-        <Scene desks={desks} />
+      <PageHeader title="Escritório" description="Você é o chefe: toque no chão para andar (no computador, setas ou WASD). Chegue perto de uma mesa para ouvir o relatório." />
+      <div className="relative select-none overflow-hidden rounded-xl border-4 border-[#3a2a1a] bg-[#a9b1bd] font-mono shadow-lg">
+        <Scene desks={desks} onNear={onNear} />
 
-        {/* placar */}
-        <div className="absolute inset-x-2 top-2 flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
+        <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
           <span className="rounded-full bg-black/75 px-2 py-0.5 text-[#FFC72C]">🪙 {sales ? brl(sales.total.today.revenue) : "…"} hoje</span>
           <span className="rounded-full bg-black/75 px-2 py-0.5 text-white">{sales ? n(sales.total.today.orders, "pedido", "pedidos") : "…"}</span>
           <span className="rounded-full bg-black/75 px-2 py-0.5 text-emerald-300">{n(working, "trabalhando", "trabalhando")}</span>
           {alerts > 0 && <span className="rounded-full bg-red-600 px-2 py-0.5 text-white">{n(alerts, "precisa de você", "precisam de você")}</span>}
         </div>
 
-        {/* mesas: plaquinha + balão, por cima do desenho */}
         {desks.map((d, i) => {
           const { x, y } = deskPos(i, desks.length);
           return (
-            <button
+            <div
               key={d.key}
-              type="button"
-              onClick={() => navigate(d.to)}
-              aria-label={`${d.label}: ${d.text}`}
-              className="absolute flex -translate-x-1/2 flex-col items-center gap-0.5 rounded-md p-1 transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+              className="pointer-events-none absolute flex -translate-x-1/2 flex-col items-center gap-0.5 p-1"
               style={{ left: `${(x / W) * 100}%`, top: `${((y - 22) / H) * 100}%`, width: `${(88 / W) * 100}%`, height: `${(ROW / H) * 100}%` }}
             >
               <span className={`max-w-full truncate rounded px-1.5 py-px text-[10px] font-bold leading-tight shadow sm:text-[11px] ${d.state === "alert" ? "bg-red-600 text-white" : "bg-white text-black"}`}>{d.text}</span>
@@ -267,12 +416,24 @@ export default function Office() {
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT[d.state]}`} />
                 {d.label}
               </span>
-            </button>
+            </div>
           );
         })}
+
       </div>
+      {/* relatório do funcionário quando o chefe chega perto */}
+      {current && (
+        <div className="sticky bottom-20 z-20 mt-3 rounded-lg border-2 border-black bg-[#fffbe8] p-2.5 text-black shadow-xl">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-black/60">{current.label} diz:</p>
+          <p className="mt-0.5 text-[13px] font-bold leading-snug">“{report(current, woke.has(current.key))}”</p>
+          <div className="mt-2 flex gap-2">
+            <button type="button" onClick={() => navigate(current.to)} className="rounded-md bg-black px-3 py-1.5 text-[12px] font-bold text-white">Abrir {current.label} ›</button>
+            <button type="button" onClick={() => setNear(-1)} className="rounded-md border-2 border-black px-3 py-1.5 text-[12px] font-bold">Depois</button>
+          </div>
+        </div>
+        )}
       <p className="mt-3 text-center text-xs text-muted-foreground">
-        Digitando = trabalhando · acordado = pronto · Zzz = nada na fila · ❗ = precisa de você. Atualiza a cada 30 s.
+        Digitando = trabalhando · acordado = pronto · Zzz = nada na fila · ❗ = precisa de você. Quem está dormindo acorda quando o chefe chega. Atualiza a cada 30 s.
       </p>
     </div>
   );
