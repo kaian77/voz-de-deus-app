@@ -22,6 +22,7 @@ import Quiz from "./studio/pages/Quiz";
 import Photos from "./studio/pages/Photos";
 import QuickPost from "./studio/pages/QuickPost";
 import Usage from "./studio/pages/Usage";
+import Office from "./studio/pages/Office";
 import Accounts from "./studio/pages/Accounts";
 import ClaudeApi from "./studio/pages/ClaudeApi";
 import Messages from "./studio/pages/Messages";
@@ -70,6 +71,7 @@ const App = () => (
             <Route path="fotos" element={<Photos />} />
             <Route path="postar" element={<QuickPost />} />
             <Route path="uso" element={<Usage />} />
+            <Route path="escritorio" element={<Office />} />
             <Route path="contas" element={<Accounts />} />
             <Route path="claude" element={<ClaudeApi />} />
           </Route>
