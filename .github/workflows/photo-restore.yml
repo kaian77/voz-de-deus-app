@@ -1,0 +1,23 @@
+# Teste: restaurar foto antiga pela fal.ai (video/restore_photo.py). Resultado na branch restore-preview.
+name: Restaurar foto antiga
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Link da foto"
+        required: true
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      FAL_KEY: ${{ secrets.FAL_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 video/restore_photo.py "${{ inputs.url }}" out
+      - name: Publicar na branch restore-preview
+        run: |
+          cd out && git init -q && git checkout -q -b restore-preview && git add -A
+          git -c user.name=bot -c user.email=bot@users.noreply.github.com commit -qm "restauração $(date -u +%FT%T)"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" restore-preview
