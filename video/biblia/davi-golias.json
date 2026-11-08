@@ -1,0 +1,22 @@
+{
+  "title": "Davi e Golias",
+  "hook": "Um menino contra um gigante",
+  "voice": "pt-BR-AntonioNeural",
+  "lines": [
+    {"shot": "hook", "say": "Um gigante de quase três metros desafiou um exército inteiro. E quem venceu foi um menino."},
+    {"shot": "armies", "say": "Israel e os filisteus estavam frente a frente, cada exército num monte, com um vale no meio."},
+    {"shot": "shout", "talk": "goliath", "say": "Todo dia, o gigante Golias descia ao vale e gritava: mandem um homem para lutar comigo!"},
+    {"shot": "forty", "say": "Por quarenta dias, ninguém teve coragem. Nem o rei Saul."},
+    {"shot": "arrive", "say": "Até que chegou Davi, um jovem pastor, que só tinha ido levar comida para os irmãos."},
+    {"shot": "volunteer", "talk": "david", "say": "Davi ouviu o gigante e disse: eu vou lutar com ele!"},
+    {"shot": "armor", "say": "Saul deu a sua armadura para ele. Mas era tão pesada que Davi nem conseguia andar."},
+    {"shot": "stones", "say": "Então ele tirou tudo, pegou o cajado, a funda e cinco pedras lisas do riacho."},
+    {"shot": "laugh", "talk": "goliath", "say": "Golias zombou: sou eu algum cão, para você vir contra mim com pedaços de pau?"},
+    {"shot": "answer", "talk": "david", "say": "E Davi respondeu: você vem com espada e lança, mas eu vou em nome do Senhor!"},
+    {"shot": "sling", "say": "Davi correu, girou a funda e soltou a pedra."},
+    {"shot": "hit", "say": "A pedra acertou bem na testa, e o gigante caiu com o rosto no chão."},
+    {"shot": "victory", "say": "Os filisteus fugiram, e Israel venceu a batalha."},
+    {"shot": "lesson", "say": "O tamanho do gigante não importa quando Deus está com você. Primeiro Samuel, capítulo dezessete. Segue para mais histórias!"}
+  ],
+  "caption": "Davi e Golias em bonequinhos ⚔️ Um jovem pastor, uma funda e cinco pedras contra um gigante de quase 3 metros. (1 Samuel 17)\n\n#biblia #daviegolias #historiasbiblicas #fe #shorts"
+}
