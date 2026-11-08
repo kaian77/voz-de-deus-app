@@ -8,7 +8,7 @@ const API = "https://api.mercadolibre.com";
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ");
 const words = (s: string) => new Set(norm(s).split(/\s+/).filter((w) => w.length > 3 && !["metal", "esmaltado", "edicao"].includes(w)));
 
-const { data: accounts } = await db.from("social_accounts").select("id,user_id,meta").eq("platform", "mercadolivre");
+const { data: accounts } = await db.from("social_accounts").select("id,user_id,meta,external_id").eq("platform", "mercadolivre");
 const acc = accounts?.[0];
 if (!acc) throw new Error("sem conta do ML");
 const token = await mlTokenFor(db, acc.id);
