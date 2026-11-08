@@ -148,3 +148,101 @@ export async function runDailyDigest(db: SupabaseClient) {
   }
   return out;
 }
+
+// ---------- Vendas de um período (Escritório → Financeiro: "quanto vendeu esse mês?") ----------
+
+export type SalesPeriod = "today" | "yesterday" | "week" | "month" | "last_month";
+
+/** Início e fim do período em Brasília (UTC ms). Semana = últimos 7 dias; mês = do dia 1 até agora. */
+function periodRange(p: SalesPeriod, now = Date.now()) {
+  const today = todayStart(now);
+  const local = new Date(now - TZ_OFFSET);
+  const monthStart = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1) + TZ_OFFSET;
+  const lastMonthStart = Date.UTC(local.getUTCFullYear(), local.getUTCMonth() - 1, 1) + TZ_OFFSET;
+  switch (p) {
+    case "today": return { from: today, to: now };
+    case "yesterday": return { from: today - 86400_000, to: today };
+    case "week": return { from: today - 6 * 86400_000, to: now };
+    case "month": return { from: monthStart, to: now };
+    case "last_month": return { from: lastMonthStart, to: monthStart };
+  }
+}
+
+async function siteRange(db: SupabaseClient, userId: string, from: number, to: number): Promise<Sale[] | null> {
+  const store = await storeFor(db, userId);
+  if (!store) return null;
+  const out: Sale[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const params = new URLSearchParams({ created_at_min: new Date(from).toISOString(), created_at_max: new Date(to).toISOString(), payment_status: "paid", per_page: "200", page: String(page) });
+    const list = await ns<any[]>(store.token, store.storeId, `orders?${params}`).catch((e) => {
+      if (/404|Last page/i.test(String(e))) return [] as any[]; // a Nuvemshop responde 404 depois da última página
+      throw e;
+    });
+    const rows = Array.isArray(list) ? list : [];
+    for (const o of rows) if (o.status !== "cancelled") out.push({ at: new Date(o.created_at).getTime(), total: Number(o.total ?? 0) });
+    if (rows.length < 200) break;
+  }
+  return out;
+}
+
+async function mlRange(db: SupabaseClient, userId: string, from: number, to: number): Promise<Sale[] | null> {
+  const { data: acc } = await db.from("social_accounts").select("*").eq("user_id", userId).eq("platform", "mercadolivre").order("connected_at").limit(1).maybeSingle();
+  if (!acc) return null;
+  const token = await mlTokenFor(db, acc.id);
+  const iso = (t: number) => encodeURIComponent(new Date(t).toISOString().replace("Z", "-00:00"));
+  const out: Sale[] = [];
+  for (let offset = 0; offset < 2000; offset += 50) {
+    const r = await ml<{ results?: any[]; paging?: { total: number } }>(token,
+      `/orders/search?seller=${acc.external_id}&order.status=paid&order.date_created.from=${iso(from)}&order.date_created.to=${iso(to)}&sort=date_desc&limit=50&offset=${offset}`);
+    for (const o of r.results ?? []) out.push({ at: new Date(o.date_created).getTime(), total: Number(o.total_amount ?? 0) });
+    if (offset + 50 >= (r.paging?.total ?? 0)) break;
+  }
+  return out;
+}
+
+async function shopeeRange(db: SupabaseClient, userId: string, from: number, to: number): Promise<Sale[] | null> {
+  const { data: acc } = await db.from("social_accounts").select("*").eq("user_id", userId).eq("platform", "shopee").order("connected_at").limit(1).maybeSingle();
+  if (!acc) return null;
+  const token = await shopeeTokenFor(db, acc.id, acc.external_id);
+  const paid: string[] = [];
+  // A Shopee aceita no máximo 15 dias por consulta
+  for (let start = from; start < to; start += 15 * 86400_000) {
+    const end = Math.min(to, start + 15 * 86400_000 - 1000);
+    let cursor = "";
+    for (let guard = 0; guard < 20; guard++) {
+      const list = await shopee<{ order_list?: { order_sn: string; order_status: string }[]; more?: boolean; next_cursor?: string }>(token, acc.external_id, "/api/v2/order/get_order_list", {
+        params: { time_range_field: "create_time", time_from: Math.floor(start / 1000), time_to: Math.floor(end / 1000), page_size: 100, cursor, response_optional_fields: "order_status" },
+      });
+      for (const o of list.order_list ?? []) if (!["UNPAID", "CANCELLED", "IN_CANCEL"].includes(o.order_status)) paid.push(o.order_sn);
+      if (!list.more || !list.next_cursor) break;
+      cursor = list.next_cursor;
+    }
+  }
+  const out: Sale[] = [];
+  for (let i = 0; i < paid.length; i += 50) {
+    const d = await shopee<{ order_list?: any[] }>(token, acc.external_id, "/api/v2/order/get_order_detail", {
+      params: { order_sn_list: paid.slice(i, i + 50).join(","), response_optional_fields: "total_amount" },
+    });
+    for (const o of d.order_list ?? []) out.push({ at: Number(o.create_time) * 1000, total: Number(o.total_amount ?? 0) });
+  }
+  return out;
+}
+
+/** Pedidos pagos e faturamento de cada plataforma num período (cancelados ficam de fora). */
+export async function salesForPeriod(db: SupabaseClient, userId: string, period: SalesPeriod) {
+  const { from, to } = periodRange(period);
+  const sources = { site: siteRange, mercadolivre: mlRange, shopee: shopeeRange } as const;
+  const results = await Promise.all(CHANNELS.map((c) => sources[c](db, userId, from, to).then((s) => ({ s })).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))));
+  const channels: Partial<Record<Channel, Totals & { error?: string }>> = {};
+  const total: Totals = { orders: 0, revenue: 0 };
+  CHANNELS.forEach((c, i) => {
+    const r = results[i];
+    if ("error" in r) { channels[c] = { orders: 0, revenue: 0, error: r.error }; return; }
+    if (!r.s) return; // não conectado
+    const t = sum(r.s, from, to + 1);
+    channels[c] = t;
+    total.orders += t.orders;
+    total.revenue = Math.round((total.revenue + t.revenue) * 100) / 100;
+  });
+  return { period, from: new Date(from).toISOString(), to: new Date(to).toISOString(), channels, total };
+}

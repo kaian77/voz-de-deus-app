@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTable } from "../lib/hooks";
 import { api, isDemo } from "../lib/api";
 import type { SalesSummary } from "../lib/types";
@@ -22,9 +23,10 @@ const ROW = 70;
 const REFRESH = { refetchInterval: 30_000 };
 const HOUR = 3600_000;
 const recent = (iso: string | null | undefined, ms: number) => !!iso && Date.now() - new Date(iso).getTime() < ms;
+const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const n = (x: number, one: string, many: string) => `${x} ${x === 1 ? one : many}`;
 
-function useDesks(): Desk[] {
+function useDesks(sales: SalesSummary | undefined): Desk[] {
   const { data: posts } = useTable("posts", undefined, REFRESH);
   const { data: convs } = useTable("conversations", { order: "last_message_at" }, REFRESH);
   const { data: accounts } = useTable("social_accounts", undefined, REFRESH);
@@ -122,8 +124,14 @@ function useDesks(): Desk[] {
         : { state: "sleep" as State, text: "Sem sites na fila" }),
     });
 
+    // Financeiro: responde quanto vendeu
+    desks.push({
+      key: "fin", label: "Financeiro", to: "/studio/pedidos", shirt: "#22a35a", hair: "#6b4423", screen: "#9dffb0",
+      ...(sales ? { state: "ready" as State, text: `Hoje: ${brl(sales.total.today.revenue)}` } : { state: "ready" as State, text: "Pergunte as vendas" }),
+    });
+
     return desks;
-  }, [posts, convs, accounts, storePhotos, photoJobs, yt, landings]);
+  }, [posts, convs, accounts, storePhotos, photoJobs, yt, landings, sales]);
 }
 
 /** Posição da mesa i (2 colunas; a 7ª fica no meio da última fileira). */
@@ -163,6 +171,7 @@ function nearestDesk(b: Boss, total: number) {
 }
 
 function report(d: Desk, awakeByBoss: boolean) {
+  if (d.key === "fin") return d.text.startsWith("Hoje") ? `Oi, chefe! ${d.text} até agora. O que mais quer saber?` : "Oi, chefe! O que quer saber das vendas?";
   if (d.state === "alert") return `Chefe, ${d.text.toLowerCase()}! Dá uma olhada?`;
   if (d.state === "work") return `Tô no corre, chefe: ${d.text.toLowerCase()}.`;
   if (d.state === "ready") return `Tudo certo, chefe. ${d.text}.`;
@@ -280,7 +289,7 @@ function draw(ctx: CanvasRenderingContext2D, desks: Desk[], boss: Boss, near: nu
   order.sort((a, b) => a.y - b.y).forEach((o) => o.f());
 }
 
-const SPEED = 46; // px lógicos por segundo
+const SPEED = 64; // px lógicos por segundo
 
 function Scene({ desks, onNear }: { desks: Desk[]; onNear: (i: number) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -369,12 +378,10 @@ function Scene({ desks, onNear }: { desks: Desk[]; onNear: (i: number) => void }
   );
 }
 
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const DOT: Record<State, string> = { work: "bg-emerald-400", ready: "bg-sky-300", sleep: "bg-slate-400", alert: "bg-red-500 animate-pulse" };
 
 export default function Office() {
   const navigate = useNavigate();
-  const desks = useDesks();
   const [near, setNear] = useState(-1);
   const [woke, setWoke] = useState<Set<string>>(new Set());
   const onNear = useCallback((i: number) => setNear(i), []);
@@ -385,6 +392,7 @@ export default function Office() {
     staleTime: 5 * 60_000,
     retry: false,
   });
+  const desks = useDesks(sales);
   const working = desks.filter((d) => d.state === "work").length;
   const alerts = desks.filter((d) => d.state === "alert").length;
   const current = near >= 0 ? desks[near] : null;
@@ -421,20 +429,117 @@ export default function Office() {
         })}
 
       </div>
-      {/* relatório do funcionário quando o chefe chega perto */}
-      {current && (
-        <div className="sticky bottom-20 z-20 mt-3 rounded-lg border-2 border-black bg-[#fffbe8] p-2.5 text-black shadow-xl">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-black/60">{current.label} diz:</p>
-          <p className="mt-0.5 text-[13px] font-bold leading-snug">“{report(current, woke.has(current.key))}”</p>
-          <div className="mt-2 flex gap-2">
-            <button type="button" onClick={() => navigate(current.to)} className="rounded-md bg-black px-3 py-1.5 text-[12px] font-bold text-white">Abrir {current.label} ›</button>
-            <button type="button" onClick={() => setNear(-1)} className="rounded-md border-2 border-black px-3 py-1.5 text-[12px] font-bold">Depois</button>
-          </div>
-        </div>
-        )}
+      {/* relatório e ordens do funcionário quando o chefe chega perto */}
+      {current && <DeskPanel desk={current} woke={woke.has(current.key)} onClose={() => setNear(-1)} onOpen={() => navigate(current.to)} />}
       <p className="mt-3 text-center text-xs text-muted-foreground">
         Digitando = trabalhando · acordado = pronto · Zzz = nada na fila · ❗ = precisa de você. Quem está dormindo acorda quando o chefe chega. Atualiza a cada 30 s.
       </p>
+    </div>
+  );
+}
+
+// ---------- Ordens do chefe e perguntas ao Financeiro ----------
+
+type Order = { label: string; confirm?: string; run: () => Promise<string> };
+
+const PERIODS = [
+  { key: "today", label: "Hoje", ask: "Quanto vendeu hoje?" },
+  { key: "yesterday", label: "Ontem", ask: "E ontem?" },
+  { key: "week", label: "7 dias", ask: "Nos últimos 7 dias?" },
+  { key: "month", label: "Este mês", ask: "Quanto vendeu esse mês?" },
+  { key: "last_month", label: "Mês passado", ask: "E no mês passado?" },
+] as const;
+type PeriodKey = (typeof PERIODS)[number]["key"];
+type PeriodSales = { period: PeriodKey; channels: Partial<Record<"site" | "mercadolivre" | "shopee", { orders: number; revenue: number; error?: string }>>; total: { orders: number; revenue: number } };
+const CH_LABEL = { site: "Site", mercadolivre: "Mercado Livre", shopee: "Shopee" } as const;
+const brl2 = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+function useOrders(desk: Desk): Order[] {
+  const { data: photos } = useTable("store_photo_jobs", undefined, REFRESH);
+  const { data: channels } = useTable("yt_channels");
+  switch (desk.key) {
+    case "posts":
+      return [{ label: "Criar 3 posts para eu aprovar", run: async () => { const r = await api.invoke<{ created: unknown[] }>("ai", { action: "content_ideas", count: 3 }); return `Fiz ${r.created?.length ?? 0} posts, chefe. Estão em Aprovações.`; } }];
+    case "ml":
+      return [
+        { label: "Melhorar a vitrine", run: async () => { await api.invoke("ai", { action: "ml_quality", fix: true }); return "Revisei os anúncios e mandei corrigir o que dava, chefe."; } },
+        { label: "Sincronizar tudo de novo", confirm: "Refazer a sincronização de todos os produtos no Mercado Livre? Leva umas horas.", run: async () => { const r = await api.invoke<{ total: number; minutes: number }>("ai", { action: "ml_sync_start" }); return `Começando, chefe: ${r.total} produtos, uns ${r.minutes} min.`; } },
+      ];
+    case "shopee":
+      return [{ label: "Sincronizar com a loja", confirm: "Sincronizar todos os produtos com a Shopee?", run: async () => { const r = await api.invoke<{ update: number; create: number; minutes: number }>("ai", { action: "shopee_sync_start" }); return `Bora, chefe: ${r.update} para atualizar e ${r.create} para criar, uns ${r.minutes} min.`; } }];
+    case "fotos": {
+      const ready = (photos ?? []).filter((j) => j.status === "ready").map((j) => j.id);
+      return ready.length ? [{ label: `Aplicar as ${ready.length} prontas`, run: async () => { const r = await api.invoke<{ applied: number }>("ai", { action: "store_photos_apply", ids: ready }); return `Apliquei ${r.applied} fotos no site, chefe.`; } }] : [];
+    }
+    case "yt":
+      return (channels ?? []).filter((c) => c.mode !== "clips" && c.enabled).slice(0, 3).map((c) => ({
+        label: `Short no ${c.title ?? "canal"}`,
+        run: async () => { await api.invoke("ai", { action: "yt_generate_now", channel_id: c.id, kind: "short" }); return `Short do ${c.title ?? "canal"} a caminho, chefe: fica pronto em uns 15 min.`; },
+      }));
+    case "pp":
+      return [{ label: "Criar posts da PáginasPro", run: async () => { const r = await api.invoke<{ created: unknown[] }>("ai", { action: "paginaspro_ideas", count: 2 }); return `Fiz ${r.created?.length ?? 0} posts da PáginasPro, chefe. Estão em Aprovações.`; } }];
+    default:
+      return [];
+  }
+}
+
+function DeskPanel({ desk, woke, onClose, onOpen }: { desk: Desk; woke: boolean; onClose: () => void; onOpen: () => void }) {
+  const qc = useQueryClient();
+  const orders = useOrders(desk);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [reply, setReply] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<PeriodSales | null>(null);
+  useEffect(() => { setReply(null); setAnswer(null); }, [desk.key]);
+
+  const give = async (o: Order) => {
+    if (isDemo) { setReply("No modo demonstração eu só finjo, chefe 😅"); return; }
+    if (o.confirm && !window.confirm(o.confirm)) return;
+    setBusy(o.label); setReply("Sim, chefe! Já estou fazendo…");
+    try { setReply(await o.run()); qc.invalidateQueries({ queryKey: ["table"] }); }
+    catch (e) { const m = e instanceof Error ? e.message : String(e); setReply(`Deu ruim, chefe: ${m}`); toast.error(m); }
+    finally { setBusy(null); }
+  };
+
+  const ask = async (p: (typeof PERIODS)[number]) => {
+    if (isDemo) { setReply("No modo demonstração não tenho as vendas, chefe."); return; }
+    setBusy(p.key); setAnswer(null); setReply(`${p.ask} Deixa eu somar o site, o Mercado Livre e a Shopee…`);
+    try {
+      const r = await api.invoke<PeriodSales>("ai", { action: "sales_period", period: p.key });
+      setAnswer(r);
+      setReply(`${p.label}: ${brl2(r.total.revenue)} em ${n(r.total.orders, "pedido", "pedidos")}, chefe!${r.total.orders ? ` Ticket médio de ${brl2(r.total.revenue / r.total.orders)}.` : ""}`);
+    } catch (e) { setReply(`Não consegui somar agora, chefe: ${e instanceof Error ? e.message : String(e)}`); }
+    finally { setBusy(null); }
+  };
+
+  const btn = "rounded-md border-2 border-black bg-white px-2.5 py-1.5 text-[12px] font-bold disabled:opacity-50";
+  return (
+    <div className="sticky bottom-20 z-20 mt-3 rounded-lg border-2 border-black bg-[#fffbe8] p-2.5 text-black shadow-xl lg:bottom-4">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-black/60">{desk.label} diz:</p>
+      <p className="mt-0.5 text-[13px] font-bold leading-snug">“{reply ?? report(desk, woke)}”</p>
+
+      {desk.key === "fin" && answer && (
+        <div className="mt-2 grid grid-cols-3 gap-1.5 text-[11px]">
+          {(Object.keys(CH_LABEL) as (keyof typeof CH_LABEL)[]).filter((c) => answer.channels[c]).map((c) => {
+            const v = answer.channels[c]!;
+            return (
+              <div key={c} className="rounded border-2 border-black bg-white p-1.5">
+                <p className="font-bold text-black/60">{CH_LABEL[c]}</p>
+                {v.error ? <p className="text-red-600">sem acesso</p> : <><p className="text-[13px] font-bold">{brl(v.revenue)}</p><p>{n(v.orders, "pedido", "pedidos")}</p></>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {desk.key === "fin"
+          ? PERIODS.map((p) => <button key={p.key} type="button" disabled={!!busy} onClick={() => ask(p)} className={btn}>{busy === p.key ? "Somando…" : p.ask}</button>)
+          : orders.map((o) => <button key={o.label} type="button" disabled={!!busy} onClick={() => give(o)} className={btn}>{busy === o.label ? "Fazendo…" : `📣 ${o.label}`}</button>)}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <button type="button" onClick={onOpen} className="rounded-md bg-black px-3 py-1.5 text-[12px] font-bold text-white">Abrir {desk.label} ›</button>
+        <button type="button" onClick={onClose} className="rounded-md px-2 py-1.5 text-[12px] font-bold underline">Depois</button>
+      </div>
     </div>
   );
 }
