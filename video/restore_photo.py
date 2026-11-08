@@ -1,14 +1,17 @@
 """Restaurar foto antiga pela fal.ai (crédito FAL_KEY). Uso: python3 video/restore_photo.py <url da foto> <pasta de saída>
 Faz 3 versões: A = rostos restaurados (CodeFormer); B = A colorida (DDColor); C = restaurada e colorida pela IA de edição (FLUX Kontext)."""
-import json, os, sys, urllib.request
+import json, os, sys, urllib.error, urllib.request
 
 KEY = os.environ["FAL_KEY"]
 
 def fal(model, body):
     req = urllib.request.Request(f"https://fal.run/{model}", data=json.dumps(body).encode(),
-                                 headers={"Authorization": f"Key {KEY}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=600) as r:
-        out = json.load(r)
+                                 headers={"Authorization": f"Key {KEY}", "Content-Type": "application/json", "User-Agent": "social-studio/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=600) as r:
+            out = json.load(r)
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"{model}: {e.code} {e.read().decode(errors='replace')[:300]}")
     img = out.get("image") or (out.get("images") or [None])[0]
     if not img:
         raise RuntimeError(f"{model}: {json.dumps(out)[:300]}")
