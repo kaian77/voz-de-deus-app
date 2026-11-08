@@ -2,7 +2,7 @@
 // dados fiscais) e publicação de produtos novos seguindo esse padrão.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { ns, storeFor, txt } from "./nuvemshop.ts";
-import { ml, type MlItem, ML_LOOKUP_FIELDS, mlPictures, mlSellerItems, mlSku, mlTokenFor } from "./mercadolivre.ts";
+import { ml, type MlItem, ML_LOOKUP_FIELDS, mlPictures, mlSellerItems, mlSku, mlItemsByIds, mlTokenFor } from "./mercadolivre.ts";
 import { shopeeItems, shopeeTokenFor } from "./shopee.ts";
 
 export type Marketplace = "mercadolivre" | "shopee";
@@ -456,8 +456,7 @@ async function findMlListing(token: string, sellerId: string, name: string, sku?
     const found = await ml<{ results: string[] }>(token, `/users/${sellerId}/items/search?seller_sku=${encodeURIComponent(sku)}`)
       .catch(() => ({ results: [] as string[] }));
     if (found.results.length) {
-      const batch = await ml<{ code: number; body: MlItem }[]>(token, `/items?ids=${found.results.slice(0, 20).join(",")}`);
-      const items = batch.filter((r) => r.code === 200 && r.body.status !== "closed").map((r) => r.body);
+      const items = (await mlItemsByIds(token, found.results.slice(0, 20))).filter((i) => i.status !== "closed");
       if (pick(items)) return pick(items);
     }
   }

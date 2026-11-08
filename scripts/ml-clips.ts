@@ -19,6 +19,15 @@ const call = async (method: string, path: string, body?: BodyInit) => {
   return { status: res.status, text };
 };
 
+if (Deno.args[0] === "requeue") {
+  // produtos com foto temática aplicada + os que deram erro → frente da fila do ML
+  const { requeueProducts } = await import("../supabase/functions/_shared/ml-sync.ts");
+  const { data: jobs } = await db.from("store_photo_jobs").select("product_id").eq("user_id", acc.user_id).eq("status", "applied");
+  const errs = (acc.meta?.ml_sync?.errors ?? []).map((e: { id: number }) => e.id).filter((id: number) => id > 0);
+  const ids = [...new Set([...errs, ...(jobs ?? []).map((j: { product_id: number }) => Number(j.product_id))])].filter(Boolean);
+  console.log("de volta na fila:", await requeueProducts(db, acc.id, ids), "(erros:", errs.length, ")");
+  Deno.exit(0);
+}
 if (Deno.args[0] === "sync") {
   const sy = acc.meta?.ml_sync;
   console.log("total", sy.total, "fila", sy.queue.length, "feitos", sy.done.length, "únicos", new Set(sy.done.map((d: { id: number }) => d.id)).size, "inflight", JSON.stringify(sy.inflight));
