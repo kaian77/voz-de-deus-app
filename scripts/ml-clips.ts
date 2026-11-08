@@ -8,7 +8,7 @@ const API = "https://api.mercadolibre.com";
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]/g, " ");
 const words = (s: string) => new Set(norm(s).split(/\s+/).filter((w) => w.length > 3 && !["metal", "esmaltado", "edicao"].includes(w)));
 
-const { data: accounts } = await db.from("social_accounts").select("id,user_id,meta").eq("platform", "mercadolivre");
+const { data: accounts } = await db.from("social_accounts").select("id,user_id,meta,external_id").eq("platform", "mercadolivre");
 const acc = accounts?.[0];
 if (!acc) throw new Error("sem conta do ML");
 const token = await mlTokenFor(db, acc.id);
@@ -19,6 +19,29 @@ const call = async (method: string, path: string, body?: BodyInit) => {
   return { status: res.status, text };
 };
 
+if (Deno.args[0] === "chat") {
+  // Teste de acesso (só leitura): perguntas, mensagens pós-venda, etiqueta e nota fiscal
+  const seller = acc.external_id;
+  console.log("seller", seller);
+  await call("GET", `/questions/search?seller_id=${seller}&api_version=4&status=UNANSWERED&limit=5`);
+  await call("GET", `/my/received_questions/search?limit=3`);
+  const orders = await call("GET", `/orders/search?seller=${seller}&sort=date_desc&limit=3`);
+  const o = JSON.parse(orders.text).results?.[0];
+  if (o) {
+    const pack = o.pack_id ?? o.id;
+    await call("GET", `/messages/packs/${pack}/sellers/${seller}?tag=post_sale&mark_as_read=false`);
+    await call("GET", `/messages/action_guide/packs/${pack}/caps_available?tag=post_sale`);
+    const ship = o.shipping?.id;
+    if (ship) {
+      await call("GET", `/shipments/${ship}`);
+      const lab = await fetch(`${API}/shipment_labels?shipment_ids=${ship}&response_type=pdf`, { headers: { Authorization: `Bearer ${token}` } });
+      console.log("ETIQUETA", lab.status, lab.headers.get("content-type"), (await lab.arrayBuffer()).byteLength, "bytes");
+    }
+    await call("GET", `/users/${seller}/invoices/orders/${o.id}`);
+    await call("GET", `/orders/${o.id}/billing_info`);
+  }
+  Deno.exit(0);
+}
 if (Deno.args[0] === "requeue") {
   // produtos com foto temática aplicada + os que deram erro → frente da fila do ML
   const { requeueProducts } = await import("../supabase/functions/_shared/ml-sync.ts");
