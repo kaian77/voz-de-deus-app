@@ -21,7 +21,7 @@ const call = async (method: string, path: string, body?: BodyInit) => {
 
 if (Deno.args[0] === "chat") {
   // Teste de acesso (só leitura): perguntas, mensagens pós-venda, etiqueta e nota fiscal
-  const seller = acc.meta?.ml_sync ? (await (await fetch(`${API}/users/me`, { headers: { Authorization: `Bearer ${token}` } })).json()).id : null;
+  const seller = acc.external_id;
   console.log("seller", seller);
   await call("GET", `/questions/search?seller_id=${seller}&api_version=4&status=UNANSWERED&limit=5`);
   await call("GET", `/my/received_questions/search?limit=3`);
