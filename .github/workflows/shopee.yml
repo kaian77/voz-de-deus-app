@@ -8,7 +8,7 @@ on:
         description: "one | start | status | audit | dedupe"
         default: status
       arg:
-        description: "nome do produto (one)"
+        description: "nome do produto (one; vários com ; ou latest:N)"
         default: ""
 
 permissions:
