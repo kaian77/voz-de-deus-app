@@ -47,7 +47,7 @@ export function StoreManager() {
     staleTime: 60_000,
   });
   return (
-    <Panel title="Produtos da loja" description="Mude o estoque, apague ou crie a foto temática. Estoque e apagar valem para o site e para o anúncio do Mercado Livre." bodyClassName="p-0">
+    <Panel title="Produtos da loja" description="Mude o estoque, apague ou crie a foto temática. Estoque vale para o site, o Mercado Livre e a Shopee; “Esgotar” zera nos três na hora." bodyClassName="p-0">
       <div className="flex flex-wrap gap-2 border-b p-3">
         <Button size="sm" onClick={() => queue(false)} disabled={!sel.length || queuing}>
           {queuing ? <Loader2 className="animate-spin" /> : <ImagePlus />} Foto temática ({sel.length})
@@ -84,11 +84,12 @@ function Row({ item, onChange }: { item: Item; onChange: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const changed = stock !== (item.stock === null ? "" : String(item.stock));
 
-  const save = async () => {
+  const save = async (value = stock) => {
     setBusy("stock");
     try {
-      const r = await api.invoke<Result>("ai", { action: "store_stock", id: item.id, stock: stock.trim() === "" ? null : Number(stock) });
-      toast.success(`Estoque salvo.${mlNote(r)}`);
+      const r = await api.invoke<Result>("ai", { action: "store_stock", id: item.id, stock: value.trim() === "" ? null : Number(value) });
+      if (value !== stock) setStock(value);
+      toast.success(value === "0" ? "Esgotado no site, no Mercado Livre e na Shopee." : `Estoque salvo.${mlNote(r)}`);
       onChange();
     } catch (e) {
       toast.error((e as Error).message);
@@ -124,7 +125,12 @@ function Row({ item, onChange }: { item: Item; onChange: () => void }) {
         <Input value={stock} onChange={(e) => setStock(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="∞"
           className="h-8 w-20 text-center" aria-label="Estoque" title="Vazio = sem controle de estoque" />
         {changed && (
-          <Button size="sm" className="h-8" onClick={save} disabled={!!busy}>{busy === "stock" && <Loader2 className="animate-spin" />}Salvar</Button>
+          <Button size="sm" className="h-8" onClick={() => save()} disabled={!!busy}>{busy === "stock" && <Loader2 className="animate-spin" />}Salvar</Button>
+        )}
+        {!changed && item.stock !== 0 && (
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => save("0")} disabled={!!busy} title="Zera no site, no Mercado Livre e na Shopee">
+            {busy === "stock" && <Loader2 className="animate-spin" />}Esgotar
+          </Button>
         )}
         {confirming ? (
           <>
