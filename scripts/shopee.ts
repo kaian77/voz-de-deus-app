@@ -24,33 +24,46 @@ const ask = async (request: "all" | "audit" | "dedupe" | number[]) => {
 const wait = (s: number) => new Promise((r) => setTimeout(r, s * 1000));
 
 if (cmd === "one") {
+  // arg: um nome, vários separados por ";" ou "latest:N" (os N produtos mais novos da loja)
   const store = (await storeFor(db, userId))!;
   const key = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  let hit: { id: number; name: string } | null = null;
-  for (let page = 1; page <= 10 && !hit; page++) {
+  // deno-lint-ignore no-explicit-any
+  const all: any[] = [];
+  for (let page = 1; page <= 10; page++) {
     // deno-lint-ignore no-explicit-any
     const list = await ns<any[]>(store.token, store.storeId, `products?per_page=200&page=${page}`);
-    // deno-lint-ignore no-explicit-any
-    const p = list.find((x: any) => key(txt(x.name)).includes(key(arg)));
-    if (p) hit = { id: Number(p.id), name: txt(p.name) };
+    if (!Array.isArray(list) || !list.length) break;
+    all.push(...list);
     if (list.length < 200) break;
   }
-  if (!hit) throw new Error(`não achei "${arg}" na loja`);
-  console.log("produto", hit);
-  await ask([hit.id]);
-  for (let i = 0; i < 30; i++) {
+  const latest = arg.match(/^latest:(\d+)$/);
+  const hits: { id: number; name: string }[] = latest
+    ? all.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, Number(latest[1])).map((p) => ({ id: Number(p.id), name: txt(p.name) }))
+    : arg.split(";").map((n) => n.trim()).filter(Boolean).map((n) => {
+      const p = all.find((x) => key(txt(x.name)).includes(key(n)));
+      if (!p) console.log("NÃO ACHEI", n);
+      return p ? { id: Number(p.id), name: txt(p.name) } : null;
+    }).filter((x): x is { id: number; name: string } => !!x);
+  if (!hits.length) throw new Error(`não achei "${arg}" na loja`);
+  for (const h of hits) console.log("produto", h.id, h.name);
+  const ids = hits.map((h) => h.id);
+  await ask(ids);
+  const pending = new Set(ids);
+  for (let i = 0; i < 45 && pending.size; i++) {
     await wait(20);
     const s = await state();
-    const d = s.done.find((x: { id: number }) => x.id === hit!.id);
-    const e = s.errors.filter((x: { id: number }) => x.id === hit!.id || x.id === 0).at(-1);
-    const k = s.skipped.find((x: { id: number }) => x.id === hit!.id);
-    console.log(`${i * 20}s`, "pedido", JSON.stringify(s.request ?? null), "ligado", s.links?.[hit.id] ?? "-", "fila", s.queue.length, "inflight", JSON.stringify(s.inflight?.ids ?? []));
     if (s.request) continue; // o cron ainda não pegou o pedido
-    if (d || k || (e && !s.queue.includes(hit.id) && !s.inflight?.ids?.includes(hit.id))) {
-      console.log("RESULTADO", JSON.stringify(d ?? k ?? e));
-      break;
+    for (const id of [...pending]) {
+      const d = s.done.find((x: { id: number }) => x.id === id);
+      const k = s.skipped.find((x: { id: number }) => x.id === id);
+      const e = s.errors.filter((x: { id: number }) => x.id === id).at(-1);
+      if (d || k || (e && !s.queue.includes(id) && !s.inflight?.ids?.includes(id))) {
+        console.log("RESULTADO", JSON.stringify(d ?? k ?? e));
+        pending.delete(id);
+      }
     }
   }
+  if (pending.size) console.log("AINDA NA FILA", [...pending].join(","));
 }
 
 if (cmd === "start") {
