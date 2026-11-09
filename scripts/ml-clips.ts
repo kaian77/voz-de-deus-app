@@ -1,7 +1,7 @@
 // Teste da API de Clips (vídeo) do Mercado Livre pelo GitHub Actions (workflow "ML clips"):
 //   deno run -A scripts/ml-clips.ts probe  → mostra o que a API responde para os vídeos de um anúncio e tenta subir um vídeo de teste
 import { adminClient } from "../supabase/functions/_shared/util.ts";
-import { mlTokenFor } from "../supabase/functions/_shared/mercadolivre.ts";
+import { ml, mlTokenFor } from "../supabase/functions/_shared/mercadolivre.ts";
 
 const db = adminClient();
 const API = "https://api.mercadolibre.com";
@@ -40,6 +40,33 @@ if (Deno.args[0] === "chat") {
     await call("GET", `/users/${seller}/invoices/orders/${o.id}`);
     await call("GET", `/orders/${o.id}/billing_info`);
   }
+  Deno.exit(0);
+}
+if (Deno.args[0] === "stock0") {
+  // produtos sem estoque no site que ficaram com estoque no anúncio do ML (a sincronização punha 200 em todos)
+  const { ns, storeFor } = await import("../supabase/functions/_shared/nuvemshop.ts");
+  const store = await storeFor(db, acc.user_id);
+  if (!store) throw new Error("sem loja");
+  const latest = new Map<number, string>();
+  for (const d of acc.meta?.ml_sync?.done ?? []) if (d.ml_id) latest.set(d.id, d.ml_id);
+  let fixed = 0;
+  for (let page = 1; page <= 10; page++) {
+    const list = await ns<any[]>(store.token, store.storeId, `products?per_page=200&page=${page}&fields=id,name,variants`);
+    if (!Array.isArray(list) || !list.length) break;
+    for (const p of list) {
+      const v = p.variants?.[0];
+      if (!v || v.stock === null || v.stock === undefined || Number(v.stock) > 0) continue;
+      const mlId = latest.get(p.id);
+      if (!mlId) continue;
+      const item = await ml<any>(token, `/items/${mlId}?attributes=id,available_quantity,status`).catch(() => null);
+      if (!item || !(item.available_quantity > 0) || item.status === "closed") continue;
+      const err = await ml(token, `/items/${mlId}`, { method: "PUT", body: { available_quantity: 0 } }).then(() => "", (e) => String(e?.message ?? e));
+      console.log(err ? "ERRO" : "ZERADO", p.name?.pt ?? p.name, mlId, item.available_quantity, "→ 0", err);
+      fixed++;
+    }
+    if (list.length < 200) break;
+  }
+  console.log("zerados:", fixed);
   Deno.exit(0);
 }
 if (Deno.args[0] === "requeue") {

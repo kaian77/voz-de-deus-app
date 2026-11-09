@@ -353,6 +353,8 @@ export async function publishToMercadoLivre(
   attributes.push({ id: "MODEL", value_name: pinModelName(product.name) });
   attributes.push({ id: "COLOR", value_name: "Multicolorido" });
   if (product.sku) attributes.push({ id: "SELLER_SKU", value_name: product.sku });
+  // anúncio novo precisa de pelo menos 1 unidade: sem estoque no site, não cria
+  if (product.stock === 0) throw new Error("sem estoque na loja: o anúncio é criado quando chegar estoque");
 
   const title = mlFamilyName(product.name);
   const body: Record<string, unknown> = {

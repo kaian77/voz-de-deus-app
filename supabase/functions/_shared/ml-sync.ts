@@ -405,7 +405,8 @@ export async function runMlSync(db: SupabaseClient) {
             ml_ready_pictures: photos.ready,
             price,
             sku: String(v.sku ?? "").trim() || pinSku(name),
-            stock: 200,
+            // estoque do site (sem controle = 200); 0 deixa o anúncio sem estoque, fora de venda
+            stock: v.stock === null || v.stock === undefined ? 200 : Math.max(0, Number(v.stock)),
             exclude_ids: foreignListings(sync, id, name),
           }, sellerItems);
           remaining = await record(db, acc.id, id, {
