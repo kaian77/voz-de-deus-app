@@ -233,8 +233,8 @@ window.agSaveAppt=function(){var g=function(i){var x=document.getElementById(i);
  api('appt',body).then(function(){A.sheet=null;A.err='';refresh()}).catch(window.agFail)};
 window.agSub=function(){api('subscribe').then(function(r){location.href=r.url}).catch(window.agFail)};
 window.agCopy=function(t){navigator.clipboard&&navigator.clipboard.writeText(t);alert('Link copiado!')};
-window.agStyle=function(s){A.data.settings.style=s;draw()};
-window.agSvc=function(op,i){var sv=A.data.settings.services;readCfg();if(op==='add')sv.push({name:'',minutes:60});else sv.splice(i,1);draw()};
+window.agStyle=function(s){readCfg();A.data.settings.style=s;api('save',{settings:A.data.settings}).then(function(r){A.data.settings=r.settings;A.err='';draw();alert(s==='modern'?'Pronto! Agenda no jeito Moderno: tudo numa tela e a aba Semana aqui no painel.':'Pronto! Agenda no jeito Simples: letra grande e um passo por vez.')}).catch(window.agFail)};
+window.agSvc=function(op,i){readCfg();var sv=A.data.settings.services;if(op==='add')sv.push({name:'',minutes:30});else sv.splice(i,1);draw();if(op==='add'){var n=document.getElementById('sv-n'+(sv.length-1));if(n)n.focus()}};
 function hoursOf(k){var s=A.data.settings;if(k<0){s.hours=s.hours||{};return s.hours}s.pros[k].hours=s.pros[k].hours||{};return s.pros[k].hours}
 window.agIv=function(k,d,op,i){readCfg();var h=hoursOf(k);h[d]=h[d]||[];if(op==='add')h[d].push(['08:00','12:00']);else if(op==='del')h[d].splice(i,1);else h[d]=h[d].length?[]:[['08:00','12:00'],['14:00','18:00']];draw()};
 window.agPros=function(op,k){readCfg();var s=A.data.settings;s.pros=s.pros||[];if(op==='add')s.pros.push({id:'p'+Date.now().toString(36),name:'',role:'',hours:JSON.parse(JSON.stringify(s.pros.length?s.pros[0].hours:s.hours||{}))});else if(confirm('Tirar este profissional da agenda?'))s.pros.splice(k,1);draw()};
