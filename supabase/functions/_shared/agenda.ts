@@ -18,7 +18,8 @@ export const AGENDA_PRICE = 29;
  * a agenda não liga sozinha (o link não diz de quem é): o Bruno marca "Pagou" no Studio. */
 export const AGENDA_LINK = "https://mpago.la/1oq3nf6";
 
-export type Service = { name: string; minutes: number };
+/** pros = ids dos profissionais que fazem o serviço (vazio = todos) */
+export type Service = { name: string; minutes: number; pros?: string[] };
 export type Hours = Record<string, [string, string][]>;
 /** Profissional da clínica, com os próprios horários (clínica com mais de um profissional) */
 export type Pro = { id: string; name: string; role: string; hours: Hours };
@@ -76,6 +77,11 @@ function cleanHours(src: unknown): Hours {
   return out;
 }
 
+/** O profissional faz esse serviço? (serviço sem "quem faz" = todos fazem) */
+function doesService(service: Service, pro: Pro | null) {
+  return !pro || !service.pros?.length || service.pros.includes(pro.id);
+}
+
 /** Profissional escolhido (com profissionais cadastrados, o 1º quando não vem nenhum válido). */
 function proOf(settings: Settings, id: unknown) {
   if (!settings.pros.length) return null;
@@ -85,10 +91,6 @@ function proOf(settings: Settings, id: unknown) {
 /** Configuração salva, limpa e com os padrões no que faltar. */
 export function cleanSettings(raw: unknown): Settings {
   const r = (raw ?? {}) as Partial<Settings>;
-  const services = (Array.isArray(r.services) ? r.services : [])
-    .map((s) => ({ name: String(s?.name ?? "").trim().slice(0, 60), minutes: Math.min(480, Math.max(10, Math.round(Number(s?.minutes) || 0))) }))
-    .filter((s) => s.name && s.minutes)
-    .slice(0, 12);
   const pros = (Array.isArray(r.pros) ? r.pros : []).map((p, i) => ({
     id: String(p?.id ?? "").replace(/[^a-z0-9]/gi, "").slice(0, 12) || `p${i + 1}`,
     name: String(p?.name ?? "").trim().slice(0, 60),
@@ -96,6 +98,15 @@ export function cleanSettings(raw: unknown): Settings {
     hours: cleanHours(p?.hours),
   })).filter((p) => p.name).slice(0, 20);
   for (const [i, p] of pros.entries()) if (pros.findIndex((x) => x.id === p.id) !== i) p.id = `${p.id}${i}`; // ids únicos
+  const ids = new Set(pros.map((p) => p.id));
+  const services = (Array.isArray(r.services) ? r.services : [])
+    .map((s) => ({
+      name: String(s?.name ?? "").trim().slice(0, 60),
+      minutes: Math.min(480, Math.max(10, Math.round(Number(s?.minutes) || 0))),
+      pros: (Array.isArray(s?.pros) ? s.pros : []).map(String).filter((id) => ids.has(id)),
+    }))
+    .filter((s) => s.name && s.minutes)
+    .slice(0, 30);
   return {
     style: r.style === "modern" ? "modern" : "simple",
     services: services.length ? services : DEFAULT_SETTINGS.services,
@@ -209,6 +220,7 @@ export async function publicDays(db: SupabaseClient, page: Page, serviceIdx: num
   const settings = withDefaults(cleanSettings(page.agenda), page);
   const service = settings.services[serviceIdx] ?? settings.services[0];
   const pro = proOf(settings, proId) ?? settings.pros[0] ?? null;
+  if (!doesService(service, pro)) throw new HttpError(400, "Esse serviço não é feito por esse profissional");
   return freeDays(settings, service, await busyOf(db, page.id, undefined, pro?.id), Date.now(), pro?.hours ?? settings.hours);
 }
 
@@ -238,6 +250,7 @@ export async function book(db: SupabaseClient, page: Page, input: Record<string,
   if (settings.plans.length && !choices.includes(plan)) throw new HttpError(400, "Escolha particular ou o seu convênio/plano");
   const pro = proOf(settings, input.pro);
   if (settings.pros.length && !pro) throw new HttpError(400, "Escolha o profissional");
+  if (!doesService(service, pro)) throw new HttpError(400, "Esse serviço não é feito por esse profissional");
   const free = freeDays(settings, service, await busyOf(db, page.id, undefined, pro?.id), Date.now(), pro?.hours ?? settings.hours).find((d) => d.date === date);
   if (!free?.slots.includes(time)) throw new HttpError(409, "Esse horário acabou de ser ocupado. Escolha outro.");
   // Trava contra robô/brincadeira: no máximo 3 horários futuros por telefone
