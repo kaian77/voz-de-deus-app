@@ -77,7 +77,8 @@ function systemPrompt(o: Record<string, number | string>, channel: string) {
     `PLANOS (só passe quando a pessoa perguntar valor ou disser que gostou):\n` +
     `- Mensal: ${brl(o.monthly)}/mês, sem taxa de entrada, inclui alterações sempre que precisar${link(o.monthlyLink)} (cartão, renova sozinho)\n` +
     `- Pagamento único: ${brl(o.oneTime)}, sem mensalidade; alteração depois ${brl(o.change)} cada${link(o.oneTimeLink)} (Pix, cartão ou boleto)\n` +
-    `- Premium (animado, foto em 3D, galeria, interação do ramo, igual ao site da PáginasPro): ${brl(o.premiumMonthly)}/mês${link(o.premiumMonthlyLink)} ou ${brl(o.premiumOneTime)} à vista${link(o.premiumOneTimeLink)}\n` +
+    `- Premium (animado, foto em 3D, galeria, igual ao site da PáginasPro): ${brl(o.premiumMonthly)}/mês${link(o.premiumMonthlyLink)} ou ${brl(o.premiumOneTime)} à vista${link(o.premiumOneTimeLink)}\n` +
+    `Agenda online é opcional (${brl(Number(o.agendaMonthly) || 29)}/mês a mais, em qualquer plano): o cliente marca o horário pelo site, escolhe o profissional e o serviço, e o negócio controla tudo num painel com relatório; lembrete por e-mail 1 dia antes. Ofereça para quem atende com horário marcado (clínicas, salões, consultórios, escritórios).\n` +
     `Domínio próprio (.com.br) é opcional: o cliente compra (uns R$ 40/ano no Registro.br) e eu configuro.\n\n` +
     `REGRAS:\n` +
     `- Nunca prometa quantidade de clientes, vendas ou posição no Google. Pode dizer que o site ajuda a passar confiança e facilita o contato pelo WhatsApp.\n` +

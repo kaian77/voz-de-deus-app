@@ -19,7 +19,12 @@ const MSG_KEY = "studio-leads-msg";
 const DEFAULT_MSG =
   "Oi, tudo bem? Vi a {nome} no Google Maps e reparei que vocês ainda não têm um site. " +
   "Eu crio páginas profissionais para {tema} que ajudam a trazer mais clientes pelo Google e pelo Instagram. " +
+  "Se quiserem, o site também pode vir com agenda online: o cliente marca o horário sozinho pelo site e vocês controlam tudo num painel, com lembrete antes do horário. " +
   "Posso te mostrar um modelo, sem compromisso?";
+/** Textos sugeridos antigos: quem nunca editou a mensagem passa a ver o novo (com a agenda). */
+const OLD_DEFAULTS = [
+  "Oi, tudo bem? Vi a {nome} no Google Maps e reparei que vocês ainda não têm um site. Eu crio páginas profissionais para {tema} que ajudam a trazer mais clientes pelo Google e pelo Instagram. Posso te mostrar um modelo, sem compromisso?",
+];
 
 const SEARCH_STATUS: Record<LeadSearch["status"], string> = {
   queued: "Na fila",
@@ -30,7 +35,8 @@ const SEARCH_STATUS: Record<LeadSearch["status"], string> = {
 
 function readMsg() {
   try {
-    return localStorage.getItem(MSG_KEY) || DEFAULT_MSG;
+    const saved = localStorage.getItem(MSG_KEY);
+    return saved && !OLD_DEFAULTS.includes(saved) ? saved : DEFAULT_MSG;
   } catch {
     return DEFAULT_MSG;
   }
@@ -39,7 +45,8 @@ function readMsg() {
 function fill(template: string, lead: Lead, search?: LeadSearch) {
   return template
     .split("{nome}").join(lead.name)
-    .split("{tema}").join((search?.query ?? lead.category ?? "empresas").toLowerCase());
+    // busca com vários temas ("nutricionista, psicólogo"): usa a categoria do próprio lead no Maps
+    .split("{tema}").join(((search?.query?.includes(",") ? lead.category : search?.query) ?? lead.category ?? "empresas").toLowerCase());
 }
 
 function exportCsv(leads: Lead[]) {
@@ -162,7 +169,7 @@ export default function Leads() {
         <div className="space-y-4">
           <Panel title="Nova busca">
             <div className="grid gap-2 sm:grid-cols-[1fr_1fr_110px_auto]">
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="O quê (ex.: nutricionista)" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="O quê (ex.: nutricionista, psicólogo, dentista)" />
               <Input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Onde (ex.: Sobradinho DF)" onKeyDown={(e) => e.key === "Enter" && start()} />
               <Select value={wanted} onValueChange={setWanted}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
