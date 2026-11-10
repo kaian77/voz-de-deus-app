@@ -83,6 +83,7 @@ h1{font-size:${big ? 32 : 28}px;margin-bottom:6px}
 .sec{margin-top:22px}.sec h3{font-size:18px}
 .sum{background:#fff;border-radius:18px;padding:16px 18px;margin:16px 0;display:grid;gap:4px}
 .sum b{font-size:1.1em}
+.note{background:#fff7e0;border-radius:12px;padding:10px 12px;font-size:.85em;margin:0 0 8px;line-height:1.4}
 .bar{position:fixed;left:0;right:0;bottom:0;background:#fff;box-shadow:0 -8px 24px rgba(0,0,0,.08);padding:14px}
 .bar .in{width:min(640px,100%);margin:0 auto}
 .done{text-align:center;padding:30px 10px}.done .ok{width:84px;height:84px;border-radius:50%;background:var(--p);color:var(--on);display:grid;place-items:center;font-size:44px;margin:0 auto 18px}
@@ -118,8 +119,9 @@ function err(){return S.err?'<div class="err">'+h(S.err)+'</div>':''}
 function planPick(){var pl=plans();if(!S.info.plans.length)return '';return '<label>Atendimento</label><div class="chips">'+pl.map(function(x){return '<button class="chip'+(x===S.plan?' on':'')+'" onclick="keep();pick(\'plan\',this.textContent)">'+h(x)+'</button>'}).join('')+'</div>'}
 function form(){return '<label for="n">Seu nome</label><input id="n" autocomplete="name" value="'+h(S.name)+'" placeholder="Nome e sobrenome">'+
  '<label for="p">Seu WhatsApp (com DDD)</label><input id="p" type="tel" inputmode="tel" autocomplete="tel" value="'+h(S.phone)+'" placeholder="(61) 99999-9999">'+
- '<label for="m">Seu e-mail <span class="muted" style="font-weight:400">(opcional)</span></label><input id="m" type="email" inputmode="email" autocomplete="email" value="'+h(S.email)+'" placeholder="seu@email.com">'+planPick()+
- '<p class="muted" style="font-size:.85em;margin-top:10px">Com e-mail, você recebe a confirmação agora e um lembrete 1 dia antes.</p>'}
+ '<label for="m">Seu e-mail <span class="muted" style="font-weight:400">(opcional)</span></label>'+
+ '<p class="note">📧 Quer receber a confirmação e um <b>lembrete 1 dia antes</b>? Coloque o seu e-mail. Sem e-mail, você não recebe o lembrete.</p>'+
+ '<input id="m" type="email" inputmode="email" autocomplete="email" value="'+h(S.email)+'" placeholder="seu@email.com">'+planPick()}
 function summary(){var sv=S.info.services[S.svc];return '<div class="sum"><span class="muted">'+h(sv.name)+' · '+svcLabel(sv)+(proName()?' · '+h(proName()):'')+'</span><b>'+h(dayNice(S.date,true))+' às '+h(S.time)+'</b></div>'}
 function proOpts(cls){return S.info.pros.map(function(p){return cls==='opt'?'<button class="opt" onclick="pick(\'pro\',\''+p.id+'\')"><span><b>'+h(p.name)+'</b>'+(p.role?'<br><small>'+h(p.role)+'</small>':'')+'</span><span class="go">›</span></button>':'<button class="chip'+(p.id===S.pro?' on':'')+'" onclick="pick(\'pro\',\''+p.id+'\')">'+h(p.name)+(p.role?' · '+h(p.role):'')+'</button>'}).join('')}
 function draw(){var i=S.info,o='';
