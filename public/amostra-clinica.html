@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sua Clínica · Saúde Integrada</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Ortopedia, fisioterapia, psicologia, osteopatia, acupuntura para gestantes e terapia ayurvédica. Agende pelo WhatsApp.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --escuro:#0E3B24; --verde:#1F7A3A; --limao:#A6D13F; --fundo:#F5F2EA;
+  --tinta:#16261C; --suave:#4C5A50; --linha:#D9D3C3; --papel:#FFFDF8;
+  --titulo:"Bricolage Grotesque","Arial Narrow",Arial,sans-serif;
+  --texto:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+html.travado{overflow:hidden}
+body{margin:0;background:var(--fundo);color:var(--tinta);font-family:var(--texto);font-size:18px;line-height:1.55;overflow-x:hidden}
+h1,h2,h3,h4,p,ol,ul{margin:0}
+ol,ul{padding:0;list-style:none}
+svg{display:block}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--limao);outline-offset:3px}
+.sobre-claro :focus-visible, .proposta :focus-visible{outline-color:var(--verde)}
+.caixa{width:100%;max-width:1180px;margin:0 auto;padding:0 20px}
+section{scroll-margin-top:120px}
+
+/* Botões */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:54px;padding:10px 26px;border-radius:999px;border:2px solid transparent;font-weight:600;font-size:18px;line-height:1.2;text-decoration:none;text-align:center;transition:transform .15s ease,background-color .15s ease}
+.btn:active{transform:scale(.98)}
+.btn-limao{background:var(--limao);color:var(--escuro)}
+.btn-limao:hover{background:#B7DD58}
+.btn-escuro{background:var(--escuro);color:#fff}
+.btn-escuro:hover{background:#14502F}
+.btn-contorno{border-color:currentColor;background:transparent}
+.btn svg{width:22px;height:22px;flex:none}
+
+/* Faixa de amostra */
+.amostra{background:var(--tinta);color:#E6E2D6;font-size:14px;text-align:center;padding:7px 16px;letter-spacing:.02em}
+
+/* Topo */
+.topo{position:sticky;top:0;z-index:40;background:rgba(245,242,234,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--linha)}
+.topo-linha{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px}
+.marca{display:flex;align-items:center;gap:10px;min-width:0;min-height:48px;text-decoration:none}
+.marca svg{width:30px;height:38px;flex:none}
+.marca-nome{font-family:var(--titulo);font-weight:800;font-size:19px;line-height:1.05;letter-spacing:-.01em}
+.marca-sub{display:block;font-family:var(--texto);font-weight:500;font-size:13px;color:var(--suave);letter-spacing:0}
+.topo .btn{min-height:48px;padding:8px 22px;font-size:17px}
+.menu{display:flex;gap:4px;margin:0 -10px;border-top:1px solid var(--linha)}
+.menu a{flex:1;display:flex;align-items:center;justify-content:center;min-height:48px;padding:0 6px;font-size:16px;font-weight:600;text-decoration:none;white-space:nowrap;color:var(--escuro)}
+.menu a:hover{text-decoration:underline;text-underline-offset:5px}
+
+/* Abertura */
+.abertura{background:var(--escuro);color:#F5F2EA;position:relative;overflow:hidden}
+.abertura-grade{display:grid;gap:8px;padding-top:44px;padding-bottom:52px}
+.sobretitulo{font-size:15px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--limao)}
+.abertura h1{font-family:var(--titulo);font-weight:800;font-size:clamp(58px,17.5vw,150px);line-height:.9;letter-spacing:-.035em;margin:18px 0 22px}
+.abertura h1 span{display:block}
+.abertura h1 .l2{color:var(--limao)}
+.abertura-texto{font-size:20px;max-width:30em;color:#D8E2D5}
+.abertura-botoes{display:flex;flex-direction:column;gap:12px;margin-top:28px}
+.abertura-arte{justify-self:center;width:min(78vw,340px);margin-top:26px}
+.abertura-arte svg{width:100%;height:auto}
+
+.ic{fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.atalhos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:30px}
+.atalho{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:88px;padding:10px 4px;border-radius:18px;border:1.5px solid rgba(245,242,234,.3);background:rgba(255,255,255,.06);color:#F5F2EA;font-weight:600;font-size:15px;line-height:1.15;transition:background-color .15s}
+.atalho:hover{background:rgba(255,255,255,.14)}
+.atalho .ic{width:36px;height:36px;color:var(--limao)}
+.card{scroll-margin-top:130px}
+.card .btn svg{width:24px;height:24px}
+.faixa-grupo .ic{width:30px;height:30px;margin-right:-12px}
+#demoEsp .op{display:flex;align-items:center;gap:8px;padding:6px 10px;text-align:left;font-size:15px}
+#demoEsp .op .ic{width:26px;height:26px;color:var(--verde)}
+#demoEsp .op.sel .ic{color:var(--limao)}
+.resumo{margin-top:16px;border-radius:24px;padding:24px 20px;background:#E4EDD2;border:2px solid var(--verde)}
+.resumo h3{font-family:var(--titulo);font-weight:800;font-size:27px;letter-spacing:-.02em;line-height:1.1}
+.resumo ul{margin-top:10px}
+.resumo li{padding:7px 0 7px 30px;position:relative;font-weight:600}
+.resumo li::before{content:"";position:absolute;left:2px;top:15px;width:15px;height:8px;border-left:3px solid var(--verde);border-bottom:3px solid var(--verde);transform:rotate(-45deg)}
+.resumo li.vazio{padding-left:0;font-weight:400;color:var(--suave)}
+.resumo li.vazio::before,.resumo li.soma::before{display:none}
+.resumo li.soma{padding-left:0;font-family:var(--titulo);font-weight:800;font-size:22px;color:var(--escuro)}
+.resumo-rot{margin-top:12px;font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--suave)}
+.resumo-msg{margin-top:8px;background:#fff;border-radius:4px 16px 16px 16px;padding:12px 14px;font-size:17px}
+.resumo .btn{width:100%;margin-top:16px}
+/* Caixa 3D da mensagem */
+.caixa-wa{display:none;position:fixed;inset:0;z-index:200;background:rgba(8,37,26,.74);overflow-y:auto}
+.caixa-wa.aberta{display:block}
+.cw-cena{min-height:100%;display:flex;align-items:flex-end;justify-content:center;padding:20px 14px 26px;perspective:900px}
+.cw-caixa{width:100%;max-width:440px;background:var(--papel);border-radius:26px;padding:22px 20px 18px;border:2px solid var(--escuro);box-shadow:0 10px 0 var(--escuro),0 34px 50px rgba(0,0,0,.45);transform-origin:50% 100%;animation:subir3d .75s cubic-bezier(.2,.9,.25,1.08) both}
+@keyframes subir3d{from{opacity:0;transform:translateY(70%) rotateX(58deg) scale(.82)}55%{opacity:1}to{opacity:1;transform:none}}
+.cw-topo{display:flex;align-items:center;gap:14px}
+.cw-ic{width:58px;height:58px;border-radius:18px;background:var(--limao);color:var(--escuro);display:grid;place-items:center;flex:none}
+.cw-ic svg{width:36px;height:36px}
+.cw-topo b{display:block;font-family:var(--titulo);font-weight:800;font-size:25px;line-height:1.1;letter-spacing:-.02em}
+.cw-topo small{display:block;font-size:15px;color:var(--suave);margin-top:2px}
+.cw-msg{margin:16px 0 4px;background:#E4EDD2;border-radius:4px 18px 18px 18px;padding:14px 16px;font-size:19px;line-height:1.4;min-height:5.2em}
+.cw-cursor{display:inline-block;width:2px;height:1.1em;background:var(--escuro);margin-left:2px;vertical-align:-3px;animation:piscar .8s steps(1) infinite}
+@keyframes piscar{50%{opacity:0}}
+.cw-caixa .btn{width:100%;margin-top:10px}
+.cw-voltar{display:block;width:100%;min-height:48px;margin-top:6px;background:none;border:0;font-weight:600;font-size:17px;color:var(--suave);text-decoration:underline;text-underline-offset:4px}
+.cw-nota{font-size:14.500px;line-height:1.35;color:var(--suave);text-align:center}
+@media (min-width:700px){.cw-cena{align-items:center}}
+.p-autor a{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:0 4px;font-weight:700;color:var(--escuro)}
+.p-autor a svg{width:22px;height:22px}
+.p-autor b{color:var(--tinta)}
+
+/* Faixa correndo */
+.faixa{background:var(--limao);color:var(--escuro);overflow:hidden;border-block:2px solid var(--escuro)}
+.faixa-trilho{display:flex;width:max-content;animation:correr 34s linear infinite}
+.faixa-grupo{display:flex;flex:none}
+.faixa-grupo span{display:flex;align-items:center;gap:22px;padding:14px 11px;font-family:var(--titulo);font-weight:700;font-size:22px;white-space:nowrap}
+.faixa-grupo span::after{content:"";width:9px;height:9px;border-radius:50%;background:var(--escuro)}
+@keyframes correr{to{transform:translateX(-50%)}}
+
+/* Títulos de seção */
+.secao{padding:64px 0}
+.secao-cab{margin-bottom:30px;max-width:22em}
+.rotulo{font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--verde)}
+.secao h2{font-family:var(--titulo);font-weight:800;font-size:clamp(36px,9vw,64px);line-height:1;letter-spacing:-.025em;margin-top:10px}
+.secao-cab p{margin-top:14px;color:var(--suave);font-size:19px}
+
+/* Cards */
+.cards{display:grid;gap:16px;align-items:start}
+.card{--c:#E4EDD2;--ct:var(--tinta);--cs:#445247;--cl:rgba(14,59,36,.16);background:var(--c);color:var(--ct);border-radius:26px;padding:24px 22px 22px;cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;transition:transform .2s ease}
+.card:nth-child(3){--c:#DBE7EA}
+.card:nth-child(4){--c:#F0E4CB}
+.card:nth-child(5){--c:#F4DDD2}
+.card:nth-child(6){--c:#F5E3A9}
+.card.destaque{--c:var(--escuro);--ct:#F5F2EA;--cs:#C9D6C7;--cl:rgba(255,255,255,.2)}
+.card-topo{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.icone{width:64px;height:64px;border-radius:20px;background:rgba(255,255,255,.6);display:grid;place-items:center;color:var(--escuro)}
+.destaque .icone{background:var(--limao)}
+.icone svg{width:40px;height:40px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.selo-card{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--limao);color:var(--escuro);padding:6px 12px;border-radius:999px}
+.card h3{font-family:var(--titulo);font-weight:800;font-size:31px;line-height:1.05;letter-spacing:-.02em;margin-top:18px}
+.card-para{margin-top:8px;color:var(--cs);font-size:18px}
+.etiquetas{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.etiquetas li{font-size:15px;font-weight:600;padding:5px 13px;border-radius:999px;border:1.5px solid var(--cl)}
+.card-abrir{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:52px;margin-top:16px;padding:0;background:none;border:0;border-top:1.5px solid var(--cl);font-weight:700;font-size:18px;text-align:left}
+.card-abrir i{width:34px;height:34px;border-radius:50%;border:1.5px solid currentColor;position:relative;flex:none;transition:transform .25s ease}
+.card-abrir i::before,.card-abrir i::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:2px;margin:-1px 0 0 -7px;background:currentColor}
+.card-abrir i::after{transform:rotate(90deg);transition:opacity .2s}
+.card.aberto .card-abrir i{transform:rotate(180deg)}
+.card.aberto .card-abrir i::after{opacity:0}
+.passos{display:none;padding:4px 0 10px;counter-reset:p}
+.card.aberto .passos{display:block;animation:surgir .3s ease}
+.passos li{counter-increment:p;display:flex;gap:14px;align-items:center;padding:9px 0;font-size:18px}
+.passos li::before{content:counter(p);flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-family:var(--titulo);font-weight:800;font-size:17px;background:var(--ct);color:var(--c)}
+.card .btn{width:100%;margin-top:10px}
+.destaque .btn-escuro{background:var(--limao);color:var(--escuro)}
+@keyframes surgir{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+/* Como agendar */
+.agendar{background:var(--papel);border-block:1px solid var(--linha)}
+.etapas{display:grid;gap:0}
+.etapas li{display:grid;grid-template-columns:auto 1fr;gap:4px 18px;padding:22px 0;border-top:1.5px solid var(--linha);align-items:start}
+.etapas li:last-child{border-bottom:1.5px solid var(--linha)}
+.etapas b{grid-row:span 2;font-family:var(--titulo);font-weight:800;font-size:60px;line-height:.85;color:var(--verde);letter-spacing:-.04em;min-width:1.1em}
+.etapas h3{font-family:var(--titulo);font-weight:700;font-size:25px;line-height:1.1;letter-spacing:-.01em}
+.etapas p{color:var(--suave)}
+
+/* Perguntas */
+.faq-lista{border-top:1.5px solid var(--tinta)}
+.faq-item{border-bottom:1.5px solid var(--tinta)}
+.faq-item button{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;min-height:72px;padding:14px 0;background:none;border:0;text-align:left;font-family:var(--titulo);font-weight:700;font-size:23px;line-height:1.15;letter-spacing:-.01em}
+.faq-item button i{width:38px;height:38px;border-radius:50%;background:var(--escuro);position:relative;flex:none;transition:transform .25s ease}
+.faq-item button i::before,.faq-item button i::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:2px;margin:-1px 0 0 -7px;background:var(--limao)}
+.faq-item button i::after{transform:rotate(90deg)}
+.faq-item.aberto button i{transform:rotate(45deg)}
+.faq-resposta{display:none;padding:0 0 22px;max-width:38em;color:#33423A}
+.faq-item.aberto .faq-resposta{display:block;animation:surgir .3s ease}
+
+/* Contato */
+.contato{background:var(--limao);color:var(--escuro)}
+.contato .rotulo{color:var(--escuro)}
+.contato-grade{display:grid;gap:30px}
+.contato h2{font-size:clamp(40px,10.5vw,84px)}
+.contato-dados{display:grid;gap:0;border-top:2px solid var(--escuro)}
+.contato-dados div{display:grid;grid-template-columns:44px 1fr;gap:12px;align-items:center;padding:16px 0;border-bottom:2px solid var(--escuro)}
+.contato-dados svg{width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.contato-dados small{display:block;font-size:14px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.75}
+.contato-dados strong{font-size:20px;font-weight:600}
+.contato .btn{width:100%;margin-top:24px}
+
+/* Cartão Proposta */
+.bloco-proposta{padding:56px 0 64px}
+.cartao-proposta{display:block;width:100%;text-align:left;background:#08251A;color:#F5F2EA;border:0;border-radius:30px;padding:30px 24px 26px;position:relative;overflow:hidden;box-shadow:0 0 0 2px var(--limao) inset;transition:transform .2s ease}
+.cartao-proposta:hover{transform:translateY(-3px)}
+.cartao-proposta .pontos{position:absolute;right:-30px;top:-20px;width:210px;opacity:.9;pointer-events:none}
+.cartao-proposta small{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--escuro);background:var(--limao);padding:6px 12px;border-radius:999px;position:relative}
+.cartao-proposta strong{display:block;font-family:var(--titulo);font-weight:800;font-size:clamp(60px,17vw,128px);line-height:.92;letter-spacing:-.04em;margin:22px 0 12px;position:relative}
+.cartao-proposta span.t{display:block;font-size:19px;color:#CBD8C9;max-width:26em;position:relative}
+.cartao-proposta span.ir{display:inline-flex;align-items:center;gap:10px;min-height:54px;margin-top:22px;padding:10px 26px;border-radius:999px;background:var(--limao);color:var(--escuro);font-weight:700;position:relative}
+.cartao-proposta span.ir svg{width:22px;height:22px}
+
+/* Rodapé */
+.rodape{background:var(--tinta);color:#C9D0C6;padding:34px 0 110px;font-size:16px}
+.rodape strong{display:block;font-family:var(--titulo);font-size:22px;color:#fff;margin-bottom:6px}
+
+/* WhatsApp flutuante */
+.flutuante{position:fixed;right:16px;bottom:16px;z-index:45;width:62px;height:62px;border-radius:50%;background:var(--verde);color:#fff;display:grid;place-items:center;box-shadow:0 8px 22px rgba(14,59,36,.35);border:3px solid #fff;text-decoration:none}
+.flutuante svg{width:32px;height:32px}
+
+/* Animação ao rolar */
+.js .revela{opacity:0;transform:translateY(22px);transition:opacity .6s ease,transform .6s ease}
+.js .revela.visto{opacity:1;transform:none}
+
+/* ============ PROPOSTA (camada) ============ */
+.proposta{display:none;position:fixed;inset:0;z-index:100;background:var(--fundo);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.proposta.aberta{display:block}
+.p-topo{position:sticky;top:0;z-index:5;background:#08251A;color:#fff}
+.p-topo .caixa{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:64px}
+.p-topo b{font-family:var(--titulo);font-size:20px;font-weight:800}
+.p-fechar{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:6px 20px;border-radius:999px;border:2px solid var(--limao);background:transparent;color:#fff;font-weight:700;font-size:17px}
+.p-fechar svg{width:16px;height:16px}
+.p-corpo{max-width:880px;padding-top:40px;padding-bottom:40px}
+.p-corpo h2{font-family:var(--titulo);font-weight:800;font-size:clamp(34px,8.6vw,60px);line-height:1;letter-spacing:-.03em}
+.p-intro{margin-top:18px;font-size:19px;color:#33423A;max-width:36em}
+.p-ordem{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:20px;font-weight:700}
+.p-ordem span{padding:7px 15px;border-radius:999px;background:var(--escuro);color:#fff;font-size:16px}
+.p-ordem svg{width:20px;height:20px;color:var(--verde)}
+.etapa{background:var(--papel);border:2px solid var(--linha);border-radius:26px;padding:24px 20px;margin-top:22px;position:relative;transition:border-color .2s, box-shadow .2s}
+.etapa.marcada{border-color:var(--verde);box-shadow:0 0 0 4px rgba(166,209,63,.55)}
+.etapa-num{font-size:14px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--verde)}
+.etapa h3{font-family:var(--titulo);font-weight:800;font-size:32px;line-height:1.05;letter-spacing:-.02em;margin-top:6px}
+.etapa-linha{margin-top:8px;color:var(--suave)}
+.selo-fund{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:7px 14px;border-radius:999px;background:var(--limao);color:var(--escuro);font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.selo-fund svg{width:16px;height:16px}
+.precos{display:grid;gap:10px;margin-top:18px}
+.preco{background:var(--fundo);border-radius:18px;padding:16px 18px}
+.preco small{display:block;font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--suave)}
+.preco strong{font-family:var(--titulo);font-weight:800;font-size:40px;line-height:1.1;letter-spacing:-.02em;color:var(--escuro)}
+.preco strong em{font-style:normal;font-family:var(--texto);font-size:17px;font-weight:600;letter-spacing:0;color:var(--suave)}
+.preco s{color:#7B857D;font-size:19px;font-weight:600;margin-right:6px}
+.preco p{font-size:16px;color:var(--suave);margin-top:4px}
+.etapa h4{font-size:14px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--suave);margin-top:22px}
+.inclui{margin-top:8px}
+.inclui li{position:relative;padding:8px 0 8px 34px;border-bottom:1px solid var(--linha)}
+.inclui li:last-child{border-bottom:0}
+.inclui li::before{content:"";position:absolute;left:2px;top:14px;width:18px;height:10px;border-left:3px solid var(--verde);border-bottom:3px solid var(--verde);transform:rotate(-45deg) scale(.8);transform-origin:left top;margin-top:6px}
+.nota{margin-top:16px;padding:14px 16px;border-radius:16px;background:var(--fundo);font-size:17px;color:#33423A}
+.nota b{color:var(--escuro)}
+.btn-incluir{width:100%;margin-top:20px;background:#fff;color:var(--escuro);border:2px solid var(--escuro)}
+.btn-incluir .cx{width:26px;height:26px;border-radius:8px;border:2px solid var(--escuro);flex:none;display:grid;place-items:center}
+.btn-incluir .cx svg{width:16px;height:16px;opacity:0}
+.marcada .btn-incluir{background:var(--escuro);color:#fff}
+.marcada .btn-incluir .cx{background:var(--limao);border-color:var(--limao);color:var(--escuro)}
+.marcada .btn-incluir .cx svg{opacity:1}
+
+/* Mini demonstração */
+.demo{margin-top:22px;border:2px dashed var(--verde);border-radius:22px;padding:20px 16px;background:#F0F4E6}
+.demo-cab{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.demo-cab b{font-family:var(--titulo);font-size:24px;font-weight:800;letter-spacing:-.01em}
+.demo-cab span{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:999px;background:var(--escuro);color:#fff}
+.demo > p{margin-top:6px;color:var(--suave);font-size:17px}
+.demo h5{margin:18px 0 8px;font-size:17px;font-weight:700}
+.demo h5 i{font-style:normal;display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--escuro);color:#fff;font-size:15px;margin-right:8px}
+.opcoes{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.opcoes.dias{grid-template-columns:repeat(5,1fr);gap:6px}
+.opcoes.horas{grid-template-columns:repeat(4,1fr)}
+.op{min-height:50px;padding:6px 4px;border-radius:14px;border:2px solid #C6CFBB;background:#fff;font-weight:600;font-size:16px;line-height:1.15;color:var(--tinta)}
+.op small{display:block;font-size:13px;font-weight:500;color:var(--suave)}
+.op.sel{background:var(--escuro);border-color:var(--escuro);color:#fff}
+.op.sel small{color:#CBD8C9}
+.op:disabled{background:#E4E3DC;border-color:#E4E3DC;color:#8E948C;cursor:not-allowed;text-decoration:line-through}
+.op:disabled small{text-decoration:none;color:#8E948C}
+.legenda{display:flex;gap:16px;margin-top:10px;font-size:15px;color:var(--suave)}
+.legenda span{display:flex;align-items:center;gap:6px}
+.legenda span::before{content:"";width:16px;height:16px;border-radius:5px;border:2px solid #C6CFBB;background:#fff}
+.legenda span.oc::before{background:#E4E3DC;border-color:#E4E3DC}
+.demo-res{display:none;margin-top:20px}
+.demo-res.visivel{display:block;animation:surgir .35s ease}
+.tela{background:#E7E0D3;border-radius:20px;padding:14px 12px 16px;margin-top:12px}
+.tela-cab{font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5B5A50;margin-bottom:10px}
+.balao{background:#fff;border-radius:4px 16px 16px 16px;padding:12px 14px;font-size:17px;line-height:1.45;max-width:340px;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+.balao b{display:block}
+.balao-botoes{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:340px;margin-top:8px}
+.balao-botoes button{min-height:50px;border-radius:12px;border:0;background:#fff;color:var(--verde);font-weight:700;font-size:17px;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+.balao-botoes button.sel{background:var(--verde);color:#fff}
+.demo-retorno{margin-top:10px;font-size:16px;font-weight:600;color:var(--escuro);min-height:1.5em}
+
+.quadros{display:grid;gap:16px;margin-top:26px}
+.quadro{border-radius:24px;padding:24px 20px}
+.quadro h3{font-family:var(--titulo);font-weight:800;font-size:27px;letter-spacing:-.02em;line-height:1.1}
+.quadro.nao{background:var(--escuro);color:#F5F2EA}
+.quadro.nao p{margin-top:10px;color:#D3DDD0}
+.quadro.cond{background:var(--papel);border:2px solid var(--linha)}
+.quadro.cond ul{margin-top:8px}
+.quadro.cond li{padding:9px 0 9px 20px;border-bottom:1px solid var(--linha);position:relative}
+.quadro.cond li:last-child{border-bottom:0}
+.quadro.cond li::before{content:"";position:absolute;left:0;top:20px;width:8px;height:8px;border-radius:50%;background:var(--verde)}
+.p-autor{margin-top:28px;padding-top:18px;border-top:1.5px solid var(--linha);font-size:16px;color:var(--suave)}
+
+.barra{position:sticky;bottom:0;z-index:5;background:#08251A;color:#fff;border-top:3px solid var(--limao);padding:12px 0 calc(12px + env(safe-area-inset-bottom))}
+.barra .caixa{max-width:880px;display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;align-items:end}
+.tot small{display:block;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#B9C8B7}
+.tot strong{font-family:var(--titulo);font-weight:800;font-size:30px;line-height:1.1;letter-spacing:-.02em;color:var(--limao);white-space:nowrap}
+.barra-nota{grid-column:1/-1;font-size:14.5px;line-height:1.35;color:#DCE5D8}
+.barra .btn{grid-column:1/-1;min-height:52px}
+.barra .btn[aria-disabled="true"]{background:#40584A;color:#AEBBAF;cursor:not-allowed}
+
+/* ============ Telas maiores ============ */
+@media (min-width:700px){
+  .caixa{padding:0 32px}
+  .cards{grid-template-columns:repeat(2,1fr);gap:20px}
+  .abertura-botoes{flex-direction:row;flex-wrap:wrap}
+  .etapas{grid-template-columns:repeat(2,1fr);column-gap:40px}
+  .etapas li:nth-last-child(2){border-bottom:1.5px solid var(--linha)}
+  .contato .btn{width:auto}
+  .precos{grid-template-columns:1fr 1fr}
+  .precos.um{grid-template-columns:1fr}
+  .opcoes{grid-template-columns:repeat(3,1fr)}
+  .opcoes.horas{grid-template-columns:repeat(8,1fr)}
+  .etapa{padding:32px}
+  .demo{padding:26px}
+  .quadro{padding:30px}
+  .cartao-proposta{padding:48px 44px 42px}
+  .cartao-proposta .pontos{width:340px;right:10px;top:-10px}
+  .barra .caixa{grid-template-columns:auto auto 1fr;gap:6px 30px;align-items:center}
+  .barra-nota{grid-column:1/-1;grid-row:2}
+  .barra .btn{grid-column:3;grid-row:1;justify-self:end;white-space:nowrap}
+}
+@media (min-width:1000px){
+  section{scroll-margin-top:84px}
+  .topo-linha{min-height:76px}
+  .topo .caixa{display:flex;align-items:center;gap:28px}
+  .topo-linha{flex:1;order:1}
+  .menu{order:2;border:0;margin:0;gap:6px}
+  .menu a{padding:0 16px;font-size:17px}
+  .topo-linha .btn{order:3}
+  .topo .caixa{position:relative}
+  .topo-linha{display:contents}
+  .marca{margin-right:auto}
+  .marca-nome{font-size:22px}
+  .abertura-grade{grid-template-columns:1.25fr .75fr;align-items:center;gap:40px;padding-top:72px;padding-bottom:84px}
+  .abertura h1{font-size:clamp(96px,10.4vw,150px)}
+  .abertura-arte{width:100%;max-width:400px;margin:0;grid-row:1/4;grid-column:2}
+  .abertura-grade > *:not(.abertura-arte){grid-column:1}
+  .abertura-grade > .atalhos{grid-column:1/-1;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:20px}
+  .atalho{flex-direction:row;gap:10px;min-height:64px;font-size:16px}
+  .card{scroll-margin-top:96px}
+  .secao{padding:96px 0}
+  .secao-cab{margin-bottom:44px}
+  .cards{grid-template-columns:repeat(3,1fr)}
+  .etapas{grid-template-columns:repeat(4,1fr);column-gap:28px}
+  .etapas li{grid-template-columns:1fr;border-bottom:0!important;padding-top:26px}
+  .etapas b{font-size:84px;margin-bottom:14px}
+  .faq-grade{display:grid;grid-template-columns:.8fr 1.2fr;gap:60px;align-items:start}
+  .contato-grade{grid-template-columns:1.1fr .9fr;gap:70px;align-items:end}
+  .quadros{grid-template-columns:.8fr 1.2fr}
+  .faixa-grupo span{font-size:26px;padding:16px 14px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .js .revela{opacity:1;transform:none}
+  .faixa-trilho{width:auto;flex-wrap:wrap}
+  .faixa-grupo{flex-wrap:wrap}
+  .faixa-grupo[aria-hidden="true"]{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="amostra">Amostra · demonstração de como a página vai ficar</div>
+
+<header class="topo">
+  <div class="caixa">
+    <div class="topo-linha">
+      <a class="marca" href="#inicio" data-rolar="inicio" aria-label="Início">
+        <svg viewBox="0 0 30 38" aria-hidden="true"><circle cx="13" cy="4" r="3" fill="#A6D13F"/><circle cx="17" cy="11.5" r="3.6" fill="#1F7A3A"/><circle cx="18" cy="20" r="4.2" fill="#0E3B24"/><circle cx="14.5" cy="28" r="3.6" fill="#1F7A3A"/><circle cx="10.5" cy="34.5" r="3" fill="#A6D13F"/></svg>
+        <span class="marca-nome"><span data-nome-curto>Sua Clínica</span><span class="marca-sub" data-nome-sub>Saúde Integrada</span></span>
+      </a>
+      <a class="btn btn-escuro" data-wa="Olá! Vim pelo site e quero agendar uma consulta." target="_blank" rel="noopener">Agendar</a>
+    </div>
+    <nav class="menu" aria-label="Menu">
+      <a href="#especialidades" data-rolar="especialidades">Especialidades</a>
+      <a href="#como-agendar" data-rolar="como-agendar">Como agendar</a>
+      <a href="#contato" data-rolar="contato">Contato</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="abertura" id="inicio">
+    <div class="caixa abertura-grade">
+      <p class="sobretitulo" data-nome>Sua Clínica · Saúde Integrada</p>
+      <h1><span>Viva sem dor.</span><span class="l2">Viva a vida.</span></h1>
+      <div class="abertura-arte" aria-hidden="true">
+        <svg id="arteColuna" viewBox="0 0 360 430">
+          <path d="M183 12c62-6 128 30 150 92 20 58 4 118-12 176-16 60-58 118-124 126-70 8-130-36-158-98C12 246 6 170 40 106 68 52 122 18 183 12z" fill="#1F7A3A"/>
+          <circle cx="180" cy="215" r="150" fill="none" stroke="#F5F2EA" stroke-opacity=".28" stroke-width="1.5" stroke-dasharray="3 9"/>
+          <circle cx="180" cy="215" r="108" fill="none" stroke="#F5F2EA" stroke-opacity=".2" stroke-width="1.5" stroke-dasharray="3 9"/>
+        </svg>
+      </div>
+      <p class="abertura-texto">Seis especialidades no mesmo endereço, para cuidar do corpo e da mente. Escolha a sua e fale direto com a recepção.</p>
+      <div class="abertura-botoes">
+        <a class="btn btn-limao" href="#especialidades" data-rolar="especialidades">Escolher especialidade</a>
+        <a class="btn btn-contorno" data-wa="Olá! Vim pelo site e quero falar com a clínica." target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2zm0 18.2a8.200 8.200 0 0 1-4.200-1.150l-.3-.18-3 .78.800-2.920-.2-.300A8.200 8.200 0 1 1 12 20.200zm4.500-6.100c-.25-.120-1.460-.720-1.680-.800-.230-.080-.390-.120-.560.130-.160.240-.640.800-.780.960-.140.170-.290.180-.530.060a6.700 6.700 0 0 1-3.340-2.920c-.250-.430.250-.400.720-1.340.080-.160.040-.300-.020-.420-.060-.120-.560-1.340-.760-1.830-.200-.480-.400-.420-.560-.420h-.470a.900.900 0 0 0-.660.300 2.760 2.760 0 0 0-.860 2.050c0 1.210.880 2.380 1 2.540.120.170 1.730 2.640 4.200 3.700 1.560.670 2.170.730 2.950.610.470-.070 1.460-.600 1.660-1.170.210-.580.210-1.070.150-1.170-.060-.110-.220-.170-.470-.290z"/></svg>
+          Falar no WhatsApp
+        </a>
+      </div>
+      <div class="atalhos" id="atalhos" aria-label="Ir direto para uma especialidade"></div>
+    </div>
+  </section>
+
+  <div class="faixa" aria-hidden="true"><div class="faixa-trilho" id="faixaTrilho"></div></div>
+
+  <section class="secao" id="especialidades">
+    <div class="caixa">
+      <div class="secao-cab revela">
+        <p class="rotulo">Especialidades</p>
+        <h2>Escolha o cuidado que você procura</h2>
+        <p>Toque em um cartão para ver como funciona. Cada um tem o seu botão de agendamento.</p>
+      </div>
+      <div class="cards" id="cards"></div>
+    </div>
+  </section>
+
+  <section class="secao agendar" id="como-agendar">
+    <div class="caixa">
+      <div class="secao-cab revela">
+        <p class="rotulo">Como agendar</p>
+        <h2>Quatro passos, sem ligação e sem fila</h2>
+      </div>
+      <ol class="etapas">
+        <li class="revela"><b>1</b><h3>Escolha a especialidade</h3><p>Veja os cartões e toque em "Agendar" na que você precisa.</p></li>
+        <li class="revela"><b>2</b><h3>Escolha o horário</h3><p>Diga o dia e o período que ficam melhores para você.</p></li>
+        <li class="revela"><b>3</b><h3>A recepção confirma</h3><p>A confirmação chega pelo WhatsApp, com dia, hora e o que levar.</p></li>
+        <li class="revela"><b>4</b><h3>Lembrete na véspera</h3><p>Um dia antes você recebe um lembrete para confirmar ou remarcar.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="secao" id="perguntas">
+    <div class="caixa faq-grade">
+      <div class="secao-cab revela">
+        <p class="rotulo">Perguntas frequentes</p>
+        <h2>Antes de marcar</h2>
+      </div>
+      <div class="faq-lista revela">
+        <div class="faq-item">
+          <button type="button" aria-expanded="false" aria-controls="faq1">A clínica atende por convênio?<i aria-hidden="true"></i></button>
+          <div class="faq-resposta" id="faq1"><p>Ortopedia, fisioterapia, psicologia, osteopatia e acupuntura para gestantes atendem por convênio e particular. A terapia ayurvédica é só particular. Informe o nome do seu plano pelo WhatsApp e a recepção confirma a cobertura antes de marcar.</p></div>
+        </div>
+        <div class="faq-item">
+          <button type="button" aria-expanded="false" aria-controls="faq2">A psicologia pode ser online?<i aria-hidden="true"></i></button>
+          <div class="faq-resposta" id="faq2"><p>Pode. As sessões de psicologia acontecem na clínica ou por chamada de vídeo. O formato é combinado na primeira conversa e pode mudar ao longo do acompanhamento.</p></div>
+        </div>
+        <div class="faq-item">
+          <button type="button" aria-expanded="false" aria-controls="faq3">Preciso de pedido médico?<i aria-hidden="true"></i></button>
+          <div class="faq-resposta" id="faq3"><p>Para consultas, não. Para fisioterapia pelo convênio, o plano costuma exigir o pedido médico. Em caso de dúvida, pergunte pelo WhatsApp e a recepção informa o que levar no dia.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="secao contato" id="contato">
+    <div class="caixa contato-grade">
+      <div class="revela">
+        <p class="rotulo">Contato</p>
+        <h2>Marque sua consulta pelo WhatsApp</h2>
+      </div>
+      <div class="revela">
+        <div class="contato-dados">
+          <div>
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 29s9-8.500 9-16a9 9 0 0 0-18 0c0 7.500 9 16 9 16z"/><circle cx="16" cy="13" r="3.200"/></svg>
+            <p><small>Endereço</small><strong>[Endereço da clínica]</strong></p>
+          </div>
+          <div>
+            <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M16 9v7.500l5 3"/></svg>
+            <p><small>Horário</small><strong>Seg a sex, 8h às 18h</strong></p>
+          </div>
+          <div>
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27l1.700-6A11.500 11.500 0 1 1 11 25.400z"/><path d="M12 12.500c0 4 3.500 7.500 7.500 7.500"/></svg>
+            <p><small>WhatsApp</small><strong>[WhatsApp da clínica]</strong></p>
+          </div>
+        </div>
+        <a class="btn btn-escuro" data-wa="Olá! Vim pelo site e quero agendar uma consulta." target="_blank" rel="noopener">Falar com a recepção</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="bloco-proposta">
+    <div class="caixa">
+      <button type="button" class="cartao-proposta revela" id="abrirProposta" aria-haspopup="true">
+        <svg class="pontos" id="pontosProposta" viewBox="0 0 220 220" aria-hidden="true"></svg>
+        <small>Para a clínica</small>
+        <strong>Proposta</strong>
+        <span class="t">Três etapas independentes, com os valores na tela. A clínica escolhe quais quer e vê o total na hora.</span>
+        <span class="ir">Abrir a proposta
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.600" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </span>
+      </button>
+    </div>
+  </section>
+</main>
+
+<footer class="rodape">
+  <div class="caixa">
+    <strong data-nome>Sua Clínica · Saúde Integrada</strong>
+    <p>[Endereço da clínica] · Seg a sex, 8h às 18h</p>
+    <p>Página de demonstração. Os dados de contato são exemplos.</p>
+  </div>
+</footer>
+
+<a class="flutuante" data-wa="Olá! Vim pelo site e quero agendar uma consulta." target="_blank" rel="noopener" aria-label="Falar no WhatsApp">
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.600 15.100L2 22l5.100-1.300A10 10 0 1 0 12 2zm0 18.200a8.200 8.200 0 0 1-4.200-1.150l-.300-.180-3 .780.800-2.920-.200-.300A8.200 8.200 0 1 1 12 20.200zm4.500-6.100c-.250-.120-1.460-.720-1.680-.800-.230-.080-.390-.120-.560.130-.160.240-.640.800-.780.960-.140.170-.290.180-.530.060a6.700 6.700 0 0 1-3.340-2.920c-.250-.430.250-.400.720-1.340.080-.160.040-.300-.020-.420-.060-.120-.560-1.340-.760-1.830-.200-.480-.400-.420-.560-.420h-.470a.900.900 0 0 0-.660.300 2.760 2.760 0 0 0-.860 2.050c0 1.210.880 2.380 1 2.540.120.170 1.730 2.640 4.200 3.700 1.560.670 2.170.730 2.950.610.470-.070 1.460-.600 1.660-1.170.210-.580.210-1.070.150-1.170-.060-.110-.220-.170-.470-.290z"/></svg>
+</a>
+
+<!-- ============ PROPOSTA ============ -->
+<div class="proposta" id="proposta" role="dialog" aria-modal="true" aria-labelledby="pTitulo">
+  <div class="p-topo">
+    <div class="caixa">
+      <b>Proposta</b>
+      <button type="button" class="p-fechar" id="fecharProposta">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" aria-hidden="true"><path d="M2 2l12 12M14 2L2 14"/></svg>
+        Fechar
+      </button>
+    </div>
+  </div>
+
+  <div class="caixa p-corpo">
+    <h2 id="pTitulo">Mais pacientes encontrando a clínica, e a recepção com menos trabalho.</h2>
+    <p class="p-intro">São três etapas independentes: a clínica escolhe quais quer. A ordem sugerida é esta, para não pagar anúncio sem conseguir atender quem chega.</p>
+    <div class="p-ordem" aria-label="Ordem sugerida: página, agenda, anúncios">
+      <span>1 · Página</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.600" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      <span>2 · Agenda</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.600" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      <span>3 · Anúncios</span>
+    </div>
+
+    <!-- ETAPA 1 -->
+    <article class="etapa" data-etapa="1">
+      <p class="etapa-num">Etapa 1</p>
+      <h3>Landing page</h3>
+      <p class="etapa-linha">A página que você acabou de ver, com os dados reais da clínica.</p>
+      <div class="precos um">
+        <div class="preco"><small>Pagamento único</small><strong>R$ 697</strong><p>Sem mensalidade. Prazo de 7 dias úteis.</p></div>
+      </div>
+      <h4>O que inclui</h4>
+      <ul class="inclui">
+        <li>Esta página com as especialidades e um botão de WhatsApp em cada uma</li>
+        <li>Feita para celular e para ser encontrada no Google</li>
+        <li>Endereço próprio (.com.br, pago pela clínica, cerca de R$ 40 por ano)</li>
+        <li>Contagem de cliques nos botões</li>
+        <li>Fotos da clínica e da equipe, se a clínica quiser (esta amostra está sem fotos de propósito)</li>
+        <li>30 dias de ajustes grátis depois da entrega</li>
+      </ul>
+      <p class="nota"><b>Depois disso, só se a clínica pedir:</b> ajuste simples (texto, foto, convênio, horário) por R$ 40 cada, ou pacote de 5 ajustes por R$ 150.</p>
+      <button type="button" class="btn btn-incluir" aria-pressed="false" data-incluir="1"><span class="cx"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.500l3.200 3.200L13 4.500"/></svg></span><span class="tx">Incluir esta etapa</span></button>
+    </article>
+
+    <!-- ETAPA 2 -->
+    <article class="etapa" data-etapa="2">
+      <p class="etapa-num">Etapa 2</p>
+      <h3>Agenda integrada ao WhatsApp</h3>
+      <p class="etapa-linha">Um produto feito para clínicas: a mesma agenda para todas, que continua recebendo melhorias.</p>
+      <p class="selo-fund"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .800l2.100 4.500 4.900.600-3.600 3.400.900 4.900L8 11.800l-4.300 2.400.900-4.900L1 5.900l4.900-.600z"/></svg>Condição de clínica fundadora</p>
+      <div class="precos">
+        <div class="preco"><small>Implantação · pagamento único</small><strong><s>R$ 990</s>R$ 690</strong><p>Preço de clínica fundadora. Prazo de 15 dias úteis.</p></div>
+        <div class="preco"><small>Hospedagem e banco de dados</small><strong>R$ 149 <em>por mês</em></strong><p>Cancelável com 30 dias de aviso.</p></div>
+      </div>
+      <p class="nota"><b>Para que serve a mensalidade:</b> É o servidor onde a agenda fica no ar e onde os dados dos pacientes ficam guardados com segurança, com cópia de segurança diária e acesso protegido por senha.</p>
+      <h4>O que inclui</h4>
+      <ul class="inclui">
+        <li>Agenda digital por especialidade e por profissional</li>
+        <li>O paciente escolhe o horário livre na página e o pedido chega pronto no WhatsApp</li>
+        <li>Lembrete automático na véspera, com os botões Confirmar ou Remarcar</li>
+        <li>Registro de faltas e lista de quem precisa remarcar</li>
+        <li>Tela simples para a recepção, com letra grande</li>
+        <li>Treinamento da recepção</li>
+        <li>Dados guardados em servidor no Brasil, com backup diário</li>
+        <li>As melhorias que a agenda ganhar para outras clínicas chegam para esta também, sem custo</li>
+      </ul>
+      <p class="nota"><b>Condição de fundadora:</b> em troca do desconto na implantação, a clínica dá um depoimento depois de 60 dias de uso e autoriza mostrar o resultado como case, sem nenhum dado de paciente.</p>
+      <p class="nota"><b>Custo de terceiros:</b> as mensagens de lembrete têm custo de centavos, cobrado pela Meta direto da clínica.</p>
+
+      <div class="demo" id="demo">
+        <div class="demo-cab"><b>Experimente a agenda</b><span>Simulação</span></div>
+        <p>Faça de conta que você é um paciente. Nada é enviado de verdade.</p>
+        <h5><i>1</i>Escolha a especialidade</h5>
+        <div class="opcoes" id="demoEsp"></div>
+        <h5><i>2</i>Escolha o dia</h5>
+        <div class="opcoes dias" id="demoDias"></div>
+        <h5><i>3</i>Escolha um horário livre</h5>
+        <div class="opcoes horas" id="demoHoras"></div>
+        <div class="legenda"><span>Livre</span><span class="oc">Ocupado</span></div>
+        <div class="demo-res" id="demoRes" aria-live="polite">
+          <div class="tela">
+            <p class="tela-cab">Chega no WhatsApp da recepção</p>
+            <div class="balao" id="demoMsgRecepcao"></div>
+          </div>
+          <div class="tela">
+            <p class="tela-cab">O paciente recebe na véspera</p>
+            <div class="balao" id="demoMsgLembrete"></div>
+            <div class="balao-botoes">
+              <button type="button" data-resp="confirmar">Confirmar</button>
+              <button type="button" data-resp="remarcar">Remarcar</button>
+            </div>
+            <p class="demo-retorno" id="demoRetorno"></p>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-incluir" aria-pressed="false" data-incluir="2"><span class="cx"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.500l3.200 3.200L13 4.500"/></svg></span><span class="tx">Incluir esta etapa</span></button>
+    </article>
+
+    <!-- ETAPA 3 -->
+    <article class="etapa" data-etapa="3">
+      <p class="etapa-num">Etapa 3</p>
+      <h3>Tráfego pago</h3>
+      <p class="etapa-linha">Anúncios para quem mora perto e procura as especialidades da clínica.</p>
+      <div class="precos um">
+        <div class="preco"><small>Por mês de campanha</small><strong>R$ 590 <em>por mês</em></strong><p>Contrata só os meses que quiser, sem fidelidade.</p></div>
+      </div>
+      <h4>O que inclui</h4>
+      <ul class="inclui">
+        <li>Anúncios no Instagram, no Facebook e no Google para a região</li>
+        <li>Criação dos anúncios</li>
+        <li>Medição de quantas pessoas chamaram no WhatsApp</li>
+        <li>Ajustes semanais</li>
+        <li>Relatório no fim do mês</li>
+      </ul>
+      <p class="nota"><b>Verba dos anúncios:</b> é paga direto à Meta e ao Google, fora deste valor. Sugestão: R$ 20 por dia.</p>
+      <button type="button" class="btn btn-incluir" aria-pressed="false" data-incluir="3"><span class="cx"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.500l3.200 3.200L13 4.500"/></svg></span><span class="tx">Incluir esta etapa</span></button>
+    </article>
+
+    <div class="quadros">
+      <div class="quadro nao">
+        <h3>O que não prometemos</h3>
+        <p>Não garantimos número de pacientes. O que entregamos é a medição de visitas, cliques e mensagens, para a clínica ver o que está acontecendo e decidir com base nisso.</p>
+      </div>
+      <div class="quadro cond">
+        <h3>Condições</h3>
+        <ul>
+          <li>Pagamento por Pix</li>
+          <li>Valor único: metade no início e metade na entrega</li>
+          <li>Landing page sem mensalidade</li>
+          <li>Agenda com hospedagem mensal, cancelável com 30 dias de aviso. Se cancelar, a clínica recebe todos os seus dados em planilha</li>
+          <li>Tráfego sem fidelidade</li>
+          <li>A página, o domínio e os dados dos pacientes são da clínica</li>
+          <li>Proposta válida por 15 dias</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="resumo">
+      <h3>Sua escolha</h3>
+      <ul id="resumoLista"></ul>
+      <p class="resumo-rot">Mensagem que vai para o WhatsApp do Kaian:</p>
+      <p class="resumo-msg" id="resumoMsg"></p>
+      <a class="btn btn-escuro" id="btnSeguir2" target="_blank" rel="noopener"></a>
+    </div>
+
+    <p class="p-autor" id="pAutor">Feito por Kaian Bruno</p>
+  </div>
+
+  <div class="barra">
+    <div class="caixa">
+      <div class="tot"><small>Valor único</small><strong id="totUnico">R$ 0</strong></div>
+      <div class="tot"><small>Por mês</small><strong id="totMes">R$ 0</strong></div>
+      <p class="barra-nota" id="totNota" aria-live="polite">Marque as etapas que quiser incluir.</p>
+      <a class="btn btn-limao" id="btnSeguir" target="_blank" rel="noopener"></a>
+    </div>
+  </div>
+</div>
+
+<div class="caixa-wa" id="caixaWa" role="dialog" aria-modal="true" aria-labelledby="cwTit">
+  <div class="cw-cena">
+    <div class="cw-caixa" id="cwCaixa">
+      <div class="cw-topo"><span class="cw-ic" id="cwIc"></span><div><b id="cwTit">Mensagem pronta</b><small id="cwPara"></small></div></div>
+      <p class="cw-msg" aria-live="polite"><span id="cwTexto"></span><i class="cw-cursor" aria-hidden="true"></i></p>
+      <a class="btn btn-escuro" id="cwEnviar" target="_blank" rel="noopener"></a>
+      <button type="button" class="btn btn-contorno" id="cwCopiar">Copiar mensagem</button>
+      <button type="button" class="cw-voltar" id="cwFechar">Voltar</button>
+      <p class="cw-nota">Se o WhatsApp não abrir nesta tela, copie a mensagem e envie para o número acima.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================================================================
+   TROQUE AQUI os dados da clínica e os seus
+   =================================================================== */
+var CLINICA_NOME    = "Sua Clínica · Saúde Integrada";
+var WHATSAPP_NUMERO = "5561992372216";      // só números: país + DDD + número (na amostra é o do Kaian, para testar; trocar pelo da clínica)
+var AUTOR_NOME      = "Kaian Bruno";
+var AUTOR_WHATSAPP  = "5561992372216";      // recebe o "Quero seguir com estas etapas"
+/* =================================================================== */
+
+(function(){
+  "use strict";
+  document.documentElement.classList.add("js");
+  var $ = function(s, r){ return (r || document).querySelector(s); };
+  var $$ = function(s, r){ return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var SVGNS = "http://www.w3.org/2000/svg";
+
+  function linkWhats(msg, numero){
+    return "https://wa.me/" + (numero || WHATSAPP_NUMERO) + "?text=" + encodeURIComponent(msg);
+  }
+  function telefone(n){
+    var m = String(n).replace(/\D/g, "").match(/^55(\d{2})(\d{5})(\d{4})$/);
+    return m ? "(" + m[1] + ") " + m[2] + "-" + m[3] : n;
+  }
+  function icone(e){ return '<svg class="ic" viewBox="0 0 48 48" aria-hidden="true">' + e.icone + '</svg>'; }
+  var ICONE_WA = '<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 27l1.700-6A11.500 11.500 0 1 1 11 25.400z"/><path d="M12 12.500c0 4 3.500 7.500 7.500 7.500"/></svg>';
+  function reais(n){ return "R$ " + n.toLocaleString("pt-BR"); }
+
+  /* ---------- Nome da clínica ---------- */
+  var partes = CLINICA_NOME.split("·");
+  document.title = CLINICA_NOME;
+  $$("[data-nome]").forEach(function(el){ el.textContent = CLINICA_NOME; });
+  $("[data-nome-curto]").textContent = partes[0].trim();
+  $("[data-nome-sub]").textContent = (partes[1] || "").trim();
+  $("#pAutor").innerHTML = 'Feito por <b>' + AUTOR_NOME + '</b> · <a target="_blank" rel="noopener" href="' +
+    linkWhats("Olá, " + AUTOR_NOME.split(" ")[0] + "! Vi a proposta e quero tirar uma dúvida.", AUTOR_WHATSAPP) + '">' +
+    ICONE_WA + 'WhatsApp ' + telefone(AUTOR_WHATSAPP) + '</a>';
+
+  /* ---------- Especialidades ---------- */
+  var ESPECIALIDADES = [
+    { nome:"Ortopedia", para:"Para dores e lesões em ossos, músculos e articulações.",
+      passos:["Consulta de avaliação","Exame e diagnóstico","Plano de tratamento"],
+      tags:["Convênio","Particular"],
+      icone:'<path d="M11 44h26"/><path d="M30 44V15"/><path d="M21 44c1-5-4-8-3-14 1-5 6-6 5-12-.300-2-1-3-1-4"/><path d="M17.500 32H30M23 23h7"/><path d="M21 14c-5 1-9-2-8-6 1-4 6-5 9-3 3-3 9-2 10 2 1 4-3 7-7 6"/>' },
+    { nome:"Fisioterapia", para:"Para reabilitação depois de lesões, cirurgias e dores na coluna.", destaque:true,
+      passos:["Avaliação inicial","Série de sessões","Reavaliação do progresso"],
+      tags:["Convênio","Particular"],
+      icone:'<path d="M28 3L18 24h6l-4 21 11-25h-6z" fill="currentColor" stroke-width="1.500"/><path d="M11 8c-3 8 6 9 6 14M31 25c1 4 9 6 6 13-2 4-8 4-9-1" stroke-width="2.200"/><path d="M37 8c3 8-6 9-7 13M17 26c-1 4-9 5-6 12 2 4 8 4 9-1" stroke-width="2.200"/><circle cx="11.500" cy="7" r="1.700" fill="currentColor"/><circle cx="36.500" cy="7" r="1.700" fill="currentColor"/>' },
+    { nome:"Psicologia", para:"Para quem busca acompanhamento psicológico individual.",
+      passos:["Primeira conversa","Sessões semanais","Presencial ou online"],
+      tags:["Convênio","Particular","Online"],
+      icone:'<path d="M24 5v38"/><path d="M9 8c2 1 3 3 3 8 0 9 5 14 12 14s12-5 12-14c0-5 1-7 3-8"/><path d="M17 43h14"/>' },
+    { nome:"Osteopatia", para:"Técnicas manuais para dores na coluna e nas articulações.",
+      passos:["Avaliação da postura","Sessões manuais","Orientações para casa"],
+      tags:["Convênio","Particular"],
+      icone:'<rect x="19" y="4" width="10" height="6" rx="3"/><rect x="21" y="13" width="10" height="6" rx="3"/><rect x="21" y="22" width="10" height="6" rx="3"/><rect x="19" y="31" width="10" height="6" rx="3"/><path d="M39 12c4 7 4 17 0 24"/><path d="M11 12c-4 7-4 17 0 24"/><path d="M24 41v3"/>' },
+    { nome:"Acupuntura para gestantes", curto:"Acupuntura", para:"Apoio ao bem-estar durante a gestação.",
+      passos:["Conversa sobre a gestação","Sessões com agulhas finas","Acompanhamento por trimestre"],
+      tags:["Convênio","Particular"],
+      icone:'<circle cx="21" cy="27" r="16"/><path d="M21 11a8 8 0 0 1 0 16a8 8 0 0 0 0 16"/><circle cx="21" cy="19" r="2" fill="currentColor"/><circle cx="21" cy="35" r="2" fill="currentColor"/><path d="M33 15L44 4"/><path d="M39.500 3.500l5 5"/>' },
+    { nome:"Terapia ayurvédica", curto:"Ayurvédica", para:"Terapia tradicional indiana voltada ao equilíbrio e ao bem-estar.",
+      passos:["Avaliação do perfil","Plano de cuidados","Sessões de terapia"],
+      tags:["Particular"],
+      icone:'<path d="M24 37c-7-5-9-13 0-25 9 12 7 20 0 25z"/><path d="M24 37c-10 0-17-5-18-14 6 0 10 2 13 6"/><path d="M24 37c10 0 17-5 18-14-6 0-10 2-13 6"/><path d="M13 43h22"/>' }
+  ];
+
+  var cards = $("#cards");
+  ESPECIALIDADES.forEach(function(e, i){
+    var art = document.createElement("article");
+    art.className = "card revela" + (e.destaque ? " destaque" : "");
+    art.id = "card" + i;
+    var nomeMin = e.nome.charAt(0).toLowerCase() + e.nome.slice(1);
+    art.innerHTML =
+      '<div class="card-topo"><span class="icone">' + icone(e) + '</span>' +
+      '</div>' +
+      '<h3>' + e.nome + '</h3>' +
+      '<p class="card-para">' + e.para + '</p>' +
+      '<ul class="etiquetas">' + e.tags.map(function(t){ return '<li>' + t + '</li>'; }).join('') + '</ul>' +
+      '<button type="button" class="card-abrir" aria-expanded="false" aria-controls="passos' + i + '">Como funciona<i aria-hidden="true"></i></button>' +
+      '<ol class="passos" id="passos' + i + '">' + e.passos.map(function(p){ return '<li>' + p + '</li>'; }).join('') + '</ol>' +
+      '<a class="btn btn-escuro" target="_blank" rel="noopener" data-esp="' + i + '" data-wa="Olá! Vim pelo site e quero agendar ' + nomeMin + '.">' + ICONE_WA + 'Agendar ' + nomeMin + '</a>';
+    art.addEventListener("click", function(ev){
+      if (ev.target.closest("a")) return;
+      var aberto = art.classList.toggle("aberto");
+      $(".card-abrir", art).setAttribute("aria-expanded", aberto ? "true" : "false");
+    });
+    cards.appendChild(art);
+
+    /* atalho com o símbolo, na abertura */
+    var at = document.createElement("button");
+    at.type = "button"; at.className = "atalho";
+    at.innerHTML = icone(e) + "<span>" + (e.curto || e.nome) + "</span>";
+    at.setAttribute("aria-label", "Ver " + e.nome);
+    at.addEventListener("click", function(){
+      art.classList.add("aberto", "visto");
+      $(".card-abrir", art).setAttribute("aria-expanded", "true");
+      art.scrollIntoView({ behavior: reduzido() ? "auto" : "smooth", block: "start" });
+    });
+    $("#atalhos").appendChild(at);
+  });
+
+  /* ---------- Faixa correndo ---------- */
+  var trilho = $("#faixaTrilho");
+  for (var g = 0; g < 2; g++){
+    var grupo = document.createElement("div");
+    grupo.className = "faixa-grupo";
+    if (g) grupo.setAttribute("aria-hidden", "true");
+    grupo.innerHTML = ESPECIALIDADES.concat(ESPECIALIDADES).map(function(e){ return "<span>" + icone(e) + e.nome + "</span>"; }).join("");
+    trilho.appendChild(grupo);
+  }
+
+  /* ---------- Coluna de pontinhos ---------- */
+  function ponto(svg, x, y, r, cor, op){
+    var c = document.createElementNS(SVGNS, "circle");
+    c.setAttribute("cx", x.toFixed(1)); c.setAttribute("cy", y.toFixed(1)); c.setAttribute("r", r.toFixed(1));
+    c.setAttribute("fill", cor); if (op) c.setAttribute("fill-opacity", op);
+    svg.appendChild(c);
+  }
+  function desenharColuna(svg, cx, topo, altura, largura, n, escala){
+    for (var i = 0; i < n; i++){
+      var t = i / (n - 1);
+      var y = topo + t * altura;
+      var x = cx + largura * Math.sin(t * Math.PI * 2 - 0.5);
+      var r = (6.5 + t * 7.5) * escala;
+      ponto(svg, x, y, r, i % 3 === 1 ? "#F5F2EA" : "#A6D13F");
+      ponto(svg, x - r - 13 * escala, y + 2, 3.2 * escala, "#A6D13F", ".55");
+      ponto(svg, x + r + 13 * escala, y + 2, 3.2 * escala, "#A6D13F", ".55");
+    }
+  }
+  desenharColuna($("#arteColuna"), 180, 52, 326, 30, 13, 1);
+  desenharColuna($("#pontosProposta"), 120, 20, 185, 20, 10, .62);
+
+  /* ---------- Links de WhatsApp ---------- */
+  $$("[data-wa]").forEach(function(a){ a.href = linkWhats(a.getAttribute("data-wa")); });
+
+  /* ---------- Menu: rolar sem depender da URL ---------- */
+  $$("[data-rolar]").forEach(function(a){
+    a.addEventListener("click", function(ev){
+      ev.preventDefault();
+      var alvo = document.getElementById(a.getAttribute("data-rolar"));
+      if (alvo) alvo.scrollIntoView({ behavior: reduzido() ? "auto" : "smooth", block: "start" });
+    });
+  });
+  function reduzido(){ return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+
+  /* ---------- Perguntas frequentes ---------- */
+  $$(".faq-item button").forEach(function(b){
+    b.addEventListener("click", function(){
+      var aberto = b.parentNode.classList.toggle("aberto");
+      b.setAttribute("aria-expanded", aberto ? "true" : "false");
+    });
+  });
+
+  /* ---------- Animação ao rolar ---------- */
+  var revelar = $$(".revela");
+  if ("IntersectionObserver" in window && !reduzido()){
+    var obs = new IntersectionObserver(function(entradas){
+      entradas.forEach(function(en){
+        if (en.isIntersecting){ en.target.classList.add("visto"); obs.unobserve(en.target); }
+      });
+    }, { rootMargin: "0px 0px -8% 0px" });
+    revelar.forEach(function(el){ obs.observe(el); });
+  } else {
+    revelar.forEach(function(el){ el.classList.add("visto"); });
+  }
+
+  /* ---------- Proposta: abrir e fechar (só classe, sem URL) ---------- */
+  var proposta = $("#proposta"), btnAbrir = $("#abrirProposta"), btnFechar = $("#fecharProposta");
+  function abrirProposta(){
+    proposta.classList.add("aberta");
+    document.documentElement.classList.add("travado");
+    proposta.scrollTop = 0;
+    btnFechar.focus();
+  }
+  function fecharProposta(){
+    if (!proposta.classList.contains("aberta")) return;
+    proposta.classList.remove("aberta");
+    document.documentElement.classList.remove("travado");
+    btnAbrir.focus();
+  }
+  btnAbrir.addEventListener("click", abrirProposta);
+  btnFechar.addEventListener("click", fecharProposta);
+  document.addEventListener("keydown", function(ev){
+    if (ev.key === "Escape" || ev.key === "Esc" || ev.keyCode === 27){
+      if (caixaWa.classList.contains("aberta")) fecharCaixa(); else fecharProposta();
+    }
+  });
+
+  /* ---------- Caixa 3D: mostra a mensagem sendo escrita antes de enviar ---------- */
+  var caixaWa = $("#caixaWa"), cwTimer = null, cwOrigem = null, cwMsg = "";
+  function abrirCaixa(msg, numero, simbolo, origem){
+    clearInterval(cwTimer);
+    cwMsg = msg; cwOrigem = origem;
+    $("#cwIc").innerHTML = simbolo || ICONE_WA;
+    $("#cwPara").textContent = "Vai para o WhatsApp " + telefone(numero || WHATSAPP_NUMERO);
+    $("#cwEnviar").href = linkWhats(msg, numero);
+    $("#cwEnviar").innerHTML = ICONE_WA + "Enviar no WhatsApp";
+    $("#cwCopiar").textContent = "Copiar mensagem";
+    var alvo = $("#cwTexto"), i = 0;
+    caixaWa.classList.remove("aberta"); void caixaWa.offsetWidth;   // reinicia a animação
+    caixaWa.classList.add("aberta");
+    document.documentElement.classList.add("travado");
+    if (reduzido()){ alvo.textContent = msg; }
+    else {
+      alvo.textContent = "";
+      cwTimer = setInterval(function(){
+        i++; alvo.textContent = msg.slice(0, i);
+        if (i >= msg.length) clearInterval(cwTimer);
+      }, 24);
+    }
+    $("#cwEnviar").focus();
+  }
+  function fecharCaixa(){
+    clearInterval(cwTimer);
+    caixaWa.classList.remove("aberta");
+    if (!proposta.classList.contains("aberta")) document.documentElement.classList.remove("travado");
+    if (cwOrigem) cwOrigem.focus();
+  }
+  $("#cwFechar").addEventListener("click", fecharCaixa);
+  caixaWa.addEventListener("click", function(ev){ if (!ev.target.closest(".cw-caixa")) fecharCaixa(); });
+  $("#cwCopiar").addEventListener("click", function(){
+    var b = this, ok = function(){ b.textContent = "Mensagem copiada"; };
+    function reserva(){
+      var t = document.createElement("textarea");
+      t.value = cwMsg; t.style.position = "fixed"; t.style.opacity = "0";
+      $("#cwCaixa").appendChild(t); t.select();
+      try { document.execCommand("copy"); ok(); } catch (e) { b.textContent = "Selecione o texto e copie"; }
+      t.remove();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(cwMsg).then(ok, reserva);
+    else reserva();
+  });
+  /* todo botão de WhatsApp passa pela caixa (o link de verdade fica no botão "Enviar") */
+  document.addEventListener("click", function(ev){
+    var a = ev.target.closest("a[data-wa]");
+    if (!a) return;
+    ev.preventDefault();
+    var esp = a.getAttribute("data-esp");
+    abrirCaixa(a.getAttribute("data-wa"), a.getAttribute("data-num"), esp !== null ? icone(ESPECIALIDADES[esp]) : "", a);
+  });
+
+  /* ---------- Proposta: etapas e totais ---------- */
+  var ETAPAS = {
+    1: { nome: "Etapa 1 (Landing page)", unico: 697, mes: 0 },
+    2: { nome: "Etapa 2 (Agenda integrada ao WhatsApp)", unico: 690, mes: 149 },
+    3: { nome: "Etapa 3 (Tráfego pago)", unico: 0, mes: 590 }
+  };
+  var PRECO_1_E_2 = 1290;
+  var marcadas = { 1: false, 2: false, 3: false };
+  var btnSeguir = $("#btnSeguir");
+
+  function atualizarTotais(){
+    var unico = 0, mes = 0, nomes = [], notas = [];
+    [1, 2, 3].forEach(function(n){
+      if (marcadas[n]){ unico += ETAPAS[n].unico; mes += ETAPAS[n].mes; nomes.push(ETAPAS[n].nome); }
+    });
+    if (marcadas[1] && marcadas[2]){
+      notas.push("Etapas 1 + 2 juntas: de " + reais(unico) + " por " + reais(PRECO_1_E_2) + " (desconto de " + reais(unico - PRECO_1_E_2) + ").");
+      unico = PRECO_1_E_2;
+    }
+    if (mes){
+      var m = [];
+      if (marcadas[2]) m.push("hospedagem da agenda " + reais(149));
+      if (marcadas[3]) m.push("tráfego " + reais(590));
+      notas.push("Por mês: " + m.join(" + ") + ".");
+    }
+    $("#totUnico").textContent = reais(unico);
+    $("#totMes").textContent = reais(mes);
+    var msg, rotulo;
+    if (!nomes.length){
+      $("#totNota").textContent = "Marque as etapas que quiser incluir. Sem marcar, o botão abre uma conversa para tirar dúvidas.";
+      msg = "Olá! Vi a proposta e quero conversar antes de escolher as etapas.";
+      rotulo = "Tirar dúvidas no WhatsApp";
+      $("#resumoLista").innerHTML = "<li class=\"vazio\">Nenhuma etapa marcada ainda. Toque em \"Incluir esta etapa\" nos cartões acima.</li>";
+    } else {
+      $("#totNota").textContent = notas.join(" ") || "Pagamento único, sem mensalidade.";
+      msg = "Olá! Quero seguir com: " + nomes.join(", ") + ". Valor único " + reais(unico) + " e " + reais(mes) + " por mês.";
+      rotulo = "Quero seguir com estas etapas";
+      $("#resumoLista").innerHTML = nomes.map(function(n){ return "<li>" + n + "</li>"; }).join("") +
+        "<li class=\"soma\">Valor único " + reais(unico) + " · " + reais(mes) + " por mês</li>";
+    }
+    $("#resumoMsg").textContent = msg;
+    [btnSeguir, $("#btnSeguir2")].forEach(function(b){
+      b.href = linkWhats(msg, AUTOR_WHATSAPP);
+      b.setAttribute("data-wa", msg); b.setAttribute("data-num", AUTOR_WHATSAPP);
+      b.innerHTML = ICONE_WA + rotulo;
+    });
+  }
+  $$("[data-incluir]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var n = b.getAttribute("data-incluir");
+      marcadas[n] = !marcadas[n];
+      b.setAttribute("aria-pressed", marcadas[n] ? "true" : "false");
+      b.closest(".etapa").classList.toggle("marcada", marcadas[n]);
+      $(".tx", b).textContent = marcadas[n] ? "Etapa incluída · toque para tirar" : "Incluir esta etapa";
+      atualizarTotais();
+    });
+  });
+  atualizarTotais();
+
+  /* ---------- Mini demonstração da agenda (tudo simulado) ---------- */
+  var SEMANA = ["domingo","segunda","terça","quarta","quinta","sexta","sábado"];
+  var SEM_CURTO = ["dom","seg","ter","qua","qui","sex","sáb"];
+  var HORAS = ["08:00","09:00","10:00","11:00","14:00","15:00","16:00","17:00"];
+  var dias = [], d = new Date();
+  while (dias.length < 5){
+    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) dias.push(d);
+  }
+  function dm(dt){ return ("0" + dt.getDate()).slice(-2) + "/" + ("0" + (dt.getMonth() + 1)).slice(-2); }
+  var demo = { esp: 1, dia: 0, hora: null };
+  var elEsp = $("#demoEsp"), elDias = $("#demoDias"), elHoras = $("#demoHoras"), elRes = $("#demoRes");
+
+  function ocupado(e, di, h){ var v = Math.abs(Math.sin(e * 12.9 + di * 78.2 + h * 37.7) * 43758.5); return v - Math.floor(v) < 0.36; }
+
+  function botao(texto, sub, sel, fn){
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "op" + (sel ? " sel" : "");
+    b.setAttribute("aria-pressed", sel ? "true" : "false");
+    b.innerHTML = texto + (sub ? "<small>" + sub + "</small>" : "");
+    b.addEventListener("click", fn);
+    return b;
+  }
+  function desenharDemo(){
+    elEsp.innerHTML = ""; elDias.innerHTML = ""; elHoras.innerHTML = "";
+    ESPECIALIDADES.forEach(function(e, i){
+      elEsp.appendChild(botao(icone(e) + "<span>" + e.nome + "</span>", "", demo.esp === i, function(){ demo.esp = i; demo.hora = null; desenharDemo(); }));
+    });
+    dias.forEach(function(dt, i){
+      elDias.appendChild(botao(SEM_CURTO[dt.getDay()], dm(dt), demo.dia === i, function(){ demo.dia = i; demo.hora = null; desenharDemo(); }));
+    });
+    HORAS.forEach(function(h, i){
+      var b = botao(h, "", demo.hora === i, function(){ demo.hora = i; desenharDemo(); });
+      if (ocupado(demo.esp, demo.dia, i)){ b.disabled = true; b.setAttribute("aria-label", h + ", ocupado"); }
+      elHoras.appendChild(b);
+    });
+    if (demo.hora === null){ elRes.classList.remove("visivel"); return; }
+    var dt = dias[demo.dia], esp = ESPECIALIDADES[demo.esp].nome, quando = SEMANA[dt.getDay()] + ", " + dm(dt), h = HORAS[demo.hora];
+    $("#demoMsgRecepcao").innerHTML = "<b>Novo pedido de horário pelo site</b>Especialidade: " + esp +
+      "<br>Dia: " + quando + "<br>Horário: " + h + "<br>Paciente: [nome do paciente]<br>Telefone: [telefone do paciente]";
+    $("#demoMsgLembrete").innerHTML = "Olá! Passando para lembrar da sua consulta de <b style=\"display:inline\">" + esp + "</b> amanhã, " +
+      quando + ", às " + h + ", na " + partes[0].trim() + ". Você confirma a presença?";
+    $("#demoRetorno").textContent = "";
+    $$(".balao-botoes button").forEach(function(b){ b.classList.remove("sel"); });
+    elRes.classList.add("visivel");
+  }
+  $$(".balao-botoes button").forEach(function(b){
+    b.addEventListener("click", function(){
+      $$(".balao-botoes button").forEach(function(o){ o.classList.toggle("sel", o === b); });
+      $("#demoRetorno").textContent = b.getAttribute("data-resp") === "confirmar"
+        ? "Presença confirmada. Na tela da recepção, o horário aparece como confirmado."
+        : "Pedido de remarcação recebido. O horário volta a ficar livre e o paciente entra na lista de quem precisa remarcar.";
+    });
+  });
+  desenharDemo();
+})();
+</script>
+</body>
+</html>
