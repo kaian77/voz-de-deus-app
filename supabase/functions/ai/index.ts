@@ -389,7 +389,7 @@ Deno.serve(async (req) => {
         if (error || !data) throw new HttpError(404, "Busca não encontrada");
         return json({ ...data, started: await dispatchRender("leads.yml") });
       }
-      const query = String(input.query ?? "").trim().slice(0, 80);
+      const query = String(input.query ?? "").trim().slice(0, 160);
       const place = String(input.place ?? "").trim().slice(0, 120);
       if (!query || !place) throw new HttpError(400, "Diga o que procurar e onde (ex.: nutricionista, Sobradinho DF)");
       const wanted = Math.min(200, Math.max(1, Math.round(Number(input.wanted) || 30)));

@@ -45,7 +45,8 @@ function readMsg() {
 function fill(template: string, lead: Lead, search?: LeadSearch) {
   return template
     .split("{nome}").join(lead.name)
-    .split("{tema}").join((search?.query ?? lead.category ?? "empresas").toLowerCase());
+    // busca com vários temas ("nutricionista, psicólogo"): usa a categoria do próprio lead no Maps
+    .split("{tema}").join(((search?.query?.includes(",") ? lead.category : search?.query) ?? lead.category ?? "empresas").toLowerCase());
 }
 
 function exportCsv(leads: Lead[]) {
@@ -168,7 +169,7 @@ export default function Leads() {
         <div className="space-y-4">
           <Panel title="Nova busca">
             <div className="grid gap-2 sm:grid-cols-[1fr_1fr_110px_auto]">
-              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="O quê (ex.: nutricionista)" />
+              <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="O quê (ex.: nutricionista, psicólogo, dentista)" />
               <Input value={place} onChange={(e) => setPlace(e.target.value)} placeholder="Onde (ex.: Sobradinho DF)" onKeyDown={(e) => e.key === "Enter" && start()} />
               <Select value={wanted} onValueChange={setWanted}>
                 <SelectTrigger><SelectValue /></SelectTrigger>

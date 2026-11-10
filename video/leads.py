@@ -320,10 +320,13 @@ def run(search):
         bbox = around(lat, lng, region, km)
         rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"lat": lat, "lng": lng, "bbox": bbox, "updated_at": now()})
         cell = cells(bbox, 1)[0]
+        # Vários temas separados por vírgula (ex.: "nutricionista, psicólogo, dentista"): uma busca por tema.
+        # Profissional autônomo tem site bem menos que "clínica" (no teste da Asa Sul, 91 de 112 clínicas tinham site).
+        terms = [t.strip() for t in search["query"].split(",") if t.strip()][:6] or [search["query"]]
         if km == base:
-            jobs = [(f"{search['query']} em {search['place']}", 5 if wanted <= 15 else 10)]
+            jobs = [(f"{t} em {search['place']}", 5 if wanted <= 15 else 10) for t in terms]
         else:
-            jobs = [(f"{search['query']} em {name}", 5) for name in nearby(bbox)]
+            jobs = [(f"{t} em {name}", 5) for name in nearby(bbox) for t in terms][:12]
         for keyword, depth in jobs:
             i += 1
             try:
