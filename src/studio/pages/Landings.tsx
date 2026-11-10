@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { renderLanding } from "@/landing/render";
-import { WIDGET_LABEL, widgetFor, type WidgetKind } from "@/landing/widgets";
 import { api, supabase } from "../lib/api";
 import { useInvalidate, useOffer, useTable } from "../lib/hooks";
 import type { LandingPage, LandingStat, SiteStat, TourProject } from "../lib/types";
@@ -687,16 +686,6 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
                 </button>
               ))}
             </div>
-            {form.tier === "premium" && (
-              <label className="mt-3 block text-xs">
-                <span className="mb-1 block font-medium">Animação interativa</span>
-                <select value={form.widget ?? ""} onChange={(e) => set("widget", e.target.value || null)} className="h-9 w-full rounded-md border bg-background px-2 text-sm">
-                  <option value="">Automática (pelo ramo{widgetFor(form.niche ?? "") ? `: ${WIDGET_LABEL[widgetFor(form.niche ?? "")!]}` : ": nenhuma combina"})</option>
-                  {(Object.keys(WIDGET_LABEL) as WidgetKind[]).map((k) => <option key={k} value={k}>{WIDGET_LABEL[k]}</option>)}
-                  <option value="none">Sem animação</option>
-                </select>
-              </label>
-            )}
           </Panel>
 
           <Button className="w-full" size="lg" onClick={() => generate()} disabled={busy !== null}>
