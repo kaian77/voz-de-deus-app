@@ -227,6 +227,8 @@ export async function book(db: SupabaseClient, page: Page, input: Record<string,
   const time = String(input.time ?? "");
   const name = String(input.name ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
   const phone = cleanPhone(input.phone);
+  const email = String(input.email ?? "").trim().toLowerCase().slice(0, 120);
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(400, "Confira o e-mail (ou deixe em branco)");
   if (name.length < 2) throw new HttpError(400, "Escreva o seu nome");
   if (!phone) throw new HttpError(400, "Confira o número do WhatsApp com DDD");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || hm(time) < 0) throw new HttpError(400, "Escolha o dia e o horário");
@@ -245,11 +247,12 @@ export async function book(db: SupabaseClient, page: Page, input: Record<string,
   const starts = at(date, hm(time));
   const { data, error } = await db.from("agenda_appointments").insert({
     user_id: page.user_id, page_id: page.id, service: service.name, name, phone, note: String(input.note ?? "").slice(0, 300) || null,
-    plan: settings.plans.length ? plan : null, pro: pro?.id ?? null,
+    plan: settings.plans.length ? plan : null, pro: pro?.id ?? null, email: email || null, token: newToken(),
     starts_at: starts.toISOString(), ends_at: new Date(starts.getTime() + service.minutes * 60_000).toISOString(), source: "site",
-  }).select("id, starts_at, service").single();
+  }).select("*").single();
   if (error) throw new HttpError(500, error.message);
-  return data;
+  await bookingEmails(page, settings, data).catch((e) => console.error("agenda e-mail", e)); // e-mail nunca derruba a marcação
+  return { id: data.id, starts_at: data.starts_at, service: data.service };
 }
 
 // ------------------------------------------------------------------ login do profissional
@@ -332,7 +335,7 @@ export async function panel(db: SupabaseClient, page: Page) {
   const price = Number(offer.agendaMonthly) > 0 ? Number(offer.agendaMonthly) : AGENDA_PRICE;
   const link = typeof offer.agendaLink === "string" && /^https:\/\//.test(offer.agendaLink) ? offer.agendaLink : AGENDA_LINK;
   const from = new Date(Date.now() - 2 * 86400_000).toISOString();
-  const { data } = await db.from("agenda_appointments").select("id, service, starts_at, ends_at, name, phone, note, plan, pro, status, source, reminder_sent_at, answered_at")
+  const { data } = await db.from("agenda_appointments").select("id, service, starts_at, ends_at, name, phone, email, note, plan, pro, status, source, reminder_sent_at, email_reminded_at, answered_at")
     .eq("page_id", page.id).gt("starts_at", from).order("starts_at").limit(1500);
   return {
     name: page.name, status: page.agenda_status, until: page.agenda_until, open: agendaOpen(page), email: page.agenda_email,
@@ -362,6 +365,7 @@ export async function saveAppointment(db: SupabaseClient, page: Page, input: Rec
   if (input.phone !== undefined) patch.phone = cleanPhone(input.phone) || String(input.phone).replace(/\D/g, "").slice(0, 15);
   if (input.note !== undefined) patch.note = String(input.note).slice(0, 300) || null;
   if (input.plan !== undefined) patch.plan = String(input.plan).trim().slice(0, 50) || null;
+  if (input.email !== undefined) patch.email = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(input.email).trim()) ? String(input.email).trim().toLowerCase() : null;
   if (input.pro !== undefined) patch.pro = proOf(settings, input.pro)?.id ?? null;
   let minutes = 0;
   if (input.service !== undefined) {
@@ -383,7 +387,7 @@ export async function saveAppointment(db: SupabaseClient, page: Page, input: Rec
     // Sem profissional (bloqueio da clínica toda) confere contra todos; com profissional, só a agenda dele
     const clash = (await busyOf(db, page.id, id || undefined, (patch.pro as string | null | undefined) ?? null)).some((b) => starts.getTime() < Date.parse(b.ends_at) && ends.getTime() > Date.parse(b.starts_at));
     if (clash && !input.force) throw new HttpError(409, "Já tem alguém nesse horário");
-    Object.assign(patch, { starts_at: starts.toISOString(), ends_at: ends.toISOString(), reminder_sent_at: null, answered_at: null });
+    Object.assign(patch, { starts_at: starts.toISOString(), ends_at: ends.toISOString(), reminder_sent_at: null, email_reminded_at: null, answered_at: null });
     if (id && input.status === undefined) patch.status = "booked";
   }
   if (id) {
@@ -393,7 +397,7 @@ export async function saveAppointment(db: SupabaseClient, page: Page, input: Rec
   }
   if (!patch.starts_at) throw new HttpError(400, "Escolha o dia e o horário");
   const { data, error } = await db.from("agenda_appointments").insert({
-    user_id: page.user_id, page_id: page.id, source: "manual", service: patch.service ?? settings.services[0].name, ...patch,
+    user_id: page.user_id, page_id: page.id, source: "manual", service: patch.service ?? settings.services[0].name, token: newToken(), ...patch,
     status: patch.status ?? "booked", name: patch.name || (patch.status === "block" ? "Bloqueado" : ""),
   }).select().single();
   if (error) throw new HttpError(500, error.message);
@@ -443,4 +447,129 @@ export async function onAgendaSubscription(db: SupabaseClient, sub: any) {
     return { agenda: "paused" };
   }
   return { status: sub.status };
+}
+
+// ------------------------------------------------------------------ e-mails (Resend, grátis até 3 mil/mês)
+// Confirmação na hora para quem marcou (se deixou e-mail) + aviso de horário novo para o dono da agenda;
+// lembrete 1 dia antes (cron, 9h-21h) com os botões Confirmo / Preciso remarcar (paginaspro.app.br/confirmar/<token>).
+// Remetente: AGENDA_EMAIL_FROM (domínio verificado no Resend), com o nome do negócio na frente.
+
+const newToken = () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const WEEKDAY = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+const MONTH = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+export const whenLabel = (iso: string) => {
+  const d = new Date(Date.parse(iso) + TZ);
+  const m = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return `${WEEKDAY[d.getUTCDay()]}, ${d.getUTCDate()} de ${MONTH[d.getUTCMonth()]}, às ${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+};
+const escH = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+function fromFor(name: string) {
+  const raw = Deno.env.get("AGENDA_EMAIL_FROM") || "agenda@paginaspro.app.br";
+  const addr = (raw.match(/<([^>]+)>/)?.[1] ?? raw).trim();
+  return `${String(name).replace(/[<>"\r\n]/g, "").slice(0, 60) || "Agenda"} <${addr}>`;
+}
+
+async function sendMail(to: string, subject: string, html: string, from: string, replyTo?: string | null) {
+  const key = Deno.env.get("RESEND_API_KEY");
+  if (!key) throw new Error("RESEND_API_KEY não configurada");
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from, to: [to], subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  await res.body?.cancel();
+}
+
+function mailHtml(page: Page, title: string, lines: string[], buttons: { label: string; url: string; ghost?: boolean }[] = []) {
+  const color = /^#[0-9a-f]{6}$/i.test(page.content?.colors?.primary ?? "") ? page.content.colors.primary : "#2f5d50";
+  const btns = buttons.map((b) => `<a href="${escH(b.url)}" style="display:inline-block;margin:6px 6px 0 0;padding:13px 22px;border-radius:999px;font-weight:700;text-decoration:none;${b.ghost ? `color:${color};border:2px solid ${color}` : `background:${color};color:#ffffff`}">${escH(b.label)}</a>`).join("");
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f2;font-family:Arial,Helvetica,sans-serif;color:#1c2321">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden">
+<tr><td style="background:${color};color:#ffffff;padding:18px 24px;font-size:18px;font-weight:700">${escH(page.name)}</td></tr>
+<tr><td style="padding:24px;font-size:16px;line-height:1.55"><h1 style="font-size:22px;margin:0 0 12px">${escH(title)}</h1>${lines.map((l) => `<p style="margin:0 0 10px">${l}</p>`).join("")}${btns ? `<div style="margin-top:14px">${btns}</div>` : ""}</td></tr>
+<tr><td style="padding:14px 24px;border-top:1px solid #eeeeee;font-size:12px;color:#888888">Agenda online por PáginasPro · você recebeu este e-mail porque marcou um horário em ${escH(page.name)}.</td></tr>
+</table></td></tr></table></body></html>`;
+}
+
+// deno-lint-ignore no-explicit-any
+function details(page: Page, settings: Settings, a: any) {
+  const pro = settings.pros.find((p) => p.id === a.pro)?.name;
+  return [
+    `<b>${escH(a.service)}</b>${pro ? ` com ${escH(pro)}` : ""}${a.plan ? ` · ${escH(a.plan)}` : ""}`,
+    `<b style="font-size:18px">${escH(whenLabel(a.starts_at))}</b>`,
+    ...(page.address ? [`📍 ${escH(page.address)}`] : []),
+  ];
+}
+
+// deno-lint-ignore no-explicit-any
+async function bookingEmails(page: Page, settings: Settings, a: any) {
+  const jobs: Promise<unknown>[] = [];
+  const t = terms(page.niche);
+  if (a.email) {
+    jobs.push(sendMail(a.email, `Horário marcado: ${whenLabel(a.starts_at)}`, mailHtml(page, `Pronto, ${a.name.split(" ")[0]}! Seu horário está marcado.`,
+      [...details(page, settings, a), "Um dia antes você recebe um lembrete para confirmar."],
+      [{ label: "Preciso remarcar", url: `${SITE}/confirmar/${a.token}?r=no`, ghost: true }]), fromFor(page.name), page.agenda_email));
+  }
+  if (page.agenda_email) {
+    jobs.push(sendMail(page.agenda_email, `Novo horário: ${a.name} · ${whenLabel(a.starts_at)}`, mailHtml(page, "Horário novo marcado pelo site",
+      [...details(page, settings, a), `${t.client.charAt(0).toUpperCase() + t.client.slice(1)}: <b>${escH(a.name)}</b> · WhatsApp ${escH(a.phone)}${a.email ? ` · ${escH(a.email)}` : ""}`],
+      page.report_token ? [{ label: "Abrir a agenda", url: `${SITE}/r/${page.report_token}#agenda` }] : []), fromFor(page.name)));
+  }
+  await Promise.allSettled(jobs);
+}
+
+/** Cron (a cada 10 min): lembrete por e-mail dos horários de amanhã, a partir das 9h (Brasília). */
+export async function runAgendaEmails(db: SupabaseClient) {
+  const now = Date.now();
+  const hour = new Date(now + TZ).getUTCHours();
+  if (hour < 9 || hour >= 21 || !Deno.env.get("RESEND_API_KEY")) return { skipped: true };
+  const tomorrow = brDate(now + 86400_000);
+  const { data: due } = await db.from("agenda_appointments").select("*, landing_pages(*)")
+    .eq("status", "booked").is("email_reminded_at", null).not("email", "is", null)
+    .gte("starts_at", at(tomorrow, 0).toISOString()).lt("starts_at", at(tomorrow, 24 * 60).toISOString()).limit(50);
+  const out: unknown[] = [];
+  for (const a of due ?? []) {
+    const page = a.landing_pages as Page | null;
+    if (!page || !agendaOpen(page)) continue;
+    const token = a.token ?? newToken();
+    // marca antes de mandar: se a rede cair no meio, não manda 2 vezes
+    await db.from("agenda_appointments").update({ email_reminded_at: new Date().toISOString(), token }).eq("id", a.id);
+    try {
+      const settings = withDefaults(cleanSettings(page.agenda), page);
+      await sendMail(a.email, `Lembrete: amanhã, ${whenLabel(a.starts_at).split(", ").slice(1).join(", ")}`, mailHtml(page, `Olá, ${a.name.split(" ")[0]}! Seu horário é amanhã.`,
+        [...details(page, settings, a), "Você confirma?"],
+        [{ label: "✅ Confirmo", url: `${SITE}/confirmar/${token}?r=yes` }, { label: "Preciso remarcar", url: `${SITE}/confirmar/${token}?r=no`, ghost: true }]), fromFor(page.name), page.agenda_email);
+      out.push({ id: a.id, sent: true });
+    } catch (e) {
+      out.push({ id: a.id, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return out;
+}
+
+/** Página do botão do e-mail (paginaspro.app.br/confirmar/<token>?r=yes|no): reply "peek" só mostra; "yes"/"no" (toque no botão da página) confirma ou pede para remarcar. */
+export async function answer(db: SupabaseClient, token: unknown, reply: unknown) {
+  const t = String(token ?? "").replace(/[^a-f0-9]/g, "");
+  if (t.length < 20) throw new HttpError(404, "Link inválido");
+  const { data: a } = await db.from("agenda_appointments").select("*, landing_pages(name, whatsapp, slug, domain, logo, content, user_id, niche)").eq("token", t).maybeSingle();
+  if (!a || !a.landing_pages) throw new HttpError(404, "Horário não encontrado");
+  const page = a.landing_pages as Page;
+  const yes = reply === "yes";
+  const base = { name: page.name, logo: page.logo, content: page.content, whatsapp: page.whatsapp, when: whenLabel(a.starts_at), service: a.service };
+  if (["cancelled", "done", "noshow"].includes(a.status) || Date.parse(a.starts_at) < Date.now()) return { ...base, result: "closed" };
+  // Só olhar (a página do link): leitores de e-mail abrem links sozinhos, então a mudança só vem do toque no botão
+  if (reply !== "yes" && reply !== "no") return { ...base, result: a.status === "confirmed" ? "confirmed" : a.status === "reschedule" ? "reschedule" : "ask" };
+  if (yes) {
+    if (a.status !== "confirmed") await db.from("agenda_appointments").update({ status: "confirmed", answered_at: new Date().toISOString() }).eq("id", a.id);
+    return { ...base, result: "confirmed" };
+  }
+  if (a.status !== "reschedule") {
+    await db.from("agenda_appointments").update({ status: "reschedule", answered_at: new Date().toISOString() }).eq("id", a.id);
+    await notify(db, page.user_id, `📅 Pediu para remarcar: ${a.name}`, `${page.name} · ${whenLabel(a.starts_at)}`, "/studio/landing");
+  }
+  return { ...base, result: "reschedule" };
 }
