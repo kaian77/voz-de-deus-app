@@ -4,7 +4,7 @@
 //   profissional:  { action: "setup" | "login" } -> { session, token }; depois { action: "panel" | "save" | "appt" | "subscribe" | "logout", session, ... }
 import { adminClient, corsHeaders, handleError, HttpError, json } from "../_shared/util.ts";
 import {
-  answer, book, login, logout, pageBySession, pageBySlug, panel, publicDays, publicInfo, saveAppointment, saveSettings, setup, subscribeLink,
+  answer, book, login, logout, pageBySession, pageBySlug, panel, publicDays, report, publicInfo, saveAppointment, saveSettings, setup, subscribeLink,
 } from "../_shared/agenda.ts";
 
 Deno.serve(async (req) => {
@@ -37,6 +37,8 @@ Deno.serve(async (req) => {
         return json(await saveSettings(db, page, body.settings));
       case "appt":
         return json(await saveAppointment(db, page, body));
+      case "report":
+        return json(await report(db, page, body));
       case "subscribe":
         return json(await subscribeLink(page, `https://paginaspro.app.br/r/${page.report_token}#agenda`));
     }
