@@ -41,6 +41,10 @@
       "destination": "/api/landing?entrar=1"
     },
     {
+      "source": "/confirmar/:token",
+      "destination": "/api/landing?confirmar=:token"
+    },
+    {
       "source": "/inicio",
       "has": [
         {

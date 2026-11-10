@@ -90,7 +90,7 @@ h1{font-size:${big ? 32 : 28}px;margin-bottom:6px}
 .empty{text-align:center;padding:40px 10px}
 footer{text-align:center;font-size:12px;color:var(--muted);margin-top:28px}footer a{color:inherit}`;
   const script = String.raw`
-var S={si:0,svc:0,pro:'',plan:'',days:[],date:'',time:'',name:'',phone:'',busy:false,err:''};
+var S={si:0,svc:0,pro:'',plan:'',days:[],date:'',time:'',name:'',phone:'',email:'',busy:false,err:''};
 var app=document.getElementById('app');
 function steps(){var i=S.info,l=[];if(i.pros.length>1)l.push('pro');if(i.services.length>1)l.push('svc');l.push('day','time','data');return l}
 function cur(){return steps()[S.si]}
@@ -106,24 +106,26 @@ function pick(k,v){S[k]=v;S.err='';
  if(k==='date'){S.time='';if(CFG.big)next()}
  if(k==='time'&&CFG.big)next();
  draw()}
-function send(){var n=document.getElementById('n'),p=document.getElementById('p');S.name=n.value;S.phone=p.value;
+function keep(){var n=document.getElementById('n'),p=document.getElementById('p'),m=document.getElementById('m');if(n)S.name=n.value;if(p)S.phone=p.value;if(m)S.email=m.value}
+function send(){keep();
  if(S.name.trim().length<2){S.err='Escreva o seu nome';draw();return}
  if(String(S.phone).replace(/\D/g,'').length<10){S.err='Escreva o seu WhatsApp com DDD';draw();return}
  if(S.info.plans.length&&!S.plan){S.err='Escolha particular ou o seu convênio';draw();return}
  S.busy=true;S.err='';draw();
- call('book',{slug:CFG.slug,service:S.svc,pro:S.pro,plan:S.plan,date:S.date,time:S.time,name:S.name,phone:S.phone}).then(function(){S.busy=false;S.done=true;draw()}).catch(function(e){S.busy=false;S.err=e.message;if(/ocupado/.test(e.message)){S.time='';if(CFG.big)S.si=steps().indexOf('time');days()}else draw()})}
+ call('book',{slug:CFG.slug,service:S.svc,pro:S.pro,plan:S.plan,date:S.date,time:S.time,name:S.name,phone:S.phone,email:S.email}).then(function(){S.busy=false;S.done=true;draw()}).catch(function(e){S.busy=false;S.err=e.message;if(/ocupado/.test(e.message)){S.time='';if(CFG.big)S.si=steps().indexOf('time');days()}else draw()})}
 function gcal(){var sv=S.info.services[S.svc];var s=new Date(Date.parse(S.date+'T'+S.time+':00-03:00'));var e=new Date(s.getTime()+sv.minutes*6e4);function f(d){return d.toISOString().replace(/[-:]/g,'').slice(0,15)+'Z'}return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text='+encodeURIComponent(sv.name+' — '+(proName()||S.info.name))+'&dates='+f(s)+'/'+f(e)}
 function err(){return S.err?'<div class="err">'+h(S.err)+'</div>':''}
-function planPick(){var pl=plans();if(!S.info.plans.length)return '';return '<label>Atendimento</label><div class="chips">'+pl.map(function(x){return '<button class="chip'+(x===S.plan?' on':'')+'" onclick="S.name=document.getElementById(\'n\').value;S.phone=document.getElementById(\'p\').value;pick(\'plan\',this.textContent)">'+h(x)+'</button>'}).join('')+'</div>'}
+function planPick(){var pl=plans();if(!S.info.plans.length)return '';return '<label>Atendimento</label><div class="chips">'+pl.map(function(x){return '<button class="chip'+(x===S.plan?' on':'')+'" onclick="keep();pick(\'plan\',this.textContent)">'+h(x)+'</button>'}).join('')+'</div>'}
 function form(){return '<label for="n">Seu nome</label><input id="n" autocomplete="name" value="'+h(S.name)+'" placeholder="Nome e sobrenome">'+
- '<label for="p">Seu WhatsApp (com DDD)</label><input id="p" type="tel" inputmode="tel" autocomplete="tel" value="'+h(S.phone)+'" placeholder="(61) 99999-9999">'+planPick()+
- '<p class="muted" style="font-size:.85em;margin-top:10px">Um dia antes você recebe um lembrete no WhatsApp para confirmar.</p>'}
+ '<label for="p">Seu WhatsApp (com DDD)</label><input id="p" type="tel" inputmode="tel" autocomplete="tel" value="'+h(S.phone)+'" placeholder="(61) 99999-9999">'+
+ '<label for="m">Seu e-mail <span class="muted" style="font-weight:400">(opcional)</span></label><input id="m" type="email" inputmode="email" autocomplete="email" value="'+h(S.email)+'" placeholder="seu@email.com">'+planPick()+
+ '<p class="muted" style="font-size:.85em;margin-top:10px">Com e-mail, você recebe a confirmação agora e um lembrete 1 dia antes.</p>'}
 function summary(){var sv=S.info.services[S.svc];return '<div class="sum"><span class="muted">'+h(sv.name)+' · '+svcLabel(sv)+(proName()?' · '+h(proName()):'')+'</span><b>'+h(dayNice(S.date,true))+' às '+h(S.time)+'</b></div>'}
 function proOpts(cls){return S.info.pros.map(function(p){return cls==='opt'?'<button class="opt" onclick="pick(\'pro\',\''+p.id+'\')"><span><b>'+h(p.name)+'</b>'+(p.role?'<br><small>'+h(p.role)+'</small>':'')+'</span><span class="go">›</span></button>':'<button class="chip'+(p.id===S.pro?' on':'')+'" onclick="pick(\'pro\',\''+p.id+'\')">'+h(p.name)+(p.role?' · '+h(p.role):'')+'</button>'}).join('')}
 function draw(){var i=S.info,o='';
  if(!i){app.innerHTML=S.err?err():'<p class="muted">Carregando a agenda…</p>';return}
  if(!i.open){var wl=waLink(i.whatsapp,'Olá! Quero marcar um horário.');app.innerHTML='<div class="empty card"><h2>Agenda online fechada</h2><p class="muted" style="margin:10px 0 18px">No momento os horários estão sendo marcados pelo WhatsApp.</p>'+(wl?'<a class="btn" href="'+wl+'">Chamar no WhatsApp</a>':'')+'</div>';return}
- if(S.done){var sv=i.services[S.svc];app.innerHTML='<div class="done"><div class="ok">✓</div><h1>Horário marcado!</h1><p class="muted" style="margin:8px 0 6px">'+h(sv.name)+' com '+h(proName()||i.name)+(S.plan?' · '+h(S.plan):'')+'</p><p style="font-size:1.25em;font-weight:700">'+h(dayNice(S.date,true))+' às '+h(S.time)+'</p><p class="muted" style="margin:14px 0">Um dia antes você recebe uma mensagem no WhatsApp para confirmar.</p><a class="btn ghost wide" target="_blank" rel="noopener" href="'+gcal()+'">Salvar na minha agenda</a><a class="btn wide" href="'+h(CFG.site)+'">Voltar ao site</a></div>';return}
+ if(S.done){var sv=i.services[S.svc];app.innerHTML='<div class="done"><div class="ok">✓</div><h1>Horário marcado!</h1><p class="muted" style="margin:8px 0 6px">'+h(sv.name)+' com '+h(proName()||i.name)+(S.plan?' · '+h(S.plan):'')+'</p><p style="font-size:1.25em;font-weight:700">'+h(dayNice(S.date,true))+' às '+h(S.time)+'</p><p class="muted" style="margin:14px 0">'+(S.email?'Mandamos a confirmação para '+h(S.email)+'. Um dia antes chega o lembrete.':'Anote o dia e o horário. Se precisar remarcar, chame no WhatsApp.')+'</p><a class="btn ghost wide" target="_blank" rel="noopener" href="'+gcal()+'">Salvar na minha agenda</a><a class="btn wide" href="'+h(CFG.site)+'">Voltar ao site</a></div>';return}
  if(CFG.big){var st=cur(),n=steps().length,bk=S.si>0?'<button class="back" onclick="back()">‹ Voltar</button>':'',lbl='<p class="step">Passo '+(S.si+1)+' de '+n+'</p>';
   if(st==='pro')o=bk+lbl+'<h1>Com quem você quer marcar?</h1><div class="list">'+proOpts('opt')+'</div>';
   else if(st==='svc')o=bk+lbl+'<h1>O que você quer marcar?</h1><div class="list">'+i.services.map(function(s,k){return '<button class="opt" onclick="pick(\'svc\','+k+')"><span><b>'+h(s.name)+'</b><br><small>'+svcLabel(s)+'</small></span><span class="go">›</span></button>'}).join('')+'</div>';
@@ -224,7 +226,7 @@ window.agNew=function(block){A.sheet={create:true,block:!!block};draw()};
 window.agClose=function(){A.sheet=null;draw()};
 window.agMove=function(id){A.sheet={id:id,move:true};draw()};
 window.agSaveAppt=function(){var g=function(i){var x=document.getElementById(i);return x?x.value:undefined};var s=A.sheet;var body={date:g('ag-d'),time:g('ag-t')};
- if(s.create){body.status=s.block?'block':'booked';body.name=s.block?(g('ag-n')||'Bloqueado'):g('ag-n');body.phone=g('ag-f');body.service=g('ag-s');body.minutes=Number(g('ag-m')||0)||undefined;if(g('ag-pr')!==undefined)body.pro=g('ag-pr');if(g('ag-pl')!==undefined)body.plan=g('ag-pl');if(!s.block&&(!body.name||body.name.length<2)){A.err='Escreva o nome';draw();return}}
+ if(s.create){body.status=s.block?'block':'booked';body.name=s.block?(g('ag-n')||'Bloqueado'):g('ag-n');body.phone=g('ag-f');body.service=g('ag-s');body.minutes=Number(g('ag-m')||0)||undefined;if(g('ag-pr')!==undefined)body.pro=g('ag-pr');if(g('ag-em'))body.email=g('ag-em');if(g('ag-pl')!==undefined)body.plan=g('ag-pl');if(!s.block&&(!body.name||body.name.length<2)){A.err='Escreva o nome';draw();return}}
  else body.id=s.id;
  api('appt',body).then(function(){A.sheet=null;A.err='';refresh()}).catch(window.agFail)};
 window.agSub=function(){api('subscribe').then(function(r){location.href=r.url}).catch(window.agFail)};
@@ -253,13 +255,13 @@ function card(a){var d=br(a.starts_at),c=(ST[a.status]||['','#999'])[1];var wl=w
   if(a.status!=='cancelled')acts+='<button onclick="agSet(\''+a.id+'\',\'cancelled\')">❌ Cancelar</button>';
   if(Date.parse(a.starts_at)<Date.now()&&a.status!=='done')acts+='<button onclick="agSet(\''+a.id+'\',\'done\')">✔️ Atendido</button><button onclick="agSet(\''+a.id+'\',\'noshow\')">🚫 Faltou</button>'}
  else acts+='<button onclick="agSet(\''+a.id+'\',\'cancelled\')">Liberar horário</button>';
- return '<div class="ap" style="--c:'+c+'"><div class="row" style="justify-content:space-between"><span class="t">'+hhmm(d)+'</span>'+tag(a.status)+'</div><div class="n">'+h(a.name||'—')+'</div><div class="muted" style="font-size:14px">'+h(a.service)+(a.pro&&proName(a.pro)?' · '+h(proName(a.pro)):a.status==='block'&&pros().length?' · '+h(T().all.toLowerCase()):'')+(a.plan?' · '+h(a.plan):'')+(a.phone?' · '+h(phoneNice(a.phone)):'')+(a.source==='site'?' · pelo site':'')+(a.reminder_sent_at&&a.status==='booked'?' · lembrete enviado':'')+'</div>'+(a.note?'<div class="muted" style="font-size:13px;margin-top:4px">'+h(a.note)+'</div>':'')+'<div class="acts">'+acts+'</div></div>'}
+ return '<div class="ap" style="--c:'+c+'"><div class="row" style="justify-content:space-between"><span class="t">'+hhmm(d)+'</span>'+tag(a.status)+'</div><div class="n">'+h(a.name||'—')+'</div><div class="muted" style="font-size:14px">'+h(a.service)+(a.pro&&proName(a.pro)?' · '+h(proName(a.pro)):a.status==='block'&&pros().length?' · '+h(T().all.toLowerCase()):'')+(a.plan?' · '+h(a.plan):'')+(a.phone?' · '+h(phoneNice(a.phone)):'')+(a.email?' · ✉️'+(a.email_reminded_at&&a.status==='booked'?' lembrete enviado':''):'')+(a.source==='site'?' · pelo site':'')+(a.reminder_sent_at&&a.status==='booked'?' · lembrete enviado':'')+'</div>'+(a.note?'<div class="muted" style="font-size:13px;margin-top:4px">'+h(a.note)+'</div>':'')+'<div class="acts">'+acts+'</div></div>'}
 function sheet(){var s=A.sheet;if(!s)return '';var a=s.id?A.data.appointments.filter(function(x){return x.id===s.id})[0]:null;var o='<div class="sheet" onclick="if(event.target===this)agClose()"><div>';
  if(a&&!s.move){o+='<div class="row" style="justify-content:space-between"><h3>'+h(dayNice(dkey(br(a.starts_at)),true))+'</h3><button class="btn ghost" style="padding:8px 14px" onclick="agClose()">Fechar</button></div>'+card(a)}
  else{var sv=A.data.settings.services,today=dkey(br(new Date().toISOString()));var d0=a?dkey(br(a.starts_at)):today,t0=a?hhmm(br(a.starts_at)):'09:00';
   o+='<h3>'+(s.move?'Remarcar '+h(a.name):s.block?'Bloquear horário':'Marcar horário')+'</h3>';
   var ps=pros();if(s.create&&ps.length)o+='<label>Profissional</label><select id="ag-pr">'+(s.block?'<option value="">'+h(T().all)+'</option>':'')+ps.map(function(p){return '<option value="'+h(p.id)+'"'+(p.id===A.pro?' selected':'')+'>'+h(p.name)+'</option>'}).join('')+'</select>';
-  if(s.create&&!s.block){o+='<label>Nome</label><input id="ag-n"><label>WhatsApp</label><input id="ag-f" type="tel" placeholder="(61) 99999-9999"><label>Serviço</label><select id="ag-s">'+sv.map(function(x){return '<option>'+h(x.name)+'</option>'}).join('')+'</select>';
+  if(s.create&&!s.block){o+='<label>Nome</label><input id="ag-n"><label>WhatsApp</label><input id="ag-f" type="tel" placeholder="(61) 99999-9999"><label>E-mail (opcional, para o lembrete)</label><input id="ag-em" type="email"><label>Serviço</label><select id="ag-s">'+sv.map(function(x){return '<option>'+h(x.name)+'</option>'}).join('')+'</select>';
    var pl=(A.data.settings.particular?['Particular']:[]).concat(A.data.settings.plans||[]);if((A.data.settings.plans||[]).length)o+='<label>Atendimento</label><select id="ag-pl">'+pl.map(function(x){return '<option>'+h(x)+'</option>'}).join('')+'</select>'}
   if(s.block)o+='<label>Motivo (opcional)</label><input id="ag-n" placeholder="Almoço, folga, compromisso…"><label>Duração (minutos)</label><input id="ag-m" type="number" value="60" min="10" step="10">';
   o+='<div class="row" style="flex-wrap:nowrap"><div style="flex:1"><label>Dia</label><input id="ag-d" type="date" value="'+d0+'" min="'+today+'"></div><div style="flex:1"><label>Hora</label><input id="ag-t" type="time" value="'+t0+'" step="300"></div></div>'+(A.err?'<div class="err">'+h(A.err)+'</div>':'')+
@@ -333,4 +335,29 @@ call('login',{email:e,password:p}).then(function(r){try{localStorage.setItem('ag
 <div id="er"></div><button class="btn wide" style="margin-top:14px">Entrar</button>
 <p class="muted" style="font-size:13px;margin-top:14px">Primeiro acesso ou esqueceu a senha? Abra o link do painel que você recebeu no WhatsApp.</p></form>
 <script>var CFG=${json(cfg)};${COMMON}${script}</script></body></html>`;
+}
+
+/** paginaspro.app.br/confirmar/<token>?r=yes|no — página do botão do e-mail de lembrete. Nada muda só de abrir
+ * (leitores de e-mail abrem links sozinhos): a pessoa toca no botão e o script chama a função "agenda". */
+export function renderAnswer(
+  d: (AgendaTheme & { whatsapp?: string | null; when: string; service: string; result: string }) | null,
+  o: { cfg: AgendaCfg; token: string; want: "yes" | "no" },
+) {
+  const t = theme(d ?? { name: "Agenda" });
+  const n = String(d?.whatsapp ?? "").replace(/\D/g, "");
+  const wa = n ? `https://wa.me/${n.length <= 11 ? `55${n}` : n}?text=${encodeURIComponent(`Olá! Preciso remarcar o meu horário de ${d?.when ?? ""}.`)}` : "";
+  const script = String.raw`
+var R={confirmed:['✓','Presença confirmada!',CFG.service+' · '+CFG.when+'. Até lá!'],reschedule:['↺','Pedido de remarcação enviado','Avisamos '+CFG.name+' e vão falar com você para escolher outro horário.'],closed:['!','Este horário já passou ou foi cancelado','Para marcar outro, use a agenda online ou chame no WhatsApp.'],none:['?','Link inválido','Este link não existe mais. Fale direto com quem marcou o seu horário.']};
+function show(k){var r=R[k]||R.none;document.getElementById('ic').textContent=r[0];document.getElementById('tt').textContent=r[1];document.getElementById('tx').textContent=r[2];document.getElementById('bt').innerHTML=(k==='reschedule'&&CFG.wa?'<a class="btn wide" style="margin-top:18px" href="'+h(CFG.wa)+'">Chamar no WhatsApp agora</a>':'')}
+function go(r){var b=document.querySelectorAll('#bt button');for(var i=0;i<b.length;i++)b[i].disabled=true;call('answer',{token:CFG.token,reply:r}).then(function(x){show(x.result)}).catch(function(e){document.getElementById('tx').textContent=e.message;for(var i=0;i<b.length;i++)b[i].disabled=false})}
+if(CFG.result!=='ask')show(CFG.result);`;
+  const ask = d?.result === "ask";
+  const first = o.want === "yes" ? ["yes", "✅ Confirmar presença"] : ["no", "Pedir para remarcar"];
+  const second = o.want === "yes" ? ["no", "Preciso remarcar"] : ["yes", "Na verdade, vou: confirmar"];
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>${esc(d?.name ?? "Agenda")}</title><link href="https://fonts.googleapis.com/css2?${t.f.url}&display=swap" rel="stylesheet">
+<style>${baseCss(t, true)}body{display:grid;place-items:center;min-height:100vh;padding:16px;text-align:center}.card{width:min(440px,100%)}#ic{width:80px;height:80px;border-radius:50%;background:var(--p);color:var(--on);display:grid;place-items:center;font-size:40px;margin:0 auto 16px}h1{font-size:26px;margin-bottom:8px}#bt .btn{margin-top:12px}</style></head>
+<body><div class="card"><div id="ic">📅</div><p class="muted" style="margin-bottom:6px">${esc(d?.name ?? "")}</p><h1 id="tt">${ask ? "Seu horário" : ""}</h1><p class="muted" id="tx">${ask ? `${esc(d!.service)} · ${esc(d!.when)}` : ""}</p>
+<div id="bt">${ask ? `<button class="btn wide" onclick="go('${first[0]}')">${first[1]}</button><button class="btn ghost wide" onclick="go('${second[0]}')">${second[1]}</button>` : ""}</div></div>
+<script>var CFG=${json({ ...o.cfg, token: o.token, result: d ? d.result : "none", name: d?.name ?? "", when: d?.when ?? "", service: d?.service ?? "", wa })};${COMMON}${script}</script></body></html>`;
 }

@@ -4,7 +4,7 @@
 //   profissional:  { action: "setup" | "login" } -> { session, token }; depois { action: "panel" | "save" | "appt" | "subscribe" | "logout", session, ... }
 import { adminClient, corsHeaders, handleError, HttpError, json } from "../_shared/util.ts";
 import {
-  book, login, logout, pageBySession, pageBySlug, panel, publicDays, publicInfo, saveAppointment, saveSettings, setup, subscribeLink,
+  answer, book, login, logout, pageBySession, pageBySlug, panel, publicDays, publicInfo, saveAppointment, saveSettings, setup, subscribeLink,
 } from "../_shared/agenda.ts";
 
 Deno.serve(async (req) => {
@@ -20,6 +20,8 @@ Deno.serve(async (req) => {
         return json(await publicDays(db, await pageBySlug(db, body.slug), Number(body.service) || 0, body.pro));
       case "book":
         return json(await book(db, await pageBySlug(db, body.slug), body));
+      case "answer":
+        return json(await answer(db, body.token, body.reply));
       case "setup":
         return json(await setup(db, body));
       case "login":

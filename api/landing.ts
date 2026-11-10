@@ -6,7 +6,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { renderLanding, type LandingData } from "../src/landing/render.js";
 import { demoReport, renderReport, type ReportData } from "../src/landing/report.js";
 import { renderAgency } from "../src/landing/agency.js";
-import { renderBooking, renderLogin } from "../src/landing/agenda.js";
+import { renderAnswer, renderBooking, renderLogin } from "../src/landing/agenda.js";
 import { mergeOffer } from "../src/studio/lib/offer.js";
 
 const URL_ = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rrlxhnmfsmknzhqpfrhr.supabase.co";
@@ -70,6 +70,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // Agenda online: /agendar/<slug> (paciente) e /entrar (login do profissional)
   const cfg = { api: `${URL_}/functions/v1/agenda`, key: KEY };
   if (url.searchParams.get("entrar")) return send(res, 200, renderLogin(cfg), "public, s-maxage=300");
+  // Botão do e-mail de lembrete: /confirmar/<token>?r=yes|no
+  const confirmar = (url.searchParams.get("confirmar") ?? "").replace(/[^a-f0-9]/g, "").slice(0, 64);
+  if (confirmar && KEY) {
+    const r = await fetch(cfg.api, { method: "POST", headers, body: JSON.stringify({ action: "answer", token: confirmar, reply: "peek" }) });
+    return send(res, r.ok ? 200 : 404, renderAnswer(r.ok ? await r.json() : null, { cfg, token: confirmar, want: url.searchParams.get("r") === "yes" ? "yes" : "no" }), "no-store");
+  }
   const agendar = (url.searchParams.get("agendar") ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 80);
   if (agendar && KEY) {
     const r = await fetch(`${URL_}/rest/v1/landing_pages?slug=eq.${agendar}&status=in.(preview,published)&select=name,logo,slug,domain,content,agenda,agenda_status&limit=1`, { headers });

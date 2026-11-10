@@ -21,6 +21,7 @@ import { runShopeeSync } from "../_shared/shopee-sync.ts";
 import { ytAutopilot } from "../_shared/youtube.ts";
 import { runPaginasproJobs } from "../_shared/paginaspro-agent.ts";
 import { sendPendingPush } from "../_shared/push.ts";
+import { runAgendaEmails } from "../_shared/agenda.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -93,6 +94,10 @@ Deno.serve(async (req) => {
       : undefined;
     // Perguntas e mensagens de pedido do Mercado Livre na caixa de entrada (a função controla o intervalo de 3 min)
     const mlinbox = await runMlInbox(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
+    // Agenda online da PáginasPro: lembrete por e-mail 1 dia antes (a partir das 9h)
+    const agenda = new Date().getUTCMinutes() % 10 === 1
+      ? await runAgendaEmails(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
+      : null;
     // Avisos no celular (Studio instalado como app)
     const push = await sendPendingPush(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Resumo do dia no WhatsApp (só às 8h de Brasília, uma vez por dia)
@@ -105,7 +110,7 @@ Deno.serve(async (req) => {
     // PáginasPro: prévias pedidas pelo atendente (a IA leva ~1 min; roda em segundo plano)
     const paginaspro = runPaginasproJobs(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(paginaspro);
-    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, shopeesync, mlnew, sales, reviews, push, mlinbox });
+    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, shopeesync, mlnew, sales, reviews, push, mlinbox, agenda });
   } catch (err) {
     return handleError(err);
   }

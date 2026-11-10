@@ -39,6 +39,12 @@ alter table public.agenda_appointments add constraint agenda_appointments_status
 alter table public.agenda_appointments add column if not exists plan text;
 -- Profissional da clínica (id em landing_pages.agenda.pros); vazio = agenda única ou bloqueio da clínica toda
 alter table public.agenda_appointments add column if not exists pro text;
+-- E-mail de quem marcou (opcional): confirmação na hora e lembrete 1 dia antes com os botões Confirmo / Preciso remarcar
+alter table public.agenda_appointments add column if not exists email text;
+alter table public.agenda_appointments add column if not exists email_reminded_at timestamptz;
+-- segredo dos botões do e-mail (paginaspro.app.br/confirmar/<token>)
+alter table public.agenda_appointments add column if not exists token text;
+create unique index if not exists agenda_appointments_token on public.agenda_appointments (token) where token is not null;
 create index if not exists agenda_appointments_page on public.agenda_appointments (page_id, starts_at);
 create index if not exists agenda_appointments_reminder on public.agenda_appointments (starts_at) where reminder_sent_at is null;
 create index if not exists agenda_appointments_phone on public.agenda_appointments (phone);
