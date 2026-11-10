@@ -363,8 +363,24 @@ def run(search):
     rest("PATCH", f"lead_searches?id=eq.{search['id']}", {"status": "done", "found": found, "updated_at": now()})
 
 
+def add_test():
+    """--test "tema|lugar|quantos": põe uma busca na fila do dono (teste pelo GitHub, sem abrir o Studio)."""
+    if "--test" not in sys.argv:
+        return False
+    spec = sys.argv[sys.argv.index("--test") + 1]
+    if not spec.strip():
+        return False
+    q, place, n = (spec.split("|") + ["", "", "20"])[:3]
+    owner = (rest("GET", "brand_settings?select=user_id&limit=1") or [{}])[0].get("user_id")
+    if owner and q.strip() and place.strip():
+        rest("POST", "lead_searches", {"user_id": owner, "query": q.strip(), "place": place.strip(), "wanted": int(n or 20)})
+        return True
+    return False
+
+
 def main():
     if "--check" in sys.argv:
+        add_test()
         if "--retry-failed" in sys.argv:  # rodada manual: buscas que falharam ou vieram incompletas voltam para a fila
             rest("PATCH", "lead_searches?status=eq.failed", {"status": "queued", "error": None})
             for r in rest("GET", "lead_searches?status=eq.done&select=id,found,wanted") or []:
