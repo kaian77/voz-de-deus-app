@@ -55,9 +55,37 @@ export type LandingData = {
   agenda_status?: string | null;
   agenda_until?: string | null;
   /** Configuração da agenda (só os convênios aparecem no site) */
-  agenda?: { plans?: string[]; particular?: boolean } | null;
+  agenda?: { plans?: string[]; particular?: boolean; pros?: { id: string; name: string; role?: string }[]; services?: { name: string; pros?: string[] }[] } | null;
   content: LandingContent;
 };
+
+const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/** Link da agenda já no profissional (?pro=) e/ou no serviço (?s=) que combina com o cartão do site
+ * (ex.: cartão "Nutrição" → profissional com especialidade "Nutricionista": as 5 primeiras letras batem). */
+export function agendaLinkFor(d: LandingData, title: string) {
+  const base = agendaLink(d);
+  if (!base) return "";
+  const t = norm(title);
+  const words = (s: string) => norm(s).split(/[^a-z]+/).filter((w) => w.length >= 5);
+  const hit = (s: string) => !!s && (t.includes(norm(s)) || words(s).some((w) => t.includes(w.slice(0, 5))));
+  const services = d.agenda?.services ?? [];
+  const si = services.findIndex((s) => hit(s.name));
+  const pro = (d.agenda?.pros ?? []).find((p) => hit(p.role ?? "") || (si >= 0 && services[si].pros?.length === 1 && services[si].pros![0] === p.id));
+  if (si < 0 && !pro) return "";
+  const q = [pro ? `pro=${encodeURIComponent(pro.id)}` : "", si >= 0 ? `s=${si}` : ""].filter(Boolean).join("&");
+  return `${base}?${q}`;
+}
+
+/** Profissionais da agenda, cada um com "Agendar com…" (só com agenda ligada e mais de um profissional). */
+export function prosSection(d: LandingData, wrapClass = "wrap") {
+  const base = agendaLink(d);
+  const pros = d.agenda?.pros ?? [];
+  if (!base || pros.length < 2) return "";
+  return `<section id="profissionais"><div class="${wrapClass}"><h2 style="margin-bottom:22px">Agende com quem você precisa</h2>
+<div class="pros">${pros.map((p) => `<a class="pro reveal" href="${esc(`${base}?pro=${encodeURIComponent(p.id)}`)}"><b>${esc(p.name)}</b>${p.role ? `<span>${esc(p.role)}</span>` : ""}<em>📅 Agendar</em></a>`).join("")}</div>
+</div></section>`;
+}
 
 /** "Atendimento: Particular · Unimed · Amil" quando a agenda está ligada e tem convênios. */
 export function plansLine(d: LandingData) {
@@ -210,6 +238,10 @@ section{padding:clamp(72px,10vw,120px) 0}
 .head p{max-width:28em;color:var(--muted)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
 .card{background:#fff;border-radius:20px;padding:30px 28px;border:1px solid var(--line)}
+.card .book,.pro em{display:inline-block;margin-top:14px;font-weight:700;color:var(--p);text-decoration:none;font-style:normal}
+.pros{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.pro{display:flex;flex-direction:column;gap:2px;background:var(--soft);border-radius:18px;padding:20px;text-decoration:none;color:inherit;border:1px solid var(--line)}
+.pro b{font-size:18px}.pro span{color:var(--muted);font-size:15px}
 .card .n{font-family:var(--head);font-size:15px;color:var(--p);margin-bottom:18px;display:block}
 .card p{margin-top:10px;font-size:15.5px;color:var(--muted)}
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(20px,4vw,48px);counter-reset:s}
@@ -306,8 +338,12 @@ ${c.credentials?.length ? `<ul class="creds">${c.credentials.map((x) => `<li>${e
 ${d.registry ? `<p style="font-size:14px;margin-top:22px">${esc(d.registry)}</p>` : ""}</div></div></section>
 <section class="services" id="servicos"><div class="wrap">
 <div class="head reveal"><div><span class="eyebrow">Serviços</span><h2>${esc(c.services_title)}</h2></div></div>
-<div class="grid">${c.services.map((s, i) => `<article class="card reveal"><span class="n">${String(i + 1).padStart(2, "0")}</span><h3>${esc(s.title)}</h3><p>${esc(s.text)}</p></article>`).join("")}</div>
+<div class="grid">${c.services.map((s, i) => {
+  const book = agendaLinkFor(d, s.title);
+  return `<article class="card reveal"><span class="n">${String(i + 1).padStart(2, "0")}</span><h3>${esc(s.title)}</h3><p>${esc(s.text)}</p>${book ? `<a class="book" href="${esc(book)}">📅 Agendar</a>` : ""}</article>`;
+}).join("")}</div>
 </div></section>
+${prosSection(d)}
 <section id="como-funciona"><div class="wrap">
 <div class="head reveal"><div><span class="eyebrow">Como funciona</span><h2>Do primeiro contato ao acompanhamento</h2></div></div>
 <div class="steps">${c.steps.slice(0, 3).map((s) => `<div class="step reveal"><h3>${esc(s.title)}</h3><p>${esc(s.text)}</p></div>`).join("")}</div>

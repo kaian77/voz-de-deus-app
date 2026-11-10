@@ -3,7 +3,7 @@
 // rolando com as especialidades, serviços que abrem ao tocar, galeria arrastável, blocos em mosaico e mini conversa
 // do WhatsApp ao chamar. Chamado por renderLanding quando tier = "premium" (prévia do Studio e página publicada).
 import { WIDGET_CSS, WIDGET_JS, WIDGET_TITLE, widgetHtml, widgetOf } from "./widgets.js";
-import { agendaLink, plansLine, esc, FONTS, headline, hex, mix, onColor, SAMPLE_HOURS, WA_ICON, whatsappLink, type LandingContent, type LandingData } from "./render.js";
+import { agendaLink, agendaLinkFor, prosSection, plansLine, esc, FONTS, headline, hex, mix, onColor, SAMPLE_HOURS, WA_ICON, whatsappLink, type LandingContent, type LandingData } from "./render.js";
 
 export function renderPremium(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean; track?: boolean } = {}): string {
   const c = d.content;
@@ -99,6 +99,10 @@ section{padding:clamp(80px,11vw,130px) 0}
 .tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
 .tags span{background:#fff;border:1px solid var(--line);font-size:14px;font-weight:500;padding:7px 14px;border-radius:999px}
 .svc{margin-top:46px;border-top:1.5px solid var(--ink)}
+.svc .book,.pro em{display:inline-block;font-weight:700;color:var(--p);text-decoration:none;font-style:normal;margin-top:6px}
+.pros{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+.pro{display:flex;flex-direction:column;gap:2px;border:1.5px solid var(--ink);border-radius:18px;padding:20px;text-decoration:none;color:inherit}
+.pro b{font-size:18px}.pro span{opacity:.7;font-size:15px}
 .svc details{border-bottom:1.5px solid var(--ink)}
 .svc summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:70px 1fr auto;align-items:center;gap:16px;padding:24px 4px;transition:padding .3s}
 .svc summary::-webkit-details-marker{display:none}
@@ -248,8 +252,12 @@ ${d.registry ? `<p style="font-size:14px;margin-top:20px;color:var(--muted)">${e
 
 <section id="servicos" style="padding-top:0"><div class="wrap">
 <span class="kicker reveal"><i></i>Serviços</span><h2 class="reveal" style="margin-top:16px;max-width:15em">${esc(c.services_title)}</h2>
-<div class="svc">${c.services.map((s, i) => `<details class="reveal"${i === 0 ? " open" : ""}><summary><span class="n">${String(i + 1).padStart(2, "0")}</span><h3>${esc(s.title)}</h3><span class="ar">+</span></summary><p>${esc(s.text)}</p></details>`).join("")}</div>
+<div class="svc">${c.services.map((s, i) => {
+  const book = agendaLinkFor(d, s.title);
+  return `<details class="reveal"${i === 0 ? " open" : ""}><summary><span class="n">${String(i + 1).padStart(2, "0")}</span><h3>${esc(s.title)}</h3><span class="ar">+</span></summary><p>${esc(s.text)}</p>${book ? `<p><a class="book" href="${esc(book)}">📅 Agendar</a></p>` : ""}</details>`;
+}).join("")}</div>
 </div></section>
+${prosSection(d)}
 
 ${wk ? `<section style="padding-top:0"><div class="wrap">
 <span class="kicker reveal"><i></i>Experimente</span><h2 class="reveal" style="margin-top:16px">${esc(WIDGET_TITLE[wk][0])}</h2><p class="reveal" style="color:var(--muted);margin:12px 0 30px;max-width:34em">${esc(WIDGET_TITLE[wk][1])}</p>
