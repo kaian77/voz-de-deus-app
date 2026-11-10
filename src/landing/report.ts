@@ -1,6 +1,7 @@
 // Painel de resultados do cliente (plano mensal): /r/<token> -> HTML com as cores, fontes e logo da landing dele.
 // Os números vêm da função landing_report (só totais por dia). Feito para o celular; sem login (o token é o acesso).
 import { esc, FONTS, hex, mix, onColor, type LandingContent } from "./render.js";
+import { agendaPanel, type AgendaCfg } from "./agenda.js";
 
 type Day = { day: string; views: number; whatsapp: number; maps: number; sources: Record<string, number> };
 export type ReportData = {
@@ -17,6 +18,8 @@ export type ReportData = {
   stats: Day[] | null;
   /** Painel de exemplo (/r/demo), com números fictícios */
   demo?: boolean;
+  /** Agenda online: off | trial | active | paused */
+  agenda?: string | null;
 };
 
 /** Painel de exemplo para mostrar a quem ainda não é cliente: números inventados, mas estáveis (não mudam a cada visita). */
@@ -51,7 +54,7 @@ function delta(now: number, before: number) {
   return p === 0 ? `<span>igual</span>` : `<span class="${p > 0 ? "up" : "down"}">${p > 0 ? "↑" : "↓"} ${Math.abs(p)}%</span>`;
 }
 
-export function renderReport(d: ReportData): string {
+export function renderReport(d: ReportData, opts: { token?: string; cfg?: AgendaCfg } = {}): string {
   const fonts = FONTS[d.content?.fonts as LandingContent["fonts"]] ?? FONTS.fraunces;
   const primary = hex(d.content?.colors?.primary ?? "", "#2f5d50");
   const ink = hex(d.content?.colors?.ink ?? "", "#1c2321");
@@ -63,8 +66,12 @@ export function renderReport(d: ReportData): string {
     : "";
   const brand = d.logo ? `<img class="logo" src="${esc(d.logo)}" alt="${esc(d.name)}">` : `<span class="wordmark">${esc(d.name)}</span>`;
 
+  const ag = d.agenda && d.agenda !== "off" && opts.token && opts.cfg ? agendaPanel({ name: d.name, logo: d.logo, content: d.content, token: opts.token }, opts.cfg) : null;
+  const statsOn = (d.plan === "monthly" || !!d.panel) && !!d.stats;
   let body: string;
-  if ((d.plan !== "monthly" && !d.panel) || !d.stats) {
+  if (!statsOn && ag) {
+    body = "";
+  } else if (!statsOn || !d.stats) {
     body = `<section class="card center"><h2>Painel indisponível</h2><p>O painel de resultados faz parte do plano mensal do site.</p>
 ${supportUrl ? `<a class="btn" href="${esc(supportUrl)}" target="_blank" rel="noopener">Falar com o suporte</a>` : ""}</section>`;
   } else {
@@ -108,7 +115,7 @@ ${supportUrl ? `<section class="card center"><h3>Precisa mudar algo no site?</h3
 
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Resultados · ${esc(d.name)}</title><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="${primary}">
+<title>${ag ? "Agenda" : "Resultados"} · ${esc(d.name)}</title><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="${primary}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?${fonts.url}&display=swap" rel="stylesheet">
 <style>
@@ -141,13 +148,24 @@ h3{font-size:18px;margin-bottom:14px}
 .muted{color:${mix(ink, "#ffffff", 0.35)};font-size:14px}
 .btn{display:inline-block;background:${primary};color:${onColor(primary)};text-decoration:none;font-weight:600;padding:13px 22px;border-radius:999px}
 footer{margin-top:24px;text-align:center;font-size:12px;color:${mix(ink, "#ffffff", 0.45)}}
+[hidden]{display:none!important}
+.tabs{display:flex;gap:6px;background:#fff;border-radius:999px;padding:5px;margin-bottom:16px}
+.tabs button{flex:1;border:0;background:none;border-radius:999px;padding:11px;font:inherit;font-weight:700;cursor:pointer;color:${ink}}
+.tabs button.on{background:${primary};color:${onColor(primary)}}
+.btn.ghost{background:transparent;color:${primary};box-shadow:inset 0 0 0 2px ${primary}}
+.btn{border:0;cursor:pointer;font:inherit;font-weight:600}
+${ag ? ag.css : ""}
 @media (max-width:520px){.stats{grid-template-columns:1fr}.stat{flex-direction:row;align-items:baseline;gap:10px}.stat b{font-size:28px;min-width:64px}}
 </style></head>
 <body><div class="wrap">
 <header>${brand}<a href="${esc(site)}" target="_blank" rel="noopener">Ver meu site ↗</a></header>
 ${d.demo ? `<p style="background:${ink};color:#fff;border-radius:12px;padding:10px 14px;font-size:13px;margin-bottom:16px">Painel de exemplo com números fictícios. É assim que o seu fica, com as cores e o logo do seu site.</p>` : ""}
-<h1>Resultados do seu site</h1>
-${body}
-<footer>Atualizado agora · os números contam visitas reais (robôs ficam de fora)</footer>
+${ag
+  ? `<nav class="tabs"${statsOn ? "" : " hidden"}><button id="tb-agenda" onclick="tab('agenda')">Agenda</button>${statsOn ? `<button id="tb-res" onclick="tab('res')">Resultados do site</button>` : ""}</nav>
+<div id="pn-agenda">${ag.html}</div>${statsOn ? `<div id="pn-res" hidden><h1>Resultados do seu site</h1>${body}</div>` : ""}
+<script>function tab(t){var a=t==='agenda';document.getElementById('pn-agenda').hidden=!a;var r=document.getElementById('pn-res');if(r)r.hidden=a;document.getElementById('tb-agenda').className=a?'on':'';var b=document.getElementById('tb-res');if(b)b.className=a?'':'on';history.replaceState(null,'',a?'#agenda':'#resultados')}tab(location.hash==='#resultados'?'res':'agenda')</script>${ag.script}`
+  : `<h1>Resultados do seu site</h1>
+${body}`}
+${statsOn ? `<footer>Atualizado agora · os números contam visitas reais (robôs ficam de fora)</footer>` : ""}
 </div></body></html>`;
 }

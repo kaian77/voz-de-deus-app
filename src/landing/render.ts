@@ -50,8 +50,28 @@ export type LandingData = {
   /** premium = layout animado (src/landing/premium.ts), vendido mais caro */
   tier?: string | null;
   widget?: string | null;
+  slug?: string | null;
+  /** Agenda online (adicional): botão "Agendar online" leva para paginaspro.app.br/agendar/<slug> */
+  agenda_status?: string | null;
+  agenda_until?: string | null;
+  /** Configuração da agenda (só os convênios aparecem no site) */
+  agenda?: { plans?: string[]; particular?: boolean } | null;
   content: LandingContent;
 };
+
+/** "Atendimento: Particular · Unimed · Amil" quando a agenda está ligada e tem convênios. */
+export function plansLine(d: LandingData) {
+  const plans = (d.agenda?.plans ?? []).map((p) => String(p).trim()).filter(Boolean);
+  if (!agendaLink(d) || !plans.length) return "";
+  const all = [...(d.agenda?.particular === false ? [] : ["Particular"]), ...plans];
+  return `<p class="plans" style="margin-top:14px;font-size:14px;opacity:.85"><b>Convênios:</b> ${all.map(esc).join(" · ")}</p>`;
+}
+
+/** Link da agenda online, quando ligada (teste no prazo ou assinatura ativa). */
+export function agendaLink(d: LandingData) {
+  const on = d.agenda_status === "active" || (d.agenda_status === "trial" && (!d.agenda_until || new Date(d.agenda_until).getTime() > Date.now()));
+  return on && d.slug ? `https://paginaspro.app.br/agendar/${d.slug}` : "";
+}
 
 export const FONTS: Record<LandingContent["fonts"], { head: string; body: string; url: string; weight: number }> = {
   fraunces: { head: "'Fraunces', Georgia, serif", body: "'Inter', system-ui, sans-serif", weight: 500, url: "family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600" },
@@ -112,6 +132,8 @@ export function renderLanding(d: LandingData, opts: { url?: string; preview?: bo
   const about = photos[c.about_photo] ?? photos[1] ?? photos[0];
   const gallery = photos.filter((p) => p !== hero && p !== about).slice(0, 6);
   const wa = whatsappLink(d);
+  const booking = agendaLink(d);
+  const second = booking ? `<a class="btn ghost" href="${esc(booking)}">📅 Agendar online</a>` : `<a class="btn ghost" href="#servicos">Conhecer os serviços</a>`;
   // Galeria sem buraco: 2 fotos lado a lado ou múltiplos de 3
   const shown = gallery.length >= 3 ? gallery.slice(0, 3 * Math.floor(gallery.length / 3)) : gallery.length === 2 ? gallery : [];
   const galleryHtml = shown.length
@@ -244,10 +266,10 @@ footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
     c.template === "full" && hero
       ? `<section class="hero full"><img src="${esc(hero)}" alt="${esc(d.name)}"><div class="wrap">
   <span class="eyebrow">${esc(c.eyebrow)}</span><h1>${headline(c)}</h1><p class="lead">${esc(c.subheadline)}</p>
-  <div class="actions">${cta()}<a class="btn ghost" href="#servicos">Conhecer os serviços</a></div>${rating}</div></section>`
+  <div class="actions">${cta()}${second}</div>${plansLine(d)}${rating}</div></section>`
       : `<section class="hero split"><div class="wrap"><div>
   <span class="eyebrow">${esc(c.eyebrow)}</span><h1>${headline(c)}</h1><p class="lead">${esc(c.subheadline)}</p>
-  <div class="actions">${cta()}<a class="btn ghost" href="#servicos">Conhecer os serviços</a></div>${rating}</div>
+  <div class="actions">${cta()}${second}</div>${plansLine(d)}${rating}</div>
   ${hero ? `<div class="photo"><img src="${esc(hero)}" alt="${esc(d.name)}"></div>` : `<div class="photo"><div class="mono" aria-hidden="true"><b>${esc((d.name.trim()[0] ?? "").toUpperCase())}</b><span>${esc(d.name)}</span></div></div>`}</div></section>`;
 
   const contactRows = [

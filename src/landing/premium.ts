@@ -3,7 +3,7 @@
 // rolando com as especialidades, serviços que abrem ao tocar, galeria arrastável, blocos em mosaico e mini conversa
 // do WhatsApp ao chamar. Chamado por renderLanding quando tier = "premium" (prévia do Studio e página publicada).
 import { WIDGET_CSS, WIDGET_JS, WIDGET_TITLE, widgetHtml, widgetOf } from "./widgets.js";
-import { esc, FONTS, headline, hex, mix, onColor, SAMPLE_HOURS, WA_ICON, whatsappLink, type LandingContent, type LandingData } from "./render.js";
+import { agendaLink, plansLine, esc, FONTS, headline, hex, mix, onColor, SAMPLE_HOURS, WA_ICON, whatsappLink, type LandingContent, type LandingData } from "./render.js";
 
 export function renderPremium(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean; track?: boolean } = {}): string {
   const c = d.content;
@@ -232,7 +232,7 @@ ${cta("Agendar", "btn")}</div></div></header>
 <span class="kicker reveal"><i></i>${esc(c.eyebrow)}</span>
 <h1 class="split" style="margin-top:20px">${headline(c)}</h1>
 <p class="lead reveal">${esc(c.subheadline)}</p>
-<div class="ctas reveal">${cta(c.cta_label || "Agendar pelo WhatsApp")}<a class="btn ghost" href="#servicos">Ver serviços</a></div>
+<div class="ctas reveal">${cta(c.cta_label || "Agendar pelo WhatsApp")}${agendaLink(d) ? `<a class="btn ghost" href="${esc(agendaLink(d))}">📅 Agendar online</a>` : `<a class="btn ghost" href="#servicos">Ver serviços</a>`}</div>${plansLine(d)}
 </div>
 <div class="stage" id="stage"><div class="rig" id="rig"><div class="card3d">${hero ? `<img src="${esc(hero)}" alt="${esc(d.name)}">` : `<div class="ph">${initial}</div>`}</div>${chips}</div></div>
 </div></section>
