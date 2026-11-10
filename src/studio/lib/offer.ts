@@ -56,12 +56,14 @@ export function offerMessages(name: string, link?: string | null, o: Offer = OFF
       `Já está tudo incluso:\n` +
       `• site no ar, com botão do WhatsApp, mapa e horário\n` +
       `• um painel só seu para ver quantas pessoas visitaram o site e quantas te chamaram por ele\n` +
-      `• alterações sempre que precisar (texto, foto, horário, serviços), sem custo extra${preview}` +
+      `• alterações sempre que precisar (texto, foto, horário, serviços), sem custo extra\n\n` +
+      `Se quiser, dá para incluir a agenda online (o cliente marca o horário pelo site e vocês controlam tudo num painel) por mais ${brl(o.agendaMonthly)} por mês.${preview}` +
       (o.monthlyLink ? `\n\nAprovou a prévia? A assinatura é por aqui (cartão, cobrança automática todo mês): ${o.monthlyLink}` : ""),
     oneTime:
       `Se preferir pagar uma vez só: ${brl(o.oneTime)} e o site da ${name} fica no ar, sem mensalidade.\n\n` +
       `Nesse formato, cada alteração depois sai ${brl(o.change)}. ` +
-      `E se quiser o painel de resultados (quantas pessoas visitaram e te chamaram pelo site), dá para incluir por mais ${brl(o.panelAddon)} por mês.${preview}` +
+      `E se quiser o painel de resultados (quantas pessoas visitaram e te chamaram pelo site), dá para incluir por mais ${brl(o.panelAddon)} por mês. ` +
+      `A agenda online (o cliente marca o horário pelo site) também é opcional: ${brl(o.agendaMonthly)} por mês.${preview}` +
       (o.oneTimeLink ? `\n\nAprovou a prévia? O pagamento é por aqui (Pix, cartão ou boleto): ${o.oneTimeLink}` : ""),
   };
 }

@@ -46,9 +46,9 @@ jobs:
 
       - name: Tem busca na fila?
         id: queue
-        run: echo "status=$(cd video && python3 leads.py --check ${{ inputs.retry_failed && '--retry-failed' || '' }} --test "$TEST")"
+        run: echo "status=$(cd video && python3 leads.py --check ${{ inputs.retry_failed && '--retry-failed' || '' }} --test "$TEST")" >> "$GITHUB_OUTPUT"
         env:
-          TEST: ${{ inputs.test }} >> "$GITHUB_OUTPUT"
+          TEST: ${{ inputs.test }}
 
       - name: Robô do Google Maps
         if: steps.queue.outputs.status == 'queued'
