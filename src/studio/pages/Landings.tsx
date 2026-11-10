@@ -278,16 +278,18 @@ function AgendaPanel({ page, onChange }: { page: LandingPage; onChange: (p: Land
     const n = String(page.whatsapp ?? "").replace(/\D/g, "");
     const text = `Oi! A agenda online de vocês está pronta 📅\n\n` +
       `1) Painel da agenda (só seu): ${panelUrl}\nNo primeiro acesso você cria o seu e-mail e senha. Depois dá para entrar também por ${LANDING_HOST}/entrar\n\n` +
-      `2) Link para os pacientes marcarem: ${booking}\nColoque na bio do Instagram e mande no WhatsApp. O site já tem o botão "Agendar online".\n\n` +
-      `Um dia antes, o paciente recebe uma mensagem no WhatsApp para confirmar, e a resposta aparece no seu painel.`;
+      `2) Link para os ${who} marcarem: ${booking}\nColoque na bio do Instagram e mande no WhatsApp. O site já tem o botão "Agendar online".\n\n` +
+      `Na véspera, o painel mostra o botão 🔔 Lembrar em cada horário: um toque e a mensagem de confirmação abre pronta no seu WhatsApp.`;
     window.open(`https://wa.me/${n.length <= 11 && n ? `55${n}` : n}?text=${encodeURIComponent(text)}`, "_blank");
   };
+  const health = /nutri|m[eé]dic|odont|dent|psic|fisio|derma|pediat|cl[ií]nic|sa[uú]de|fono|terap/i.test(page.niche ?? "");
+  const who = health ? "pacientes" : "clientes";
   const label = { off: "Desligada", trial: `Teste grátis${trialLeft !== null ? ` · ${Math.max(0, trialLeft)} dia(s)` : ""}`, active: "Ativa (assinatura paga)", paused: "Pausada" }[status];
 
   return (
     <Panel
       title="Agenda online"
-      description={`Adicional de R$ ${OFFER.agendaMonthly}/mês: o paciente marca pelo site, o cliente controla no painel e a IA manda o lembrete no WhatsApp 1 dia antes. Situação: ${label}${upcoming !== null ? ` · ${upcoming} horário(s) marcado(s)` : ""}.`}
+      description={`Adicional de R$ ${OFFER.agendaMonthly}/mês: quem precisa de horário marca pelo site e o cliente controla tudo no painel (profissionais, horários, convênios, lembrete na véspera). Situação: ${label}${upcoming !== null ? ` · ${upcoming} horário(s) marcado(s)` : ""}.`}
     >
       <div className="flex flex-wrap gap-2">
         {status === "off" && <Button size="sm" onClick={() => set({ agenda_status: "trial", agenda_until: new Date(Date.now() + 14 * 86400_000).toISOString() }, "Agenda ligada: 14 dias grátis")} disabled={busy}>Ligar teste grátis (14 dias)</Button>}
@@ -299,7 +301,7 @@ function AgendaPanel({ page, onChange }: { page: LandingPage; onChange: (p: Land
       {status !== "off" && (
         <>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(booking).then(() => toast.success("Link de agendamento copiado"))}><Copy className="mr-1.5 h-4 w-4" />Link dos pacientes</Button>
+            <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(booking).then(() => toast.success("Link de agendamento copiado"))}><Copy className="mr-1.5 h-4 w-4" />Link de agendamento</Button>
             {panelUrl && <Button size="sm" variant="outline" asChild><a href={panelUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Painel da agenda</a></Button>}
             {page.whatsapp && panelUrl && <Button size="sm" variant="outline" onClick={send}><Send className="mr-1.5 h-4 w-4" />Mandar para o cliente</Button>}
           </div>

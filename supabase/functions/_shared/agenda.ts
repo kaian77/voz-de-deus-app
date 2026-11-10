@@ -113,6 +113,29 @@ export function cleanSettings(raw: unknown): Settings {
 // deno-lint-ignore no-explicit-any
 type Page = Record<string, any>;
 
+/** Palavras da agenda pelo ramo do site: clínica fala "paciente" e tem convênio; salão, advocacia etc. falam "cliente". */
+export function terms(niche: unknown) {
+  const n = String(niche ?? "").toLowerCase();
+  const health = /nutri|m[eé]dic|odont|dent|psic|fisio|derma|pediat|cl[ií]nic|sa[uú]de|fono|terap|cardio|gineco|ortop|oftalm|endocrin/.test(n);
+  const salon = /sal[aã]o|cabel|barb|manicure|unha|beleza|est[eé]tic|make|maqui|sobrancel|c[ií]lio|depila|spa|massag/.test(n);
+  const law = /advoc|jur[ií]d|direito|contab|consultoria/.test(n);
+  return {
+    health,
+    client: health ? "paciente" : "cliente",
+    clients: health ? "pacientes" : "clientes",
+    place: health ? "o consultório" : salon ? "o salão" : law ? "o escritório" : "a empresa",
+    all: health ? "Clínica toda" : salon ? "Salão todo" : law ? "Escritório todo" : "Todos",
+    service: health ? "Consulta" : salon ? "Atendimento" : law ? "Consulta" : "Atendimento",
+  };
+}
+
+/** Serviço padrão quando o cliente ainda não cadastrou nenhum (pelo ramo). */
+function withDefaults(settings: Settings, page: Page) {
+  const raw = (page.agenda ?? {}) as Partial<Settings>;
+  if (!Array.isArray(raw.services) || !raw.services.length) settings.services = [{ name: terms(page.niche).service, minutes: 60 }];
+  return settings;
+}
+
 /** A agenda aceita marcação? (teste dentro do prazo ou assinatura ativa) */
 export function agendaOpen(p: Page) {
   if (p.agenda_status === "active") return true;
@@ -172,18 +195,18 @@ export async function pageBySlug(db: SupabaseClient, slug: string) {
 
 /** Dados públicos da página de agendamento. */
 export function publicInfo(page: Page) {
-  const settings = cleanSettings(page.agenda);
+  const settings = withDefaults(cleanSettings(page.agenda), page);
   const open = agendaOpen(page);
   return {
     open, name: page.name, style: settings.style, services: settings.services, particular: settings.particular, plans: settings.plans,
-    pros: settings.pros.map((p) => ({ id: p.id, name: p.name, role: p.role })),
+    pros: settings.pros.map((p) => ({ id: p.id, name: p.name, role: p.role })), terms: terms(page.niche),
     whatsapp: page.whatsapp ?? null,
   };
 }
 
 export async function publicDays(db: SupabaseClient, page: Page, serviceIdx: number, proId?: unknown) {
   if (!agendaOpen(page)) throw new HttpError(403, "A agenda online está fechada no momento");
-  const settings = cleanSettings(page.agenda);
+  const settings = withDefaults(cleanSettings(page.agenda), page);
   const service = settings.services[serviceIdx] ?? settings.services[0];
   const pro = proOf(settings, proId) ?? settings.pros[0] ?? null;
   return freeDays(settings, service, await busyOf(db, page.id, undefined, pro?.id), Date.now(), pro?.hours ?? settings.hours);
@@ -198,7 +221,7 @@ export const cleanPhone = (raw: unknown) => {
 /** Paciente marca um horário pela página. */
 export async function book(db: SupabaseClient, page: Page, input: Record<string, unknown>) {
   if (!agendaOpen(page)) throw new HttpError(403, "A agenda online está fechada no momento");
-  const settings = cleanSettings(page.agenda);
+  const settings = withDefaults(cleanSettings(page.agenda), page);
   const service = settings.services[Number(input.service) || 0] ?? settings.services[0];
   const date = String(input.date ?? "");
   const time = String(input.time ?? "");
@@ -210,7 +233,7 @@ export async function book(db: SupabaseClient, page: Page, input: Record<string,
   // Particular ou convênio: obrigatório quando a agenda tem convênios
   const plan = String(input.plan ?? "").trim();
   const choices = [...(settings.particular ? ["Particular"] : []), ...settings.plans];
-  if (settings.plans.length && !choices.includes(plan)) throw new HttpError(400, "Escolha particular ou o seu convênio");
+  if (settings.plans.length && !choices.includes(plan)) throw new HttpError(400, "Escolha particular ou o seu convênio/plano");
   const pro = proOf(settings, input.pro);
   if (settings.pros.length && !pro) throw new HttpError(400, "Escolha o profissional");
   const free = freeDays(settings, service, await busyOf(db, page.id, undefined, pro?.id), Date.now(), pro?.hours ?? settings.hours).find((d) => d.date === date);
@@ -218,7 +241,7 @@ export async function book(db: SupabaseClient, page: Page, input: Record<string,
   // Trava contra robô/brincadeira: no máximo 3 horários futuros por telefone
   const { count } = await db.from("agenda_appointments").select("id", { count: "exact", head: true }).eq("page_id", page.id).eq("phone", phone)
     .in("status", ["booked", "confirmed"]).gt("starts_at", new Date().toISOString());
-  if ((count ?? 0) >= 3) throw new HttpError(429, "Você já tem horários marcados. Para mudar, fale com o consultório.");
+  if ((count ?? 0) >= 3) throw new HttpError(429, `Você já tem horários marcados. Para mudar, fale com ${terms(page.niche).place}.`);
   const starts = at(date, hm(time));
   const { data, error } = await db.from("agenda_appointments").insert({
     user_id: page.user_id, page_id: page.id, service: service.name, name, phone, note: String(input.note ?? "").slice(0, 300) || null,
@@ -313,7 +336,7 @@ export async function panel(db: SupabaseClient, page: Page) {
     .eq("page_id", page.id).gt("starts_at", from).order("starts_at").limit(1500);
   return {
     name: page.name, status: page.agenda_status, until: page.agenda_until, open: agendaOpen(page), email: page.agenda_email,
-    settings: cleanSettings(page.agenda), appointments: data ?? [], price, canSubscribe: mpEnabled(), payLink: link,
+    settings: withDefaults(cleanSettings(page.agenda), page), terms: terms(page.niche), appointments: data ?? [], price, canSubscribe: mpEnabled(), payLink: link,
     booking: `${SITE}/agendar/${page.slug}`, slug: page.slug,
   };
 }
@@ -328,7 +351,7 @@ const STATUSES = ["booked", "confirmed", "reschedule", "cancelled", "done", "nos
 
 /** Cria (sem id) ou muda um horário: status, remarcar (date + time), nome, telefone, serviço. */
 export async function saveAppointment(db: SupabaseClient, page: Page, input: Record<string, unknown>) {
-  const settings = cleanSettings(page.agenda);
+  const settings = withDefaults(cleanSettings(page.agenda), page);
   const id = input.id ? String(input.id) : "";
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (input.status !== undefined) {
