@@ -28,6 +28,8 @@ type DomainInfo = { domain: string | null; vercel: string; status: "ok" | "dns" 
 
 const SOURCE_LABEL: Record<string, string> = { google: "Google", instagram: "Instagram", facebook: "Facebook", whatsapp: "WhatsApp", tiktok: "TikTok", direto: "Direto", outros: "Outros" };
 const MY_SITE = "https://paginaspro.app.br";
+/** Linha de landing_pages só para a agenda do próprio site da PáginasPro (não aparece na lista de clientes). */
+const MY_AGENDA_SLUG = "paginaspro";
 
 const PRICE_FIELDS: [keyof Offer, string, "n" | "t"][] = [
   ["monthly", "Mensal (R$/mês)", "n"], ["oneTime", "Avulso (R$)", "n"], ["change", "Alteração avulsa (R$)", "n"], ["panelAddon", "Painel no avulso (R$/mês)", "n"],
@@ -76,7 +78,32 @@ function PricesPanel({ onClose }: { onClose: () => void }) {
 }
 
 /** Painel só do dono: resultados do site da PáginasPro (a vitrine dele) nos últimos 30 dias. */
-function MySitePanel() {
+/** Agenda do seu próprio site (paginaspro.app.br): cria a linha na 1ª vez e usa o mesmo painel dos clientes. */
+function MyAgenda({ page }: { page?: LandingPage }) {
+  const OFFER = useOffer();
+  const invalidate = useInvalidate();
+  const [busy, setBusy] = useState(false);
+  const create = async () => {
+    setBusy(true);
+    try {
+      await api.insert("landing_pages", {
+        slug: MY_AGENDA_SLUG, name: "PáginasPro", niche: "Sites e marketing", whatsapp: OFFER.whatsapp, photos: [], status: "published",
+        report_token: newToken(), agenda_status: "active", agenda_until: null,
+      });
+      await invalidate("landing_pages");
+      toast.success("Agenda do seu site ligada: o botão já aparece em paginaspro.app.br");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!page) return <Button className="mt-3 w-full" onClick={create} disabled={busy}>{busy ? "Ligando…" : "Ligar a agenda no meu site (para testar)"}</Button>;
+  return <div className="mt-3"><AgendaPanel page={page} onChange={() => invalidate("landing_pages")} /></div>;
+}
+
+function MySitePanel({ agenda }: { agenda?: LandingPage }) {
+  const [showAgenda, setShowAgenda] = useState(false);
   const { data = [] } = useTable("site_stats", { order: "day", limit: 60 });
   const [editing, setEditing] = useState(false);
   const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
@@ -94,6 +121,7 @@ function MySitePanel() {
       action={
         <div className="flex flex-wrap gap-1">
           <Button size="sm" variant="outline" onClick={() => setEditing((v) => !v)}>Preços e links</Button>
+          <Button size="sm" variant={showAgenda ? "default" : "outline"} onClick={() => setShowAgenda((v) => !v)}>Agenda</Button>
           <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(MY_SITE).then(() => toast.success("Link do seu site copiado"))}><Copy className="mr-1.5 h-4 w-4" />Link</Button>
           <Button size="sm" variant="outline" asChild><a href={MY_SITE} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Abrir</a></Button>
         </div>
@@ -112,6 +140,7 @@ function MySitePanel() {
         </div>
       </div>
       {editing && <PricesPanel onClose={() => setEditing(false)} />}
+      {showAgenda && <MyAgenda page={agenda} />}
     </Panel>
   );
 }
@@ -715,7 +744,9 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
             </Panel>
           )}
           {current.status !== "draft" && <PlanPanel page={current} onChange={setCurrent} />}
-          {current.status !== "draft" && <AgendaPanel page={current} onChange={setCurrent} />}
+          {current.status !== "draft" ? <AgendaPanel page={current} onChange={setCurrent} /> : (
+            <Panel title="Agenda online"><p className="text-sm text-muted-foreground">Gere o link de prévia (ou publique) para ligar a agenda deste cliente: quem precisa de horário marca pelo site e ele controla tudo no painel.</p></Panel>
+          )}
           {current.status === "published" && <DomainPanel page={current} onChange={(domain) => setCurrent({ ...current, domain })} />}
           {current.status !== "draft" && (
             <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => publish("draft")}>Tirar do ar</button>
@@ -761,7 +792,8 @@ export default function Landings() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const invalidate = useInvalidate();
-  const { data: pages = [], isLoading } = useTable("landing_pages", { order: "updated_at" });
+  const { data: allPages = [], isLoading } = useTable("landing_pages", { order: "updated_at" });
+  const pages = allPages.filter((p) => p.slug !== MY_AGENDA_SLUG); // a linha da agenda do seu site não é cliente
   const remove = async (p: LandingPage) => {
     try {
       await api.invoke("ai", { action: "landing_delete", id: p.id });
@@ -816,7 +848,7 @@ export default function Landings() {
         description="Envie as fotos e os dados do cliente; a IA escreve, escolhe cores e fontes e você publica com um link."
         actions={<Button onClick={() => create()} disabled={creating}>{creating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}Nova página</Button>}
       />
-      <MySitePanel />
+      <MySitePanel agenda={allPages.find((p) => p.slug === MY_AGENDA_SLUG)} />
       <ToursPanel />
       {pages.length === 0 ? (
         <EmptyState icon={<Globe className="h-5 w-5" />} title="Nenhuma página ainda" action={<Button variant="outline" onClick={() => navigate("/studio/leads")}>Ver meus leads</Button>}>

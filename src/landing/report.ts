@@ -59,7 +59,7 @@ export function renderReport(d: ReportData, opts: { token?: string; cfg?: Agenda
   const primary = hex(d.content?.colors?.primary ?? "", "#2f5d50");
   const ink = hex(d.content?.colors?.ink ?? "", "#1c2321");
   const soft = hex(d.content?.colors?.soft ?? "", mix(primary, "#ffffff", 0.92));
-  const site = d.domain ? `https://${d.domain}` : `https://paginaspro.app.br/p/${d.slug}`;
+  const site = d.slug === "paginaspro" ? "https://paginaspro.app.br/inicio" : d.domain ? `https://${d.domain}` : `https://paginaspro.app.br/p/${d.slug}`;
   const support = String(d.support ?? "").replace(/\D/g, "");
   const supportUrl = support
     ? `https://wa.me/${support.length <= 11 ? `55${support}` : support}?text=${encodeURIComponent(`Olá! Sou de ${d.name} e queria pedir uma alteração no site: `)}`
