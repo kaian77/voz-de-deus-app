@@ -93,17 +93,19 @@ footer{text-align:center;font-size:12px;color:var(--muted);margin-top:28px}foote
   const script = String.raw`
 var S={si:0,svc:0,pro:'',plan:'',days:[],date:'',time:'',name:'',phone:'',email:'',busy:false,err:''};
 var app=document.getElementById('app');
-function steps(){var i=S.info,l=[];if(i.pros.length>1)l.push('pro');if(i.services.length>1)l.push('svc');l.push('day','time','data');return l}
+function offered(){return S.info.services.map(function(s,k){return {s:s,k:k}}).filter(function(x){return !S.pro||!x.s.pros||!x.s.pros.length||x.s.pros.indexOf(S.pro)>=0})}
+function fixSvc(){var o=offered();if(o.length&&!o.some(function(x){return x.k===S.svc}))S.svc=o[0].k}
+function steps(){var i=S.info,l=[];if(i.pros.length>1)l.push('pro');if(offered().length>1)l.push('svc');l.push('day','time','data');return l}
 function cur(){return steps()[S.si]}
 function plans(){var i=S.info;return (i.particular?['Particular']:[]).concat(i.plans||[])}
 function proName(){var p=S.info.pros.filter(function(x){return x.id===S.pro})[0];return p?p.name:''}
-function load(){call('info',{slug:CFG.slug}).then(function(i){S.info=i;if(!i.open){draw();return}if(i.pros.length)S.pro=i.pros[0].id;var pl=plans();if(pl.length===1)S.plan=pl[0];if(i.pros.length>1&&CFG.big){draw();return}days()}).catch(function(e){S.err=e.message;draw()})}
+function load(){call('info',{slug:CFG.slug}).then(function(i){S.info=i;if(!i.open){draw();return}if(i.pros.length)S.pro=i.pros[0].id;fixSvc();var pl=plans();if(pl.length===1)S.plan=pl[0];if(i.pros.length>1&&CFG.big){draw();return}days()}).catch(function(e){S.err=e.message;draw()})}
 function days(){S.days=null;draw();call('days',{slug:CFG.slug,service:S.svc,pro:S.pro}).then(function(d){S.days=d;var f=d.filter(function(x){return x.slots.length})[0];if(!CFG.big&&f&&!S.date)S.date=f.date;draw()}).catch(function(e){S.err=e.message;draw()})}
 function svcLabel(s){var m=s.minutes;return m>=60?(Math.floor(m/60)+'h'+(m%60?String(m%60).padStart(2,'0'):'')):m+' min'}
 function back(){S.err='';if(cur()==='data')S.time='';S.si=Math.max(0,S.si-1);draw()}
 function next(){S.si=Math.min(steps().length-1,S.si+1)}
 function pick(k,v){S[k]=v;S.err='';
- if(k==='pro'||k==='svc'){S.date='';S.time='';if(CFG.big)next();days();return}
+ if(k==='pro'||k==='svc'){if(k==='pro')fixSvc();S.date='';S.time='';if(CFG.big)next();days();return}
  if(k==='date'){S.time='';if(CFG.big)next()}
  if(k==='time'&&CFG.big)next();
  draw()}
@@ -130,7 +132,7 @@ function draw(){var i=S.info,o='';
  if(S.done){var sv=i.services[S.svc];app.innerHTML='<div class="done"><div class="ok">✓</div><h1>Horário marcado!</h1><p class="muted" style="margin:8px 0 6px">'+h(sv.name)+' com '+h(proName()||i.name)+(S.plan?' · '+h(S.plan):'')+'</p><p style="font-size:1.25em;font-weight:700">'+h(dayNice(S.date,true))+' às '+h(S.time)+'</p><p class="muted" style="margin:14px 0">'+(S.email?'Mandamos a confirmação para '+h(S.email)+'. Um dia antes chega o lembrete.':'Anote o dia e o horário. Se precisar remarcar, chame no WhatsApp.')+'</p><a class="btn ghost wide" target="_blank" rel="noopener" href="'+gcal()+'">Salvar na minha agenda</a><a class="btn wide" href="'+h(CFG.site)+'">Voltar ao site</a></div>';return}
  if(CFG.big){var st=cur(),n=steps().length,bk=S.si>0?'<button class="back" onclick="back()">‹ Voltar</button>':'',lbl='<p class="step">Passo '+(S.si+1)+' de '+n+'</p>';
   if(st==='pro')o=bk+lbl+'<h1>Com quem você quer marcar?</h1><div class="list">'+proOpts('opt')+'</div>';
-  else if(st==='svc')o=bk+lbl+'<h1>O que você quer marcar?</h1><div class="list">'+i.services.map(function(s,k){return '<button class="opt" onclick="pick(\'svc\','+k+')"><span><b>'+h(s.name)+'</b><br><small>'+svcLabel(s)+'</small></span><span class="go">›</span></button>'}).join('')+'</div>';
+  else if(st==='svc')o=bk+lbl+'<h1>O que você quer marcar?</h1>'+(proName()?'<p class="muted">'+h(proName())+'</p>':'')+'<div class="list">'+offered().map(function(x){var s=x.s,k=x.k;return '<button class="opt" onclick="pick(\'svc\','+k+')"><span><b>'+h(s.name)+'</b><br><small>'+svcLabel(s)+'</small></span><span class="go">›</span></button>'}).join('')+'</div>';
   else if(st==='day'){o=bk+lbl+'<h1>Qual dia é melhor?</h1>'+(proName()?'<p class="muted">'+h(proName())+'</p>':'');
    if(!S.days)o+='<p class="muted" style="margin-top:16px">Procurando horários livres…</p>';else{var free=S.days.filter(function(x){return x.slots.length});o+=free.length?'<div class="list">'+free.slice(0,14).map(function(x){return '<button class="opt" onclick="pick(\'date\',\''+x.date+'\')"><span><b>'+h(dayNice(x.date,true))+'</b><br><small>'+x.slots.length+(x.slots.length===1?' horário livre':' horários livres')+'</small></span><span class="go">›</span></button>'}).join('')+'</div>':'<div class="card empty" style="margin-top:16px"><p>Não há horários livres nos próximos dias.</p></div>'}}
   else if(st==='time'){var day=(S.days||[]).filter(function(x){return x.date===S.date})[0];o=bk+lbl+'<h1>'+h(dayNice(S.date,true))+'</h1><p class="muted">Escolha o horário</p><div class="times">'+(day?day.slots:[]).map(function(s){return '<button class="time" onclick="pick(\'time\',\''+s+'\')">'+s+'</button>'}).join('')+'</div>'}
@@ -138,7 +140,7 @@ function draw(){var i=S.info,o='';
   app.innerHTML=o;return}
  o='<h1>Agende seu horário</h1><p class="muted">'+h(i.name)+'</p>';
  if(i.pros.length>1)o+='<div class="sec"><h3>Profissional</h3><div class="chips">'+proOpts('chip')+'</div></div>';
- if(i.services.length>1)o+='<div class="sec"><h3>Serviço</h3><div class="chips">'+i.services.map(function(s,k){return '<button class="chip'+(k===S.svc?' on':'')+'" onclick="pick(\'svc\','+k+')">'+h(s.name)+' · '+svcLabel(s)+'</button>'}).join('')+'</div></div>';
+ if(offered().length>1)o+='<div class="sec"><h3>Serviço</h3><div class="chips">'+offered().map(function(x){var s=x.s,k=x.k;return '<button class="chip'+(k===S.svc?' on':'')+'" onclick="pick(\'svc\','+k+')">'+h(s.name)+' · '+svcLabel(s)+'</button>'}).join('')+'</div></div>';
  o+='<div class="sec"><h3>Dia</h3>';
  if(!S.days)o+='<p class="muted">Procurando horários livres…</p>';else{o+='<div class="strip">'+S.days.map(function(x){var d=new Date(x.date+'T12:00:00Z');return '<button class="day'+(x.date===S.date?' on':'')+'" '+(x.slots.length?'onclick="pick(\'date\',\''+x.date+'\')"':'disabled')+'><span>'+WS[d.getUTCDay()]+'</span><b>'+d.getUTCDate()+'</b><span>'+MS[d.getUTCMonth()]+'</span></button>'}).join('')+'</div>';
   var cd=S.days.filter(function(x){return x.date===S.date})[0];o+='</div><div class="sec"><h3>Horário</h3>'+(cd&&cd.slots.length?'<div class="times">'+cd.slots.map(function(s){return '<button class="time'+(s===S.time?' on':'')+'" onclick="pick(\'time\',\''+s+'\')">'+s+'</button>'}).join('')+'</div>':'<p class="muted">Escolha um dia com horário livre.</p>')}
@@ -198,6 +200,8 @@ export function agendaPanel(d: AgendaTheme & { token: string }, cfg: AgendaCfg) 
 #agenda .pick button{border:2px solid transparent;background:#fff;border-radius:16px;padding:14px;text-align:left;cursor:pointer}
 #agenda .pick button.on{border-color:${t.p}}
 #agenda .pick b{display:block}#agenda .pick small{color:${mix(t.ink, "#ffffff", 0.4)}}
+#agenda .who{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:13px;margin:6px 0 4px;padding:8px 10px;background:${t.soft};border-radius:10px}
+#agenda .who span{font-weight:700}#agenda .who label{display:flex;align-items:center;gap:4px;margin:0;font-weight:500}#agenda .who input{width:auto}
 #agenda .link{background:#fff;border-radius:12px;padding:10px 12px;font-size:13px;word-break:break-all}`;
   const script = String.raw`
 (function(){
@@ -240,7 +244,7 @@ window.agIv=function(k,d,op,i){readCfg();var h=hoursOf(k);h[d]=h[d]||[];if(op===
 window.agPros=function(op,k){readCfg();var s=A.data.settings;s.pros=s.pros||[];if(op==='add')s.pros.push({id:'p'+Date.now().toString(36),name:'',role:'',hours:JSON.parse(JSON.stringify(s.pros.length?s.pros[0].hours:s.hours||{}))});else if(confirm('Tirar este profissional da agenda?'))s.pros.splice(k,1);draw()};
 window.agPlans=function(op,i){readCfg();var s=A.data.settings;s.plans=s.plans||[];if(op==='add')s.plans.push('');else s.plans.splice(i,1);draw()};
 function readHours(k){var h=hoursOf(k);for(var d=0;d<7;d++){var l=h[d]||[];h[d]=l.map(function(iv,i){var a=document.getElementById('h'+k+'_'+d+'a'+i),b=document.getElementById('h'+k+'_'+d+'b'+i);return [a?a.value:iv[0],b?b.value:iv[1]]})}}
-function readCfg(){var s=A.data.settings;s.services=s.services.map(function(x,i){var n=document.getElementById('sv-n'+i),m=document.getElementById('sv-m'+i);return {name:n?n.value:x.name,minutes:m?Number(m.value):x.minutes}});
+function readCfg(){var s=A.data.settings;s.services=s.services.map(function(x,i){var n=document.getElementById('sv-n'+i),m=document.getElementById('sv-m'+i);var who=(s.pros||[]).filter(function(p,k){var c=document.getElementById('sv-p'+i+'-'+k);return c?c.checked:(x.pros||[]).indexOf(p.id)>=0}).map(function(p){return p.id});return {name:n?n.value:x.name,minutes:m?Number(m.value):x.minutes,pros:who}});
  readHours(-1);(s.pros||[]).forEach(function(p,k){var n=document.getElementById('pp-n'+k),r=document.getElementById('pp-r'+k);if(n)p.name=n.value;if(r)p.role=r.value;readHours(k)});
  s.plans=(s.plans||[]).map(function(x,i){var e=document.getElementById('pl'+i);return e?e.value:x});var pa=document.getElementById('cf-part');if(pa)s.particular=pa.checked;
  var no=document.getElementById('cf-notice'),da=document.getElementById('cf-days'),stp=document.getElementById('cf-step');if(no)s.notice=Number(no.value);if(da)s.days=Number(da.value);if(stp)s.step=Number(stp.value)}
@@ -287,7 +291,7 @@ function hoursEd(k,hs){var o='';for(var d=1;d<=7;d++){var w=d%7,l=hs[w]||[];o+='
 function cfgView(){var s=A.data.settings,o='';
  o+='<div class="card"><h3>Link para os '+T().clients+'</h3><p class="muted" style="font-size:14px;margin-bottom:8px">Coloque na bio do Instagram e mande no WhatsApp. O botão "Agendar" do seu site já leva para cá.</p><div class="link">'+h(A.data.booking)+'</div><div class="row" style="margin-top:10px"><button class="btn" onclick="agCopy(\''+A.data.booking+'\')">Copiar link</button><a class="btn ghost" href="'+A.data.booking+'" target="_blank">Ver página</a></div></div>';
  o+='<div class="card"><h3>Jeito da agenda</h3><p class="muted" style="font-size:14px">Vale para a sua página de agendamento e para este painel.</p><div class="pick"><button class="'+(s.style==='simple'?'on':'')+'" onclick="agStyle(\'simple\')"><b>Simples</b><small>Letra grande, um passo por vez. Melhor para quem tem mais idade.</small></button><button class="'+(s.style==='modern'?'on':'')+'" onclick="agStyle(\'modern\')"><b>Moderno</b><small>Tudo numa tela, calendário da semana.</small></button></div></div>';
- o+='<div class="card"><h3>Serviços</h3>'+s.services.map(function(x,i){return '<div class="row" style="flex-wrap:nowrap;margin-top:8px"><input id="sv-n'+i+'" value="'+h(x.name)+'" placeholder="Ex.: Consulta"><input id="sv-m'+i+'" type="number" min="10" step="5" value="'+x.minutes+'" style="width:90px" title="minutos"><button class="btn ghost" style="padding:8px 12px" onclick="agSvc(\'del\','+i+')">✕</button></div>'}).join('')+'<p class="muted" style="font-size:12px;margin-top:4px">Nome e duração em minutos.</p><button class="btn ghost" style="margin-top:10px;padding:8px 14px" onclick="agSvc(\'add\')">+ Serviço</button></div>';
+ o+='<div class="card"><h3>Serviços</h3>'+s.services.map(function(x,i){return '<div class="row" style="flex-wrap:nowrap;margin-top:8px"><input id="sv-n'+i+'" value="'+h(x.name)+'" placeholder="Ex.: Consulta"><input id="sv-m'+i+'" type="number" min="10" step="5" value="'+x.minutes+'" style="width:90px" title="minutos"><button class="btn ghost" style="padding:8px 12px" onclick="agSvc(\'del\','+i+')">✕</button></div>'+((s.pros||[]).length?'<div class="who"><span>Quem faz:</span>'+s.pros.map(function(p,k){return '<label><input type="checkbox" id="sv-p'+i+'-'+k+'" '+((x.pros||[]).indexOf(p.id)>=0?'checked':'')+'>'+h(p.name||'Profissional '+(k+1))+'</label>'}).join('')+'</div>':'')}).join('')+'<p class="muted" style="font-size:12px;margin-top:4px">Nome e duração em minutos.'+((s.pros||[]).length?' Em "Quem faz", marque os profissionais de cada serviço (sem marcar ninguém = todos fazem).':'')+'</p><button class="btn ghost" style="margin-top:10px;padding:8px 14px" onclick="agSvc(\'add\')">+ Serviço</button></div>';
  var ps=s.pros||[];
  if(!ps.length)o+='<div class="card hours"><h3>Horário de atendimento</h3>'+hoursEd(-1,s.hours||{})+'<p class="muted" style="font-size:13px;margin-top:10px">Tem mais de um profissional? Cada um pode ter os próprios horários.</p><button class="btn ghost" style="margin-top:8px;padding:8px 14px" onclick="agPros(\'add\')">+ Profissional</button></div>';
  else{o+='<div class="card"><h3>Profissionais</h3><p class="muted" style="font-size:14px">Cada um com os próprios horários. O '+T().client+' escolhe com quem quer marcar.</p></div>';
