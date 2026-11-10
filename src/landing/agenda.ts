@@ -203,6 +203,14 @@ export function agendaPanel(d: AgendaTheme & { token: string }, cfg: AgendaCfg) 
 #agenda .pick b{display:block}#agenda .pick small{color:${mix(t.ink, "#ffffff", 0.4)}}
 #agenda .who{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-size:13px;margin:6px 0 4px;padding:8px 10px;background:${t.soft};border-radius:10px}
 #agenda .who span{font-weight:700}#agenda .who label{display:flex;align-items:center;gap:4px;margin:0;font-weight:500}#agenda .who input{width:auto}
+#agenda .stats{display:grid;gap:10px;margin-bottom:6px}
+#agenda .stat{background:#fff;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:2px}
+#agenda .stat b{font-family:${t.f.head};font-size:30px;line-height:1;color:${t.p}}
+#agenda .stat span{font-size:13px}
+#agenda table.rep{width:100%;border-collapse:collapse;font-size:14px}
+#agenda table.rep th{text-align:right;font-size:12px;color:${mix(t.ink, "#ffffff", 0.4)};font-weight:600;padding:4px}
+#agenda table.rep td{text-align:right;padding:8px 4px;border-top:1px solid ${mix(t.ink, "#ffffff", 0.9)}}
+#agenda table.rep td:first-child,#agenda table.rep th:first-child{text-align:left}
 #agenda .link{background:#fff;border-radius:12px;padding:10px 12px;font-size:13px;word-break:break-all}`;
   const script = String.raw`
 (function(){
@@ -220,7 +228,43 @@ window.agAuth=auth;
 window.agMode=function(m){A.mode=m;A.err='';draw()};
 window.agOut=function(){call('logout',{session:A.session});save(null);A.data=null;draw()};
 window.agView=function(v){A.view=v;draw()};
-window.agTab=function(v){A.tab=v;A.err='';draw()};
+window.agTab=function(v){A.tab=v;A.err='';draw();if(v==='rep'&&!A.rep)agPeriod('month')};
+function bk(d){return dkey(d)}
+window.agPeriod=function(k){var t=br(new Date().toISOString());var y=t.getUTCFullYear(),m=t.getUTCMonth(),from,to;
+ if(k==='week'){var w=new Date(t);w.setUTCDate(t.getUTCDate()-((t.getUTCDay()+6)%7));from=bk(w);to=bk(new Date(w.getTime()+6*864e5))}
+ else if(k==='month'){from=bk(new Date(Date.UTC(y,m,1)));to=bk(new Date(Date.UTC(y,m+1,0)))}
+ else if(k==='last'){from=bk(new Date(Date.UTC(y,m-1,1)));to=bk(new Date(Date.UTC(y,m,0)))}
+ else if(k==='30'){from=bk(new Date(t.getTime()-29*864e5));to=bk(t)}
+ else{from=document.getElementById('rp-f').value;to=document.getElementById('rp-t').value}
+ A.rep={k:k,from:from,to:to,loading:true};draw();
+ api('report',{from:from,to:to}).then(function(r){A.rep={k:k,from:from,to:to,rows:r.rows,ret:r.returning};draw()}).catch(function(e){A.rep={k:k,from:from,to:to,rows:[],ret:[]};window.agFail(e)})};
+window.agCsv=function(){var R=A.rep;if(!R||!R.rows)return;var q=function(v){v=String(v==null?'':v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+ var lines=[['Dia','Hora','Nome','WhatsApp','E-mail','Serviço','Profissional','Convênio','Situação','Origem'].join(';')].concat(R.rows.map(function(a){var d=br(a.starts_at);return [dkey(d).split('-').reverse().join('/'),hhmm(d),a.name,phoneNice(a.phone),a.email||'',a.service,proName(a.pro),a.plan||'',(ST[a.status]||[a.status])[0],a.source==='site'?'Site':'Painel'].map(q).join(';')}));
+ var blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});var u=URL.createObjectURL(blob);var l=document.createElement('a');l.href=u;l.download='agenda-'+R.from+'-a-'+R.to+'.csv';document.body.appendChild(l);l.click();l.remove();setTimeout(function(){URL.revokeObjectURL(u)},2000)};
+function repView(){var R=A.rep||{},o='';var ks=[['week','Esta semana'],['month','Este mês'],['last','Mês passado'],['30','30 dias']];
+ o+='<div class="seg">'+ks.map(function(x){return '<button class="'+(R.k===x[0]?'on':'')+'" onclick="agPeriod(\''+x[0]+'\')">'+x[1]+'</button>'}).join('')+'</div>';
+ o+='<div class="row" style="flex-wrap:nowrap;margin-bottom:10px;gap:6px"><input id="rp-f" type="date" style="flex:1;width:0;min-width:0;padding:10px 6px" value="'+(R.from||'')+'"><input id="rp-t" type="date" style="flex:1;width:0;min-width:0;padding:10px 6px" value="'+(R.to||'')+'"><button class="btn ghost" style="padding:8px 12px" onclick="agPeriod(\'custom\')">Ver</button></div>';
+ if(!R.rows)return o+'<p class="muted">Carregando…</p>';
+ var now=Date.now(),rows=R.rows,ret={};(R.ret||[]).forEach(function(p){ret[p]=1});
+ var past=rows.filter(function(a){return Date.parse(a.starts_at)<now});
+ var att=past.filter(function(a){return ['done','confirmed','booked'].indexOf(a.status)>=0}),no=rows.filter(function(a){return a.status==='noshow'}),can=rows.filter(function(a){return a.status==='cancelled'});
+ var fut=rows.filter(function(a){return Date.parse(a.starts_at)>=now&&['booked','confirmed','reschedule'].indexOf(a.status)>=0});
+ var seen={},novos=0,volta=0;rows.forEach(function(a){if(!a.phone||seen[a.phone]||a.status==='cancelled')return;seen[a.phone]=1;if(ret[a.phone])volta++;else novos++});
+ var pct=function(a,b){return b?Math.round(a*100/b)+'%':'—'};
+ var card=function(n,l,sub){return '<div class="stat"><b>'+n+'</b><span>'+l+'</span>'+(sub?'<span class="muted" style="font-size:12px">'+sub+'</span>':'')+'</div>'};
+ o+='<section class="stats" style="grid-template-columns:repeat(2,1fr)">'+card(att.length,'Atendimentos','no período, até agora')+card(no.length,'Faltas',pct(no.length,att.length+no.length)+' dos horários que já passaram')+card(novos,T().clients.charAt(0).toUpperCase()+T().clients.slice(1)+' novos',volta+' voltaram')+card(fut.length,'Ainda vão acontecer',can.length+' cancelados')+'</section>';
+ var group=function(title,keyf,label){var g={};rows.forEach(function(a){if(a.status==='cancelled')return;var k=keyf(a);if(!k)return;g[k]=g[k]||{n:0,d:0,f:0};g[k].n++;if(Date.parse(a.starts_at)<now&&['done','confirmed','booked'].indexOf(a.status)>=0)g[k].d++;if(a.status==='noshow')g[k].f++});
+  var ks2=Object.keys(g).sort(function(x,y){return g[y].n-g[x].n});if(!ks2.length)return '';
+  return '<div class="card" style="margin-top:12px"><h3>'+title+'</h3><table class="rep"><tr><th></th><th>Marcados</th><th>Atendidos</th><th>Faltas</th></tr>'+ks2.map(function(k){return '<tr><td>'+h(label?label(k):k)+'</td><td>'+g[k].n+'</td><td>'+g[k].d+'</td><td>'+g[k].f+'</td></tr>'}).join('')+'</table></div>'};
+ if(pros().length)o+=group('Por profissional',function(a){return a.pro||'-'},function(k){return k==='-'?'Sem profissional':proName(k)||'Profissional removido'});
+ o+=group('Por serviço',function(a){return a.service});
+ if(rows.some(function(a){return a.plan}))o+=group('Por convênio',function(a){return a.plan||'Sem informar'});
+ o+=group('Como marcaram',function(a){return a.source==='site'?'Pelo site':'Pelo painel'});
+ var days={};rows.forEach(function(a){if(a.status==='cancelled')return;var w=WD[br(a.starts_at).getUTCDay()];days[w]=(days[w]||0)+1});var top=Object.keys(days).sort(function(x,y){return days[y]-days[x]})[0];
+ if(top)o+='<p class="muted" style="margin-top:10px;font-size:14px">Dia mais movimentado: <b>'+top+'</b> ('+days[top]+' horários).</p>';
+ o+='<button class="btn" style="width:100%;margin-top:14px" onclick="agCsv()" '+(rows.length?'':'disabled')+'>Baixar planilha ('+rows.length+' horários)</button>';
+ o+='<p class="muted" style="font-size:12px;margin-top:8px">Atendimentos = horários que já passaram e não foram marcados como falta ou cancelados. Marque "Faltou" no horário de quem não veio para o relatório ficar certo.</p>';
+ return o}
 window.agWeek=function(n){A.week+=n;draw()};
 window.agPro=function(id){A.pro=id;draw()};
 function pros(){return A.data.settings.pros||[]}
@@ -315,8 +359,8 @@ function draw(){var o='';
   '<p style="text-align:center;margin-top:14px;font-size:14px"><a href="javascript:agMode(\''+(setup?'login':'setup')+'\')" style="color:inherit">'+(setup?'Já tenho senha':'Primeiro acesso? Criar senha')+'</a></p></div>';el.innerHTML=o;return}
  if(!A.data){el.innerHTML=A.err?'<div class="err">'+h(A.err)+'</div>':'<p class="muted">Carregando a agenda…</p>';return}
  var modern=A.data.settings.style==='modern';
- o+=banner()+'<div class="seg"><button class="'+(A.tab==='list'?'on':'')+'" onclick="agTab(\'list\')">Agenda</button>'+(modern?'<button class="'+(A.tab==='week'?'on':'')+'" onclick="agTab(\'week\')">Semana</button>':'')+'<button class="'+(A.tab==='cfg'?'on':'')+'" onclick="agTab(\'cfg\')">Configurar</button></div>';
- if(A.tab==='cfg')o+=cfgView();else{o+='<div class="row" style="margin-bottom:6px"><button class="btn" style="flex:1" onclick="agNew()">+ Marcar horário</button><button class="btn ghost" onclick="agNew(true)">Bloquear</button></div>'+(A.err&&!A.sheet?'<div class="err">'+h(A.err)+'</div>':'')+proBar()+(A.tab==='week'&&modern?weekView():listView())}
+ o+=banner()+'<div class="seg"><button class="'+(A.tab==='list'?'on':'')+'" onclick="agTab(\'list\')">Agenda</button>'+(modern?'<button class="'+(A.tab==='week'?'on':'')+'" onclick="agTab(\'week\')">Semana</button>':'')+'<button class="'+(A.tab==='rep'?'on':'')+'" onclick="agTab(\'rep\')">Relatório</button><button class="'+(A.tab==='cfg'?'on':'')+'" onclick="agTab(\'cfg\')">Configurar</button></div>';
+ if(A.tab==='cfg')o+=cfgView();else if(A.tab==='rep')o+=repView();else{o+='<div class="row" style="margin-bottom:6px"><button class="btn" style="flex:1" onclick="agNew()">+ Marcar horário</button><button class="btn ghost" onclick="agNew(true)">Bloquear</button></div>'+(A.err&&!A.sheet?'<div class="err">'+h(A.err)+'</div>':'')+proBar()+(A.tab==='week'&&modern?weekView():listView())}
  o+='<p style="text-align:center;margin-top:20px;font-size:13px"><a href="javascript:agOut()" style="color:inherit">Sair</a></p>'+sheet();
  el.innerHTML=o}
 if(A.session)refresh();draw();

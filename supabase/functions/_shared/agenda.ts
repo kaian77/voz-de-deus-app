@@ -357,6 +357,25 @@ export async function panel(db: SupabaseClient, page: Page) {
   };
 }
 
+/** Relatório do período (datas de Brasília "AAAA-MM-DD", até 400 dias): horários do período + telefones que já
+ * tinham vindo antes (para contar clientes novos × que voltaram). */
+export async function report(db: SupabaseClient, page: Page, input: Record<string, unknown>) {
+  const from = String(input.from ?? ""), to = String(input.to ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < from) throw new HttpError(400, "Escolha o período");
+  if (Date.parse(to) - Date.parse(from) > 400 * 86400_000) throw new HttpError(400, "Período grande demais (até 1 ano)");
+  const start = at(from, 0).toISOString(), end = at(to, 24 * 60).toISOString();
+  const { data: rows } = await db.from("agenda_appointments").select("id, starts_at, service, pro, plan, status, source, name, phone, email")
+    .eq("page_id", page.id).neq("status", "block").gte("starts_at", start).lt("starts_at", end).order("starts_at").limit(5000);
+  const phones = [...new Set((rows ?? []).map((r) => r.phone).filter(Boolean))];
+  const returning = new Set<string>();
+  for (let i = 0; i < phones.length; i += 200) {
+    const { data } = await db.from("agenda_appointments").select("phone").eq("page_id", page.id).lt("starts_at", start)
+      .in("phone", phones.slice(i, i + 200)).not("status", "in", "(block,cancelled)").limit(5000);
+    for (const r of data ?? []) returning.add(r.phone);
+  }
+  return { rows: rows ?? [], returning: [...returning] };
+}
+
 export async function saveSettings(db: SupabaseClient, page: Page, raw: unknown) {
   const settings = cleanSettings(raw);
   await db.from("landing_pages").update({ agenda: settings }).eq("id", page.id);
