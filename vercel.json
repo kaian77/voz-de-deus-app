@@ -33,6 +33,14 @@
       "destination": "/api/landing?report=:token"
     },
     {
+      "source": "/agendar/:slug",
+      "destination": "/api/landing?agendar=:slug"
+    },
+    {
+      "source": "/entrar",
+      "destination": "/api/landing?entrar=1"
+    },
+    {
       "source": "/inicio",
       "has": [
         {

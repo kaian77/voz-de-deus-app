@@ -46,3 +46,7 @@ verify_jwt = false
 # Avisos de pagamento do Mercado Pago (PáginasPro); o pagamento é conferido na API do Mercado Pago
 [functions.mercadopago-webhook]
 verify_jwt = false
+
+# Agenda online da PáginasPro: página de agendamento (paciente) e painel do profissional (sessão própria)
+[functions.agenda]
+verify_jwt = false

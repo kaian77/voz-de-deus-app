@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { renderLanding, type LandingData } from "../src/landing/render.js";
 import { demoReport, renderReport, type ReportData } from "../src/landing/report.js";
 import { renderAgency } from "../src/landing/agency.js";
+import { renderBooking, renderLogin } from "../src/landing/agenda.js";
 import { mergeOffer } from "../src/studio/lib/offer.js";
 
 const URL_ = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rrlxhnmfsmknzhqpfrhr.supabase.co";
@@ -17,6 +18,9 @@ const NOT_FOUND = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"
 
 const EXPIRED = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Prévia expirada</title></head>
 <body style="font-family:system-ui;display:grid;place-items:center;min-height:100vh;margin:0;color:#444;text-align:center;padding:24px"><div><p style="font-size:20px;margin:0 0 8px">Esta prévia expirou.</p><p style="margin:0">Fale com quem criou o site para ver a versão final.</p></div></body></html>`;
+
+// Colunas com leitura pública (migration 20261110000000_agenda.sql): nunca select=* (o anon não lê as colunas secretas)
+const PUBLIC_COLS = "name,niche,city,whatsapp,instagram,address,registry,hours,photos,logo,rating,reviews,tier,widget,content,status,slug,preview_until,domain,agenda_status,agenda_until,agenda";
 
 type Row = LandingData & { content: LandingData["content"] | null; status: string; slug: string; preview_until: string | null; domain: string | null };
 
@@ -63,13 +67,24 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const saved = KEY ? await fetch(`${URL_}/rest/v1/rpc/paginaspro_offer`, { method: "POST", headers, body: "{}" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
     return send(res, 200, renderAgency(mergeOffer(saved)), "public, s-maxage=60, stale-while-revalidate=600");
   }
+  // Agenda online: /agendar/<slug> (paciente) e /entrar (login do profissional)
+  const cfg = { api: `${URL_}/functions/v1/agenda`, key: KEY };
+  if (url.searchParams.get("entrar")) return send(res, 200, renderLogin(cfg), "public, s-maxage=300");
+  const agendar = (url.searchParams.get("agendar") ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 80);
+  if (agendar && KEY) {
+    const r = await fetch(`${URL_}/rest/v1/landing_pages?slug=eq.${agendar}&status=in.(preview,published)&select=name,logo,slug,domain,content,agenda,agenda_status&limit=1`, { headers });
+    const p = (r.ok ? ((await r.json()) as (Row & { agenda: { style?: string } | null; agenda_status: string })[]) : [])[0];
+    if (!p || p.agenda_status === "off") return send(res, 404, NOT_FOUND, "no-store");
+    const site = p.domain ? `https://${p.domain}/` : `https://paginaspro.app.br/p/${p.slug}`;
+    return send(res, 200, renderBooking({ name: p.name, logo: p.logo, content: p.content, slug: p.slug, style: p.agenda?.style === "modern" ? "modern" : "simple", site }, cfg), "no-store");
+  }
   // Painel do cliente (plano mensal): /r/<token>
   const token = (url.searchParams.get("report") ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 64);
   if (token === "demo") return send(res, 200, renderReport(demoReport()), "public, s-maxage=3600");
   if (token && KEY) {
     const r = await fetch(`${URL_}/rest/v1/rpc/landing_report`, { method: "POST", headers, body: JSON.stringify({ p_token: token }) });
     const data = r.ok ? ((await r.json()) as ReportData | null) : null;
-    return data ? send(res, 200, renderReport(data), "no-store") : send(res, 404, NOT_FOUND, "no-store");
+    return data ? send(res, 200, renderReport(data, { token, cfg }), "no-store") : send(res, 404, NOT_FOUND, "no-store");
   }
   // Aviso do navegador do visitante (visita, clique no WhatsApp, rota no mapa): conta só página publicada
   const event = url.searchParams.get("e");
@@ -86,7 +101,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
   if ((!slug && !own) || !KEY) return send(res, 404, NOT_FOUND, "no-store");
   const filter = own ? `domain=ilike.${own}&status=eq.published` : `slug=eq.${slug}&status=in.(preview,published)`;
-  const r = await fetch(`${URL_}/rest/v1/landing_pages?${filter}&select=*&limit=1`, { headers });
+  const r = await fetch(`${URL_}/rest/v1/landing_pages?${filter}&select=${PUBLIC_COLS}&limit=1`, { headers });
   const page = (r.ok ? ((await r.json()) as Row[]) : [])[0];
   if (!page?.content) return send(res, 404, NOT_FOUND, "no-store");
   if (page.status === "preview" && page.preview_until && new Date(page.preview_until).getTime() < Date.now()) return send(res, 410, EXPIRED, "no-store");

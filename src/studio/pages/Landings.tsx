@@ -34,6 +34,7 @@ const PRICE_FIELDS: [keyof Offer, string, "n" | "t"][] = [
   ["premiumMonthly", "Premium mensal (R$/mês)", "n"], ["premiumOneTime", "Premium à vista (R$)", "n"],
   ["monthlyLink", "Link Mercado Pago · mensal", "t"], ["oneTimeLink", "Link Mercado Pago · avulso", "t"],
   ["premiumMonthlyLink", "Link Mercado Pago · Premium mensal", "t"], ["premiumOneTimeLink", "Link Mercado Pago · Premium à vista", "t"],
+  ["agendaMonthly", "Agenda online (R$/mês)", "n"], ["agendaLink", "Link Mercado Pago · agenda", "t"],
   ["whatsapp", "Seu WhatsApp (no seu site)", "t"],
 ];
 
@@ -239,6 +240,76 @@ function PlanPanel({ page, onChange }: { page: LandingPage; onChange: (p: Landin
         </div>
       )}
       <p className="mt-3 text-[11px] text-muted-foreground">O botão "Pedir alteração" do painel abre o seu WhatsApp de avisos de venda.</p>
+    </Panel>
+  );
+}
+
+const newToken = () => [...crypto.getRandomValues(new Uint8Array(18))].map((b) => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
+
+/** Agenda online do cliente (adicional): teste grátis, pagou, pausar; links da página de agendamento e do painel. */
+function AgendaPanel({ page, onChange }: { page: LandingPage; onChange: (p: LandingPage) => void }) {
+  const OFFER = useOffer();
+  const [busy, setBusy] = useState(false);
+  const [upcoming, setUpcoming] = useState<number | null>(null);
+  const status = page.agenda_status ?? "off";
+  const booking = `${LANDING_HOST}/agendar/${page.slug}`;
+  const panelUrl = page.report_token ? `${LANDING_HOST}/r/${page.report_token}#agenda` : "";
+  const trialLeft = status === "trial" && page.agenda_until ? Math.ceil((new Date(page.agenda_until).getTime() - Date.now()) / 86400_000) : null;
+
+  useEffect(() => {
+    if (status === "off") return;
+    supabase.from("agenda_appointments").select("id", { count: "exact", head: true }).eq("page_id", page.id)
+      .in("status", ["booked", "confirmed", "reschedule"]).gt("starts_at", new Date().toISOString())
+      .then(({ count }) => setUpcoming(count ?? 0));
+  }, [page.id, status]);
+
+  const set = async (patch: Partial<LandingPage>, msg: string) => {
+    setBusy(true);
+    try {
+      onChange(await api.update("landing_pages", page.id, { report_token: page.report_token ?? newToken(), ...patch }));
+      toast.success(msg);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const send = () => {
+    const n = String(page.whatsapp ?? "").replace(/\D/g, "");
+    const text = `Oi! A agenda online de vocês está pronta 📅\n\n` +
+      `1) Painel da agenda (só seu): ${panelUrl}\nNo primeiro acesso você cria o seu e-mail e senha. Depois dá para entrar também por ${LANDING_HOST}/entrar\n\n` +
+      `2) Link para os pacientes marcarem: ${booking}\nColoque na bio do Instagram e mande no WhatsApp. O site já tem o botão "Agendar online".\n\n` +
+      `Um dia antes, o paciente recebe uma mensagem no WhatsApp para confirmar, e a resposta aparece no seu painel.`;
+    window.open(`https://wa.me/${n.length <= 11 && n ? `55${n}` : n}?text=${encodeURIComponent(text)}`, "_blank");
+  };
+  const label = { off: "Desligada", trial: `Teste grátis${trialLeft !== null ? ` · ${Math.max(0, trialLeft)} dia(s)` : ""}`, active: "Ativa (assinatura paga)", paused: "Pausada" }[status];
+
+  return (
+    <Panel
+      title="Agenda online"
+      description={`Adicional de R$ ${OFFER.agendaMonthly}/mês: o paciente marca pelo site, o cliente controla no painel e a IA manda o lembrete no WhatsApp 1 dia antes. Situação: ${label}${upcoming !== null ? ` · ${upcoming} horário(s) marcado(s)` : ""}.`}
+    >
+      <div className="flex flex-wrap gap-2">
+        {status === "off" && <Button size="sm" onClick={() => set({ agenda_status: "trial", agenda_until: new Date(Date.now() + 14 * 86400_000).toISOString() }, "Agenda ligada: 14 dias grátis")} disabled={busy}>Ligar teste grátis (14 dias)</Button>}
+        {status === "trial" && <Button size="sm" variant="outline" onClick={() => set({ agenda_until: new Date(Date.now() + 7 * 86400_000).toISOString() }, "Teste estendido por 7 dias")} disabled={busy}>+7 dias de teste</Button>}
+        {status !== "active" && <Button size="sm" variant={status === "off" ? "outline" : "default"} onClick={() => set({ agenda_status: "active", agenda_until: null }, "Agenda ativa (pagou)")} disabled={busy}>Pagou: ativar</Button>}
+        {(status === "active" || status === "trial") && <Button size="sm" variant="outline" onClick={() => set({ agenda_status: "paused" }, "Agenda pausada: o site para de aceitar marcações")} disabled={busy}>Pausar</Button>}
+        {status !== "off" && <Button size="sm" variant="ghost" onClick={() => confirm("Desligar a agenda deste cliente? Os horários marcados ficam guardados.") && set({ agenda_status: "off" }, "Agenda desligada")} disabled={busy}>Desligar</Button>}
+      </div>
+      {status !== "off" && (
+        <>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(booking).then(() => toast.success("Link de agendamento copiado"))}><Copy className="mr-1.5 h-4 w-4" />Link dos pacientes</Button>
+            {panelUrl && <Button size="sm" variant="outline" asChild><a href={panelUrl} target="_blank" rel="noreferrer"><ExternalLink className="mr-1.5 h-4 w-4" />Painel da agenda</a></Button>}
+            {page.whatsapp && panelUrl && <Button size="sm" variant="outline" onClick={send}><Send className="mr-1.5 h-4 w-4" />Mandar para o cliente</Button>}
+          </div>
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Acesso do cliente: {page.agenda_email ? `${page.agenda_email} (senha criada)` : "ainda não criou a senha (cria no 1º acesso pelo link do painel)"}.
+            {page.agenda_pass && <> <button className="underline" disabled={busy} onClick={() => confirm("Zerar a senha? O cliente cria outra pelo link do painel.") && set({ agenda_pass: null }, "Senha zerada: o cliente cria outra pelo link do painel")}>Zerar senha</button></>}
+            {" "}Pagamento pelo link fixo do Mercado Pago não liga sozinho: quando cair, toque em "Pagou: ativar".
+          </p>
+        </>
+      )}
     </Panel>
   );
 }
@@ -642,6 +713,7 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
             </Panel>
           )}
           {current.status !== "draft" && <PlanPanel page={current} onChange={setCurrent} />}
+          {current.status !== "draft" && <AgendaPanel page={current} onChange={setCurrent} />}
           {current.status === "published" && <DomainPanel page={current} onChange={(domain) => setCurrent({ ...current, domain })} />}
           {current.status !== "draft" && (
             <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => publish("draft")}>Tirar do ar</button>

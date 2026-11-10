@@ -16,6 +16,9 @@ export const OFFER = {
   premiumOneTime: 997,
   premiumMonthlyLink: "https://mpago.la/1Bu8EjD",
   premiumOneTimeLink: "https://mpago.la/1YEqfgd",
+  /** Agenda online (adicional): assinatura mensal */
+  agendaMonthly: 29,
+  agendaLink: "https://mpago.la/1oq3nf6",
 };
 
 export type Offer = typeof OFFER;

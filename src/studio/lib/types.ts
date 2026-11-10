@@ -442,6 +442,11 @@ export interface LandingPage {
   /** monthly = plano mensal (painel de resultados /r/<report_token> + alterações inclusas) */
   plan: "none" | "monthly";
   report_token: string | null;
+  /** Agenda online (adicional R$ 29/mês): off | trial (teste até agenda_until) | active (pagou) | paused */
+  agenda_status?: "off" | "trial" | "active" | "paused";
+  agenda_until?: string | null;
+  agenda_email?: string | null;
+  agenda_pass?: string | null;
   /** premium = layout animado (src/landing/premium.ts) */
   tier: "normal" | "premium";
   views: number;

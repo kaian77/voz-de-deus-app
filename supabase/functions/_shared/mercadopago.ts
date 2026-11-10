@@ -10,6 +10,7 @@ import { publishPatch } from "./landing.ts";
 import { sendMessage } from "./inbox.ts";
 import { notify } from "./push.ts";
 import { functionsUrl } from "./util.ts";
+import { onAgendaSubscription } from "./agenda.ts";
 
 const API = "https://api.mercadopago.com";
 const SITE = "https://paginaspro.app.br";
@@ -109,6 +110,8 @@ async function onPayment(db: SupabaseClient, id: string) {
 
 async function onSubscription(db: SupabaseClient, id: string) {
   const sub = await mp(`/preapproval/${id}`);
+  const agenda = await onAgendaSubscription(db, sub); // assinatura da agenda online ("ag:<landing_id>")
+  if (agenda) return agenda;
   if (sub.status !== "authorized") return { status: sub.status };
   const amount = Number(sub.auto_recurring?.transaction_amount ?? 0);
   const m = String(sub.external_reference ?? "").match(/^lp:([0-9a-f-]{36}):(monthly|premiumMonthly)$/);
