@@ -65,7 +65,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
     // preços, links e WhatsApp salvos no Studio ("Preços e links")
     const saved = KEY ? await fetch(`${URL_}/rest/v1/rpc/paginaspro_offer`, { method: "POST", headers, body: "{}" }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
-    return send(res, 200, renderAgency(mergeOffer(saved)), "public, s-maxage=60, stale-while-revalidate=600");
+    // Agenda do próprio site (linha "paginaspro" em landing_pages, ligada em Studio → Seu site → Agenda)
+    const own = KEY ? await fetch(`${URL_}/rest/v1/landing_pages?slug=eq.paginaspro&select=agenda_status,agenda_until&limit=1`, { headers }).then((r) => (r.ok ? r.json() : [])).catch(() => []) : [];
+    const ag = (own as { agenda_status: string; agenda_until: string | null }[])[0];
+    const agendaOn = ag && (ag.agenda_status === "active" || (ag.agenda_status === "trial" && (!ag.agenda_until || Date.parse(ag.agenda_until) > Date.now())));
+    return send(res, 200, renderAgency(mergeOffer(saved), { agenda: agendaOn ? "/agendar/paginaspro" : undefined }), "public, s-maxage=60, stale-while-revalidate=600");
   }
   // Agenda online: /agendar/<slug> (paciente) e /entrar (login do profissional)
   const cfg = { api: `${URL_}/functions/v1/agenda`, key: KEY };
@@ -81,8 +85,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const r = await fetch(`${URL_}/rest/v1/landing_pages?slug=eq.${agendar}&status=in.(preview,published)&select=name,logo,slug,domain,content,agenda,agenda_status&limit=1`, { headers });
     const p = (r.ok ? ((await r.json()) as (Row & { agenda: { style?: string } | null; agenda_status: string })[]) : [])[0];
     if (!p || p.agenda_status === "off") return send(res, 404, NOT_FOUND, "no-store");
-    const site = p.domain ? `https://${p.domain}/` : `https://paginaspro.app.br/p/${p.slug}`;
-    return send(res, 200, renderBooking({ name: p.name, logo: p.logo, content: p.content, slug: p.slug, style: p.agenda?.style === "modern" ? "modern" : "simple", site }, cfg), "no-store");
+    const site = p.slug === "paginaspro" ? "https://paginaspro.app.br/inicio" : p.domain ? `https://${p.domain}/` : `https://paginaspro.app.br/p/${p.slug}`;
+    // Sem conteúdo (agenda do próprio site da PáginasPro): cores da identidade da PáginasPro
+    const look = p.content ?? ({ colors: { primary: "#111110", ink: "#111110", soft: "#F3F1EA" }, fonts: "jakarta" } as unknown as Row["content"]);
+    return send(res, 200, renderBooking({ name: p.name, logo: p.logo, content: look, slug: p.slug, style: p.agenda?.style === "modern" ? "modern" : "simple", site }, cfg), "no-store");
   }
   // Painel do cliente (plano mensal): /r/<token>
   const token = (url.searchParams.get("report") ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 64);

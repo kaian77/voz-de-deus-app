@@ -10,7 +10,7 @@ const WG_TABS: [WidgetKind, string][] = [["plate", "Nutricionista"], ["tooth", "
 const brl = (n: number) => n.toLocaleString("pt-BR");
 
 /** o = preços, links e WhatsApp (padrões de offer.ts com o que o dono salvou no Studio). */
-export function renderAgency(o: Offer = OFFER): string {
+export function renderAgency(o: Offer = OFFER, opts: { agenda?: string } = {}): string {
   const WA = o.whatsapp;
   const waLink = (text: string) => `https://wa.me/${WA}?text=${encodeURIComponent(text)}`;
   const HELLO = waLink("Oi, Bruno! Vi o site da PáginasPro e quero ver a prévia do site do meu negócio. Vou te mandar o @ do Instagram, fotos, endereço, horário e os serviços.");
@@ -328,7 +328,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
       <p class="lead reveal">Eu monto o site do seu negócio com as suas fotos, seu horário, o mapa e o botão do WhatsApp. <b>Você vê ele pronto antes de pagar qualquer coisa.</b></p>
       <div class="ctas reveal">
         <a class="btn magnet" data-wa href="${HELLO}" target="_blank" rel="noopener"><i class="dot"></i>Quero ver a prévia do meu</a>
-        <a class="btn ghost" href="#ramos">Ver como fica</a>
+        ${opts.agenda ? `<a class="btn ghost" href="${opts.agenda}">📅 Agendar uma conversa</a>` : `<a class="btn ghost" href="#ramos">Ver como fica</a>`}
       </div>
       <div class="proof reveal">
         <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg>Prévia grátis, sem compromisso</span>
@@ -492,6 +492,7 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
     <h2>Me manda o seu @ e suas fotos. <span class="serif">Eu te mostro seu site pronto.</span></h2>
     <p>@ do Instagram, fotos, endereço, horário e tipo de serviço. Sem compromisso: se gostar, a gente coloca no ar.</p>
     <a class="btn magnet" data-wa href="${HELLO}" target="_blank" rel="noopener"><i class="dot"></i>Chamar o Bruno no WhatsApp</a>
+    ${opts.agenda ? `<a class="btn ghost" style="margin-left:8px" href="${opts.agenda}">📅 Agendar uma conversa</a>` : ""}
   </div></div>
 </section>
 </main>
