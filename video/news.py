@@ -45,8 +45,12 @@ SLOTS = {1: ["12:40"], 2: ["12:40", "19:20"], 3: ["08:10", "12:40", "19:20"], 4:
          5: ["07:40", "10:30", "13:00", "17:00", "20:30"]}
 CTA = {"dinheiro": "cta-dinheiro.jpg", "fala": "cta-fala.jpg"}
 CTA_TEXT = {
-    "dinheiro": "📘 Quer proteger seu dinheiro nos próximos anos? O guia \"Seu Dinheiro Protegido\" está no link da bio.",
-    "fala": "📕 Sabe até onde vai sua liberdade de opinar nas redes? O guia \"Fale Sem Medo\" está no link da bio.",
+    "dinheiro": ("📘 No guia \"Seu Dinheiro Protegido\" eu mostro, passo a passo, como sair das dívidas caras, montar sua "
+                 "reserva, usar o dólar a seu favor e pagar menos imposto dentro da lei.\n"
+                 "👉 Toque no LINK DA BIO e garanta o seu hoje. Quem se prepara agora não paga a conta depois."),
+    "fala": ("📕 No guia \"Fale Sem Medo\" você descobre o que pode postar sem ter a conta derrubada ou virar réu: o que a "
+             "lei diz, o que dá processo e como se proteger.\n"
+             "👉 Toque no LINK DA BIO e garanta o seu antes de postar a próxima opinião."),
 }
 
 
@@ -201,11 +205,15 @@ def write(item, art, profile):
                                                          "BRASÍLIA, CONGRESSO, GOVERNO LULA, ATENÇÃO... URGENTE só se a matéria é de hoje e muda algo já"},
             "headline": {"type": "string", "description": "título da capa, 6 a 12 palavras, forte e chamativo mas 100% fiel à "
                                                           "matéria; marque 1 a 3 palavras-chave com *asteriscos* (ficam amarelas); "
-                                                          "pode terminar com pergunta que provoque comentário"},
-            "caption": {"type": "string", "description": "legenda: 1ª linha = gancho; depois 3 a 6 linhas curtas com os fatos "
-                                                         "da matéria (números, quem, quando); termine com uma pergunta para o "
-                                                         "público comentar. No máximo 3 emojis. Sem hashtags, sem link, sem crédito "
-                                                         "(entram depois)"},
+                                                          "apelativo: mexa com o bolso, o medo de perder ou a indignação do leitor "
+                                                          "(ex.: 'E QUEM PAGA É VOCÊ', 'SEU DINHEIRO NA MIRA'), sempre verdadeiro"},
+            "caption": {"type": "string", "description": "legenda que VENDE: 1ª linha = gancho forte e emocional (🚨 "
+                                                         "pode abrir); depois 3 a 5 linhas curtas com os fatos da matéria (números, "
+                                                         "quem, quando); depois 2 linhas mostrando o impacto no bolso/na vida do "
+                                                         "leitor e a urgência de se preparar (consequência lógica, sem número "
+                                                         "inventado); termine com uma pergunta curta para comentar. Até 4 emojis. "
+                                                         "Sem hashtags, sem link, sem crédito e sem falar do guia (a chamada do "
+                                                         "guia entra depois)"},
             "hashtags": {"type": "array", "items": {"type": "string"}, "description": "5 a 8 hashtags sem #"},
             "pdf": {"type": "string", "enum": ["dinheiro", "fala"],
                     "description": "dinheiro = guia Seu Dinheiro Protegido (economia, imposto, inflação, governo e gastos); "
@@ -218,7 +226,9 @@ def write(item, art, profile):
         "- Use SÓ fatos que estão no texto da matéria abaixo. Nada de número, fala, nome ou acontecimento que não esteja nela.\n"
         "- O tom pode ser crítico e opinativo (é uma página de direita), mas opinião vem como pergunta ou comentário, nunca "
         "como fato inventado. Nada de xingamento, acusação de crime sem condenação, chamado para violência ou para votar.\n"
-        "- Nada de 'BOMBA', 'URGENTE' ou exagero que a matéria não sustenta. O título tem que ser verdadeiro.\n"
+        "- Seja APELATIVO e persuasivo, como página que vende: mexa com o bolso, o medo de perder dinheiro ou a "
+        "liberdade, a indignação e a urgência. Mas o título e os fatos têm que ser verdadeiros (nada de 'BOMBA' ou número "
+        "que a matéria não sustenta): o exagero derruba a página e a confiança de quem compraria.\n"
         "- Português do Brasil simples, frases curtas, sem clichê de IA.\n\n"
         f"Fonte: {item['source']}\nTítulo original: {item['title']}\nPublicada: {item['when']}\n\nTexto da matéria:\n{art['text']}",
         schema)
