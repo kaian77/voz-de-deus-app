@@ -336,7 +336,7 @@ def run_account(acc, force=False):
         return
     start = dt.datetime.now(BRT).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
     month = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30)
-    recent = w.rest("GET", f"posts?user_id=eq.{acc['user_id']}&created_at=gte.{month.isoformat()}"
+    recent = w.rest("GET", f"posts?user_id=eq.{acc['user_id']}&created_at=gte.{month.strftime("%Y-%m-%dT%H:%M:%SZ")}"
                            "&select=id,created_at,status,options&order=created_at.desc&limit=400") or []
     mine = [p for p in recent if (p.get("options") or {}).get("brand") == "noticias"
             and ((p.get("options") or {}).get("account_ids") or {}).get("instagram") == acc["id"]]
