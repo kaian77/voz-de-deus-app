@@ -136,10 +136,13 @@ def article(url):
     image = html.unescape(m.group(1)) if m else None
     paras = [clean(p) for p in re.findall(r"<p[^>]*>(.*?)</p>", raw, re.S)]
     text = "\n".join(p for p in paras if len(p) > 60)[:9000]
+    # Crédito: só no texto visível (sem <style>/<script>, que têm "img {" e afins) e com cara de nome
+    visible = re.sub(r"<(style|script|noscript)[^>]*>.*?</\1>", " ", raw, flags=re.S | re.I)
+    visible = clean(re.sub(r"<[^>]+>", "\n", visible))
     credit = None
-    for c in re.findall(r"(?:Foto|Fotos|Imagem|Crédito)\s*:?\s*([^<\n\"]{3,80})", raw):
-        c = clean(c)
-        if c and len(c) < 80 and not c.lower().startswith(("http", "{")):
+    for c in re.findall(r"\b(?:Foto|Fotos|Imagem|Crédito)\s*:\s*([A-ZÀ-Ú][^\n|]{2,60})", visible):
+        c = re.split(r"\s{2,}|\s[-–]\s(?=[A-Z][a-z]+ \d)", c.strip())[0].strip(" .,;")
+        if re.fullmatch(r"[A-Za-zÀ-ÿ0-9 .,'/&()-]{3,60}", c) and not re.search(r"[{}<>#;]|\bimg\b|\.ps-|slide", c, re.I):
             credit = c
             break
     return {"text": text, "image": image, "credit": credit}
