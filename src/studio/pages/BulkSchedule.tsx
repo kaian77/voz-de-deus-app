@@ -113,7 +113,7 @@ function videoInfo(src: string): Promise<{ seconds?: number; frame?: Blob }> {
 const ACCOUNT_KEY = "bulk-accounts";
 const isLoja = (a: SocialAccount) => !a.meta?.brand || a.meta.brand === "brax";
 const accountLabel = (a: SocialAccount) =>
-  `@${a.username ?? a.display_name ?? "conta"}${a.meta?.brand === "paginaspro" ? " · PáginasPro" : a.meta?.brand === "canal" ? " · fora da loja" : " · Brax Pins"}`;
+  `@${a.username ?? a.display_name ?? "conta"}${a.meta?.brand === "paginaspro" ? " · PáginasPro" : a.meta?.brand === "canal" ? " · fora da loja" : a.meta?.brand === "noticias" ? " · notícias" : " · Brax Pins"}`;
 
 function readSavedAccounts(): Partial<Record<Platform, string>> {
   try {

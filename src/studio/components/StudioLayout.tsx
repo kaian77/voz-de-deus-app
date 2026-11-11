@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { isDemo, resetDemo, supabase } from "../lib/api";
 import { useSettings, useTable } from "../lib/hooks";
+import type { SocialAccount } from "../lib/types";
 import { Avatar } from "./bits";
 import PageErrorBoundary from "./PageErrorBoundary";
 import { AppInstall } from "./AppInstall";
@@ -149,10 +150,16 @@ function Nav({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+/** Conta principal (a da loja): nunca a da PáginasPro, de canal ou de notícias, mesmo que tenha sido conectada depois. */
+function mainInstagram(accounts: SocialAccount[] | undefined) {
+  const igs = (accounts ?? []).filter((a) => a.platform === "instagram");
+  return igs.find((a) => !a.meta?.brand || a.meta.brand === "brax") ?? igs[0];
+}
+
 function Workspace() {
   const { data: settings } = useSettings();
   const { data: accounts } = useTable("social_accounts");
-  const ig = accounts?.find((a) => a.platform === "instagram" && a.meta?.brand !== "paginaspro") ?? accounts?.find((a) => a.platform === "instagram");
+  const ig = mainInstagram(accounts);
   const name = settings?.brand_name || ig?.display_name || "Social Studio";
   return (
     <div className="flex items-center gap-2.5 px-2.5">
@@ -214,7 +221,7 @@ export default function StudioLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: accounts, error: loadError } = useTable("social_accounts");
-  const ig = accounts?.find((a) => a.platform === "instagram" && a.meta?.brand !== "paginaspro") ?? accounts?.find((a) => a.platform === "instagram");
+  const ig = mainInstagram(accounts);
 
   const signOut = async () => {
     if (isDemo) {

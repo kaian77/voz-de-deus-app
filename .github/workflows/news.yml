@@ -1,0 +1,48 @@
+# Piloto de notícias (video/news.py): posta sozinho na conta do Instagram marcada como "Notícias" em Contas
+# (notícias reais da Agência Brasil, Câmara e Senado, capa chamativa com a foto da matéria + chamada para os PDFs).
+# Roda de meia em meia hora das 7h às 21h de Brasília; cada rodada só posta se passou um horário do dia sem post.
+name: Piloto de notícias
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Postar uma agora (mesmo fora do horário)"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "12,42 10-23 * * *" # 7h-20h42 em Brasília
+    - cron: "12 0 * * *" # 21h12
+
+concurrency:
+  group: news
+  cancel-in-progress: false
+
+jobs:
+  news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Chaves do Supabase
+        run: |
+          set -euo pipefail
+          api() { curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1$1"; }
+          REF=$(api /projects | jq -r --arg n "$SUPABASE_PROJECT_NAME" '.[] | select(.name == $n) | .id' | head -1)
+          [[ -n $REF ]] || { echo "::error::Projeto $SUPABASE_PROJECT_NAME não encontrado"; exit 1; }
+          KEY=$(api "/projects/$REF/api-keys?reveal=true" | jq -r '[.[] | select(.name == "service_role" or .type == "secret") | .api_key][0] // empty')
+          [[ -n $KEY ]] || { echo "::error::Não consegui ler a chave de serviço do projeto"; exit 1; }
+          echo "::add-mask::$KEY"
+          echo "SUPABASE_URL=https://$REF.supabase.co" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_KEY=$KEY" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+
+      - name: Pillow
+        run: pip install -q pillow
+
+      - name: Rodada
+        run: python3 video/news.py ${{ inputs.force && '--force' || '' }}
