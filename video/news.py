@@ -214,7 +214,7 @@ def write(item, art, profile):
                                                          "inventado); termine com uma pergunta curta para comentar. Até 4 emojis. "
                                                          "Sem hashtags, sem link, sem crédito e sem falar do guia (a chamada do "
                                                          "guia entra depois)"},
-            "hashtags": {"type": "array", "items": {"type": "string"}, "description": "5 a 8 hashtags sem #"},
+            "hashtags": {"type": "array", "items": {"type": "string"}, "description": "4 hashtags sem # (a #bolsonaro entra sozinha)"},
             "pdf": {"type": "string", "enum": ["dinheiro", "fala"],
                     "description": "dinheiro = guia Seu Dinheiro Protegido (economia, imposto, inflação, governo e gastos); "
                                    "fala = guia Fale Sem Medo (censura, redes sociais, STF/processos por opinião, liberdade)"},
@@ -396,7 +396,10 @@ def run_account(acc, force=False):
         url1 = storage_upload(img, f"{base}/{stamp}.jpg", "image/jpeg")
         with open(os.path.join(ASSETS, CTA[post["pdf"]]), "rb") as fh:
             url2 = storage_upload(fh.read(), f"{base}/{CTA[post['pdf']]}", "image/jpeg")
-        tags = " ".join(f"#{h.lstrip('#').replace(' ', '')}" for h in post["hashtags"][:8])
+        # Sempre 5 hashtags, a 1ª é #bolsonaro (pedido do dono)
+        rest = [h.lstrip("#").replace(" ", "").lower() for h in post["hashtags"]]
+        rest = [h for h in dict.fromkeys(rest) if h and h != "bolsonaro"]
+        tags = " ".join(f"#{h}" for h in (["bolsonaro"] + rest)[:5])
         caption = (f"{post['caption'].strip()}\n\n{CTA_TEXT[post['pdf']]}\n\n"
                    f"Fonte: {item['source']}. Foto: {credit}.\n\n{tags}")[:2150]
         row = w.rest("POST", "posts", {
