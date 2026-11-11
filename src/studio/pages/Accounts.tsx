@@ -34,11 +34,13 @@ function BrandSelect({ account }: { account: SocialAccount }) {
       ? `Marcar ${who} como PáginasPro? As mensagens dessa conta passam a ser atendidas pela IA de sites (não a da loja).`
       : brand === "canal"
       ? `Marcar ${who} como conta de canal? Ela só recebe os vídeos dos canais do YouTube (fica fora dos posts e do piloto da loja).`
+      : brand === "noticias"
+      ? `Marcar ${who} como página de notícias? Ela fica fora de tudo da loja e o piloto de notícias passa a postar sozinho nela (notícias reais com foto + chamada para os PDFs).`
       : `Marcar ${who} como Brax Pins? As mensagens dessa conta passam a ser atendidas pela IA da loja.`)) return;
     try {
       await api.invoke("inbox", { action: "account_brand", account_id: account.id, brand });
       await qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
-      toast.success(brand === "paginaspro" ? "Conta marcada como PáginasPro" : brand === "canal" ? "Conta marcada como canal" : "Conta marcada como Brax Pins");
+      toast.success(brand === "paginaspro" ? "Conta marcada como PáginasPro" : brand === "canal" ? "Conta marcada como canal" : brand === "noticias" ? "Conta marcada como Notícias: o piloto começa no próximo horário" : "Conta marcada como Brax Pins");
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -46,21 +48,54 @@ function BrandSelect({ account }: { account: SocialAccount }) {
   return (
     <select
       aria-label="Marca da conta"
-      value={account.meta.brand === "paginaspro" || account.meta.brand === "canal" ? account.meta.brand : "brax"}
+      value={account.meta.brand && account.meta.brand !== "brax" ? account.meta.brand : "brax"}
       onChange={(e) => change(e.target.value)}
       className="h-7 rounded-md border bg-background px-1.5 text-xs"
     >
       <option value="brax">Brax Pins</option>
       <option value="paginaspro">PáginasPro</option>
       <option value="canal">Canal / outra conta (fora da loja)</option>
+      {account.platform === "instagram" && <option value="noticias">Notícias (piloto automático)</option>}
     </select>
+  );
+}
+
+/** Piloto de notícias (workflow "Piloto de notícias", video/news.py): quantos posts por dia e pausa. */
+function NewsControls({ account }: { account: SocialAccount }) {
+  const qc = useQueryClient();
+  const save = async (patch: { news_per_day?: number; news_paused?: boolean }) => {
+    try {
+      await api.invoke("inbox", { action: "account_brand", account_id: account.id, brand: "noticias", ...patch });
+      await qc.invalidateQueries({ queryKey: ["table", "social_accounts"] });
+      toast.success(patch.news_paused === true ? "Piloto de notícias pausado" : "Piloto de notícias salvo");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  const paused = !!account.meta.news_paused;
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t px-3 py-2 text-xs text-muted-foreground">
+      <span>{paused ? "Piloto de notícias pausado." : "Posta sozinho notícias reais (Agência Brasil, Câmara, Senado) com chamada para os PDFs."}</span>
+      <select
+        aria-label="Posts por dia"
+        value={account.meta.news_per_day ?? 3}
+        onChange={(e) => save({ news_per_day: Number(e.target.value) })}
+        className="h-7 rounded-md border bg-background px-1.5 text-xs"
+      >
+        {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} por dia</option>)}
+      </select>
+      <button type="button" onClick={() => save({ news_paused: !paused })} className="h-7 rounded-md border px-2 text-xs text-foreground">
+        {paused ? "Ligar" : "Pausar"}
+      </button>
+    </div>
   );
 }
 
 export function ConnectedAccount({ account, onRemove }: { account: SocialAccount; onRemove: () => void }) {
   const [confirming, setConfirming] = useState(false);
   return (
-    <div className="flex items-center gap-3 rounded-md border px-3 py-2">
+    <div className="rounded-md border">
+    <div className="flex items-center gap-3 px-3 py-2">
       <Avatar name={account.username ?? account.display_name} src={account.avatar_url} className="h-7 w-7" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13px] font-medium">{["whatsapp", "nuvemshop", "mercadolivre", "shopee"].includes(account.platform) ? account.display_name : `@${account.username ?? account.display_name}`}</p>
@@ -85,6 +120,8 @@ export function ConnectedAccount({ account, onRemove }: { account: SocialAccount
       ) : (
         <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setConfirming(true)}>Desconectar</Button>
       )}
+    </div>
+    {account.platform === "instagram" && account.meta.brand === "noticias" && <NewsControls account={account} />}
     </div>
   );
 }
