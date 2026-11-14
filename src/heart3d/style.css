@@ -39,7 +39,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .h3-card p { margin: 8px 0 4px; font-size: 14px; line-height: 1.45; color: #dce5ef; }
 .h3-card .h3-note { color: #ffd9a0; font-size: 13px; }
 .h3-card .h3-legal { font-size: 11px; color: #7f8fa3; margin-top: 8px; }
-.h3-card.min p, .h3-card.min .h3-defs { display: none; }
+.h3-card.min p, .h3-card.min .h3-defs, .h3-card.min .h3-sym { display: none; }
 .h3-defs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
 .h3-defs button { display: flex; align-items: center; gap: 7px; text-align: left; font-size: 12.5px; line-height: 1.2; padding: 7px 8px; border-radius: 10px; background: rgba(255,255,255,0.07); }
 .h3-defs i { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--acc); color: #fff; font-style: normal; font-weight: 700; font-size: 12px; display: grid; place-items: center; }
@@ -76,3 +76,10 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   .h3-card { top: 120px; bottom: auto; left: 18px; }
   .h3-bar { left: 50%; right: auto; transform: translateX(-50%); width: 640px; border-radius: 18px 18px 0 0; }
 }
+
+.h3-sym { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255,53,40,0.08); border: 1px solid rgba(255,80,70,0.45); }
+.h3-sym i { flex: none; margin-top: 2px; width: 18px; height: 18px; border-radius: 50%; background: #ff3528; box-shadow: 0 0 10px #ff3528; }
+.h3-sym.tof { border-color: rgba(162,75,255,0.7); background: rgba(162,75,255,0.1); }
+.h3-sym.tof i { background: #a24bff; box-shadow: 0 0 10px #a24bff; }
+.h3-sym b { display: block; font-size: 13px; font-weight: 600; line-height: 1.2; }
+.h3-sym span { display: block; font-size: 12.5px; color: #c7d2de; line-height: 1.25; margin-top: 2px; }
