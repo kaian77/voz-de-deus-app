@@ -33,8 +33,8 @@ $("app").innerHTML = `
   <button data-k="both">${T("Comparar", "Compare", "Comparar")}</button>
 </div>
 <section class="h3-card" id="card"></section>
-<div class="h3-cut" id="cutBox" hidden><span>${T("Corte", "Cut", "Corte")}</span><input type="range" id="cut" min="0" max="100" value="50" aria-label="${T("Profundidade do corte", "Cut depth", "Profundidad del corte")}"></div>
 <nav class="h3-bar">
+  <div class="h3-cut" id="cutBox" hidden><span>${T("Corte", "Cut", "Corte")}</span><small>${T("frente", "front", "frente")}</small><input type="range" id="cut" min="0" max="100" value="50" aria-label="${T("Profundidade do corte", "Cut depth", "Profundidad del corte")}"><small>${T("fundo", "back", "fondo")}</small></div>
   <div class="h3-modes" id="modes">
     <button data-m="out"><i>◉</i>${T("Por fora", "Outside", "Por fuera")}</button>
     <button data-m="cut"><i>◐</i>${T("Por dentro", "Inside", "Por dentro")}</button>
@@ -82,7 +82,8 @@ scene.add(key, rim, fill, new THREE.HemisphereLight(0x8fb2d6, 0x2a1210, 0.35));
 
 // ---------- material: cor por parte (fora/dentro), gordura nos sulcos, sombra de ambiente, relevo e corte
 const linear = (hex: number) => new THREE.Color(hex);
-const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 100);
+/** Cada coração tem o próprio plano de corte (no Comparar os dois são cortados no mesmo lugar). */
+const OFF = 1000;
 const uniforms = {
   uBeat: { value: 0 },
   uAtr: { value: 0 },
@@ -108,10 +109,10 @@ else if (part < 5.5) { transformed += normal * 0.05 * uBeat; }`);
 }
 /** Corte "tampado": as faces de trás e da frente marcam no stencil onde o plano passa por dentro da parede,
  *  e um plano com textura de músculo é desenhado só ali (técnica do exemplo de clipping com stencil do three.js). */
-function stencilMaterial(side: THREE.Side, op: THREE.StencilOp) {
+function stencilMaterial(side: THREE.Side, op: THREE.StencilOp, plane: THREE.Plane) {
   const m = new THREE.MeshBasicMaterial({
     depthWrite: false, depthTest: false, colorWrite: false, stencilWrite: true, stencilFunc: THREE.AlwaysStencilFunc,
-    side, clippingPlanes: [cutPlane], stencilFail: op, stencilZFail: op, stencilZPass: op,
+    side, clippingPlanes: [plane], stencilFail: op, stencilZFail: op, stencilZPass: op,
   });
   m.onBeforeCompile = beatVertex;
   return m;
@@ -142,16 +143,11 @@ const capMat = new THREE.MeshStandardMaterial({
   stencilWrite: true, stencilRef: 0, stencilFunc: THREE.NotEqualStencilFunc,
   stencilFail: THREE.ReplaceStencilOp, stencilZFail: THREE.ReplaceStencilOp, stencilZPass: THREE.ReplaceStencilOp,
 });
-const cap = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), capMat);
-cap.renderOrder = 2;
-cap.onAfterRender = (r) => r.clearStencil();
-cap.visible = false;
-scene.add(cap);
 
-function heartMaterial() {
+function heartMaterial(plane: THREE.Plane) {
   const m = new THREE.MeshPhysicalMaterial({
     roughness: 0.42, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.32, sheen: 0.25, sheenRoughness: 0.6, sheenColor: new THREE.Color(0xff9a8a),
-    side: THREE.FrontSide, clippingPlanes: [cutPlane],
+    side: THREE.FrontSide, clippingPlanes: [plane],
   });
   m.onBeforeCompile = (sh) => {
     beatVertex(sh);
@@ -206,7 +202,7 @@ if (gl_FrontFacing) {
 }
 
 // ---------- carregar o coração pronto (.bin compactado com meshopt)
-type Model = { mesh: THREE.Mesh; group: THREE.Group; cor: THREE.Group; kind: Kind };
+type Model = { mesh: THREE.Mesh; group: THREE.Group; cor: THREE.Group; kind: Kind; plane: THREE.Plane; cap: THREE.Mesh; stencil: THREE.Mesh[] };
 const models: Partial<Record<Kind, Promise<Model>>> = {};
 function loadModel(kind: Kind): Promise<Model> {
   return (models[kind] ??= (async () => {
@@ -239,17 +235,20 @@ function loadModel(kind: Kind): Promise<Model> {
     g.setAttribute("tint", new THREE.BufferAttribute(tint, 3, true));
     g.setIndex(new THREE.BufferAttribute(ib, 1));
     g.computeBoundingSphere();
-    const mesh = new THREE.Mesh(g, heartMaterial());
-    mesh.renderOrder = 3;
-    const back = new THREE.Mesh(g, stencilMaterial(THREE.BackSide, THREE.IncrementWrapStencilOp));
-    const front = new THREE.Mesh(g, stencilMaterial(THREE.FrontSide, THREE.DecrementWrapStencilOp));
-    back.renderOrder = front.renderOrder = 1;
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), OFF);
+    const mesh = new THREE.Mesh(g, heartMaterial(plane));
+    mesh.renderOrder = 10;
+    const back = new THREE.Mesh(g, stencilMaterial(THREE.BackSide, THREE.IncrementWrapStencilOp, plane));
+    const front = new THREE.Mesh(g, stencilMaterial(THREE.FrontSide, THREE.DecrementWrapStencilOp, plane));
     back.frustumCulled = front.frustumCulled = false;
-    mesh.userData.stencil = [back, front];
+    // tampa do corte só deste coração (limpa o stencil depois, para o outro coração do Comparar não pegar a tampa errada)
+    const cap = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), capMat);
+    cap.onAfterRender = (r) => r.clearStencil();
+    cap.visible = false;
     // coronárias (vermelho) e veias cardíacas (azul), por cima dos sulcos
     const corG = new THREE.Group();
-    const art = new THREE.MeshPhysicalMaterial({ color: 0xb3251d, roughness: 0.35, clearcoat: 0.6, clippingPlanes: [cutPlane] });
-    const vein = new THREE.MeshPhysicalMaterial({ color: 0x3b4f8f, roughness: 0.4, clearcoat: 0.5, clippingPlanes: [cutPlane] });
+    const art = new THREE.MeshPhysicalMaterial({ color: 0xb3251d, roughness: 0.35, clearcoat: 0.6, clippingPlanes: [plane] });
+    const vein = new THREE.MeshPhysicalMaterial({ color: 0x3b4f8f, roughness: 0.4, clearcoat: 0.5, clippingPlanes: [plane] });
     for (const [name, pts] of Object.entries(cor)) {
       if (pts.length < 4) continue;
       const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
@@ -264,15 +263,15 @@ function loadModel(kind: Kind): Promise<Model> {
       corG.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(side), pts.length * 4, 0.075, 6), vein));
     }
     const group = new THREE.Group();
-    group.add(mesh, back, front, corG);
-    return { mesh, group, cor: corG, kind };
+    group.add(mesh, back, front, corG, cap);
+    return { mesh, group, cor: corG, kind, plane, cap, stencil: [back, front] };
   })());
 }
 
 // ---------- sangue: bolinhas andando pelos caminhos (azul, vermelho e roxo misturado na tetralogia)
 type Flow = { mesh: THREE.InstancedMesh; parts: { c: THREE.CatmullRomCurve3; u: number; off: THREE.Vector3; sp: number; mixAt: number; col: "blue" | "red" | "mix" }[] };
 const BLUE = new THREE.Color(0x3f7dff), RED = new THREE.Color(0xff3528), PURPLE = new THREE.Color(0xa24bff);
-function makeFlow(kind: Kind): Flow {
+function makeFlow(kind: Kind, plane: THREE.Plane): Flow {
   const paths = flowPaths(kind);
   const total = 340;
   const wsum = paths.reduce((s, p) => s + p.weight, 0);
@@ -290,7 +289,7 @@ function makeFlow(kind: Kind): Flow {
       parts.push({ c, u: Math.random(), off, sp: 0.07 + Math.random() * 0.03, mixAt, col: p.color === "mix" && p.pts[0][2] < -3 ? "red" : p.color });
     }
   }
-  const mat = new THREE.MeshBasicMaterial({ toneMapped: false, clippingPlanes: [cutPlane] });
+  const mat = new THREE.MeshBasicMaterial({ toneMapped: false, clippingPlanes: [plane] });
   const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.11, 8, 6), mat, parts.length);
   mesh.renderOrder = 0;
   return { mesh, parts };
@@ -329,8 +328,8 @@ const BASE_TARGET = new THREE.Vector3(0.2, 0.2, 0);
 function home() {
   const portrait = innerHeight > innerWidth;
   // comparar no celular em pé: os dois lado a lado no alto da tela (o cartão fica embaixo)
-  const d = show === "both" ? (portrait ? 82 : 38) : portrait ? 36 : 30;
-  const t = BASE_TARGET.clone().setY(show === "both" && portrait ? -6.2 : BASE_TARGET.y);
+  const d = show === "both" ? (portrait ? 78 : 38) : portrait ? 36 : 30;
+  const t = BASE_TARGET.clone().setY(show === "both" && portrait ? -5.0 : BASE_TARGET.y);
   fly = { pos: new THREE.Vector3(-0.25 * d, 0.12 * d, 0.95 * d).add(t), target: t };
 }
 
@@ -351,7 +350,10 @@ async function setShow(s: Show) {
     const yOff = 0;
     const holder = new THREE.Group();
     holder.position.set(offset, yOff, 0);
-    const f = makeFlow(m.kind);
+    const f = makeFlow(m.kind, m.plane);
+    // ordem: stencil deste coração → tampa dele (limpa) → o próximo coração
+    for (const st of m.stencil) st.renderOrder = 1 + i * 2;
+    m.cap.renderOrder = 2 + i * 2;
     flowKind.set(f, m.kind);
     holder.add(m.group, f.mesh);
     stage.add(holder);
@@ -360,7 +362,7 @@ async function setShow(s: Show) {
   $("load").hidden = true;
   home();
   applyMode();
-  if (innerWidth < 700) $("card").classList.add("min");
+  if (innerWidth < 700 && mode === "out") $("card").classList.add("min");
   renderCard();
   renderLabels();
 }
@@ -368,9 +370,13 @@ async function setShow(s: Show) {
 function applyMode() {
   document.querySelectorAll<HTMLButtonElement>("#modes button").forEach((b) => b.classList.toggle("on", b.dataset.m === mode));
   $("cutBox").hidden = mode !== "cut";
+  $("app").classList.toggle("cutting", mode === "cut");
+  $("app").classList.toggle("both", show === "both");
   uniforms.uGlass.value = mode === "flow" ? 1 : 0;
-  if (mode === "flow") $("card").classList.remove("min");
+  if (mode !== "out") $("card").classList.remove("min");
   else if (innerWidth < 700 && !selected) $("card").classList.add("min");
+  // na tetralogia, por dentro ou no fluxo, o anel marca o buraco (CIV) mesmo sem escolher nada
+  if (!selected) showRing(show !== "normal" && mode !== "out" ? DEFECTS[0] : null);
   renderCard();
   for (const s of shown) {
     s.flow.mesh.visible = mode !== "out";
@@ -388,18 +394,23 @@ const CUT_RAW = new THREE.Vector3(-0.45, -0.5, -1);
 const CUT_N = CUT_RAW.clone().normalize();
 /** De onde a câmera olha o corte (de frente para o plano). */
 const CUT_VIEW = CUT_N.clone().negate();
+const localPlane = new THREE.Plane();
 function updateCut() {
-  cap.visible = mode === "cut";
-  for (const s of shown) for (const m of s.model.mesh.userData.stencil as THREE.Mesh[]) m.visible = mode === "cut";
-  if (mode !== "cut") {
-    cutPlane.constant = 1000;
-    return;
-  }
+  const on = mode === "cut";
   const v = Number($<HTMLInputElement>("cut").value) / 100;
-  cutPlane.normal.copy(CUT_N);
-  cutPlane.constant = (2.8 - v * 5.0) / CUT_RAW.length();
-  cutPlane.coplanarPoint(cap.position);
-  cap.lookAt(cap.position.clone().sub(cutPlane.normal));
+  localPlane.normal.copy(CUT_N);
+  localPlane.constant = (2.8 - v * 5.0) / CUT_RAW.length();
+  for (const s of shown) {
+    const m = s.model;
+    m.cap.visible = on;
+    for (const st of m.stencil) st.visible = on;
+    m.plane.normal.copy(CUT_N);
+    // mesmo corte em cada coração: o plano acompanha o deslocamento do coração na tela
+    const o = s.flow.mesh.parent!.position;
+    m.plane.constant = on ? localPlane.constant - CUT_N.dot(o) : OFF;
+    localPlane.coplanarPoint(m.cap.position);
+    m.cap.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), CUT_VIEW);
+  }
 }
 
 // ---------- cartão de texto (apresentação, estrutura tocada ou defeito)
@@ -407,11 +418,20 @@ const SYM = {
   normal: () => `<div class="h3-sym"><i></i><div><b>${T("Normal: sai para o corpo sangue vermelho", "Normal: red blood goes to the body", "Normal: sale al cuerpo sangre roja")}</b><span>${T("Cheio de oxigênio → pele e lábios rosados", "Full of oxygen → pink skin and lips", "Llena de oxígeno → piel y labios rosados")}</span></div></div>`,
   tof: () => `<div class="h3-sym tof"><i></i><div><b>${T("Tetralogia: sai para o corpo sangue misturado (roxo)", "Tetralogy: mixed (purple) blood goes to the body", "Tetralogía: sale al cuerpo sangre mezclada (morada)")}</b><span>${T("O sangue azul passa pelo buraco e vai direto para a aorta. Menos oxigênio → pele e lábios arroxeados (cianose), cansaço e falta de ar ao mamar ou brincar", "Blue blood crosses the hole straight into the aorta. Less oxygen → bluish skin and lips (cyanosis), tiredness and shortness of breath when feeding or playing", "La sangre azul pasa por el agujero directo a la aorta. Menos oxígeno → piel y labios morados (cianosis), cansancio y falta de aire al mamar o jugar")}</span></div></div>`,
 };
+// o que se vê por dentro: normal = septo inteiro, lados separados; tetralogia = os 4 defeitos e a mistura
+const INSIDE = {
+  normal: () => `<div class="h3-sym"><i></i><div><b>${T("Normal por dentro", "Normal, inside", "Normal por dentro")}</b><span>${T("Septo inteiro: o azul fica à direita e vai ao pulmão; o vermelho fica à esquerda e vai ao corpo. Não se misturam.", "Whole septum: blue stays on the right and goes to the lungs; red stays on the left and goes to the body. They never mix.", "Tabique entero: el azul queda a la derecha y va al pulmón; el rojo a la izquierda y va al cuerpo. No se mezclan.")}</span></div></div>`,
+  tof: () => `<div class="h3-sym tof"><i></i><div><b>${T("Tetralogia por dentro", "Tetralogy, inside", "Tetralogía por dentro")}</b><span>${T("Anel amarelo = buraco no septo (CIV). O sangue azul passa por ele e sai pela aorta junto com o vermelho (roxo). A saída para o pulmão é estreita e o ventrículo direito fica grosso. Pouco oxigênio no corpo → lábios e pele arroxeados (cianose), cansaço.", "Yellow ring = hole in the septum (VSD). Blue blood crosses it and leaves through the aorta with the red (purple). The exit to the lungs is narrow and the right ventricle gets thick. Little oxygen in the body → bluish lips and skin (cyanosis), tiredness.", "Anillo amarillo = agujero en el tabique (CIV). La sangre azul pasa por él y sale por la aorta junto con la roja (morada). La salida al pulmón es estrecha y el ventrículo derecho se engrosa. Poco oxígeno en el cuerpo → labios y piel morados (cianosis), cansancio.")}</span></div></div>`,
+};
 function renderCard() {
   const intro = INTRO[show];
-  if (mode === "flow" && !selected) {
+  if ((mode === "flow" || mode === "cut") && !selected) {
     const kinds: Kind[] = show === "both" ? ["normal", "tof"] : [show];
-    $("card").innerHTML = `<div class="h3-head"><div><small>${T("Azul = sem oxigênio · vermelho = com oxigênio", "Blue = no oxygen · red = with oxygen", "Azul = sin oxígeno · rojo = con oxígeno")}</small><b>${T("O que muda no corpo", "What changes in the body", "Qué cambia en el cuerpo")}</b></div></div>${kinds.map((k) => SYM[k]()).join("")}`;
+    const rows = mode === "flow" ? kinds.map((k) => SYM[k]()) : kinds.map((k) => INSIDE[k]());
+    const defs = show !== "normal" ? `<div class="h3-defs">${DEFECTS.map((d) => `<button data-d="${d.id}"><i>${d.num}</i>${esc(L(d.name))}</button>`).join("")}</div>` : "";
+    $("card").innerHTML = `<div class="h3-head"><div><small>${T("Azul = sem oxigênio · vermelho = com oxigênio · roxo = misturado", "Blue = no oxygen · red = with oxygen · purple = mixed", "Azul = sin oxígeno · rojo = con oxígeno · morado = mezclado")}</small><b>${mode === "flow" ? T("O que muda no corpo", "What changes in the body", "Qué cambia en el cuerpo") : T("O que você está vendo", "What you are seeing", "Lo que estás viendo")}</b></div><button class="h3-min" aria-label="${T("Recolher", "Collapse", "Contraer")}">–</button></div>${rows.join("")}${mode === "cut" ? defs : ""}`;
+    $("card").querySelector<HTMLElement>(".h3-head")!.onclick = () => $("card").classList.toggle("min");
+    $("card").querySelectorAll<HTMLButtonElement>("[data-d]").forEach((b) => (b.onclick = () => pick(DEFECTS.find((d) => d.id === b.dataset.d)!)));
     return;
   }
   if (selected) {
@@ -539,7 +559,15 @@ function thump(freq: number, gain: number) {
 }
 
 // ---------- eventos
-document.querySelectorAll<HTMLButtonElement>("#seg button").forEach((b) => (b.onclick = () => setShow(b.dataset.k as Show)));
+document.querySelectorAll<HTMLButtonElement>("#seg button").forEach((b) => (b.onclick = () => {
+  const k = b.dataset.k as Show;
+  // Comparar: os dois por dentro, com o sangue circulando e o som da batida
+  if (k === "both") {
+    if (mode === "out") mode = "cut";
+    setSound(true);
+  }
+  setShow(k);
+}));
 document.querySelectorAll<HTMLButtonElement>("#modes button").forEach((b) => (b.onclick = () => {
   mode = b.dataset.m as Mode;
   applyMode();
@@ -553,13 +581,14 @@ $("beat").onclick = () => {
   beating = !beating;
   $("beat").classList.toggle("on", beating);
 };
-$("sound").onclick = () => {
-  sound = !sound;
+function setSound(on: boolean) {
+  sound = on;
   ac ??= new AudioContext();
   ac.resume();
   $("sound").classList.toggle("on", sound);
   $("sound").firstChild!.textContent = sound ? "🔊" : "🔈";
-};
+}
+$("sound").onclick = () => setSound(!sound);
 $("labelsBtn").onclick = () => {
   labelsOn = !labelsOn;
   $("labelsBtn").classList.toggle("on", labelsOn);
@@ -612,7 +641,7 @@ renderer.setAnimationLoop(() => {
     if (camera.position.distanceTo(fly.pos) < 0.05) fly = null;
   }
   controls.update();
-  nView.copy(cutPlane.normal).negate().transformDirection(camera.matrixWorldInverse);
+  nView.copy(CUT_N).negate().transformDirection(camera.matrixWorldInverse);
   uniforms.uCutN.value.copy(nView);
   renderer.render(scene, camera);
   placeLabels();
