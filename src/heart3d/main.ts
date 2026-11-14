@@ -369,8 +369,8 @@ async function setShow(s: Show) {
 
 function applyMode() {
   document.querySelectorAll<HTMLButtonElement>("#modes button").forEach((b) => b.classList.toggle("on", b.dataset.m === mode));
-  $("cutBox").hidden = mode !== "cut";
-  $("app").classList.toggle("cutting", mode === "cut");
+  // o corte é automático (vista de 4 câmaras; cada defeito ajusta sozinho): sem controle na tela
+  $("cutBox").hidden = true;
   $("app").classList.toggle("both", show === "both");
   uniforms.uGlass.value = mode === "flow" ? 1 : 0;
   if (mode !== "out") $("card").classList.remove("min");
@@ -440,9 +440,9 @@ function renderCard() {
       <p>${esc(L(selected.text))}</p>${isDef && selected.num === 4 ? `<p class="h3-note">${esc(L(TREATMENT))}</p>` : ""}`;
     $("cardX").onclick = () => {
       selected = null;
-      showRing(null);
+      $<HTMLInputElement>("cut").value = "50";
+      applyMode();
       home();
-      renderCard();
     };
   } else {
     $("card").innerHTML = `<div class="h3-head"><div><small>${show === "normal" ? T("Toque para explicar", "Tap to explain", "Toca para explicar") : T("Toque para ver os 4 defeitos", "Tap to see the 4 defects", "Toca para ver los 4 defectos")}</small><b>${esc(L(intro.title))}</b></div><button class="h3-min" id="cardMin" aria-label="${T("Recolher", "Collapse", "Contraer")}">–</button></div>
