@@ -44,10 +44,11 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .h3-defs button { display: flex; align-items: center; gap: 7px; text-align: left; font-size: 12.5px; line-height: 1.2; padding: 7px 8px; border-radius: 10px; background: rgba(255,255,255,0.07); }
 .h3-defs i { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--acc); color: #fff; font-style: normal; font-weight: 700; font-size: 12px; display: grid; place-items: center; }
 
-.h3-cut { position: absolute; z-index: 4; right: 12px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px;
-  background: rgba(9,14,21,0.8); border-radius: 999px; padding: 12px 8px; border: 1px solid rgba(255,255,255,0.08); }
-.h3-cut span { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #8fa2b8; }
-.h3-cut input { writing-mode: vertical-lr; direction: rtl; height: 150px; width: 24px; accent-color: var(--acc); }
+.h3-cut { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; padding: 4px 12px; border-radius: 999px; background: rgba(255,255,255,0.06); }
+.h3-cut span { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #ffb3ad; }
+.h3-cut small { font-size: 11px; color: #8fa2b8; }
+.h3-cut input { flex: 1; min-width: 0; accent-color: var(--acc); }
+#app.cutting { --bar: calc(max(10px, env(safe-area-inset-bottom)) + 142px); }
 
 .h3-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; padding: 8px 10px max(10px, env(safe-area-inset-bottom));
   background: linear-gradient(to top, rgba(5,8,12,0.95), rgba(5,8,12,0.75) 70%, rgba(5,8,12,0)); }
@@ -83,3 +84,4 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .h3-sym.tof i { background: #a24bff; box-shadow: 0 0 10px #a24bff; }
 .h3-sym b { display: block; font-size: 13px; font-weight: 600; line-height: 1.2; }
 .h3-sym span { display: block; font-size: 12.5px; color: #c7d2de; line-height: 1.25; margin-top: 2px; }
+#app.both .h3-card { max-height: 31vh; }
