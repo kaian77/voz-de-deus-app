@@ -1,4 +1,4 @@
-# Sobe no YouTube (canal de bonequinhos em inglês, StickWise) os vídeos 3D low-poly já renderizados na branch
+# Sobe no YouTube (canal de bonequinhos em inglês, StickWise, ou o Moment Drop com channel=momentdrop) os vídeos 3D low-poly já renderizados na branch
 # lowpoly-preview (video/lowpoly_upload.py) e atualiza o nome do canal no Studio.
 name: Enviar vídeos 3D low-poly
 
@@ -13,6 +13,10 @@ on:
         description: "Horas entre um vídeo e outro"
         required: true
         default: "3"
+      channel:
+        description: "Canal: stickwise ou momentdrop"
+        required: true
+        default: "stickwise"
 
 jobs:
   upload:
@@ -42,4 +46,5 @@ jobs:
         env:
           TOPICS: ${{ inputs.topics }}
           GAP: ${{ inputs.gap_hours }}
+          CHANNEL: ${{ inputs.channel }}
         run: cd video && python3 lowpoly_upload.py ../ready/out "$GAP" $TOPICS

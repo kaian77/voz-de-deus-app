@@ -2,6 +2,7 @@
 corrige o nome do canal no Studio com o título atual do YouTube.
 
 Uso (workflow lowpoly-upload.yml): python3 lowpoly_upload.py <pasta com tema.mp4> <horas entre vídeos> tema1 tema2 ...
+Env CHANNEL = "momentdrop" manda para o canal de cortes em inglês (Moment Drop) no lugar do StickWise.
 O 1º vai público na hora; os outros ficam agendados (privados até a hora). Tema já enviado não sobe de novo.
 """
 import datetime as dt
@@ -18,9 +19,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def channel():
-    rows = rest("GET", "yt_channels?style=eq.stickman&language=eq.en&select=id,user_id,title&order=created_at") or []
+    if os.environ.get("CHANNEL") == "momentdrop":
+        rows = rest("GET", "yt_channels?title=ilike.*moment*&select=id,user_id,title&order=created_at.desc") or \
+            rest("GET", "yt_channels?mode=eq.clips&language=eq.en&select=id,user_id,title&order=created_at.desc") or []
+    else:
+        rows = rest("GET", "yt_channels?style=eq.stickman&language=eq.en&select=id,user_id,title&order=created_at") or []
     if not rows:
-        sys.exit("canal de bonequinhos em inglês não encontrado")
+        sys.exit("canal não encontrado")
+    print(f"canal: {rows[0]['title']}")
     return rows[0]
 
 
@@ -53,8 +59,8 @@ def main():
         when = start + dt.timedelta(hours=gap * n)
         future = n > 0
         meta = {
-            "snippet": {"title": title, "description": spec["caption"], "categoryId": "27",
-                        "tags": ["engineering", "how it works", "science", "explained", "shorts"],
+            "snippet": {"title": title, "description": spec["caption"], "categoryId": spec.get("category", "27"),
+                        "tags": spec.get("tags") or ["engineering", "how it works", "science", "explained", "shorts"],
                         "defaultLanguage": "en", "defaultAudioLanguage": "en"},
             "status": {"privacyStatus": "private" if future else "public",
                        **({"publishAt": when.isoformat().replace("+00:00", "Z")} if future else {}),
