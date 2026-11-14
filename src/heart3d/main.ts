@@ -43,7 +43,7 @@ $("app").innerHTML = `
   <div class="h3-tools">
     <button id="beat" class="on" aria-label="${T("Batimento", "Heartbeat", "Latido")}">♥<span>${T("Batendo", "Beating", "Latiendo")}</span></button>
     <button id="sound" aria-label="${T("Som", "Sound", "Sonido")}">🔈<span>${T("Som", "Sound", "Sonido")}</span></button>
-    <button id="labelsBtn" class="on" aria-label="${T("Nomes", "Names", "Nombres")}">Aa<span>${T("Nomes", "Names", "Nombres")}</span></button>
+    <button id="labelsBtn" aria-label="${T("Nomes", "Names", "Nombres")}">Aa<span>${T("Nomes", "Names", "Nombres")}</span></button>
     <a id="wa" class="h3-wa" target="_blank" rel="noopener">${T("Quero no meu consultório", "I want this for my clinic", "Lo quiero en mi consultorio")}</a>
   </div>
 </nav>
@@ -69,7 +69,7 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.enablePan = false;
 controls.minDistance = 6;
-controls.maxDistance = 90;
+controls.maxDistance = 120;
 controls.addEventListener("start", () => (fly = null));
 
 const key = new THREE.DirectionalLight(0xfff1e6, 2.4);
@@ -274,7 +274,7 @@ type Flow = { mesh: THREE.InstancedMesh; parts: { c: THREE.CatmullRomCurve3; u: 
 const BLUE = new THREE.Color(0x3f7dff), RED = new THREE.Color(0xff3528), PURPLE = new THREE.Color(0xa24bff);
 function makeFlow(kind: Kind): Flow {
   const paths = flowPaths(kind);
-  const total = 260;
+  const total = 340;
   const wsum = paths.reduce((s, p) => s + p.weight, 0);
   const parts: Flow["parts"] = [];
   const ao = kind === "tof" ? -0.45 : 0.0;
@@ -291,7 +291,7 @@ function makeFlow(kind: Kind): Flow {
     }
   }
   const mat = new THREE.MeshBasicMaterial({ toneMapped: false, clippingPlanes: [cutPlane] });
-  const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.085, 8, 6), mat, parts.length);
+  const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.11, 8, 6), mat, parts.length);
   mesh.renderOrder = 0;
   return { mesh, parts };
 }
@@ -318,7 +318,8 @@ const kindOfFlow = (f: Flow) => flowKind.get(f) ?? "normal";
 let show: Show = params.get("ver") === "comparar" ? "both" : params.get("ver") === "tetralogia" || location.pathname.includes("fallot") ? "tof" : "normal";
 let mode: Mode = "out";
 let selected: Spot | null = null;
-let beating = true, sound = false, labelsOn = true;
+// nomes e números ficam escondidos: o coração aparece limpo; liga no botão "Nomes" ou abre um defeito pelo cartão
+let beating = true, sound = false, labelsOn = false;
 const stage = new THREE.Group();
 scene.add(stage);
 const shown: { model: Model; flow: Flow; offset: number }[] = [];
@@ -327,8 +328,9 @@ let fly: { pos: THREE.Vector3; target: THREE.Vector3 } | null = null;
 const BASE_TARGET = new THREE.Vector3(0.2, 0.2, 0);
 function home() {
   const portrait = innerHeight > innerWidth;
-  const d = show === "both" ? (portrait ? 74 : 38) : portrait ? 36 : 30;
-  const t = BASE_TARGET.clone().setY(show === "both" && portrait ? 1.6 : BASE_TARGET.y);
+  // comparar no celular em pé: os dois lado a lado no alto da tela (o cartão fica embaixo)
+  const d = show === "both" ? (portrait ? 82 : 38) : portrait ? 36 : 30;
+  const t = BASE_TARGET.clone().setY(show === "both" && portrait ? -6.2 : BASE_TARGET.y);
   fly = { pos: new THREE.Vector3(-0.25 * d, 0.12 * d, 0.95 * d).add(t), target: t };
 }
 
@@ -345,8 +347,8 @@ async function setShow(s: Show) {
   showRing(null);
   const portrait = innerHeight > innerWidth;
   ms.forEach((m, i) => {
-    const offset = s === "both" ? (i === 0 ? -1 : 1) * (portrait ? 0 : 5.6) : 0;
-    const yOff = s === "both" && portrait ? (i === 0 ? 7.2 : -7.2) : 0;
+    const offset = s === "both" ? (i === 0 ? -1 : 1) * (portrait ? 5.3 : 5.6) : 0;
+    const yOff = 0;
     const holder = new THREE.Group();
     holder.position.set(offset, yOff, 0);
     const f = makeFlow(m.kind);
@@ -367,6 +369,9 @@ function applyMode() {
   document.querySelectorAll<HTMLButtonElement>("#modes button").forEach((b) => b.classList.toggle("on", b.dataset.m === mode));
   $("cutBox").hidden = mode !== "cut";
   uniforms.uGlass.value = mode === "flow" ? 1 : 0;
+  if (mode === "flow") $("card").classList.remove("min");
+  else if (innerWidth < 700 && !selected) $("card").classList.add("min");
+  renderCard();
   for (const s of shown) {
     s.flow.mesh.visible = mode !== "out";
     s.model.cor.visible = mode === "out";
@@ -398,8 +403,17 @@ function updateCut() {
 }
 
 // ---------- cartão de texto (apresentação, estrutura tocada ou defeito)
+const SYM = {
+  normal: () => `<div class="h3-sym"><i></i><div><b>${T("Normal: sai para o corpo sangue vermelho", "Normal: red blood goes to the body", "Normal: sale al cuerpo sangre roja")}</b><span>${T("Cheio de oxigênio → pele e lábios rosados", "Full of oxygen → pink skin and lips", "Llena de oxígeno → piel y labios rosados")}</span></div></div>`,
+  tof: () => `<div class="h3-sym tof"><i></i><div><b>${T("Tetralogia: sai para o corpo sangue misturado (roxo)", "Tetralogy: mixed (purple) blood goes to the body", "Tetralogía: sale al cuerpo sangre mezclada (morada)")}</b><span>${T("O sangue azul passa pelo buraco e vai direto para a aorta. Menos oxigênio → pele e lábios arroxeados (cianose), cansaço e falta de ar ao mamar ou brincar", "Blue blood crosses the hole straight into the aorta. Less oxygen → bluish skin and lips (cyanosis), tiredness and shortness of breath when feeding or playing", "La sangre azul pasa por el agujero directo a la aorta. Menos oxígeno → piel y labios morados (cianosis), cansancio y falta de aire al mamar o jugar")}</span></div></div>`,
+};
 function renderCard() {
   const intro = INTRO[show];
+  if (mode === "flow" && !selected) {
+    const kinds: Kind[] = show === "both" ? ["normal", "tof"] : [show];
+    $("card").innerHTML = `<div class="h3-head"><div><small>${T("Azul = sem oxigênio · vermelho = com oxigênio", "Blue = no oxygen · red = with oxygen", "Azul = sin oxígeno · rojo = con oxígeno")}</small><b>${T("O que muda no corpo", "What changes in the body", "Qué cambia en el cuerpo")}</b></div></div>${kinds.map((k) => SYM[k]()).join("")}`;
+    return;
+  }
   if (selected) {
     const isDef = !!selected.num;
     $("card").innerHTML = `<div class="h3-head">${isDef ? `<i>${selected.num}</i>` : ""}<div><small>${isDef ? T("Na tetralogia", "In tetralogy", "En la tetralogía") : T("Estrutura", "Structure", "Estructura")}</small><b>${esc(L(selected.name))}</b></div><button class="h3-x" id="cardX" aria-label="${T("Fechar", "Close", "Cerrar")}">×</button></div>
@@ -411,11 +425,11 @@ function renderCard() {
       renderCard();
     };
   } else {
-    $("card").innerHTML = `<div class="h3-head"><div><small>${T("Toque nos nomes", "Tap the names", "Toca los nombres")}</small><b>${esc(L(intro.title))}</b></div><button class="h3-min" id="cardMin" aria-label="${T("Recolher", "Collapse", "Contraer")}">–</button></div>
+    $("card").innerHTML = `<div class="h3-head"><div><small>${show === "normal" ? T("Toque para explicar", "Tap to explain", "Toca para explicar") : T("Toque para ver os 4 defeitos", "Tap to see the 4 defects", "Toca para ver los 4 defectos")}</small><b>${esc(L(intro.title))}</b></div><button class="h3-min" id="cardMin" aria-label="${T("Recolher", "Collapse", "Contraer")}">–</button></div>
       <p>${esc(L(intro.text))}</p>
       ${show !== "normal" ? `<div class="h3-defs">${DEFECTS.map((d) => `<button data-d="${d.id}"><i>${d.num}</i>${esc(L(d.name))}</button>`).join("")}</div>` : ""}
       <p class="h3-legal">${T("Modelo ilustrativo para explicação. Não substitui a avaliação médica.", "Illustrative model for explanation. It does not replace medical advice.", "Modelo ilustrativo para explicación. No sustituye la evaluación médica.")}</p>`;
-    $("cardMin").onclick = () => $("card").classList.toggle("min");
+    $("card").querySelector<HTMLElement>(".h3-head")!.onclick = () => $("card").classList.toggle("min");
     $("card").querySelectorAll<HTMLButtonElement>("[data-d]").forEach((b) => (b.onclick = () => pick(DEFECTS.find((d) => d.id === b.dataset.d)!)));
   }
 }
@@ -460,7 +474,7 @@ function showRing(s: Spot | null) {
 }
 
 // ---------- nomes na tela
-type Lab = { el: HTMLButtonElement; at: THREE.Vector3; dir: THREE.Vector3; spot: Spot };
+type Lab = { el: HTMLElement; at: THREE.Vector3; dir: THREE.Vector3; spot: Spot };
 let labs: Lab[] = [];
 function renderLabels() {
   $("labels").innerHTML = "";
@@ -481,7 +495,7 @@ function renderLabels() {
       el.className = "h3-lab tag";
       el.textContent = s.model.kind === "tof" ? T("Tetralogia", "Tetralogy", "Tetralogía") : T("Normal", "Normal", "Normal");
       $("labels").appendChild(el);
-      labs.push({ el, at: new THREE.Vector3(0, 8.6, 0).add(holder.position), dir: new THREE.Vector3(0, 0, 1), spot: STRUCTURES[0] });
+      labs.push({ el, at: new THREE.Vector3(0, 9.6, 0).add(holder.position), dir: new THREE.Vector3(0, 0, 1), spot: STRUCTURES[0] });
     }
   }
 }
@@ -491,9 +505,15 @@ function placeLabels() {
   for (const l of labs) {
     pv.copy(l.at).project(camera);
     cd.copy(camera.position).sub(l.at).normalize();
-    const facing = l.el.classList.contains("tag") || l.dir.dot(cd) > -0.1 || (mode === "flow" && !l.spot.num);
-    const hideStruct = (show === "both" && !l.el.classList.contains("tag") && !l.spot.num) || (l.spot.id === "cor" && mode !== "out");
-    const vis = labelsOn && facing && pv.z < 1 && !hideStruct && (!selected || selected === l.spot || !!l.spot.num);
+    const tag = l.el.classList.contains("tag");
+    let vis: boolean;
+    if (tag) vis = true;
+    else {
+      const facing = l.dir.dot(cd) > -0.1 || (mode === "flow" && !l.spot.num) || selected === l.spot;
+      const hideStruct = (show === "both" && !l.spot.num) || (l.spot.id === "cor" && mode !== "out");
+      vis = (labelsOn || selected === l.spot) && facing && !hideStruct && (!selected || selected === l.spot || !!l.spot.num);
+    }
+    vis &&= pv.z < 1;
     l.el.style.display = vis ? "" : "none";
     if (vis) l.el.style.transform = `translate(-50%, -50%) translate(${((pv.x + 1) / 2) * w}px, ${((1 - pv.y) / 2) * h}px)`;
     l.el.classList.toggle("sel", selected === l.spot);
