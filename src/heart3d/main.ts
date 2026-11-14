@@ -18,14 +18,21 @@ const $ = <E extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const L = (x: { pt: string; en: string; es: string }) => x[lang] ?? x.pt;
 const params = new URLSearchParams(location.search);
-document.title = `${T("Coração 3D", "3D Heart", "Corazón 3D")} · ${T("demonstração", "demo", "demostración")}`;
+// Link de um médico (/coracao/<slug>): o nome dele no topo, sem o selo de demonstração e sem o botão de venda
+const DOCTORS: Record<string, { name: string }> = { "dr-nestor": { name: "Dr. Nestor" } };
+const doctor = DOCTORS[location.pathname.split("/").filter(Boolean)[1] ?? ""] ?? DOCTORS[params.get("dr") ?? ""];
+document.title = doctor
+  ? `${doctor.name} · ${T("Coração 3D", "3D Heart", "Corazón 3D")}`
+  : `${T("Coração 3D", "3D Heart", "Corazón 3D")} · ${T("demonstração", "demo", "demostración")}`;
 
 $("app").innerHTML = `
 <div class="h3-canvas" id="canvas"></div>
 <div class="h3-labels" id="labels"></div>
 <header class="h3-top">
-  <div class="h3-brand"><small>${T("Anatomia 3D", "3D anatomy", "Anatomía 3D")}</small><b>${T("Coração", "Heart", "Corazón")}</b></div>
-  <a class="h3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">${T("Demonstração", "Demo", "Demostración")}<small>PáginasPro</small></a>
+  ${doctor
+    ? `<div class="h3-brand"><small>${T("Coração 3D", "3D Heart", "Corazón 3D")}</small><b>${esc(doctor.name)}</b></div>`
+    : `<div class="h3-brand"><small>${T("Anatomia 3D", "3D anatomy", "Anatomía 3D")}</small><b>${T("Coração", "Heart", "Corazón")}</b></div>
+  <a class="h3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">${T("Demonstração", "Demo", "Demostración")}<small>PáginasPro</small></a>`}
 </header>
 <div class="h3-seg" id="seg">
   <button data-k="normal">${T("Normal", "Normal", "Normal")}</button>
@@ -44,7 +51,7 @@ $("app").innerHTML = `
     <button id="beat" class="on" aria-label="${T("Batimento", "Heartbeat", "Latido")}">♥<span>${T("Batendo", "Beating", "Latiendo")}</span></button>
     <button id="sound" aria-label="${T("Som", "Sound", "Sonido")}">🔈<span>${T("Som", "Sound", "Sonido")}</span></button>
     <button id="labelsBtn" aria-label="${T("Nomes", "Names", "Nombres")}">Aa<span>${T("Nomes", "Names", "Nombres")}</span></button>
-    <a id="wa" class="h3-wa" target="_blank" rel="noopener">${T("Quero no meu consultório", "I want this for my clinic", "Lo quiero en mi consultorio")}</a>
+    <a id="wa" class="h3-wa" target="_blank" rel="noopener"${doctor ? " hidden" : ""}>${T("Quero no meu consultório", "I want this for my clinic", "Lo quiero en mi consultorio")}</a>
   </div>
 </nav>
 <div class="h3-load" id="load"><div class="h3-pulse">♥</div><span>${T("Preparando o coração…", "Preparing the heart…", "Preparando el corazón…")}</span></div>
@@ -314,8 +321,9 @@ const flowKind = new WeakMap<Flow, Kind>();
 const kindOfFlow = (f: Flow) => flowKind.get(f) ?? "normal";
 
 // ---------- estado
-let show: Show = params.get("ver") === "comparar" ? "both" : params.get("ver") === "tetralogia" || location.pathname.includes("fallot") ? "tof" : "normal";
-let mode: Mode = "out";
+let show: Show = params.get("ver") === "comparar" || (doctor && !params.get("ver")) ? "both" : params.get("ver") === "tetralogia" || location.pathname.includes("fallot") ? "tof" : "normal";
+// o link do médico já abre comparando, por dentro
+let mode: Mode = doctor && !params.get("modo") ? "cut" : "out";
 let selected: Spot | null = null;
 // nomes e números ficam escondidos: o coração aparece limpo; liga no botão "Nomes" ou abre um defeito pelo cartão
 let beating = true, sound = false, labelsOn = false;
