@@ -21,6 +21,10 @@
       "destination": "/montagem.html"
     },
     {
+      "source": "/coracao/:slug",
+      "destination": "/coracao.html"
+    },
+    {
       "source": "/media/:path*",
       "destination": "https://rrlxhnmfsmknzhqpfrhr.supabase.co/storage/v1/object/public/media/:path*"
     },
@@ -113,6 +117,15 @@
     },
     {
       "source": "/montagem/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/coracao/(.*)",
       "headers": [
         {
           "key": "X-Robots-Tag",
