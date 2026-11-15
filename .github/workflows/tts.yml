@@ -1,0 +1,47 @@
+# Narração avulsa (edge-tts) para montar vídeos fora do Studio: video/tts_lines.py → branch "tts-out" (tts/<nome>-*.mp3 + .json).
+name: Narração (voz)
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Nome do arquivo"
+        required: true
+      voice:
+        description: "Voz do edge-tts"
+        required: true
+        default: "pt-BR-AntonioNeural"
+      lines:
+        description: "Falas separadas por |"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  tts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependências
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q "numpy>=1.26" "pillow>=10" "edge-tts>=7.0"
+      - name: Narrar
+        env:
+          NAME: ${{ inputs.name }}
+          VOICE: ${{ inputs.voice }}
+          LINES: ${{ inputs.lines }}
+        run: cd video && python3 tts_lines.py ../tts "$NAME" "$VOICE" "$LINES"
+      - name: Publicar na branch tts-out
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mv tts /tmp/tts-new
+          if git fetch -q --depth 1 origin tts-out; then git checkout -q -B tts-out FETCH_HEAD; else git checkout -q --orphan tts-out && git rm -rf -q --cached .; fi
+          mkdir -p tts && cp /tmp/tts-new/* tts/
+          git add -f tts && git commit -qm "Narração: ${{ inputs.name }}" && git push -q origin HEAD:tts-out
