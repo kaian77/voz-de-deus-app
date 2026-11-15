@@ -125,7 +125,7 @@ function tree(scale = 1) {
   return g;
 }
 
-export function buildExterior() {
+export function buildExterior(hole: { x: number; z: number }[] = []) {
   const g = new THREE.Group();
   const front = facade(FRONT), side = facade(SIDE);
   const white = new THREE.MeshStandardMaterial({ color: 0xedebe5, roughness: 0.9 });
@@ -187,9 +187,17 @@ export function buildExterior() {
     t.repeat.set(30, 30);
     return t;
   })();
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(160, 160), new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 }));
-  ground.rotation.x = -Math.PI / 2;
+  // gramado com o buraco da rampa da garagem (forma no plano XY: y da forma = -z do mundo)
+  const shape = new THREE.Shape([new THREE.Vector2(-80, -80), new THREE.Vector2(80, -80), new THREE.Vector2(80, 80), new THREE.Vector2(-80, 80)]);
+  if (hole.length) shape.holes.push(new THREE.Path(hole.map((p) => new THREE.Vector2(p.x, -p.z))));
+  const ground = new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: grassTex, roughness: 1 }));
+  {
+    // a textura repete como antes (30 vezes em 160 m)
+    const uv = ground.geometry.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) + 80) / 160, (uv.getY(i) + 80) / 160);
+  }
   ground.receiveShadow = true;
+  ground.castShadow = true; // faz sombra na garagem do subsolo
   g.add(ground);
   const concrete = new THREE.MeshStandardMaterial({ color: 0xc9c3b6, roughness: 0.95 });
   const plate = (x: number, z: number, w: number, d: number, mat: THREE.Material, y = 0.02) => {
@@ -220,30 +228,17 @@ export function buildExterior() {
     }
     g.add(bars);
   };
-  fence(-24, 18.2, 12, 18.2);
+  fence(-24, 18.2, 4, 18.2);
+  fence(7, 18.2, 12, 18.2); // portão de pedestre em x 4..7
   fence(-24, -16, -24, 18.2);
   fence(-24, -16, 24, -16);
-  // rampa da garagem (desce pela direita do prédio)
-  const ramp = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.2, 16), new THREE.MeshStandardMaterial({ color: 0x45474b, roughness: 0.9 }));
-  ramp.position.set(19.5, -0.9, 9);
-  ramp.rotation.x = -0.18;
-  g.add(ramp);
-  for (const s of [-1, 1]) {
-    const w = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1.1, 16), white);
-    w.position.set(19.5 + s * 3.3, 0.2, 9);
-    w.castShadow = true;
-    g.add(w);
-  }
-  const portal = new THREE.Mesh(new THREE.BoxGeometry(6.9, 0.5, 0.4), white);
-  portal.position.set(19.5, 2.4, 1.2);
-  g.add(portal);
   // árvores e carros na rua
-  for (const [x, z, s] of [[-21, 14, 1.1], [-21, 4, 0.9], [-21, -8, 1.2], [-8, 16.5, 0.8], [6, 16.5, 0.9], [27, 12, 1.2], [28, -6, 1.0], [-12, -13.5, 1.0], [10, -13.5, 0.9]]) {
+  for (const [x, z, s] of [[-21, 14, 1.1], [-21, 4, 0.9], [-21, -8, 1.2], [-8, 16.5, 0.8], [6, 16.5, 0.9], [31.5, 12, 1.2], [28, -6, 1.0], [-12, -13.5, 1.0], [10, -13.5, 0.9]]) {
     const t = tree(s);
     t.position.set(x, 0, z);
     g.add(t);
   }
-  [[-30, 24, 1], [-14, 28, -1], [12, 24, 1], [36, 28, -1]].forEach(([x, z, dir], i) => {
+  [[-30, 24, 1], [-14, 28, -1], [-46, 24, 1], [36, 28, -1]].forEach(([x, z, dir], i) => {
     const car = makeCar(CAR_TYPES[i % 4].id, CAR_COLORS[(i * 2) % CAR_COLORS.length].hex);
     car.position.set(x, 0, z);
     car.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
