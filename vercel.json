@@ -25,6 +25,10 @@
       "destination": "/coracao.html"
     },
     {
+      "source": "/predio/:slug",
+      "destination": "/predio.html"
+    },
+    {
       "source": "/media/:path*",
       "destination": "https://rrlxhnmfsmknzhqpfrhr.supabase.co/storage/v1/object/public/media/:path*"
     },
@@ -117,6 +121,15 @@
     },
     {
       "source": "/montagem/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/predio/(.*)",
       "headers": [
         {
           "key": "X-Robots-Tag",
