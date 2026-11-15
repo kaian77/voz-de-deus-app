@@ -17,7 +17,10 @@ const WHATSAPP = "5561992372216";
 const $ = <E extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as E;
 const pad = (n: number) => String(n).padStart(2, "0");
 type View = "predio" | "garagem" | "sorteio";
-type Phase = "idle" | "show" | "walk" | "enter" | "fwd" | "pause" | "rev" | "done";
+type Phase = "idle" | "show" | "walk" | "enter" | "fwd" | "pause" | "rev" | "done" | "foot";
+// sorteio só pelo link do síndico (?sindico=<chave>); o resultado (?mapa=) abre para todo mundo
+const SINDICO_KEY = "serrano-sd7k";
+const SINDICO = new URLSearchParams(location.search).get("sindico") === SINDICO_KEY;
 
 $("app").innerHTML = `
 <div class="b3-canvas" id="canvas"></div>
@@ -25,8 +28,10 @@ $("app").innerHTML = `
   <div class="b3-brand"><small>Sobradinho · DF</small><b>Residencial Serrano</b></div>
   <a class="b3-demo" href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">Demonstração<small>PáginasPro</small></a>
 </header>
-<div class="b3-seg" id="seg"><button data-v="predio" class="on">🏢 Prédio</button><button data-v="garagem">🚗 Garagem</button><button data-v="sorteio">🎲 Sorteio</button></div>
+<div class="b3-seg" id="seg"><button data-v="predio" class="on">🏢 Prédio</button><button data-v="garagem">🚗 Garagem</button>${SINDICO ? `<button data-v="sorteio">🎲 Sorteio</button>` : ""}</div>
 <div class="b3-toast" id="toast" hidden></div>
+<button class="b3-dn" id="dn">🌙 Noite</button>
+<div class="b3-tag" id="tag" hidden></div>
 <div class="b3-hud" id="hud" hidden>
   <div class="b3-gear" id="gear">D</div>
   <button id="camBtn">👁 Ver de fora</button>
@@ -40,6 +45,7 @@ $("app").innerHTML = `
   <div class="b3-sensor" id="sensor"><i></i><i></i><i></i><i></i><b id="dist"></b></div>
 </div>
 <section class="b3-sheet" id="sheet"></section>
+<div class="b3-target" id="target" hidden></div>
 <section class="b3-panel" id="panel" hidden></section>
 <div class="b3-load" id="load"><span>Montando o prédio…</span></div>
 `;
@@ -72,6 +78,27 @@ function sky() {
   return t;
 }
 const skyTex = sky();
+function nightSky() {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 256;
+  const x = c.getContext("2d")!;
+  const g = x.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0, "#050a1c");
+  g.addColorStop(0.6, "#13234a");
+  g.addColorStop(1, "#2c3d63");
+  x.fillStyle = g;
+  x.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 160; i++) {
+    x.fillStyle = `rgba(255,255,255,${Math.random() * 0.8})`;
+    x.fillRect(Math.random() * 256, Math.random() * 150, 1, 1);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const nightTex = nightSky();
+let night = false;
 const camera = new THREE.PerspectiveCamera(42, 1, 0.05, 400);
 const rearCam = new THREE.PerspectiveCamera(100, 4 / 3, 0.05, 60);
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -207,13 +234,23 @@ function homeView() {
 
 function setScene(outside: boolean) {
   exterior.visible = outside;
-  scene.background = outside ? skyTex : new THREE.Color(0x1d2228);
-  scene.fog = outside ? new THREE.Fog(0xdcebf6, 90, 220) : null;
+  scene.background = outside ? (night ? nightTex : skyTex) : new THREE.Color(0x1d2228);
+  scene.fog = outside ? (night ? new THREE.Fog(0x0d1630, 70, 200) : new THREE.Fog(0xdcebf6, 90, 220)) : null;
 }
+function setNight(on: boolean) {
+  night = on;
+  (exterior.userData.setNight as (b: boolean) => void)(on);
+  sun.color.set(on ? 0x9fb4ff : 0xfff3e0);
+  scene.environmentIntensity = on ? 0.12 : 0.45;
+  $("dn").textContent = on ? "☀️ Dia" : "🌙 Noite";
+  setScene(exterior.visible);
+}
+$("dn").onclick = () => setNight(!night);
 
 function setView(v: View) {
-  if (phase !== "idle" && phase !== "done" && phase !== "show") return;
+  if (phase !== "idle" && phase !== "done" && phase !== "show" && phase !== "foot") return;
   if (phase === "show") endShow();
+  if (phase === "foot") endFoot(false);
   view = v;
   document.querySelectorAll<HTMLButtonElement>("#seg button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
   $("panel").hidden = v !== "sorteio";
@@ -277,6 +314,19 @@ function renderSheet() {
     $("back").onclick = () => setView("garagem");
     return;
   }
+  if (phase === "foot") {
+    sh.classList.remove("min");
+    sh.innerHTML = `<p class="b3-drive">Arraste para olhar · <b>toque no chão</b> para andar até lá</p>
+      <div class="b3-quick"><button data-go="fim">⬅ Fim do corredor</button><button data-go="portao">Portão ➡</button>${chosen ? `<button data-go="vaga">Vaga ${pad(chosen.n)}</button>` : ""}<button data-go="sair">✕ Sair</button></div>`;
+    sh.querySelectorAll<HTMLButtonElement>("[data-go]").forEach((b) => (b.onclick = () => {
+      const g = b.dataset.go;
+      if (g === "sair") return endFoot();
+      if (g === "fim") walkTo(-18.6, -0.6);
+      else if (g === "portao") walkTo(20.6, -0.6);
+      else if (chosen) walkTo(chosen.x, chosen.side * 3.3);
+    }));
+    return;
+  }
   if (phase !== "idle" && phase !== "done") {
     sh.classList.add("min");
     sh.innerHTML = `<p class="b3-drive">${phase === "rev" || phase === "pause" ? `Entrando de ré na vaga <b>${pad(chosen!.n)}</b>…` : phase === "walk" || phase === "enter" ? "Indo até o carro…" : `Indo para a vaga <b>${pad(chosen!.n)}</b>…`}</p>`;
@@ -291,7 +341,8 @@ function renderSheet() {
     <form class="b3-apto" id="aptoForm"><input id="apto" inputmode="numeric" maxlength="3" placeholder="Nº do apto (ex.: 402)"><button>Achar</button></form>
     ${aptMsg ? `<p class="b3-msg">${aptMsg}</p>` : ""}
     <div class="b3-spots">${[...garage.spots].sort((a, b) => a.n - b.n).map((sp) => `<button data-s="${sp.n}" class="${chosen === sp ? "on" : ""} ${sp.motos ? "taken" : ""}" title="${spotLabel(sp.n)}">${pad(sp.n)}${sp.pcd ? "♿" : ""}<small>${sp.motos ? "motos" : aptOf(sp.n) ?? "—"}</small></button>`).join("")}</div>
-    <button class="b3-big" id="next" ${chosen ? "" : "disabled"}>${chosen ? `Escolher o carro → vaga ${pad(chosen.n)}` : "Diga o apto ou toque na vaga"}</button>`}`;
+    <button class="b3-big" id="next" ${chosen ? "" : "disabled"}>${chosen ? `Escolher o carro → vaga ${pad(chosen.n)}` : "Diga o apto ou toque na vaga"}</button>
+    <button class="b3-big alt" id="foot">🚶 Andar pela garagem a pé</button>`}`;
   if (done) {
     $("again").onclick = () => {
       phase = "idle";
@@ -327,6 +378,7 @@ function renderSheet() {
     choose(sp);
   }));
   $<HTMLButtonElement>("next").onclick = startShow;
+  $("foot").onclick = startFoot;
 }
 
 function choose(sp: Spot) {
@@ -335,7 +387,6 @@ function choose(sp: Spot) {
   phase = "idle";
   chosen = sp;
   clearMyCar();
-  placeNeighbors(sp.n);
   for (const o of garage.spots) (o.mesh.material as THREE.MeshBasicMaterial).opacity = o === sp ? 0.45 : 0;
   const t = toWorld(sp.x, sp.z * 0.6);
   fly = { pos: t.clone().add(portrait() ? new THREE.Vector3(-10, 34, 0) : new THREE.Vector3(0, 18, -sp.side * 14)), target: t };
@@ -357,6 +408,7 @@ function spawnShowCar() {
 }
 function startShow() {
   if (!chosen) return;
+  placeNeighbors(chosen.n); // a vaga escolhida fica livre para o seu carro
   phase = "show";
   setScene(true);
   spawnShowCar();
@@ -448,17 +500,159 @@ $("sndBtn").onclick = () => {
   if (engGain) engGain.gain.value = 0;
 };
 
+// ---------- andar a pé pela garagem (primeira pessoa, olhos a 1,6 m)
+const foot = { x: 20.4, z: -0.8, yaw: Math.PI / 2, pitch: -0.05, tx: 20.4, tz: -0.8, t: 0, step: 0 };
+const EYE = 1.6, BODY = 0.28;
+function footBlocked(x: number, z: number) {
+  const me: Box = { x, z, hw: BODY, hd: BODY, ang: 0 };
+  if (x > GATE_X - 0.2) return true;
+  for (const o of garage.obstacles) if (Math.abs(o.x - x) < 8 || o.hw > 6) if (gap(me, o) < 0) return true;
+  for (const n of neighbors) if (gap(me, n.box) < 0) return true;
+  return false;
+}
+function walkTo(x: number, z: number) {
+  foot.tx = x;
+  foot.tz = z;
+  const m = $("target");
+  m.hidden = true;
+  // vira o corpo para onde vai
+  foot.yaw = Math.atan2(-(x - foot.x), -(z - foot.z));
+}
+function startFoot() {
+  phase = "foot";
+  setScene(false);
+  fly = null;
+  controls.enabled = false;
+  controls.autoRotate = false;
+  clearMyCar();
+  Object.assign(foot, { x: 20.4, z: -0.8, yaw: Math.PI / 2, pitch: -0.05, tx: 20.4, tz: -0.8 });
+  camera.fov = portrait() ? 72 : 62;
+  camera.updateProjectionMatrix();
+  renderSheet();
+}
+function endFoot(home = true) {
+  phase = "idle";
+  $("target").hidden = true;
+  controls.enabled = true;
+  camera.fov = 42;
+  camera.updateProjectionMatrix();
+  controls.target.copy(camera.position).add(camera.getWorldDirection(tmp).multiplyScalar(5));
+  if (home) {
+    homeView();
+    renderSheet();
+  }
+}
+function stepFoot(dt: number) {
+  const dx = foot.tx - foot.x, dz = foot.tz - foot.z, d = Math.hypot(dx, dz);
+  let moving = false;
+  if (d > 0.05) {
+    const v = Math.min(1.5, 0.4 + d * 1.2) * dt;
+    const nx = foot.x + (dx / d) * Math.min(v, d), nz = foot.z + (dz / d) * Math.min(v, d);
+    if (!footBlocked(nx, nz)) {
+      foot.x = nx;
+      foot.z = nz;
+      moving = true;
+    } else if (!footBlocked(nx, foot.z)) foot.x = nx; // escorrega na parede
+    else if (!footBlocked(foot.x, nz)) foot.z = nz;
+    else {
+      foot.tx = foot.x;
+      foot.tz = foot.z;
+    }
+    // vira devagar para a direção do passo
+    const want = Math.atan2(-dx, -dz);
+    let dy = want - foot.yaw;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    foot.yaw += dy * (1 - Math.exp(-dt * 3));
+  }
+  if (moving) foot.step += dt * 9;
+  const bob = moving ? Math.sin(foot.step) * 0.035 : 0;
+  camera.position.set(foot.x, GY + EYE + bob, foot.z);
+  const cp = Math.cos(foot.pitch);
+  camera.lookAt(foot.x - Math.sin(foot.yaw) * cp, GY + EYE + bob + Math.sin(foot.pitch), foot.z - Math.cos(foot.yaw) * cp);
+  // marcador de destino no chão
+  const m = $("target");
+  if (d > 0.3) {
+    tmp.set(foot.tx, GY + 0.02, foot.tz).project(camera);
+    m.hidden = tmp.z > 1;
+    m.style.transform = `translate(${((tmp.x + 1) / 2) * innerWidth}px, ${((1 - tmp.y) / 2) * innerHeight}px) translate(-50%, -50%) scaleY(0.45)`;
+  } else m.hidden = true;
+}
+
+// ---------- toque numa vaga ou carro: mostra de quem é (bloco e apartamento)
+let tagAt: THREE.Vector3 | null = null, tagUntil = 0;
+function showTag(sp: Spot) {
+  const a = aptOf(sp.n);
+  $("tag").innerHTML = sp.motos ? `<small>Vaga 01</small><b>Motos</b>` : a ? `<small>Vaga ${pad(sp.n)}${sp.pcd ? " · PcD" : ""}</small><b>Bloco C · Apto ${a}</b>` : `<small>Vaga ${pad(sp.n)}</small><b>Sem dono neste mapa</b>`;
+  tagAt = toWorld(sp.x, sp.z, 1.9);
+  tagUntil = performance.now() + 5000;
+}
+function placeTag() {
+  const el = $("tag");
+  if (!tagAt || performance.now() > tagUntil) {
+    el.hidden = true;
+    return;
+  }
+  tmp.copy(tagAt).project(camera);
+  el.hidden = tmp.z > 1 || Math.abs(tmp.x) > 1.1 || Math.abs(tmp.y) > 1.1;
+  el.style.transform = `translate(${((tmp.x + 1) / 2) * innerWidth}px, ${((1 - tmp.y) / 2) * innerHeight}px) translate(-50%, -100%)`;
+}
+/** vaga embaixo do toque (pelo carro estacionado ou pelo chão da vaga) */
+function spotAt(e: PointerEvent): Spot | null {
+  ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hits = ray.intersectObjects([...neighbors.map((n) => n.car), ...garage.spots.map((sp) => sp.mesh)], true);
+  for (const h of hits) {
+    const sp = garage.spots.find((o) => o.mesh === h.object);
+    if (sp) return sp;
+    const nb = neighbors.find((n) => { let o: THREE.Object3D | null = h.object; while (o) { if (o === n.car) return true; o = o.parent; } return false; });
+    if (nb) return garage.spots.find((o) => o.n === nb.n) ?? null;
+  }
+  return null;
+}
+
 // ---------- toque na vaga do desenho
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 let down: { x: number; y: number } | null = null;
-renderer.domElement.addEventListener("pointerdown", (e) => (down = { x: e.clientX, y: e.clientY }));
+let dragged = false, last = { x: 0, y: 0 };
+renderer.domElement.addEventListener("pointerdown", (e) => {
+  down = { x: e.clientX, y: e.clientY };
+  last = { ...down };
+  dragged = false;
+});
+renderer.domElement.addEventListener("pointermove", (e) => {
+  if (!down || phase !== "foot") return;
+  if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) dragged = true;
+  // arrastar = virar a cabeça
+  foot.yaw += (e.clientX - last.x) * 0.0055;
+  foot.pitch = THREE.MathUtils.clamp(foot.pitch + (e.clientY - last.y) * 0.004, -0.9, 0.7);
+  last = { x: e.clientX, y: e.clientY };
+});
 renderer.domElement.addEventListener("pointerup", (e) => {
+  if (phase === "foot") {
+    if (down && !dragged) {
+      const sp = spotAt(e);
+      if (sp && (neighbors.some((n) => n.n === sp.n) || Math.hypot(sp.x - foot.x, sp.z - foot.z) < 9)) {
+        showTag(sp);
+        if (neighbors.some((n) => n.n === sp.n)) {
+          down = null;
+          return; // tocou no carro: só mostra de quem é
+        }
+      }
+      // toque no chão = andar até lá
+      ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      const hit = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -GY), tmp);
+      if (hit && ray.ray.direction.y < -0.02) walkTo(hit.x, hit.z);
+    }
+    down = null;
+    return;
+  }
   if (!down || view !== "garagem" || (phase !== "idle" && phase !== "done") || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) return;
   ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  const hit = ray.intersectObjects(garage.spots.map((sp) => sp.mesh))[0];
-  if (hit) {
-    const sp = garage.spots.find((o) => o.mesh === hit.object)!;
+  const sp = spotAt(e);
+  if (sp) {
+    showTag(sp);
     aptMsg = sp.motos ? "" : `Vaga <b>${pad(sp.n)}</b> · ${spotLabel(sp.n)}`;
     choose(sp);
   }
@@ -477,7 +671,7 @@ const q = new URLSearchParams(location.search);
 homeView();
 camera.position.copy(fly!.pos);
 controls.target.copy(fly!.target);
-setView(q.get("ver") === "sorteio" ? "sorteio" : q.get("ver") === "garagem" || q.has("mapa") ? "garagem" : "predio");
+setView(q.get("ver") === "sorteio" && SINDICO ? "sorteio" : q.get("ver") === "garagem" || q.has("mapa") ? "garagem" : "predio");
 if (q.has("mapa")) toast(`Mapa de vagas ${fmt(draw.from)} a ${fmt(draw.to)}`, 3500);
 $("load").hidden = true;
 
@@ -582,6 +776,12 @@ if (q.has("debug"))
   Object.assign(window, {
     __b3: {
       phase: () => phase,
+      foot,
+      screenOf: (n: number) => {
+        const sp = garage.spots.find((o) => o.n === n)!;
+        const v = toWorld(sp.x, sp.z, 0.8).project(camera);
+        return [((v.x + 1) / 2) * innerWidth, ((1 - v.y) / 2) * innerHeight];
+      },
       plan: () => plan,
       minDist: () => minDist,
       // folga da manobra em cada vaga com cada tipo de carro
@@ -602,7 +802,10 @@ renderer.setAnimationLoop(() => {
   if (view === "sorteio") return;
   let driving = false;
 
-  if (phase === "walk" && walkTrack) {
+  if (phase === "foot") {
+    stepFoot(dt);
+    driving = true;
+  } else if (phase === "walk" && walkTrack) {
     walkT = Math.min(walkTrack.len, walkT + dt * 1.9);
     walkTrack.at(walkT, p0);
     walkTrack.at(Math.min(walkTrack.len, walkT + 0.3), p1);
@@ -686,7 +889,12 @@ renderer.setAnimationLoop(() => {
   // teto do subsolo só aparece quando a câmera está embaixo dele
   garage.ceiling.visible = camera.position.y < GY + CEIL;
   // embaixo da terra o sol não ilumina: fica a luz das lâmpadas
-  hemi.intensity = camera.position.y < -0.2 && exterior.visible ? 0.55 : 0.9;
+  const under = camera.position.y < GY + CEIL;
+  hemi.intensity = (camera.position.y < -0.2 && exterior.visible) || under ? 0.55 : 0.9;
+  sun.intensity = under ? 0.15 : night ? 0.35 : 2.6;
+  if (night && !under) hemi.intensity = 0.22;
+  $("dn").hidden = !exterior.visible || !["idle", "show", "done"].includes(phase);
+  placeTag();
 
   renderer.setViewport(0, 0, innerWidth, innerHeight);
   renderer.setScissorTest(false);
