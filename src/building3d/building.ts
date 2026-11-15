@@ -34,6 +34,22 @@ function facade(segs: Seg[]) {
   cv.width = Math.round(wm * PX);
   cv.height = Math.round(hm * PX);
   const c = cv.getContext("2d")!;
+  // segunda textura: só as janelas acesas (brilho à noite)
+  const gv = document.createElement("canvas");
+  gv.width = cv.width;
+  gv.height = cv.height;
+  const gc = gv.getContext("2d")!;
+  gc.fillStyle = "#000";
+  gc.fillRect(0, 0, gv.width, gv.height);
+  const lit = (x: number, y: number, w: number, h: number) => {
+    if (Math.random() < 0.38) return;
+    const warm = Math.random() < 0.75;
+    const gr = gc.createLinearGradient(0, y, 0, y + h);
+    gr.addColorStop(0, warm ? "#ffd58a" : "#cfe3ff");
+    gr.addColorStop(1, warm ? "#c98a3a" : "#7f9cc4");
+    gc.fillStyle = gr;
+    gc.fillRect(x, y, w, h);
+  };
   let x0 = 0;
   for (const s of segs) {
     const x = x0 * PX, w = s.w * PX;
@@ -53,6 +69,7 @@ function facade(segs: Seg[]) {
           gr.addColorStop(1, "#1f2b37");
           c.fillStyle = gr;
           c.fillRect(cx - ww / 2, wy, ww, wh);
+          lit(cx - ww / 2, wy, ww, wh);
           c.fillStyle = "rgba(255,255,255,0.18)";
           c.fillRect(cx - ww / 2, wy, ww * 0.45, wh);
           c.fillStyle = "#f7f7f5";
@@ -81,6 +98,7 @@ function facade(segs: Seg[]) {
           c.fillRect(cx - bw / 2, by, bw, bh);
           c.fillStyle = "#26323c";
           c.fillRect(cx - bw * 0.35, by + 0.2 * PX, bw * 0.7, bh - 0.25 * PX);
+          lit(cx - bw * 0.35, by + 0.2 * PX, bw * 0.7, bh - 0.25 * PX);
           c.fillStyle = "rgba(255,255,255,0.15)";
           c.fillRect(cx - bw * 0.35, by + 0.2 * PX, bw * 0.25, bh - 0.25 * PX);
           const ry = by + bh - 1.1 * PX;
@@ -105,7 +123,9 @@ function facade(segs: Seg[]) {
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
-  return t;
+  const glow = new THREE.CanvasTexture(gv);
+  glow.colorSpace = THREE.SRGBColorSpace;
+  return [t, glow] as const;
 }
 
 function tree(scale = 1) {
@@ -127,15 +147,16 @@ function tree(scale = 1) {
 
 export function buildExterior(hole: { x: number; z: number }[] = []) {
   const g = new THREE.Group();
-  const front = facade(FRONT), side = facade(SIDE);
+  const [front, frontGlow] = facade(FRONT), [side, sideGlow] = facade(SIDE);
+  const lamp = (map: THREE.Texture, glow: THREE.Texture) => new THREE.MeshStandardMaterial({ map, roughness: 0.88, emissiveMap: glow, emissive: 0xffffff, emissiveIntensity: 0 });
   const white = new THREE.MeshStandardMaterial({ color: 0xedebe5, roughness: 0.9 });
   const mats = [
-    new THREE.MeshStandardMaterial({ map: side, roughness: 0.88 }),
-    new THREE.MeshStandardMaterial({ map: side, roughness: 0.88 }),
+    lamp(side, sideGlow),
+    lamp(side, sideGlow),
     new THREE.MeshStandardMaterial({ color: 0x9a9a96, roughness: 0.95 }),
     white,
-    new THREE.MeshStandardMaterial({ map: front, roughness: 0.88 }),
-    new THREE.MeshStandardMaterial({ map: front, roughness: 0.88 }),
+    lamp(front, frontGlow),
+    lamp(front, frontGlow),
   ];
   const H = FLOORS * FLOOR + 1.0;
   const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), mats);
@@ -244,5 +265,31 @@ export function buildExterior(hole: { x: number; z: number }[] = []) {
     car.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
     g.add(car);
   });
+  // postes na calçada (acendem à noite)
+  const pole = new THREE.MeshStandardMaterial({ color: 0x4a4d52, roughness: 0.6, metalness: 0.5 });
+  const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff1d0, emissive: 0xffd28a, emissiveIntensity: 0 });
+  const streetLights: THREE.PointLight[] = [];
+  for (const x of [-30, -12, 6, 24, 42]) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 6, 8), pole);
+    p.position.set(x, 3, 21.2);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.4), pole);
+    arm.position.set(x, 5.95, 21.9);
+    const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.12, 0.6), bulbMat);
+    bulb.position.set(x, 5.85, 22.5);
+    const l = new THREE.PointLight(0xffc98a, 0, 16, 1.4);
+    l.position.set(x, 5.6, 22.5);
+    g.add(p, arm, bulb, l);
+    streetLights.push(l);
+  }
+  // luz do hall de entrada (pilotis)
+  const lobbyLight = new THREE.PointLight(0xffe2b0, 0, 14, 1.5);
+  lobbyLight.position.set(0, 2.6, 4);
+  g.add(lobbyLight);
+  g.userData.setNight = (on: boolean) => {
+    for (const m of mats) if ("emissiveIntensity" in m && m.emissiveMap) m.emissiveIntensity = on ? 1.1 : 0;
+    bulbMat.emissiveIntensity = on ? 2.5 : 0;
+    for (const l of streetLights) l.intensity = on ? 40 : 0;
+    lobbyLight.intensity = on ? 25 : 0;
+  };
   return g;
 }

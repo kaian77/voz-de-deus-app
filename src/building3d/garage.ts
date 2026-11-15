@@ -1,5 +1,5 @@
 // Subsolo do Residencial Serrano (Bloco C), pelo mapa de vagas do quadro de avisos e pelas fotos do dono:
-// em cima Bicicletário | 13..08 | Depósito | Escada | 07..01 (01 = motos); embaixo 15 (PcD)..21 | Hall | Elevador | 22..27;
+// em cima Bicicletário | 13..08 | Depósito | Escada | 07..01 (01 = motos); embaixo 15 (PcD)..21 | Elevador (2 portas, logo à direita do carro da 21) | Hall | 22..27;
 // corredor com faixas de pedestre zebradas amarelo/branco, pilares cinza-esverdeados com faixa amarela e preta,
 // paredes creme com a mesma faixa, teto de concreto com canos e lâmpadas tubulares; no fim do corredor o portão
 // de grades brancas e a rampa curva de concreto estampado até a rua.
@@ -342,15 +342,40 @@ export function buildGarage() {
   const exitSign = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.15), new THREE.MeshBasicMaterial({ color: 0x1fae4f }));
   exitSign.position.set(1.9, 2.3, -ROW0 + 0.02);
   g.add(exitSign);
-  // hall (piso cinza) e elevadores
+  // elevadores logo à direita do carro da vaga 21 (duas portas lado a lado, de frente para o corredor) e o hall
+  // de piso cinza até a vaga 22, com o quadro de avisos de cortiça no fundo
   const hallFloor = new THREE.Mesh(new THREE.PlaneGeometry(5.5, SPOT_D), new THREE.MeshStandardMaterial({ color: 0x6f7377, roughness: 0.6 }));
   hallFloor.rotation.x = -Math.PI / 2;
   hallFloor.position.set(0.25, 0.012, ROW_C);
   g.add(hallFloor);
-  wall(1.5, (ROW0 + WALL) / 2 + 0.6, 3, WALL - ROW0 - 1.2);
-  for (const x of [0.75, 2.25]) door(x, ROW0 + 1.18, steel, 1.0);
+  const EZ = ROW0 + 0.9; // frente das portas
+  wall(-2.5, (ROW0 + WALL) / 2, 0.25, WALL - ROW0); // parede ao lado do carro da 21
+  wall(-0.95, (EZ + WALL) / 2 + 0.15, 2.9, WALL - EZ - 0.3); // poço dos elevadores
+  wall(0.55, (EZ + WALL) / 2 + 0.15, 0.2, WALL - EZ - 0.3);
+  wall(3, (ROW0 + WALL) / 2, 0.25, WALL - ROW0); // parede ao lado da 22
+  const frame = new THREE.MeshStandardMaterial({ color: 0x5d6166, roughness: 0.4, metalness: 0.7 });
+  for (const x of [-1.75, -0.35]) {
+    const d = door(x, EZ - 0.04, steel, 1.0);
+    d.scale.y = 1.02;
+    // batente e a junta do meio da porta
+    const f = new THREE.Mesh(new THREE.BoxGeometry(1.16, 2.24, 0.04), frame);
+    f.position.set(x, 1.1, EZ - 0.02);
+    g.add(f);
+    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.012, 2.1, 0.07), frame);
+    seam.position.set(x, 1.05, EZ - 0.04);
+    g.add(seam);
+    // indicador do andar em cima da porta
+    const ind = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.12), new THREE.MeshBasicMaterial({ map: numberTex("S", "#ff5a3a", "#111") }));
+    ind.position.set(x, 2.38, EZ - 0.08);
+    ind.rotation.y = Math.PI;
+    g.add(ind);
+  }
+  // botoeira entre as duas portas
+  const btn = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.03), frame);
+  btn.position.set(-1.05, 1.15, EZ - 0.06);
+  g.add(btn);
   const board = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.7), new THREE.MeshStandardMaterial({ color: 0x9c7a52, roughness: 1 }));
-  board.position.set(-1.2, 1.5, WALL - 0.02);
+  board.position.set(1.8, 1.5, WALL - 0.02);
   board.rotation.y = Math.PI;
   g.add(board);
 
