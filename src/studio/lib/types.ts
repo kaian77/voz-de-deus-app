@@ -388,6 +388,8 @@ export interface Lead {
   send_text?: string | null;
   send_error?: string | null;
   bot_sent_at?: string | null;
+  /** Conversa colada no CRM (WhatsApp pessoal) para a IA sugerir a resposta */
+  chat?: { from: "me" | "client"; text: string; at: string }[];
   notes: string | null;
   contacted_at: string | null;
   created_at: string;
@@ -450,6 +452,8 @@ export interface ManualLead {
   send_text?: string | null;
   send_error?: string | null;
   bot_sent_at?: string | null;
+  /** Conversa colada no CRM (WhatsApp pessoal) para a IA sugerir a resposta */
+  chat?: { from: "me" | "client"; text: string; at: string }[];
   notes: string | null;
   contacted_at: string | null;
   created_at: string;

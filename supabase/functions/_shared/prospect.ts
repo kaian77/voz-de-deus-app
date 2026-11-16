@@ -5,6 +5,10 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { igPublicProfile } from "./instagram.ts";
 import { wahaChatIdFor, wahaSendText } from "./whatsapp.ts";
+import { z } from "npm:zod@4";
+import { generateJSON } from "./claude.ts";
+import { clientOffer } from "./mercadopago.ts";
+import { offerFor, systemPrompt } from "./paginaspro-agent.ts";
 
 const SITE = "https://paginaspro.app.br";
 
@@ -122,7 +126,7 @@ export async function runProspecting(db: SupabaseClient) {
           user_id: o.user_id, slug: `rascunho-${crypto.randomUUID()}`, lead_id: lead.id, name: lead.name,
           niche: (search?.query?.includes(",") ? lead.category : search?.query) || lead.category || "", city: search?.place ?? null, whatsapp: lead.whatsapp,
           instagram: ig, address: lead.address, rating: lead.rating, reviews: lead.reviews, photos: [], notes,
-          tier: lead.kind === "upgrade" ? "premium" : "normal", auto_status: "queued",
+          tier: "premium", auto_status: "queued",
         }).select("id").single();
         if (error) throw error;
         pageId = page.id;
@@ -221,4 +225,70 @@ async function pauseOutbox(db: SupabaseClient, userId: string, why: string) {
   await db.from("leads").update({ send_after: null, send_text: null, send_error: why.slice(0, 200) }).eq("user_id", userId).not("send_after", "is", null);
   const { notify } = await import("./push.ts");
   await notify(db, userId, "⏸️ Envio automático pausado", why, "/studio/crm").catch(() => undefined);
+}
+
+// ---------------------------------------------------------------------------
+// CRM: o dono conversa com o lead no WhatsApp pessoal (não conectado). Ele cola o que o cliente respondeu e a IA
+// escreve a resposta como o atendente da PáginasPro, com a prévia, os preços da prospecção e o link de pagamento
+// só daquele cliente (Mercado Pago, valor certo). A conversa fica em leads.chat para a próxima resposta ter contexto.
+// ---------------------------------------------------------------------------
+const Reply = z.object({
+  reply: z.string().describe("resposta para o Bruno mandar no WhatsApp: curta (até 4 frases), natural, em primeira pessoa; vazio se não precisa responder"),
+  stage: z.enum(["talking", "won", "lost"]).describe("talking = conversa segue; won = o cliente disse que pagou ou fechou; lost = recusou de vez"),
+  note: z.string().describe("1 frase para o Bruno: o que o cliente quer ou o próximo passo (ex.: 'pediu para trocar a cor', 'vai pagar amanhã')"),
+});
+
+/** Links e preços para este lead: à vista com link do Mercado Pago só dele (valor certo), mensal pelo link fixo. */
+export async function leadOffer(db: SupabaseClient, lead: Record<string, any>) {
+  const offer = await offerFor(db, lead.user_id);
+  const { data: page } = lead.landing_id ? await db.from("landing_pages").select("id,name,pay_links,slug,status,domain").eq("id", lead.landing_id).maybeSingle() : { data: null };
+  const o = page ? await clientOffer(db, page, offer).catch(() => offer) : offer;
+  const upgrade = lead.kind === "upgrade";
+  return {
+    page,
+    url: page ? (page.status === "published" && page.domain ? `https://${page.domain}` : `${SITE}/p/${page.slug}`) : null,
+    oneTime: Number(upgrade ? o.upgradeOneTime : o.oneTime),
+    oneTimeLink: String((upgrade ? o.upgradeOneTimeLink : o.oneTimeLink) ?? ""),
+    monthly: Number(upgrade ? o.upgradeMonthly : o.monthly),
+    monthlyLink: String(o.monthlyLink ?? ""),
+    change: Number(o.change),
+    offer: o,
+  };
+}
+
+export async function crmReply(db: SupabaseClient, userId: string, leadId: string, clientText: string, myText?: string) {
+  const { data: lead } = await db.from("leads").select("*").eq("id", leadId).eq("user_id", userId).maybeSingle();
+  if (!lead) throw new Error("Lead não encontrado");
+  const chat: { from: "me" | "client"; text: string; at: string }[] = Array.isArray(lead.chat) ? lead.chat : [];
+  const now = new Date().toISOString();
+  if (!chat.length && lead.prospect_message) chat.push({ from: "me", text: String(lead.prospect_message).split("{saudacao}").join("Oi"), at: lead.contacted_at ?? now });
+  if (myText?.trim()) chat.push({ from: "me", text: myText.trim(), at: now });
+  if (clientText.trim()) chat.push({ from: "client", text: clientText.trim(), at: now });
+  const p = await leadOffer(db, lead);
+  const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
+  const context =
+    `\n\nCONTEXTO DESTA CONVERSA: o Bruno achou este negócio no Google Maps e mandou do WhatsApp dele uma prévia pronta, sem a pessoa ter pedido. ` +
+    `Você escreve a resposta que ele vai mandar (ele copia e envia). Negócio: ${lead.name}${lead.category ? ` (${lead.category})` : ""}. ` +
+    (lead.kind === "upgrade" ? `Eles JÁ TÊM site (${lead.website}); a proposta é trocar pelo nosso, mais bonito e feito para o celular. ` : "Eles não têm site. ") +
+    `Prévia: ${p.url ?? "(ainda sem link)"} (modelo Premium, animado). ` +
+    `PREÇO DESTA PROPOSTA (vale sobre a tabela de planos acima, é a condição da prospecção, inclusive para o Premium): ${brl(p.oneTime)} à vista` +
+    `${p.oneTimeLink ? ` (link de pagamento só deste cliente: ${p.oneTimeLink})` : ""} ou ${brl(p.monthly)}/mês com alterações inclusas${p.monthlyLink ? ` (assinatura: ${p.monthlyLink})` : ""}. ` +
+    `Alteração depois no à vista: ${brl(p.change)}. Domínio próprio é opcional (o cliente compra uns R$ 40/ano no Registro.br e o Bruno configura). ` +
+    `Mande o link de pagamento só quando a pessoa quiser fechar. Se pedir ajuste na prévia, diga que o Bruno ajusta e manda o link de novo (não invente que já ajustou). ` +
+    `Se a pessoa disser que não tem interesse, agradeça com educação em 1 frase e stage=lost. Nunca insista mais de uma vez.`;
+  const transcript = chat.slice(-16).map((m) => `${m.from === "client" ? "CLIENTE" : "BRUNO"}: ${m.text}`).join("\n");
+  const out = await generateJSON(Reply, systemPrompt(p.offer, "whatsapp") + context, `Conversa até agora:\n${transcript}\n\nEscreva a próxima mensagem do Bruno.`, "low");
+  const patch: Record<string, unknown> = { chat: chat.slice(-40), last_touch_at: now };
+  if (clientText.trim() && ["new", "contacted"].includes(lead.status)) Object.assign(patch, { status: "replied", replied_at: lead.replied_at ?? now });
+  await db.from("leads").update(patch).eq("id", lead.id);
+  return { ...out, chat: patch.chat };
+}
+
+/** Resposta enviada pelo Bruno: entra na conversa do lead. */
+export async function crmSent(db: SupabaseClient, userId: string, leadId: string, text: string) {
+  const { data: lead } = await db.from("leads").select("chat").eq("id", leadId).eq("user_id", userId).maybeSingle();
+  if (!lead) throw new Error("Lead não encontrado");
+  const chat = [...(Array.isArray(lead.chat) ? lead.chat : []), { from: "me", text, at: new Date().toISOString() }].slice(-40);
+  await db.from("leads").update({ chat, last_touch_at: new Date().toISOString() }).eq("id", leadId);
+  return { chat };
 }

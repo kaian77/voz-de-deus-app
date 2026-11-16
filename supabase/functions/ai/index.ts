@@ -29,6 +29,7 @@ import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 import { notify, pushPublicKey, sendPendingPush } from "../_shared/push.ts";
 import { ML_SITES, runMlManualSearch } from "../_shared/manual-leads.ts";
 import { isBrax } from "../_shared/brand.ts";
+import { crmReply, crmSent, leadOffer } from "../_shared/prospect.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -326,6 +327,17 @@ Deno.serve(async (req) => {
       await removeStudioFiles(db, urls.filter((u) => u && !keep.has(u) && String(u).includes(`/media/${userId}/`)));
       if (action === "landing_delete") await db.from("landing_pages").delete().eq("id", page.id);
       return json({ ok: true });
+    }
+    if (action === "crm_reply") {
+      return json(await crmReply(db, userId, String(input.id ?? ""), String(input.client ?? ""), input.mine ? String(input.mine) : undefined));
+    }
+    if (action === "crm_sent") return json(await crmSent(db, userId, String(input.id ?? ""), String(input.text ?? "")));
+    if (action === "crm_offer") {
+      // Preços e links da proposta deste lead (à vista com link do Mercado Pago só dele)
+      const { data: lead } = await db.from("leads").select("*").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
+      if (!lead) throw new HttpError(404, "Lead não encontrado");
+      const p = await leadOffer(db, lead);
+      return json({ url: p.url, oneTime: p.oneTime, oneTimeLink: p.oneTimeLink, monthly: p.monthly, monthlyLink: p.monthlyLink, change: p.change });
     }
     if (action === "landing_domain") {
       // Domínio próprio do cliente: salva, põe na Vercel (se houver VERCEL_TOKEN) e diz o que falta no DNS

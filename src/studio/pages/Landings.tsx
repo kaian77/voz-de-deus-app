@@ -397,7 +397,7 @@ function DomainPanel({ page, onChange }: { page: LandingPage; onChange: (domain:
 }
 
 type Form = Pick<LandingPage, "name" | "niche" | "city" | "whatsapp" | "instagram" | "address" | "hours" | "registry" | "notes" | "photos" | "logo" | "tier" | "widget" | "video">;
-const EMPTY: Form = { name: "", niche: "", city: "", whatsapp: "", instagram: "", address: "", hours: "", registry: "", notes: "", photos: [], logo: null, tier: "normal", widget: null, video: null };
+const EMPTY: Form = { name: "", niche: "", city: "", whatsapp: "", instagram: "", address: "", hours: "", registry: "", notes: "", photos: [], logo: null, tier: "premium", widget: null, video: null };
 const toForm = (page: LandingPage): Form => ({ ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map((k) => [k, page[k as keyof Form] ?? EMPTY[k as keyof Form]])) });
 
 /** Resumo do que veio do Instagram/Google para mostrar no editor. */
@@ -833,7 +833,7 @@ export default function Landings() {
   const create = async (prefill: Partial<LandingPage> = {}) => {
     setCreating(true);
     try {
-      const page = await api.insert("landing_pages", { slug: `rascunho-${crypto.randomUUID()}`, name: "", niche: "", photos: [], ...prefill });
+      const page = await api.insert("landing_pages", { slug: `rascunho-${crypto.randomUUID()}`, name: "", niche: "", photos: [], tier: "premium", ...prefill });
       await invalidate("landing_pages");
       setParams({ id: page.id });
     } catch (e) {

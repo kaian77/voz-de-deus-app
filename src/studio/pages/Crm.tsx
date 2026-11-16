@@ -5,19 +5,19 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { CalendarClock, Check, Copy, ExternalLink, Flame, Globe, MessageCircle, RotateCcw, Search, Trophy, X } from "lucide-react";
+import { CalendarClock, Check, Copy, ExternalLink, Flame, Globe, Loader2, MessageCircle, RotateCcw, Search, Sparkles, Trophy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { useOffer, useSaveRow, useTable } from "../lib/hooks";
+import { useInvalidate, useOffer, useSaveRow, useTable } from "../lib/hooks";
 import type { LandingPage, Lead } from "../lib/types";
 import { EmptyState, PageHeader, WhatsAppIcon } from "../components/bits";
 import { SendAll } from "../components/SendAll";
 import { daysSince, followupMessage, humanize, outboxEta, LOST_REASONS, MAX_FOLLOWUPS, nextFollowupAt, PLANS, STAGES, stageOf, waLink, type Stage } from "../lib/crm";
-import { offerMessages } from "../lib/offer";
+import { api } from "../lib/api";
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const ago = (days: number) => (days <= 0 ? "hoje" : days === 1 ? "ontem" : `há ${days} dias`);
@@ -242,8 +242,6 @@ function LeadDetail({ lead: l, page, actions, onSaveNotes }: { lead: Lead; page:
   const priceOf = (p: string) => p === "Mensal" ? (l.kind === "upgrade" ? offer.upgradeMonthly : offer.monthly) : p === "Upgrade" ? offer.upgradeOneTime : p === "Premium" ? offer.premiumOneTime : p === "Link da bio" ? offer.bioOneTime : offer.oneTime;
   const [value, setValue] = useState(String(l.deal_value ?? priceOf(defaultPlan)));
   const [reason, setReason] = useState(LOST_REASONS[0]);
-  const msgs = offerMessages(l.name, link, offer);
-  const copy = (text: string, what: string) => navigator.clipboard.writeText(text).then(() => toast.success(`${what} copiada`));
   const sendText = (text: string) => window.open(waLink(l.whatsapp, text), "_blank");
 
   const timeline = [
@@ -303,16 +301,8 @@ function LeadDetail({ lead: l, page, actions, onSaveNotes }: { lead: Lead; page:
 
       {(stage === "talking" || stage === "waiting" || stage === "followup") && (
         <>
-          <Block title="Mandar preço">
-            <div className="grid grid-cols-2 gap-2">
-              {(l.kind === "upgrade" ? [["upgrade", "Upgrade"], ["premium", "Premium"]] : [["oneTime", "À vista"], ["monthly", "Mensal"], ["premium", "Premium"], ["bio", "Link da bio"]]).map(([k, label]) => (
-                <div key={k} className="flex">
-                  <Button size="sm" variant="outline" className="h-8 flex-1 rounded-r-none text-xs" onClick={() => sendText(msgs[k as keyof typeof msgs])}><WhatsAppIcon className="mr-1 h-3.5 w-3.5" />{label}</Button>
-                  <Button size="sm" variant="outline" className="h-8 rounded-l-none border-l-0 px-2" onClick={() => copy(msgs[k as keyof typeof msgs], `Mensagem ${label}`)}><Copy className="h-3.5 w-3.5" /></Button>
-                </div>
-              ))}
-            </div>
-          </Block>
+          <ChatAssist lead={l} onWon={() => actions.won(l, l.kind === "upgrade" ? "Upgrade" : "À vista", Number(value) || 0)} onLost={() => actions.lost(l, "Não quer site agora")} />
+          <PriceButton lead={l} />
           <Block title="Fechou?">
             <div className="grid grid-cols-[1fr_110px] gap-2">
               <Select value={plan} onValueChange={(v) => { setPlan(v); setValue(String(priceOf(v))); }}>
@@ -359,4 +349,99 @@ function LeadDetail({ lead: l, page, actions, onSaveNotes }: { lead: Lead; page:
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return <section><h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>{children}</section>;
+}
+
+type ChatMsg = { from: "me" | "client"; text: string; at: string };
+
+/** Conversa no WhatsApp pessoal: o Bruno cola a resposta do cliente e a IA escreve a próxima mensagem dele. */
+function ChatAssist({ lead: l, onWon, onLost }: { lead: Lead; onWon: () => void; onLost: () => void }) {
+  const invalidate = useInvalidate();
+  const [client, setClient] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState<{ reply: string; stage: string; note: string } | null>(null);
+  const chat = (Array.isArray(l.chat) ? l.chat : []) as ChatMsg[];
+
+  const suggest = async () => {
+    if (!client.trim() && !chat.length) return toast.error("Cole o que o cliente respondeu");
+    setBusy(true);
+    try {
+      const r = await api.invoke<{ reply: string; stage: string; note: string }>("ai", { action: "crm_reply", id: l.id, client });
+      setDraft(r);
+      setClient("");
+      invalidate("leads");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const send = async (copyOnly = false) => {
+    if (!draft?.reply.trim()) return;
+    if (copyOnly) await navigator.clipboard.writeText(draft.reply).then(() => toast.success("Resposta copiada"));
+    else window.open(waLink(l.whatsapp, draft.reply), "_blank");
+    await api.invoke("ai", { action: "crm_sent", id: l.id, text: draft.reply }).catch(() => undefined);
+    setDraft(null);
+    invalidate("leads");
+  };
+
+  return (
+    <Block title="Responder com a IA">
+      {chat.length > 0 && (
+        <div className="mb-2 max-h-56 space-y-1.5 overflow-y-auto rounded-lg bg-secondary/40 p-2">
+          {chat.slice(-12).map((m, i) => (
+            <p key={i} className={cn("max-w-[85%] whitespace-pre-line rounded-lg px-2.5 py-1.5 text-xs", m.from === "me" ? "ml-auto bg-emerald-100 text-emerald-950 dark:bg-emerald-900/50 dark:text-emerald-50" : "bg-card")}>{m.text}</p>
+          ))}
+        </div>
+      )}
+      <Textarea value={client} onChange={(e) => setClient(e.target.value)} rows={3} placeholder="Cole aqui o que o cliente respondeu no WhatsApp" className="text-[13px]" />
+      <Button className="mt-2 w-full" variant="outline" onClick={suggest} disabled={busy}>
+        {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />}Sugerir resposta
+      </Button>
+      {draft && (
+        <div className="mt-3 rounded-lg border p-3">
+          {draft.note && <p className="mb-2 text-[11px] text-muted-foreground">💡 {draft.note}</p>}
+          <Textarea value={draft.reply} onChange={(e) => setDraft({ ...draft, reply: e.target.value })} rows={5} className="text-[13px]" />
+          <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+            <Button onClick={() => send()}><WhatsAppIcon className="mr-1.5 h-4 w-4" />Enviar pelo WhatsApp</Button>
+            <Button variant="outline" onClick={() => send(true)} title="Copiar"><Copy className="h-4 w-4" /></Button>
+          </div>
+          {draft.stage === "won" && <Button size="sm" variant="ghost" className="mt-2 w-full text-emerald-700" onClick={onWon}><Trophy className="mr-1.5 h-4 w-4" />Parece que fechou: marcar como Fechou</Button>}
+          {draft.stage === "lost" && <Button size="sm" variant="ghost" className="mt-2 w-full" onClick={onLost}><X className="mr-1.5 h-4 w-4" />Recusou: mover para Não fechou</Button>}
+        </div>
+      )}
+    </Block>
+  );
+}
+
+/** Preço da proposta com o link de pagamento só deste cliente (Mercado Pago com o valor certo; pagou = publica e fecha). */
+function PriceButton({ lead: l }: { lead: Lead }) {
+  const [busy, setBusy] = useState(false);
+  const build = async () => {
+    const o = await api.invoke<{ url: string | null; oneTime: number; oneTimeLink: string; monthly: number; monthlyLink: string; change: number }>("ai", { action: "crm_offer", id: l.id });
+    return `Fica ${brl(o.oneTime)} uma vez só (Pix, cartão ou boleto), ou ${brl(o.monthly)}/mês com alterações sempre que precisar.` +
+      (o.oneTimeLink ? `\n\nPara fechar à vista, o pagamento é por aqui: ${o.oneTimeLink}\nAssim que o pagamento cai, o site vai pro ar na hora 🙂` : "") +
+      (o.monthlyLink ? `\n\nSe preferir o mensal (cartão): ${o.monthlyLink}` : "");
+  };
+  const go = async (copyOnly: boolean) => {
+    setBusy(true);
+    try {
+      const text = await build();
+      if (copyOnly) await navigator.clipboard.writeText(text).then(() => toast.success("Mensagem de preço copiada"));
+      else window.open(waLink(l.whatsapp, text), "_blank");
+      api.invoke("ai", { action: "crm_sent", id: l.id, text }).catch(() => undefined);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Block title="Mandar preço e pagamento">
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <Button variant="outline" onClick={() => go(false)} disabled={busy}>{busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <WhatsAppIcon className="mr-1.5 h-4 w-4" />}{l.kind === "upgrade" ? "Preço do upgrade" : "Preço do site"}</Button>
+        <Button variant="outline" onClick={() => go(true)} disabled={busy} title="Copiar"><Copy className="h-4 w-4" /></Button>
+      </div>
+      <p className="mt-1.5 text-[11px] text-muted-foreground">O link à vista é só deste cliente, com o valor certo: quando ele paga, o site publica e o lead vai para Fechou sozinho.</p>
+    </Block>
+  );
 }
