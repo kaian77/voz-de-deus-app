@@ -35,7 +35,7 @@ async function mp(path: string, body?: unknown): Promise<any> {
 }
 
 type Offer = Record<string, number | string>;
-const ONE_TIME = { oneTime: "Site PáginasPro", premiumOneTime: "Site Premium PáginasPro" } as const;
+const ONE_TIME = { oneTime: "Site PáginasPro", premiumOneTime: "Site Premium PáginasPro", bioOneTime: "Link da bio PáginasPro" } as const;
 type OneTimePlan = keyof typeof ONE_TIME;
 
 /** Links de pagamento à vista só deste cliente (guardados em landing_pages.pay_links; refeitos se o preço mudar).
@@ -71,6 +71,7 @@ export async function clientOffer(db: SupabaseClient, page: { id: string; name: 
     ...offer,
     ...(links.oneTime ? { oneTimeLink: links.oneTime.url } : {}),
     ...(links.premiumOneTime ? { premiumOneTimeLink: links.premiumOneTime.url } : {}),
+    ...(links.bioOneTime ? { bioOneTimeLink: links.bioOneTime.url } : {}),
   };
 }
 
@@ -91,7 +92,7 @@ async function onPayment(db: SupabaseClient, id: string) {
   const pay = await mp(`/v1/payments/${id}`);
   if (pay.status !== "approved") return { status: pay.status };
   const ref = String(pay.external_reference ?? "");
-  const m = ref.match(/^lp:([0-9a-f-]{36}):(oneTime|premiumOneTime)$/);
+  const m = ref.match(/^lp:([0-9a-f-]{36}):(oneTime|premiumOneTime|bioOneTime)$/);
   if (!m) return { ignored: "sem referência de landing" }; // pagamento pelos links fixos: o Bruno confere ("paguei" → aviso)
   const [, pageId, plan] = m;
   const { data: page } = await db.from("landing_pages").select("*").eq("id", pageId).maybeSingle();
@@ -105,7 +106,7 @@ async function onPayment(db: SupabaseClient, id: string) {
     await notify(db, page.user_id, `⚠️ Pagamento menor que o plano: ${page.name}`, `Recebido R$ ${amount}; o plano é R$ ${expected}. Site não publicado.`, "/studio/landing");
     return { short: amount };
   }
-  return await publishPaid(db, page, plan === "premiumOneTime" ? { tier: "premium" } : {}, amount);
+  return await publishPaid(db, page, plan === "premiumOneTime" ? { tier: "premium" } : plan === "bioOneTime" ? { tier: "bio" } : {}, amount);
 }
 
 async function onSubscription(db: SupabaseClient, id: string) {
@@ -114,7 +115,7 @@ async function onSubscription(db: SupabaseClient, id: string) {
   if (agenda) return agenda;
   if (sub.status !== "authorized") return { status: sub.status };
   const amount = Number(sub.auto_recurring?.transaction_amount ?? 0);
-  const m = String(sub.external_reference ?? "").match(/^lp:([0-9a-f-]{36}):(monthly|premiumMonthly)$/);
+  const m = String(sub.external_reference ?? "").match(/^lp:([0-9a-f-]{36}):(monthly|premiumMonthly|bioMonthly)$/);
   const { data: page } = m ? await db.from("landing_pages").select("*").eq("id", m[1]).maybeSingle() : { data: null };
   if (!page) {
     // Assinatura pelo link fixo: não dá para saber de qual cliente é; avisa o Bruno uma vez
@@ -125,7 +126,7 @@ async function onSubscription(db: SupabaseClient, id: string) {
     return { unmatched: true };
   }
   if (!(await claim(db, { id: `preapproval:${id}`, user_id: page.user_id, page_id: page.id, plan: m![2], amount, status: sub.status }))) return { duplicate: true };
-  return await publishPaid(db, page, { plan: "monthly", ...(m![2] === "premiumMonthly" ? { tier: "premium" } : {}) }, amount);
+  return await publishPaid(db, page, { plan: "monthly", ...(m![2] === "premiumMonthly" ? { tier: "premium" } : m![2] === "bioMonthly" ? { tier: "bio" } : {}) }, amount);
 }
 
 // deno-lint-ignore no-explicit-any

@@ -318,10 +318,10 @@ Deno.serve(async (req) => {
     }
     if (action === "landing_delete" || action === "landing_remove_files") {
       // Espaço do storage: apagar a página (ou tirar uma foto) apaga os arquivos dela na hora
-      const { data: page } = await db.from("landing_pages").select("id,photos,logo").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
+      const { data: page } = await db.from("landing_pages").select("id,photos,logo,video").eq("id", String(input.id ?? "")).eq("user_id", userId).maybeSingle();
       if (!page) throw new HttpError(404, "Página não encontrada");
-      const keep = new Set(action === "landing_delete" ? [] : [...(page.photos ?? []), page.logo]);
-      const urls = action === "landing_delete" ? [...(page.photos ?? []), page.logo] : ((input.urls as string[] | undefined) ?? []);
+      const keep = new Set(action === "landing_delete" ? [] : [...(page.photos ?? []), page.logo, page.video]);
+      const urls = action === "landing_delete" ? [...(page.photos ?? []), page.logo, page.video] : ((input.urls as string[] | undefined) ?? []);
       // só arquivos do próprio dono que a página não usa mais
       await removeStudioFiles(db, urls.filter((u) => u && !keep.has(u) && String(u).includes(`/media/${userId}/`)));
       if (action === "landing_delete") await db.from("landing_pages").delete().eq("id", page.id);
