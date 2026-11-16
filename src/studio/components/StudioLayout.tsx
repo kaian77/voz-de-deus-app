@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
+  KanbanSquare,
   BarChart3, Bot, Building2, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Gauge, Inbox, Globe, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Star, Store, Workflow, Target, Youtube, Scissors, BookOpen, ImagePlus, Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ const GROUPS: { label?: string; items: Item[] }[] = [
     label: "Renda extra",
     items: [
       { to: "/studio/leads", label: "Leads", icon: MapPin },
+      { to: "/studio/crm", label: "CRM", icon: KanbanSquare },
       { to: "/studio/landing", label: "Landing pages", icon: Globe },
       { to: "/studio/youtube", label: "Canal do YouTube", icon: Youtube },
       { to: "/studio/cortes", label: "Cortes", icon: Scissors },

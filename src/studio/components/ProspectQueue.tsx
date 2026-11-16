@@ -11,6 +11,7 @@ import { api } from "../lib/api";
 import { useSaveRow, useSettings } from "../lib/hooks";
 import type { LandingPage, Lead } from "../lib/types";
 import { Panel, WhatsAppIcon } from "./bits";
+import { humanize, waLink } from "../lib/crm";
 
 const startOfDay = () => {
   const d = new Date();
@@ -41,8 +42,9 @@ export default function ProspectQueue({ leads, pages }: { leads: Lead[]; pages: 
   };
 
   const send = (l: Lead) => {
-    window.open(`https://wa.me/${l.whatsapp}?text=${encodeURIComponent(l.prospect_message ?? "")}`, "_blank");
-    save.mutate({ id: l.id, prospect_status: "sent", status: "contacted", contacted_at: new Date().toISOString() });
+    window.open(waLink(l.whatsapp, l.prospect_message ?? ""), "_blank");
+    const now = new Date().toISOString();
+    save.mutate({ id: l.id, prospect_status: "sent", status: "contacted", contacted_at: now, last_touch_at: now });
   };
   const skip = (l: Lead) => save.mutate({ id: l.id, prospect_status: "skipped" });
   const linkOf = (l: Lead) => {
@@ -85,7 +87,7 @@ export default function ProspectQueue({ leads, pages }: { leads: Lead[]; pages: 
                   <p className="min-w-0 flex-1 truncate text-[13px] font-medium">{l.name}</p>
                   {link && <a href={link} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs hover:underline">Prévia <ExternalLink className="h-3 w-3" /></a>}
                 </div>
-                <p className="line-clamp-3 whitespace-pre-line text-xs text-muted-foreground">{l.prospect_message}</p>
+                <p className="line-clamp-3 whitespace-pre-line text-xs text-muted-foreground">{humanize(l.prospect_message ?? "")}</p>
                 <div className="flex gap-2">
                   <Button size="sm" className="h-8 flex-1" onClick={() => send(l)}><WhatsAppIcon className="mr-1.5 h-4 w-4" />Enviar</Button>
                   <Button size="sm" variant="ghost" className="h-8" onClick={() => skip(l)} title="Não enviar para este"><SkipForward className="h-4 w-4" /></Button>

@@ -374,6 +374,15 @@ export interface Lead {
   prospect_message?: string | null;
   prospect_at?: string | null;
   landing_id?: string | null;
+  /** CRM */
+  deal_value?: number | null;
+  deal_plan?: string | null;
+  closed_at?: string | null;
+  lost_reason?: string | null;
+  followups?: number;
+  last_touch_at?: string | null;
+  replied_at?: string | null;
+  instagram?: string | null;
   notes: string | null;
   contacted_at: string | null;
   created_at: string;
@@ -422,6 +431,15 @@ export interface ManualLead {
   prospect_message?: string | null;
   prospect_at?: string | null;
   landing_id?: string | null;
+  /** CRM */
+  deal_value?: number | null;
+  deal_plan?: string | null;
+  closed_at?: string | null;
+  lost_reason?: string | null;
+  followups?: number;
+  last_touch_at?: string | null;
+  replied_at?: string | null;
+  instagram?: string | null;
   notes: string | null;
   contacted_at: string | null;
   created_at: string;

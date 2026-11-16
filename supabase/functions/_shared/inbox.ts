@@ -25,6 +25,21 @@ async function tokenFor(db: SupabaseClient, accountId: string, channel: Channel)
 }
 
 /** Registra a mensagem recebida. Retorna null se for entrega duplicada do webhook. */
+/** Telefones do WhatsApp com e sem o 9 do celular (o WhatsApp às vezes manda sem). */
+function phoneVariants(id: string) {
+  const d = id.replace(/@.*$/, "").replace(/\D/g, "");
+  if (!d.startsWith("55")) return [d];
+  const ddd = d.slice(2, 4), rest = d.slice(4);
+  return [...new Set([d, rest.length === 8 ? `55${ddd}9${rest}` : d, rest.length === 9 && rest[0] === "9" ? `55${ddd}${rest.slice(1)}` : d])];
+}
+
+async function markLeadReplied(db: SupabaseClient, userId: string, ids: string[]) {
+  const phones = ids.flatMap(phoneVariants).filter((p) => p.length >= 12);
+  if (!phones.length) return;
+  await db.from("leads").update({ status: "replied", replied_at: new Date().toISOString() })
+    .eq("user_id", userId).eq("status", "contacted").in("whatsapp", phones);
+}
+
 export async function recordInbound(
   db: SupabaseClient,
   account: { id: string; user_id: string; meta?: any },
@@ -63,6 +78,8 @@ export async function recordInbound(
     media_url: message.mediaUrl ?? null,
   }).select().single();
   if (error) return null;
+  // CRM da prospecção: lead que a gente chamou respondeu no WhatsApp → "Negociando"
+  if (channel === "whatsapp") await markLeadReplied(db, account.user_id, ids).catch(() => undefined);
 
   const { data: updated } = await db.from("conversations").update({
     last_message_at: now,
