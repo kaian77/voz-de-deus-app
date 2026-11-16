@@ -54,6 +54,25 @@ function issues(a: Audit | null) {
   ].filter(Boolean) as string[];
 }
 
+/** "Clínica odontológica" (categoria do Google) -> "clínicas odontológicas"; sem jeito seguro -> null. */
+const PLURAL: Record<string, string> = {
+  "salão de beleza": "salões de beleza", "clínica de estética": "clínicas de estética", "centro de estética": "centros de estética",
+  "pet shop": "pet shops", "barbearia": "barbearias", "designer de sobrancelhas": "designers de sobrancelha", "manicure": "manicures",
+  "estúdio de beleza": "estúdios de beleza", "escritório de advocacia": "escritórios de advocacia", "academia": "academias",
+};
+function plural(t: string) {
+  if (!t) return null;
+  if (PLURAL[t]) return PLURAL[t];
+  const one = (w: string) => /s$/.test(w) ? w : /ão$/.test(w) ? w.replace(/ão$/, "ões") : /[aeiou]$/.test(w) ? `${w}s` : /[rz]$/.test(w) ? `${w}es` : null;
+  const words = t.split(" ");
+  // substantivo + adjetivo ("clínica odontológica", "clínica veterinária"): os dois no plural
+  if (words.length <= 2 && words.every((w) => /^[a-zà-ú]+$/.test(w))) {
+    const out = words.map(one);
+    return out.every(Boolean) ? out.join(" ") : null;
+  }
+  return null;
+}
+
 /** Variação fixa por lead (mensagens diferentes entre si parecem gente, não robô). */
 const pick = <T,>(arr: T[], seed: string) => arr[[...seed].reduce((a, c) => a + c.charCodeAt(0), 0) % arr.length];
 
@@ -62,7 +81,7 @@ const pick = <T,>(arr: T[], seed: string) => arr[[...seed].reduce((a, c) => a + 
 export function prospectMessage(lead: Record<string, any>, url: string, theme?: string | null) {
   const tema = String(theme ?? lead.category ?? "").split(",")[0].trim().toLowerCase();
   // "faço sites para nutricionistas": só com tema de uma palavra (plural simples); senão fica "faço sites" e pronto
-  const forWho = /^[a-zà-ú]+$/.test(tema) ? ` para ${/s$/.test(tema) ? tema : tema + (/[aeiou]$/.test(tema) ? "s" : "es")}` : " para negócios locais";
+  const forWho = ` para ${plural(tema) ?? "negócios locais"}`;
   const stars = lead.rating >= 4.5 && lead.reviews >= 10 ? pick([` (e que avaliações, hein! ${String(lead.rating).replace(".", ",")} ⭐)`, ` (${lead.reviews} avaliações, parabéns!)`], lead.id ?? "") : "";
   if (lead.kind === "upgrade") {
     const site = String(lead.website ?? "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "");
@@ -93,7 +112,7 @@ export async function runProspecting(db: SupabaseClient) {
     const { count: done } = await db.from("leads").select("id", { count: "exact", head: true }).eq("user_id", o.user_id).gte("prospect_at", today());
     if ((done ?? 0) >= (o.prospect_per_day ?? 15)) continue;
     const { data: lead } = await db.from("leads").select("*").eq("user_id", o.user_id).eq("status", "new").is("prospect_status", null)
-      .not("whatsapp", "is", null).order("reviews", { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
+      .not("whatsapp", "is", null).order("created_at", { ascending: false }).order("reviews", { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
     if (!lead) continue;
     const { data: claimed } = await db.from("leads").update({ prospect_status: "building", prospect_at: new Date().toISOString() })
       .eq("id", lead.id).is("prospect_status", null).select("id").maybeSingle();
@@ -124,7 +143,7 @@ export async function runProspecting(db: SupabaseClient) {
       if (!existing) {
         const { data: page, error } = await db.from("landing_pages").insert({
           user_id: o.user_id, slug: `rascunho-${crypto.randomUUID()}`, lead_id: lead.id, name: lead.name,
-          niche: (search?.query?.includes(",") ? lead.category : search?.query) || lead.category || "", city: search?.place ?? null, whatsapp: lead.whatsapp,
+          niche: lead.category || search?.query?.split(",")[0]?.trim() || "", city: search?.place ?? null, whatsapp: lead.whatsapp,
           instagram: ig, address: lead.address, rating: lead.rating, reviews: lead.reviews, photos: [], notes,
           tier: "premium", auto_status: "queued",
         }).select("id").single();
@@ -152,7 +171,7 @@ export async function prospectReady(db: SupabaseClient, pageId: string) {
   if (!lead || !["building", null].includes(lead.prospect_status)) return;
   const { data: search } = lead.search_id ? await db.from("lead_searches").select("query").eq("id", lead.search_id).maybeSingle() : { data: null };
   const url = page.status === "published" && page.domain ? `https://${page.domain}` : `${SITE}/p/${page.slug}`;
-  await db.from("leads").update({ prospect_status: "ready", prospect_message: prospectMessage(lead, url, search?.query?.includes(",") ? lead.category : search?.query), landing_id: page.id }).eq("id", lead.id);
+  await db.from("leads").update({ prospect_status: "ready", prospect_message: prospectMessage(lead, url, lead.category || (search?.query?.includes(",") ? null : search?.query)), landing_id: page.id }).eq("id", lead.id);
 }
 
 /** Prévia do lead falhou: o lead sai da fila (não trava o motor). */
