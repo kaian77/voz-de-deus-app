@@ -258,16 +258,16 @@ export async function igBusinessDiscovery(username: string) {
 
 /** Perfil público de outra conta para a landing page de um cliente: bio e fotos dos posts.
  *  Business Discovery quando configurado (conta profissional); senão a página pública do Instagram (pode recusar). */
-export async function igPublicProfile(username: string): Promise<{ name?: string; bio?: string; category?: string; picture?: string; photos: string[] }> {
+export async function igPublicProfile(username: string): Promise<{ name?: string; bio?: string; category?: string; picture?: string; website?: string; photos: string[] }> {
   if (businessDiscoveryEnabled()) {
     const url = new URL(`https://graph.facebook.com/${version()}/${env("META_FB_IG_USER_ID")}`);
-    url.searchParams.set("fields", `business_discovery.username(${username}){name,biography,profile_picture_url,media.limit(18){media_type,media_url,thumbnail_url}}`);
+    url.searchParams.set("fields", `business_discovery.username(${username}){name,biography,website,profile_picture_url,media.limit(18){media_type,media_url,thumbnail_url}}`);
     url.searchParams.set("access_token", env("META_FB_ACCESS_TOKEN"));
     const data = await (await fetch(url)).json().catch(() => ({}));
     const bd = data.business_discovery;
     if (bd) {
       const photos = (bd.media?.data ?? []).map((m: Record<string, string>) => (m.media_type === "VIDEO" ? m.thumbnail_url : m.media_url)).filter(Boolean);
-      return { name: bd.name, bio: bd.biography, picture: bd.profile_picture_url, photos };
+      return { name: bd.name, bio: bd.biography, picture: bd.profile_picture_url, website: bd.website, photos };
     }
   }
   const res = await fetch(`https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`, {
@@ -281,5 +281,5 @@ export async function igPublicProfile(username: string): Promise<{ name?: string
   if (!user) throw new Error(res.status === 404 ? "perfil não encontrado" : "o Instagram não liberou o perfil agora");
   const edges = user.edge_owner_to_timeline_media?.edges ?? [];
   const photos = edges.map((e: { node: Record<string, string> }) => e.node.display_url || e.node.thumbnail_src).filter(Boolean);
-  return { name: user.full_name, bio: user.biography, category: user.category_name ?? user.business_category_name, picture: user.profile_pic_url_hd, photos };
+  return { name: user.full_name, bio: user.biography, category: user.category_name ?? user.business_category_name, picture: user.profile_pic_url_hd, website: user.external_url ?? user.bio_links?.[0]?.url, photos };
 }

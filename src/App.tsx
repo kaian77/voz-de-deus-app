@@ -15,6 +15,7 @@ import Comments from "./studio/pages/Comments";
 import Vitrine from "./studio/pages/Vitrine";
 import Competitors from "./studio/pages/Competitors";
 import Leads from "./studio/pages/Leads";
+import Crm from "./studio/pages/Crm";
 import Landings from "./studio/pages/Landings";
 import YouTube from "./studio/pages/YouTube";
 import Clips from "./studio/pages/Clips";
@@ -64,6 +65,7 @@ const App = () => (
             <Route path="vitrine" element={<Vitrine />} />
             <Route path="concorrentes" element={<Competitors />} />
             <Route path="leads" element={<Leads />} />
+            <Route path="crm" element={<Crm />} />
             <Route path="landing" element={<Landings />} />
             <Route path="youtube" element={<YouTube />} />
             <Route path="cortes" element={<Clips />} />

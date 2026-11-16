@@ -14,6 +14,7 @@ import { EmptyState, PageHeader, Panel, relativeTime, SectionLabel, WhatsAppIcon
 import LeadsMap, { areaColor, LEAD_STATUS } from "../components/LeadsMap";
 import ManualLeads from "../components/ManualLeads";
 import ProspectQueue from "../components/ProspectQueue";
+import { humanize } from "../lib/crm";
 import { offerMessages } from "../lib/offer";
 
 const MSG_KEY = "studio-leads-msg";
@@ -138,7 +139,7 @@ export default function Leads() {
 
   const openWhatsApp = (l: Lead) => {
     // Com a prévia pronta, vai a mensagem da prospecção; senão a mensagem padrão (para quem tem site, sem o "não têm site")
-    const text = l.prospect_message && l.prospect_status === "ready" ? l.prospect_message
+    const text = l.prospect_message && l.prospect_status === "ready" ? humanize(l.prospect_message)
       : l.kind === "upgrade" ? fill(msg, l, l.search_id ? byId.get(l.search_id) : undefined).replace(/ e reparei que vocês ainda não têm um site\./, ". Dei uma olhada no site de vocês e acho que dá para deixar bem melhor no celular.")
       : fill(msg, l, l.search_id ? byId.get(l.search_id) : undefined);
     window.open(`https://wa.me/${l.whatsapp}?text=${encodeURIComponent(text)}`, "_blank");

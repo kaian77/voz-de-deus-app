@@ -3,11 +3,15 @@
 // pronta numa fila de 1 toque em Leads → o dono envia pelo WhatsApp dele (sem robô no número pessoal: não leva ban).
 // A prévia em si sai pelo mesmo caminho do atendente (landing_pages.auto_status = queued → runPaginasproJobs).
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { igPublicProfile } from "./instagram.ts";
 
 const SITE = "https://paginaspro.app.br";
-const DEFAULT: Record<string, number> = { oneTime: 297, monthly: 49, upgradeOneTime: 247, upgradeMonthly: 49 };
 
-type Audit = { ok: boolean; https: boolean; mobile: boolean; whatsapp: boolean; slow: boolean; title?: string; text?: string; error?: string };
+type Audit = { ok: boolean; https: boolean; mobile: boolean; whatsapp: boolean; slow: boolean; title?: string; text?: string; instagram?: string; error?: string };
+
+// Endereços que não são site próprio (iguais aos do video/leads.py): quem só tem isso é lead de site novo
+const NOT_A_SITE = /instagram\.com|facebook\.com|fb\.com|fb\.me|wa\.me|wa\.link|whatsapp\.com|linktr\.ee|linkbio|bio\.link|beacons\.ai|business\.site|linkin\.bio|lnk\.bio|taplink|doctoralia|boaconsulta|agendor|google\.com|goo\.gl|bit\.ly|tiktok\.com|youtube\.com|ifood|sympla/i;
+export const ownSite = (url?: string | null) => Boolean(url && /\./.test(url) && !NOT_A_SITE.test(url));
 
 /** Olha o site atual de verdade (só o que dá para conferir): abre? tem https, ajuste para celular, botão de WhatsApp? */
 export async function auditSite(url: string): Promise<Audit> {
@@ -25,6 +29,7 @@ export async function auditSite(url: string): Promise<Audit> {
       whatsapp: /wa\.me\/|api\.whatsapp\.com|whatsapp:\/\//i.test(html),
       slow: ms > 6000,
       title: html.match(/<title[^>]*>([^<]{1,120})/i)?.[1]?.trim(),
+      instagram: html.match(/instagram\.com\/(?!p\/|reel\/|explore\/|accounts\/|share)([A-Za-z0-9_.]{2,30})/i)?.[1],
       text: text.slice(0, 1500),
     };
   } catch (e) {
@@ -32,36 +37,42 @@ export async function auditSite(url: string): Promise<Audit> {
   }
 }
 
-/** Problemas reais do site atual, em linguagem de gente (só o que o auditSite conferiu). */
+/** O que o site atual tem de errado, em linguagem de gente (só o que o auditSite conferiu). */
 function issues(a: Audit | null) {
   if (!a) return [];
-  if (!a.ok) return ["o site não abriu quando testei"];
+  if (!a.ok) return ["não abriu aqui para mim"];
   return [
-    !a.mobile && "não está ajustado para celular",
-    !a.whatsapp && "não tem botão direto para o WhatsApp",
+    !a.mobile && "no celular ele fica desajustado",
+    !a.whatsapp && "não tem um botão direto para o WhatsApp",
     !a.https && "aparece como \"não seguro\" no navegador",
-    a.slow && "demorou para abrir",
+    a.slow && "demora um pouco para abrir",
   ].filter(Boolean) as string[];
 }
 
-const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
+/** Variação fixa por lead (mensagens diferentes entre si parecem gente, não robô). */
+const pick = <T,>(arr: T[], seed: string) => arr[[...seed].reduce((a, c) => a + c.charCodeAt(0), 0) % arr.length];
 
-/** Mensagem da 1ª abordagem (sem promessa: só a prévia pronta, o que é verdade sobre o site atual e o preço). */
-export function prospectMessage(lead: Record<string, any>, url: string, offer: Record<string, unknown>) {
-  const o = (k: string) => Number(offer?.[k]) > 0 ? Number(offer[k]) : DEFAULT[k];
-  const name = String(lead.name ?? "").split(/\s[-|·]\s/)[0].trim();
-  const stars = lead.rating && lead.reviews >= 5 ? ` (vi as ${lead.reviews} avaliações, nota ${String(lead.rating).replace(".", ",")} 👏)` : "";
+/** 1ª abordagem, curta e natural: quem é, onde achou, a prévia pronta e uma pergunta. Sem preço (vai quando a pessoa
+ * responder) e sem promessa. {saudacao} vira "Bom dia/Boa tarde/Boa noite" na hora de enviar (Studio). */
+export function prospectMessage(lead: Record<string, any>, url: string, theme?: string | null) {
+  const tema = String(theme ?? lead.category ?? "").split(",")[0].trim().toLowerCase();
+  // "faço sites para nutricionistas": só com tema de uma palavra (plural simples); senão fica "faço sites" e pronto
+  const forWho = /^[a-zà-ú]+$/.test(tema) ? ` para ${/s$/.test(tema) ? tema : tema + (/[aeiou]$/.test(tema) ? "s" : "es")}` : " para negócios locais";
+  const stars = lead.rating >= 4.5 && lead.reviews >= 10 ? pick([` (e que avaliações, hein! ${String(lead.rating).replace(".", ",")} ⭐)`, ` (${lead.reviews} avaliações, parabéns!)`], lead.id ?? "") : "";
   if (lead.kind === "upgrade") {
-    const site = String(lead.website ?? "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
-    const found = issues(lead.site_audit);
-    return `Oi, tudo bem? Aqui é o Bruno, da PáginasPro. Achei ${name} no Google Maps${stars} e dei uma olhada no site de vocês (${site}).` +
-      (found.length ? ` Reparei que ele ${found.slice(0, 2).join(" e ")}.` : "") +
-      `\n\nTomei a liberdade de montar uma versão nova, feita para o celular e com botão direto para o WhatsApp. É só uma prévia, sem compromisso:\n${url}` +
-      `\n\nSe gostarem, faço a troca por ${brl(o("upgradeOneTime"))} (uma vez só) ou ${brl(o("upgradeMonthly"))}/mês com alterações inclusas. Se não fizer sentido, sem problema!`;
+    const site = String(lead.website ?? "").replace(/^https?:\/\/(www\.)?/, "").replace(/\/.*$/, "");
+    const found = issues(lead.site_audit).slice(0, 2);
+    const why = found.length ? ` Reparei que ${found.join(" e ")}, então` : " Fiquei com vontade de mostrar uma ideia, então";
+    return pick([
+      `{saudacao}! Tudo bem? Aqui é o Bruno 🙂\nAchei vocês no Google${stars} e entrei no site (${site}).${why} montei uma versão nova, pensada para o celular:\n${url}\n\nAbre aí no celular e me fala o que achou?`,
+      `{saudacao}! Sou o Bruno, faço sites${forWho}.\nVi o site de vocês (${site}).${why} fiz uma versão nova para vocês compararem, sem compromisso:\n${url}\n\nO que acham?`,
+    ], lead.id ?? lead.name ?? "");
   }
-  return `Oi, tudo bem? Aqui é o Bruno, da PáginasPro. Achei ${name} no Google Maps${stars} e vi que vocês ainda não têm um site.` +
-    `\n\nTomei a liberdade de montar uma prévia de como ficaria, com os dados que já estão no Google, sem compromisso:\n${url}` +
-    `\n\nSe gostarem, deixo no ar por ${brl(o("oneTime"))} (uma vez só) ou ${brl(o("monthly"))}/mês com alterações inclusas. Se não fizer sentido, sem problema!`;
+  return pick([
+    `{saudacao}! Tudo bem? Aqui é o Bruno 🙂\nAchei vocês no Google Maps${stars} e vi que ainda não têm site, aí montei um rapidinho para verem como ficaria:\n${url}\n\nAbre no celular e me fala o que achou?`,
+    `{saudacao}! Sou o Bruno, faço sites${forWho}.\nVi vocês no Google Maps${stars} e tomei a liberdade de montar uma prévia do site de vocês, sem compromisso:\n${url}\n\nSe quiser mudar alguma coisa, é só me dizer 😉`,
+    `Oi, tudo certo? Bruno aqui 👋\nEstava vendo${forWho.replace(" para", "")} da região no Google e vocês me chamaram atenção${stars}. Fiz uma prévia de site para vocês:\n${url}\n\nDá uma olhadinha quando puder?`,
+  ], lead.id ?? lead.name ?? "");
 }
 
 const today = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10) + "T03:00:00Z"; // meia-noite de Brasília
@@ -83,9 +94,21 @@ export async function runProspecting(db: SupabaseClient) {
       .eq("id", lead.id).is("prospect_status", null).select("id").maybeSingle();
     if (!claimed) continue;
     try {
+      // Instagram do lead (link no Maps): a bio pode ter site próprio → vira upgrade
+      let igUser = String(lead.instagram ?? lead.social ?? "").match(/instagram\.com\/([A-Za-z0-9_.]{2,30})/i)?.[1] ?? null;
+      if (igUser && lead.kind !== "upgrade") {
+        const profile = await igPublicProfile(igUser).catch(() => null);
+        if (profile && ownSite(profile.website)) {
+          Object.assign(lead, { kind: "upgrade", website: profile.website });
+          await db.from("leads").update({ kind: "upgrade", website: profile.website }).eq("id", lead.id);
+        }
+      }
       const audit = lead.kind === "upgrade" && lead.website ? await auditSite(lead.website) : null;
+      // Site com link do Instagram: a página puxa as fotos e a bio de lá também
+      if (!igUser && audit?.instagram) igUser = audit.instagram;
+      if (igUser) await db.from("leads").update({ instagram: `https://instagram.com/${igUser}` }).eq("id", lead.id);
       const { data: search } = lead.search_id ? await db.from("lead_searches").select("query,place").eq("id", lead.search_id).maybeSingle() : { data: null };
-      const ig = String(lead.social ?? "").includes("instagram.com") ? lead.social : null;
+      const ig = igUser ? `@${igUser}` : null;
       const notes = audit ? [
         `Este negócio JÁ TEM site (${lead.website}); a página nova é um upgrade: mais bonita, feita para o celular e com WhatsApp.`,
         audit.title && `Título do site atual: ${audit.title}`,
@@ -96,7 +119,7 @@ export async function runProspecting(db: SupabaseClient) {
       if (!existing) {
         const { data: page, error } = await db.from("landing_pages").insert({
           user_id: o.user_id, slug: `rascunho-${crypto.randomUUID()}`, lead_id: lead.id, name: lead.name,
-          niche: search?.query?.split(",")[0]?.trim() || lead.category || "", city: search?.place ?? null, whatsapp: lead.whatsapp,
+          niche: (search?.query?.includes(",") ? lead.category : search?.query) || lead.category || "", city: search?.place ?? null, whatsapp: lead.whatsapp,
           instagram: ig, address: lead.address, rating: lead.rating, reviews: lead.reviews, photos: [], notes,
           tier: lead.kind === "upgrade" ? "premium" : "normal", auto_status: "queued",
         }).select("id").single();
@@ -122,9 +145,9 @@ export async function prospectReady(db: SupabaseClient, pageId: string) {
   if (!page?.lead_id) return;
   const { data: lead } = await db.from("leads").select("*").eq("id", page.lead_id).maybeSingle();
   if (!lead || !["building", null].includes(lead.prospect_status)) return;
-  const { data: settings } = await db.from("brand_settings").select("landing_offer").eq("user_id", page.user_id).maybeSingle();
+  const { data: search } = lead.search_id ? await db.from("lead_searches").select("query").eq("id", lead.search_id).maybeSingle() : { data: null };
   const url = page.status === "published" && page.domain ? `https://${page.domain}` : `${SITE}/p/${page.slug}`;
-  await db.from("leads").update({ prospect_status: "ready", prospect_message: prospectMessage(lead, url, settings?.landing_offer ?? {}), landing_id: page.id }).eq("id", lead.id);
+  await db.from("leads").update({ prospect_status: "ready", prospect_message: prospectMessage(lead, url, search?.query?.includes(",") ? lead.category : search?.query), landing_id: page.id }).eq("id", lead.id);
 }
 
 /** Prévia do lead falhou: o lead sai da fila (não trava o motor). */

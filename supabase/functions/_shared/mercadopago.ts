@@ -146,6 +146,13 @@ async function publishPaid(db: SupabaseClient, page: any, extra: Record<string, 
     await sendMessage(db, page.conversation_id, `Pagamento confirmado, muito obrigado! ✅\n\nSeu site já está no ar: ${url}\n\nPode divulgar no Instagram, no Google e no status do WhatsApp. Qualquer ajuste, é só me chamar aqui.`, "ai")
       .catch((e) => console.error("mercadopago send", e));
   }
+  // CRM: lead da prospecção que pagou vira "Fechou" com o valor
+  if (page.lead_id) {
+    await db.from("leads").update({
+      status: "won", closed_at: new Date().toISOString(), deal_value: amount,
+      deal_plan: extra.plan === "monthly" ? "Mensal" : extra.tier === "premium" ? "Premium" : extra.tier === "bio" ? "Link da bio" : "À vista",
+    }).eq("id", page.lead_id);
+  }
   await notify(db, page.user_id, `💳 Pagamento recebido: ${page.name} R$ ${amount.toLocaleString("pt-BR")}`, `Site publicado: ${url}`, "/studio/landing");
   return { paid: true, published: true, url };
 }
