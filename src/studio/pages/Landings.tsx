@@ -33,9 +33,11 @@ const MY_AGENDA_SLUG = "paginaspro";
 const PRICE_FIELDS: [keyof Offer, string, "n" | "t"][] = [
   ["monthly", "Mensal (R$/mês)", "n"], ["oneTime", "Avulso (R$)", "n"], ["change", "Alteração avulsa (R$)", "n"], ["panelAddon", "Painel no avulso (R$/mês)", "n"],
   ["premiumMonthly", "Premium mensal (R$/mês)", "n"], ["premiumOneTime", "Premium à vista (R$)", "n"],
+  ["bioMonthly", "Link da bio mensal (R$/mês)", "n"], ["bioOneTime", "Link da bio à vista (R$)", "n"],
   ["monthlyLink", "Link Mercado Pago · mensal", "t"], ["oneTimeLink", "Link Mercado Pago · avulso", "t"],
   ["premiumMonthlyLink", "Link Mercado Pago · Premium mensal", "t"], ["premiumOneTimeLink", "Link Mercado Pago · Premium à vista", "t"],
   ["agendaMonthly", "Agenda online (R$/mês)", "n"], ["agendaLink", "Link Mercado Pago · agenda", "t"],
+  ["bioMonthlyLink", "Link Mercado Pago · Link da bio mensal", "t"], ["bioOneTimeLink", "Link Mercado Pago · Link da bio à vista", "t"],
   ["whatsapp", "Seu WhatsApp (no seu site)", "t"],
 ];
 
@@ -244,7 +246,7 @@ function PlanPanel({ page, onChange }: { page: LandingPage; onChange: (p: Landin
   return (
     <Panel
       title="Plano do cliente"
-      description={page.plan === "monthly" ? `Mensal (R$ ${page.tier === "premium" ? OFFER.premiumMonthly : OFFER.monthly}/mês): painel de resultados + alterações inclusas.` : `Avulso: alterações cobradas à parte (R$ ${OFFER.change}); painel ${page.panel ? "liberado" : `bloqueado (libere abaixo, cobrando + R$ ${OFFER.panelAddon}/mês ou de cortesia)`}.`}
+      description={page.plan === "monthly" ? `Mensal (R$ ${page.tier === "premium" ? OFFER.premiumMonthly : page.tier === "bio" ? OFFER.bioMonthly : OFFER.monthly}/mês): painel de resultados + alterações inclusas.` : `Avulso: alterações cobradas à parte (R$ ${OFFER.change}); painel ${page.panel ? "liberado" : `bloqueado (libere abaixo, cobrando + R$ ${OFFER.panelAddon}/mês ou de cortesia)`}.`}
       action={<Button size="sm" variant={page.plan === "monthly" ? "outline" : "default"} onClick={toggle} disabled={busy}>{page.plan === "monthly" ? "Desligar mensal" : "Ligar plano mensal"}</Button>}
     >
       <div className="grid grid-cols-3 gap-2 text-center">
@@ -393,8 +395,8 @@ function DomainPanel({ page, onChange }: { page: LandingPage; onChange: (domain:
   );
 }
 
-type Form = Pick<LandingPage, "name" | "niche" | "city" | "whatsapp" | "instagram" | "address" | "hours" | "registry" | "notes" | "photos" | "logo" | "tier" | "widget">;
-const EMPTY: Form = { name: "", niche: "", city: "", whatsapp: "", instagram: "", address: "", hours: "", registry: "", notes: "", photos: [], logo: null, tier: "normal", widget: null };
+type Form = Pick<LandingPage, "name" | "niche" | "city" | "whatsapp" | "instagram" | "address" | "hours" | "registry" | "notes" | "photos" | "logo" | "tier" | "widget" | "video">;
+const EMPTY: Form = { name: "", niche: "", city: "", whatsapp: "", instagram: "", address: "", hours: "", registry: "", notes: "", photos: [], logo: null, tier: "normal", widget: null, video: null };
 const toForm = (page: LandingPage): Form => ({ ...EMPTY, ...Object.fromEntries(Object.keys(EMPTY).map((k) => [k, page[k as keyof Form] ?? EMPTY[k as keyof Form]])) });
 
 /** Resumo do que veio do Instagram/Google para mostrar no editor. */
@@ -432,6 +434,7 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
   const [device, setDevice] = useState<"mobile" | "desktop">("mobile");
   const photoInput = useRef<HTMLInputElement>(null);
   const logoInput = useRef<HTMLInputElement>(null);
+  const videoInput = useRef<HTMLInputElement>(null);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const html = useMemo(() => (current.content ? renderLanding({ ...current, ...form }, { sample: current.status !== "published" }) : ""), [current, form]);
@@ -450,11 +453,24 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
     }
   };
 
+  const uploadVideo = async (file?: File) => {
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) return toast.error("Vídeo grande demais: mande um de até 25 MB (5 a 15 segundos)");
+    setBusy("upload");
+    try {
+      set("video", await api.upload(file, `landing-video-${file.name}`));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const save = async () => {
     if (!form.name.trim() || !form.niche.trim()) throw new Error("Preencha o nome e a área");
     const saved = await api.update("landing_pages", current.id, { ...form, name: form.name.trim(), niche: form.niche.trim() });
     // fotos/logo tirados: apaga os arquivos do storage (não ocupam espaço à toa)
-    const gone = [...current.photos, current.logo].filter((u): u is string => !!u && !saved.photos.includes(u) && saved.logo !== u);
+    const gone = [...current.photos, current.logo, current.video].filter((u): u is string => !!u && !saved.photos.includes(u) && saved.logo !== u && saved.video !== u);
     if (gone.length) api.invoke("ai", { action: "landing_remove_files", id: current.id, urls: gone }).catch(() => {});
     setCurrent(saved);
     return saved;
@@ -678,14 +694,31 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
           </Panel>
 
           <Panel title="Modelo" description="O conteúdo é o mesmo; muda o visual. Troque à vontade e veja na prévia.">
-            <div className="grid grid-cols-2 gap-2">
-              {([["normal", "Normal", `R$ ${OFFER.monthly}/mês · R$ ${OFFER.oneTime}`], ["premium", "Premium", `R$ ${OFFER.premiumMonthly}/mês · R$ ${OFFER.premiumOneTime}`]] as const).map(([k, label, price]) => (
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                ["normal", "Normal", "Limpo e direto", `R$ ${OFFER.monthly}/mês · R$ ${OFFER.oneTime}`],
+                ["premium", "Premium", "Animado, foto 3D, galeria", `R$ ${OFFER.premiumMonthly}/mês · R$ ${OFFER.premiumOneTime}`],
+                ["bio", "Link da bio", "No lugar do Linktree: vídeo, números, abas", `R$ ${OFFER.bioMonthly}/mês · R$ ${OFFER.bioOneTime}`],
+              ] as const).map(([k, label, about, price]) => (
                 <button key={k} type="button" onClick={() => set("tier", k)} className={cn("rounded-lg border p-3 text-left transition-colors", form.tier === k ? "border-foreground bg-secondary" : "hover:bg-secondary/50")}>
                   <p className="text-sm font-semibold">{label}</p>
-                  <p className="text-[11px] text-muted-foreground">{k === "premium" ? "Animado, foto 3D, galeria" : "Limpo e direto"} · {price}</p>
+                  <p className="text-[11px] text-muted-foreground">{about} · {price}</p>
                 </button>
               ))}
             </div>
+            {form.tier === "bio" && (
+              <div className="mt-3 space-y-2 text-xs">
+                <p className="font-medium">Vídeo do topo (opcional)</p>
+                <p className="text-muted-foreground">Vídeo curto da pessoa (5 a 15 s, em pé, MP4 até 25 MB). Toca sozinho, sem som e em loop. Sem vídeo, a foto do topo fica com zoom lento.</p>
+                <div className="flex items-center gap-3">
+                  {form.video ? <video src={form.video} muted playsInline className="h-16 w-10 rounded border object-cover" /> : null}
+                  <Button variant="outline" size="sm" disabled={busy === "upload"} onClick={() => videoInput.current?.click()}>{form.video ? "Trocar vídeo" : "Enviar vídeo"}</Button>
+                  {form.video && <button type="button" className="text-muted-foreground hover:underline" onClick={() => set("video", null)}>Remover</button>}
+                </div>
+                <input ref={videoInput} type="file" accept="video/mp4,video/quicktime" hidden onChange={(e) => { uploadVideo(e.target.files?.[0]); e.target.value = ""; }} />
+                <p className="text-muted-foreground">Os números e as abas por público ("Sou paciente" × "Sou dentista") a IA tira das informações. Para mudar, use "Pedir à IA".</p>
+              </div>
+            )}
           </Panel>
 
           <Button className="w-full" size="lg" onClick={() => generate()} disabled={busy !== null}>

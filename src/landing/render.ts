@@ -2,6 +2,7 @@
 // Usado na prévia do Studio (iframe) e na página publicada (/p/<slug>, função api/landing.ts) — mesmo resultado nos dois.
 // O layout é fixo e desenhado à mão; a IA só escreve os textos e escolhe cores, fontes e o estilo do topo.
 
+import { renderBio } from "./bio.js";
 import { renderPremium } from "./premium.js";
 
 export type LandingContent = {
@@ -32,6 +33,10 @@ export type LandingContent = {
   /** Índices em photos: foto do topo e da seção "sobre" */
   hero_photo: number;
   about_photo: number;
+  /** Modelo "Link da bio": linha abaixo do nome, números reais e abas por público */
+  bio_tagline?: string;
+  bio_stats?: { value: string; label: string }[];
+  bio_tabs?: { tab: string; title: string; text: string; cta_label: string; whatsapp_message: string }[];
 };
 
 export type LandingData = {
@@ -47,7 +52,7 @@ export type LandingData = {
   logo?: string | null;
   rating?: number | null;
   reviews?: number | null;
-  /** premium = layout animado (src/landing/premium.ts), vendido mais caro */
+  /** premium = layout animado (src/landing/premium.ts), vendido mais caro; bio = link da bio (src/landing/bio.ts) */
   tier?: string | null;
   widget?: string | null;
   slug?: string | null;
@@ -56,6 +61,8 @@ export type LandingData = {
   agenda_until?: string | null;
   /** Configuração da agenda (só os convênios aparecem no site) */
   agenda?: { plans?: string[]; particular?: boolean; pros?: { id: string; name: string; role?: string }[]; services?: { name: string; pros?: string[] }[] } | null;
+  /** Vídeo curto do topo (modelo "Link da bio") */
+  video?: string | null;
   content: LandingContent;
 };
 
@@ -149,6 +156,7 @@ export const SAMPLE_HOURS = "Seg a sex: 8h às 18h (exemplo, confirmar)";
 /** opts.track = conta visitas e cliques (só na página servida pela api/landing.ts, nunca na prévia do Studio). */
 export function renderLanding(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean; track?: boolean } = {}): string {
   if (d.tier === "premium") return renderPremium(d, opts);
+  if (d.tier === "bio") return renderBio(d, opts);
   const c = d.content;
   const f = FONTS[c.fonts] ?? FONTS.fraunces;
   const primary = hex(c.colors?.primary, "#2f5d50");

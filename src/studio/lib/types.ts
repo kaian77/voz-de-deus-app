@@ -448,7 +448,8 @@ export interface LandingPage {
   agenda_email?: string | null;
   agenda_pass?: string | null;
   /** premium = layout animado (src/landing/premium.ts) */
-  tier: "normal" | "premium";
+  tier: "normal" | "premium" | "bio";
+  video?: string | null;
   views: number;
   created_at: string;
   updated_at: string;

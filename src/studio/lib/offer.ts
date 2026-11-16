@@ -19,6 +19,11 @@ export const OFFER = {
   /** Agenda online (adicional): assinatura mensal */
   agendaMonthly: 29,
   agendaLink: "https://mpago.la/1oq3nf6",
+  /** Link da bio: uma tela no lugar do Linktree (vídeo no topo, números, abas por público, WhatsApp) */
+  bioMonthly: 39,
+  bioOneTime: 197,
+  bioMonthlyLink: "",
+  bioOneTimeLink: "",
 };
 
 export type Offer = typeof OFFER;
@@ -50,6 +55,15 @@ export function offerMessages(name: string, link?: string | null, o: Offer = OFF
         ? `\n\nAprovou a prévia? Pagamento:` +
           (o.premiumMonthlyLink ? `\n• mensal (cartão, todo mês): ${o.premiumMonthlyLink}` : "") +
           (o.premiumOneTimeLink ? `\n• à vista (Pix, cartão ou boleto): ${o.premiumOneTimeLink}` : "")
+        : ""),
+    bio:
+      `Para o link da bio do Instagram da ${name} eu faço uma página só sua no lugar do Linktree: vídeo seu no topo, seus números, abas para cada tipo de cliente, fotos e o botão do WhatsApp, tudo numa tela de celular.\n\n` +
+      `• mensal: ${brl(o.bioMonthly)} por mês, com painel de visitas/cliques e alterações inclusas\n` +
+      `• à vista: ${brl(o.bioOneTime)} uma vez só (alterações depois a ${brl(o.change)} cada)${preview}` +
+      (o.bioMonthlyLink || o.bioOneTimeLink
+        ? `\n\nAprovou a prévia? Pagamento:` +
+          (o.bioMonthlyLink ? `\n• mensal (cartão, todo mês): ${o.bioMonthlyLink}` : "") +
+          (o.bioOneTimeLink ? `\n• à vista (Pix, cartão ou boleto): ${o.bioOneTimeLink}` : "")
         : ""),
     monthly:
       `Sobre o valor do site da ${name}: fica ${brl(o.monthly)} por mês, sem taxa de entrada.\n\n` +

@@ -41,6 +41,18 @@ const Content = z.object({
   final_text: z.string(),
   hero_photo: z.number().int().describe("Índice (0..) da melhor foto para o topo: pessoa/ambiente, nítida, sem texto"),
   about_photo: z.number().int().describe("Índice de outra foto para a seção Sobre (pode repetir se só houver uma)"),
+  bio_tagline: z.string().describe("Link da bio: linha curta abaixo do nome (especialidade/assinatura do trabalho, até 5 palavras), ex.: 'Lentes e estética do sorriso'"),
+  bio_stats: z.array(z.object({
+    value: z.string().describe("número ou palavra curta, ex.: '12 anos', '3 mil+', 'Goiânia'"),
+    label: z.string().describe("o que é, até 4 palavras, ex.: 'de experiência', 'clientes atendidas', 'Clínica X'"),
+  })).describe("Link da bio: 0 a 3 números SÓ com o que foi informado (anos de atuação, clientes, cidade/clínica). Nada informado = lista vazia; nunca invente"),
+  bio_tabs: z.array(z.object({
+    tab: z.string().describe("rótulo curto da aba, ex.: 'Sou paciente', 'Sou dentista', 'Para noivas', 'Para empresas'"),
+    title: z.string().describe("título da aba, até 7 palavras"),
+    text: z.string().describe("1 ou 2 frases para esse público"),
+    cta_label: z.string().describe("texto do botão do WhatsApp dessa aba"),
+    whatsapp_message: z.string().describe("mensagem que já vem escrita no WhatsApp para esse público"),
+  })).describe("Link da bio: 2 abas só se o negócio atende dois públicos de verdade (ex.: pacientes e outros profissionais/alunos, pessoas e empresas, clientes e noivas); senão 1 aba"),
 });
 
 export type LandingContent = z.infer<typeof Content>;

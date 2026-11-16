@@ -18,6 +18,7 @@ const DEFAULT_OFFER: Record<string, number | string> = {
   monthly: 59, oneTime: 397, change: 30, panelAddon: 19, premiumMonthly: 129, premiumOneTime: 997,
   monthlyLink: "https://mpago.la/29WANe2", oneTimeLink: "https://mpago.la/1rDD3Gz",
   premiumMonthlyLink: "https://mpago.la/1Bu8EjD", premiumOneTimeLink: "https://mpago.la/1YEqfgd",
+  bioMonthly: 39, bioOneTime: 197, bioMonthlyLink: "", bioOneTimeLink: "",
 };
 
 async function offerFor(db: SupabaseClient, userId: string) {
@@ -73,11 +74,15 @@ function systemPrompt(o: Record<string, number | string>, channel: string) {
     `- Normal: limpo e direto, com fotos, serviços, horário, mapa e botão do WhatsApp.\n` +
     `- Premium: animado (foto em 3D que mexe com o dedo, título que entra palavra por palavra, galeria, conversa do WhatsApp animada). ` +
     `Exemplo para ver no celular: o próprio site da PáginasPro, ${SITE}/inicio, é feito no estilo Premium.\n` +
-    `Se ela não escolher, o modelo é Normal.\n\n` +
+    `Se ela não escolher, o modelo é Normal.\n` +
+    `- Link da bio: uma página de uma tela só, feita para o link da bio do Instagram, no lugar do Linktree: vídeo curto da pessoa no topo (ou a foto), ` +
+    `o nome/assinatura, números reais (anos de atuação, clientes, cidade), abas por público (ex.: "Sou paciente" e "Sou dentista") e o botão do WhatsApp. ` +
+    `Ofereça para quem usa Linktree ou só quer algo para a bio. Peça um vídeo curto (5 a 15 s, em pé) se a pessoa tiver; sem vídeo usa a foto. Modelo "bio" em montar_previa.\n\n` +
     `PLANOS (só passe quando a pessoa perguntar valor ou disser que gostou):\n` +
     `- Mensal: ${brl(o.monthly)}/mês, sem taxa de entrada, inclui alterações sempre que precisar${link(o.monthlyLink)} (cartão, renova sozinho)\n` +
     `- Pagamento único: ${brl(o.oneTime)}, sem mensalidade; alteração depois ${brl(o.change)} cada${link(o.oneTimeLink)} (Pix, cartão ou boleto)\n` +
     `- Premium (animado, foto em 3D, galeria, igual ao site da PáginasPro): ${brl(o.premiumMonthly)}/mês${link(o.premiumMonthlyLink)} ou ${brl(o.premiumOneTime)} à vista${link(o.premiumOneTimeLink)}\n` +
+    `- Link da bio (no lugar do Linktree): ${brl(Number(o.bioMonthly))}/mês${link(String(o.bioMonthlyLink ?? ""))} ou ${brl(Number(o.bioOneTime))} à vista${link(String(o.bioOneTimeLink ?? ""))}\n` +
     `Agenda online é opcional (${brl(Number(o.agendaMonthly) || 29)}/mês a mais, em qualquer plano): o cliente marca o horário pelo site, escolhe o profissional e o serviço, e o negócio controla tudo num painel com relatório; lembrete por e-mail 1 dia antes. Ofereça para quem atende com horário marcado (clínicas, salões, consultórios, escritórios).\n` +
     `Domínio próprio (.com.br) é opcional: o cliente compra (uns R$ 40/ano no Registro.br) e eu configuro.\n\n` +
     `REGRAS:\n` +
@@ -144,7 +149,7 @@ export async function paginasproReply(db: SupabaseClient, conversation: any, inb
         servicos: { type: "string", description: "Serviços, diferenciais, tempo de atuação, formação e tudo de real que a pessoa contou" },
         cores: { type: "string", description: "Cores da marca que a pessoa pediu (ex.: 'rosa e dourado' ou '#E75A8D'); vazio para tirar do logo/fotos" },
         whatsapp: { type: "string", description: "WhatsApp do negócio com DDD (só números), se a pessoa passou" },
-        modelo: { type: "string", enum: ["normal", "premium"] },
+        modelo: { type: "string", enum: ["normal", "premium", "bio"], description: "bio = link da bio (no lugar do Linktree)" },
         ajuste: { type: "string", description: "Só para mudar uma prévia que já existe: o que a pessoa pediu" },
       },
       required: ["nome", "ramo"],
@@ -218,7 +223,11 @@ async function queuePreview(db: SupabaseClient, conversation: any, i: Record<str
   const { data: media } = await db.from("messages").select("media_url").eq("conversation_id", conversation.id).not("media_url", "is", null)
     .order("created_at", { ascending: false }).limit(12);
   // Fotos novas da conversa entram na frente: no ajuste ("troca a foto") a IA vê e usa a mais recente
-  const sent = (media ?? []).map((m) => m.media_url as string); // mais nova primeiro
+  const all = (media ?? []).map((m) => m.media_url as string); // mais nova primeiro
+  // Vídeo que o cliente mandou vira o vídeo do topo do "Link da bio"; o resto são fotos
+  const isVideo = (u: string) => /\.(mp4|mov|m4v|webm)(\?|$)/i.test(u);
+  const video = all.find(isVideo) ?? null;
+  const sent = all.filter((u) => !isVideo(u));
   const fresh = sent.filter((u) => !(existing?.photos ?? []).includes(u));
   const photos = [...new Set([...fresh, ...(existing?.photos ?? []), ...sent])].slice(0, 12);
   const fields = {
@@ -227,7 +236,8 @@ async function queuePreview(db: SupabaseClient, conversation: any, i: Record<str
     address: i.endereco || existing?.address || null, hours: i.horario || existing?.hours || null,
     notes: [existing?.notes, i.servicos, i.cores && `Cores da marca: ${i.cores}`].filter(Boolean).join("\n").slice(0, 3000) || null,
     whatsapp: waNumber(i.whatsapp) ?? existing?.whatsapp ?? (conversation.channel === "whatsapp" ? conversation.contact_id : null),
-    tier: i.modelo === "premium" ? "premium" : (existing?.tier ?? "normal"),
+    tier: i.modelo === "premium" || i.modelo === "bio" ? i.modelo : (existing?.tier ?? "normal"),
+    video: video ?? existing?.video ?? null,
     photos, conversation_id: conversation.id, auto_status: "queued", auto_error: null,
     auto_instructions: i.ajuste
       ? `${String(i.ajuste).slice(0, 1400)}${fresh.length ? `\n(O cliente mandou ${fresh.length} foto(s) nova(s): são as primeiras da lista, índice 0${fresh.length > 1 ? ` a ${fresh.length - 1}` : ""}. Use-as no lugar das antigas se o pedido for de trocar foto.)` : ""}${i.cores ? `\nCores da marca pedidas: ${i.cores}` : ""}`
