@@ -78,8 +78,8 @@ nav.links .btn{padding:12px 18px;font-size:14px}
 .loc b{display:block;color:var(--ink);font-weight:600}
 .logo-card{position:relative;border-radius:22px;overflow:hidden;box-shadow:0 40px 80px -30px rgba(23,59,48,.45),0 0 0 1px rgba(23,59,48,.06);transform:perspective(1200px) rotateY(-6deg) rotateX(2deg);transition:transform .8s cubic-bezier(.2,.8,.2,1)}
 .logo-card:hover{transform:none}
-.logo-card img{width:100%;height:auto;aspect-ratio:4/5;object-fit:cover;object-position:50% 45%}
-.since{position:absolute;left:-18px;bottom:34px;background:var(--ink);color:#fff;border-radius:14px;padding:14px 18px;box-shadow:0 20px 40px -16px rgba(0,0,0,.5)}
+.logo-card img{width:100%;height:auto;aspect-ratio:1}
+.since{position:absolute;left:-18px;bottom:-26px;background:var(--ink);color:#fff;border-radius:14px;padding:14px 18px;box-shadow:0 20px 40px -16px rgba(0,0,0,.5)}
 .since b{display:block;font:500 34px/1 var(--serif)}
 .since span{font-size:12px;opacity:.8}
 .visual{position:relative;padding-left:18px}
@@ -290,7 +290,14 @@ footer a{text-decoration:none;color:#fff}
   .filters .count{width:100%;margin-left:0}
   .steps ol{grid-template-columns:1fr}
   .since{left:0}
-  .visual{max-width:320px;margin:0 auto;padding-left:0}
+  .hero .wrap{gap:28px;padding-block:20px 40px}
+  .visual{order:-1;width:100%;max-width:440px;margin:0 auto;padding-left:0}
+  .logo-card{transform:none;border-radius:18px}
+  .since{left:14px;bottom:-22px;padding:10px 14px;border-radius:12px}
+  .visual{margin-bottom:22px}
+  .since b{font-size:26px}
+  .hero h1{margin:14px 0 16px}
+  .loc{margin-top:28px}
   nav.links .btn .full{display:none}
   .finder{padding:20px}
   .sheet{align-items:flex-end;padding:0}
@@ -326,7 +333,7 @@ footer a{text-decoration:none;color:#fff}
       <a class="loc" data-maps href="https://maps.app.goo.gl/3sNvZbCTmsdVkJ9g6?g_st=ac" target="_blank" rel="noopener"><i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg></i><span><b>Quadra 3, CL 16, Loja 01</b>Sobradinho · Brasília / DF · Como chegar</span></a>
     </div>
     <div class="visual">
-      <div class="logo-card"><img src="/ofs/fachada.webp" alt="Fachada da OFS · Ortopedia e Fisioterapia Sobradinho" width="1086" height="1448" fetchpriority="high"></div>
+      <div class="logo-card"><img src="/ofs/logo.webp" alt="OFS Ortopedia e Fisioterapia Sobradinho · Saúde Integrada: Acupuntura, Psicologia, Fisioterapia, Osteopatia e Saúde Mental" width="1254" height="1254" fetchpriority="high"></div>
       <div class="since"><b>1998</b><span>cuidando de Sobradinho</span></div>
     </div>
   </div>
@@ -378,7 +385,7 @@ footer a{text-decoration:none;color:#fff}
 
 <section class="story" id="clinica">
   <div class="wrap">
-    <div class="photo"><img src="/ofs/fisioterapia-3.webp" alt="Sala de fisioterapia da OFS" loading="lazy" width="820" height="1024"></div>
+    <div class="photo"><img src="/ofs/fachada.webp" alt="Fachada da OFS em Sobradinho" loading="lazy" width="1086" height="1448"></div>
     <div>
       <p class="eyebrow">Nossa história</p>
       <h2>Faz parte da sua vida.<br>Faz parte de <i>Sobradinho.</i></h2>
