@@ -42,6 +42,12 @@ if (Deno.args[0] === "chat") {
   }
   Deno.exit(0);
 }
+if (Deno.args[0] === "novideos") {
+  // vídeos automáticos da loja desligados: o dono faz os vídeos à mão (piloto só com carrosséis, sem vídeos diários)
+  const { error } = await db.from("brand_settings").update({ auto_videos: false }).eq("user_id", acc.user_id);
+  console.log(error ? `ERRO ${error.message}` : "auto_videos = false");
+  Deno.exit(0);
+}
 if (Deno.args[0] === "stock0") {
   // produtos sem estoque no site que ficaram com estoque no anúncio do ML (a sincronização punha 200 em todos)
   const { ns, storeFor } = await import("../supabase/functions/_shared/nuvemshop.ts");
