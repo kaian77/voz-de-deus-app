@@ -10,12 +10,13 @@ import { sendMessage, transcript } from "./inbox.ts";
 import { notify } from "./push.ts";
 import { clientOffer } from "./mercadopago.ts";
 import { sleep } from "./util.ts";
+import { prospectFailed, prospectReady } from "./prospect.ts";
 
 const SITE = "https://paginaspro.app.br";
 
 /** Preços e links padrão (os mesmos de src/studio/lib/offer.ts); o dono muda em "Preços e links" (brand_settings.landing_offer). */
 const DEFAULT_OFFER: Record<string, number | string> = {
-  monthly: 59, oneTime: 397, change: 30, panelAddon: 19, premiumMonthly: 129, premiumOneTime: 997,
+  monthly: 49, oneTime: 297, upgradeMonthly: 49, upgradeOneTime: 247, change: 30, panelAddon: 19, premiumMonthly: 129, premiumOneTime: 997,
   monthlyLink: "https://mpago.la/29WANe2", oneTimeLink: "https://mpago.la/1rDD3Gz",
   premiumMonthlyLink: "https://mpago.la/1Bu8EjD", premiumOneTimeLink: "https://mpago.la/1YEqfgd",
   bioMonthly: 39, bioOneTime: 197, bioMonthlyLink: "", bioOneTimeLink: "",
@@ -81,6 +82,7 @@ function systemPrompt(o: Record<string, number | string>, channel: string) {
     `PLANOS (só passe quando a pessoa perguntar valor ou disser que gostou):\n` +
     `- Mensal: ${brl(o.monthly)}/mês, sem taxa de entrada, inclui alterações sempre que precisar${link(o.monthlyLink)} (cartão, renova sozinho)\n` +
     `- Pagamento único: ${brl(o.oneTime)}, sem mensalidade; alteração depois ${brl(o.change)} cada${link(o.oneTimeLink)} (Pix, cartão ou boleto)\n` +
+    `- Quem JÁ TEM site e quer trocar pelo nosso (upgrade): ${brl(o.upgradeOneTime)} uma vez só${link(o.upgradeOneTimeLink)} ou ${brl(o.upgradeMonthly)}/mês\n` +
     `- Premium (animado, foto em 3D, galeria, igual ao site da PáginasPro): ${brl(o.premiumMonthly)}/mês${link(o.premiumMonthlyLink)} ou ${brl(o.premiumOneTime)} à vista${link(o.premiumOneTimeLink)}\n` +
     `- Link da bio (no lugar do Linktree): ${brl(Number(o.bioMonthly))}/mês${link(String(o.bioMonthlyLink ?? ""))} ou ${brl(Number(o.bioOneTime))} à vista${link(String(o.bioOneTimeLink ?? ""))}\n` +
     `Agenda online é opcional (${brl(Number(o.agendaMonthly) || 29)}/mês a mais, em qualquer plano): o cliente marca o horário pelo site, escolhe o profissional e o serviço, e o negócio controla tudo num painel com relatório; lembrete por e-mail 1 dia antes. Ofereça para quem atende com horário marcado (clínicas, salões, consultórios, escritórios).\n` +
@@ -288,12 +290,19 @@ export async function runPaginasproJobs(db: SupabaseClient) {
             (page.photos?.length ? "" : "\n\nMontei sem foto por enquanto. Se mandar umas fotos suas ou do seu trabalho aqui, eu coloco no site e ele fica bem mais a sua cara. 📸");
         await sendMessage(db, page.conversation_id, text, "ai");
       }
-      await notify(db, page.user_id, `🌐 Prévia enviada: ${page.name}`, url, "/studio/landing").catch(() => {});
+      // Prévia da prospecção (lead sem conversa): a mensagem vai para a fila de 1 toque em Leads, sem aviso a cada uma
+      if (page.lead_id && !page.conversation_id) await prospectReady(db, page.id);
+      else await notify(db, page.user_id, `🌐 Prévia enviada: ${page.name}`, url, "/studio/landing").catch(() => {});
       done.push({ id: page.id, url });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await db.from("landing_pages").update({ auto_status: "failed", auto_error: msg.slice(0, 500) }).eq("id", job.id);
       if (job.conversation_id) await db.from("conversations").update({ status: "needs_human", handoff_reason: "Não consegui montar a prévia" }).eq("id", job.conversation_id);
+      if (job.lead_id && !job.conversation_id) {
+        await prospectFailed(db, job.lead_id, msg);
+        done.push({ id: job.id, error: msg });
+        continue;
+      }
       await notify(db, job.user_id, `⚠️ Prévia não saiu: ${job.name}`, msg, "/studio/landing").catch(() => {});
       done.push({ id: job.id, error: msg });
     }

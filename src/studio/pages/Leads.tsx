@@ -13,6 +13,7 @@ import type { Lead, LeadSearch, LeadStatus } from "../lib/types";
 import { EmptyState, PageHeader, Panel, relativeTime, SectionLabel, WhatsAppIcon } from "../components/bits";
 import LeadsMap, { areaColor, LEAD_STATUS } from "../components/LeadsMap";
 import ManualLeads from "../components/ManualLeads";
+import ProspectQueue from "../components/ProspectQueue";
 import { offerMessages } from "../lib/offer";
 
 const MSG_KEY = "studio-leads-msg";
@@ -76,7 +77,7 @@ export default function Leads() {
 
   const { data: searches = [] } = useTable("lead_searches");
   const busy = searches.some((s) => s.status === "queued" || s.status === "running");
-  const { data: leads = [] } = useTable("leads", { limit: 2000 }, { refetchInterval: busy ? 10000 : undefined });
+  const { data: leads = [] } = useTable("leads", { limit: 2000 }, { refetchInterval: busy ? 10000 : 30000 });
   const { data: pages = [] } = useTable("landing_pages");
   const offer = useOffer();
   useTable("lead_searches", undefined, { refetchInterval: busy ? 10000 : undefined });
@@ -136,7 +137,11 @@ export default function Leads() {
   };
 
   const openWhatsApp = (l: Lead) => {
-    window.open(`https://wa.me/${l.whatsapp}?text=${encodeURIComponent(fill(msg, l, l.search_id ? byId.get(l.search_id) : undefined))}`, "_blank");
+    // Com a prévia pronta, vai a mensagem da prospecção; senão a mensagem padrão (para quem tem site, sem o "não têm site")
+    const text = l.prospect_message && l.prospect_status === "ready" ? l.prospect_message
+      : l.kind === "upgrade" ? fill(msg, l, l.search_id ? byId.get(l.search_id) : undefined).replace(/ e reparei que vocês ainda não têm um site\./, ". Dei uma olhada no site de vocês e acho que dá para deixar bem melhor no celular.")
+      : fill(msg, l, l.search_id ? byId.get(l.search_id) : undefined);
+    window.open(`https://wa.me/${l.whatsapp}?text=${encodeURIComponent(text)}`, "_blank");
     if (l.status === "new") setStatus(l, "contacted");
   };
 
@@ -146,7 +151,7 @@ export default function Leads() {
         title="Leads"
         description={tab === "manual"
           ? "Marcas de móveis com avaliações reclamando do manual ou da montagem, no Brasil e lá fora, para oferecer a Montagem 3D."
-          : "Empresas do Google Maps sem site e com WhatsApp, para oferecer landing page. As áreas já pesquisadas ficam pintadas no mapa."}
+          : "Empresas do Google Maps com WhatsApp: sem site (site novo) ou com site (upgrade). As áreas já pesquisadas ficam pintadas no mapa."}
         actions={tab === "site" && leads.length > 0 && <Button variant="outline" size="sm" onClick={() => exportCsv(shown)}><Download className="mr-1.5 h-4 w-4" />Planilha</Button>}
       />
 
@@ -165,6 +170,8 @@ export default function Leads() {
 
       {tab === "manual" ? <ManualLeads /> : <>
 
+      <div className="mb-4"><ProspectQueue leads={leads} pages={pages} /></div>
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
           <Panel title="Nova busca">
@@ -181,7 +188,7 @@ export default function Leads() {
                 {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}Buscar
               </Button>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">Só entram empresas sem site próprio (quem só tem Instagram entra) e com celular. Quem já está na sua lista não se repete.</p>
+            <p className="mt-2 text-xs text-muted-foreground">Entram empresas com celular: sem site próprio (quem só tem Instagram conta como sem site) e as que já têm site, marcadas como "Upgrade". Quem já está na sua lista não se repete.</p>
           </Panel>
 
           <Panel bodyClassName="p-2">
@@ -263,13 +270,14 @@ export default function Leads() {
             {shown.map((l) => (
               <div key={l.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-medium">{l.name}</p>
+                  <p className="truncate text-[13px] font-medium">{l.kind === "upgrade" && <span className="mr-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-900">Upgrade</span>}{l.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {[l.category, l.address].filter(Boolean).join(" · ")}
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
                     <span className="tabular">{l.phone}</span>
                     {l.rating != null && <span className="flex items-center gap-0.5"><Star className="h-3 w-3" />{l.rating} ({l.reviews ?? 0})</span>}
+                    {l.website && <a href={l.website} target="_blank" rel="noreferrer" className="hover:underline">site: {l.website.replace(/^https?:\/\/(www\.)?/, "").slice(0, 32)}</a>}
                     {l.social && <a href={l.social} target="_blank" rel="noreferrer" className="hover:underline">{l.social.replace(/^https?:\/\/(www\.)?/, "").slice(0, 32)}</a>}
                     {l.maps_url && <a href={l.maps_url} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 hover:underline">Maps <ExternalLink className="h-3 w-3" /></a>}
                   </p>

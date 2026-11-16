@@ -26,7 +26,7 @@ const Ideas = z.object({ ideas: z.array(Idea) });
 
 const PLANS = (o: Record<string, unknown> | null) => {
   const n = (k: string, d: number) => Number(o?.[k] ?? d);
-  return `site avulso R$ ${n("oneTime", 397)} (pagamento único) ou R$ ${n("monthly", 59)}/mês com painel e alterações; ` +
+  return `site avulso R$ ${n("oneTime", 297)} (pagamento único) ou R$ ${n("monthly", 49)}/mês com painel e alterações; ` +
     `Premium animado R$ ${n("premiumOneTime", 997)} ou R$ ${n("premiumMonthly", 129)}/mês`;
 };
 
