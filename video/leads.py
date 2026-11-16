@@ -379,9 +379,9 @@ def add_test():
             page = (rest("GET", f"landing_pages?id=eq.{r['landing_id']}&select=slug,status,tier,auto_status,auto_error") or [{}])[0] if r.get("landing_id") else {}
             print(f"REPORT | {r['name']} | {r.get('category')} | {r['kind']} | {r['prospect_status']} | nota {r.get('rating')} ({r.get('reviews')}) | "
                   f"site {r.get('website') or '-'} | ig {r.get('instagram') or '-'} | página {page.get('status')}/{page.get('tier')}/{page.get('auto_status')} "
-                  f"https://paginaspro.app.br/p/{page.get('slug')} | erro {page.get('auto_error') or '-'}")
+                  f"https://paginaspro.app.br/p/{page.get('slug')} | erro {page.get('auto_error') or '-'}", file=sys.stderr)
             if r.get("prospect_message"):
-                print("REPORT MSG | " + r["prospect_message"].replace("\n", " / "))
+                print("REPORT MSG | " + r["prospect_message"].replace("\n", " / "), file=sys.stderr)
         return False
     q, place, n, extra = (spec.split("|") + ["", "", "20", ""])[:4]
     owner = (rest("GET", "brand_settings?select=user_id&limit=1") or [{}])[0].get("user_id")
