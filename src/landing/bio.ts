@@ -84,6 +84,8 @@ img,video{display:block;max-width:100%}
 .mono{display:grid;place-items:center;background:linear-gradient(150deg,var(--p),var(--bg))}
 .mono b{font-family:var(--head);font-size:160px;color:#fff;opacity:.9}
 .top:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,color-mix(in srgb,var(--bg) 70%,transparent) 72%,var(--bg) 100%)}
+.snd{position:absolute;top:16px;right:16px;z-index:3;display:flex;align-items:center;gap:8px;border:0;cursor:pointer;font:600 13px var(--body);color:#fff;background:rgba(0,0,0,.45);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:9px 14px;border-radius:999px;animation:pulse 2.6s infinite}
+.snd.on{animation:none}.snd.on .lb{display:none}
 .brand{position:absolute;left:22px;right:22px;bottom:18px;z-index:2}
 .sig{font-family:'Allura',cursive;font-weight:400;font-size:clamp(54px,15vw,72px);line-height:.9;letter-spacing:0;color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.4)}
 .word{font-family:var(--head);font-weight:${f.weight};font-size:clamp(34px,9vw,44px);line-height:1.02;letter-spacing:-.02em}
@@ -143,7 +145,7 @@ ${hero ? `<meta property="og:image" content="${esc(hero)}">` : ""}${opts.url ? `
 ${opts.preview ? `<div style="position:fixed;left:0;right:0;bottom:0;z-index:41;background:#000;color:#fff;text-align:center;font-size:13px;padding:10px 16px;font-family:system-ui,sans-serif">PRÉVIA · página ainda não publicada</div>
 <div aria-hidden="true" style="position:fixed;inset:0;z-index:40;pointer-events:none;background:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='200'%3E%3Ctext x='20' y='120' transform='rotate(-24 140 100)' font-family='Arial' font-size='30' font-weight='700' fill='%23fff' fill-opacity='.07'%3EPR%C3%89VIA%3C/text%3E%3C/svg%3E&quot;)"></div><style>footer{padding-bottom:70px}</style>` : ""}
 <main class="app">
-<header class="top">${media}<div class="brand up">${brand}</div></header>
+<header class="top">${media}${d.video ? `<button class="snd" type="button" aria-label="Ouvir o vídeo"><span class="ic">🔇</span><span class="lb">Toque para ouvir</span></button>` : ""}<div class="brand up">${brand}</div></header>
 ${c.bio_tagline || d.registry ? `<div class="sub up" style="animation-delay:.1s"><span>${esc(c.bio_tagline ?? "")}</span>${d.registry ? `<small>${esc(d.registry)}</small>` : ""}</div>` : ""}
 ${stats.length ? `<div class="stats up" style="animation-delay:.2s">${stats.map((s) => `<div><b data-n="${esc(s.value)}">${esc(s.value)}</b><span>${esc(s.label)}</span></div>`).join("")}</div>` : ""}
 ${tabs.length > 1 ? `<div class="tabs up" role="tablist" data-i="0" style="animation-delay:.3s"><i class="pill"></i>${tabs.map((t, i) => `<button role="tab" aria-selected="${i === 0}" data-tab="${i}">${esc(t.tab || (i ? "Profissionais" : "Clientes"))}</button>`).join("")}</div>` : ""}
@@ -160,6 +162,9 @@ document.addEventListener('click',function(ev){var a=ev.target.closest&&ev.targe
 </script>` : ""}
 <script>
 (function(){
+// Som do vídeo: o navegador só deixa começar mudo; um toque liga o som e volta para o começo
+var v=document.querySelector('video.hv'),snd=document.querySelector('.snd');
+if(v&&snd)snd.addEventListener('click',function(){var on=v.muted;v.muted=!on;if(on){v.currentTime=0;v.play()}snd.classList.toggle('on',on);snd.querySelector('.ic').textContent=on?'🔊':'🔇';snd.setAttribute('aria-label',on?'Tirar o som':'Ouvir o vídeo')});
 // Abas por público
 var tabs=document.querySelector('.tabs');
 if(tabs)tabs.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;var i=b.getAttribute('data-tab');tabs.setAttribute('data-i',i);
