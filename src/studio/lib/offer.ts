@@ -4,16 +4,16 @@
 export const OFFER = {
   /** WhatsApp do dono (só dígitos, com 55) usado no site da PáginasPro */
   whatsapp: "5561992372216",
-  monthly: 49,
+  monthly: 29.99,
   oneTime: 297,
   /** Upgrade para quem já tem site (prospecção): mais barato */
-  upgradeMonthly: 49,
+  upgradeMonthly: 29.99,
   upgradeOneTime: 247,
   change: 30,
   panelAddon: 19,
   /** Links do Mercado Pago (criados pelo dono no app). Vazio = a mensagem sai sem link de pagamento. */
   oneTimeLink: "https://mpago.la/1rDD3Gz",
-  monthlyLink: "https://mpago.la/29WANe2",
+  monthlyLink: "https://mpago.la/2AgY1c3",
   /** Premium: layout animado igual ao site da PáginasPro */
   premiumMonthly: 129,
   premiumOneTime: 997,
@@ -44,7 +44,7 @@ export function mergeOffer(saved?: Partial<Offer> | null): Offer {
   return out;
 }
 
-const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
+const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })}`;
 
 /** {nome} = nome da empresa; link = prévia da landing, se já existir. */
 export function offerMessages(name: string, link?: string | null, o: Offer = OFFER) {

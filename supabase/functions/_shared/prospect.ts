@@ -265,7 +265,7 @@ export async function crmReply(db: SupabaseClient, userId: string, leadId: strin
   if (myText?.trim()) chat.push({ from: "me", text: myText.trim(), at: now });
   if (clientText.trim()) chat.push({ from: "client", text: clientText.trim(), at: now });
   const p = await leadOffer(db, lead);
-  const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR")}`;
+  const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })}`;
   const context =
     `\n\nCONTEXTO DESTA CONVERSA: o Bruno achou este negócio no Google Maps e mandou do WhatsApp dele uma prévia pronta, sem a pessoa ter pedido. ` +
     `Você escreve a resposta que ele vai mandar (ele copia e envia). Negócio: ${lead.name}${lead.category ? ` (${lead.category})` : ""}. ` +

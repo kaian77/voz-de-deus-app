@@ -27,6 +27,7 @@ type DomainInfo = { domain: string | null; vercel: string; status: "ok" | "dns" 
 
 const SOURCE_LABEL: Record<string, string> = { google: "Google", instagram: "Instagram", facebook: "Facebook", whatsapp: "WhatsApp", tiktok: "TikTok", direto: "Direto", outros: "Outros" };
 const MY_SITE = "https://paginaspro.app.br";
+const money = (n: number) => Number(n).toLocaleString("pt-BR", { minimumFractionDigits: Number.isInteger(Number(n)) ? 0 : 2, maximumFractionDigits: 2 });
 /** Linha de landing_pages só para a agenda do próprio site da PáginasPro (não aparece na lista de clientes). */
 const MY_AGENDA_SLUG = "paginaspro";
 
@@ -52,7 +53,8 @@ function PricesPanel({ onClose }: { onClose: () => void }) {
     setSaving(true);
     try {
       const value = Object.fromEntries(PRICE_FIELDS.map(([k, , t]) => [k, t === "n" ? Number(String(form[k]).replace(",", ".")) || null : form[k]]));
-      await api.saveSettings({ landing_offer: value });
+      // priceSet: marca que os preços já foram mexidos (as migrations de preço não sobrescrevem de novo)
+      await api.saveSettings({ landing_offer: { ...value, priceSet: "20261116" } as typeof value });
       await qc.invalidateQueries({ queryKey: ["settings"] });
       toast.success("Preços e links salvos. O seu site atualiza em até 1 minuto.");
       onClose();
@@ -247,7 +249,7 @@ function PlanPanel({ page, onChange }: { page: LandingPage; onChange: (p: Landin
   return (
     <Panel
       title="Plano do cliente"
-      description={page.plan === "monthly" ? `Mensal (R$ ${page.tier === "premium" ? OFFER.premiumMonthly : page.tier === "bio" ? OFFER.bioMonthly : OFFER.monthly}/mês): painel de resultados + alterações inclusas.` : `Avulso: alterações cobradas à parte (R$ ${OFFER.change}); painel ${page.panel ? "liberado" : `bloqueado (libere abaixo, cobrando + R$ ${OFFER.panelAddon}/mês ou de cortesia)`}.`}
+      description={page.plan === "monthly" ? `Mensal (R$ ${money(page.tier === "bio" ? OFFER.bioMonthly : OFFER.monthly)}/mês): painel de resultados + alterações inclusas.` : `Avulso: alterações cobradas à parte (R$ ${OFFER.change}); painel ${page.panel ? "liberado" : `bloqueado (libere abaixo, cobrando + R$ ${OFFER.panelAddon}/mês ou de cortesia)`}.`}
       action={<Button size="sm" variant={page.plan === "monthly" ? "outline" : "default"} onClick={toggle} disabled={busy}>{page.plan === "monthly" ? "Desligar mensal" : "Ligar plano mensal"}</Button>}
     >
       <div className="grid grid-cols-3 gap-2 text-center">
@@ -697,8 +699,8 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
           <Panel title="Modelo" description="O conteúdo é o mesmo; muda o visual. Troque à vontade e veja na prévia.">
             <div className="grid grid-cols-3 gap-2">
               {([
-                ["normal", "Normal", "Limpo e direto", `R$ ${OFFER.monthly}/mês · R$ ${OFFER.oneTime}`],
-                ["premium", "Premium", "Animado, foto 3D, galeria", `R$ ${OFFER.premiumMonthly}/mês · R$ ${OFFER.premiumOneTime}`],
+                ["normal", "Normal", "Limpo e direto", `R$ ${money(OFFER.monthly)}/mês · R$ ${money(OFFER.oneTime)}`],
+                ["premium", "Premium", "Animado, foto 3D, galeria (padrão)", `R$ ${money(OFFER.monthly)}/mês · R$ ${money(OFFER.oneTime)}`],
                 ["bio", "Link da bio", "No lugar do Linktree: vídeo, números, abas", `R$ ${OFFER.bioMonthly}/mês · R$ ${OFFER.bioOneTime}`],
               ] as const).map(([k, label, about, price]) => (
                 <button key={k} type="button" onClick={() => set("tier", k)} className={cn("rounded-lg border p-3 text-left transition-colors", form.tier === k ? "border-foreground bg-secondary" : "hover:bg-secondary/50")}>

@@ -19,7 +19,7 @@ import { SendAll } from "../components/SendAll";
 import { daysSince, followupMessage, humanize, outboxEta, LOST_REASONS, MAX_FOLLOWUPS, nextFollowupAt, PLANS, STAGES, stageOf, waLink, type Stage } from "../lib/crm";
 import { api } from "../lib/api";
 
-const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
 const ago = (days: number) => (days <= 0 ? "hoje" : days === 1 ? "ontem" : `há ${days} dias`);
 const firstOfMonth = () => {
   const d = new Date();
