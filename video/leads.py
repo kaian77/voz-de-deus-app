@@ -212,6 +212,9 @@ def hours_text(raw):
     return " · ".join(out) or None
 
 
+_PHOTO_DEBUG = False
+
+
 def details(row):
     """Extras do Maps para a landing page: horário, fotos grandes, categoria e descrição."""
     photos = []
@@ -222,6 +225,14 @@ def details(row):
         url = re.sub(r"=w\d+-h\d+[^/]*$", "=w1200-h1200-k-no", url)
         if url not in photos:
             photos.append(url)
+    # Sem galeria no CSV: usa a foto principal do lugar (thumbnail)
+    thumb = (row.get("thumbnail") or "").strip()
+    if not photos and thumb.startswith("http"):
+        photos.append(re.sub(r"=w\d+-h\d+[^/]*$", "=w1200-h1200-k-no", thumb))
+    global _PHOTO_DEBUG
+    if not _PHOTO_DEBUG:
+        _PHOTO_DEBUG = True
+        print(f"  [fotos] colunas: {[k for k in row.keys() if re.search('imag|thumb|photo', k, re.I)]} · images={str(row.get('images'))[:300]} · thumbnail={thumb[:120]}")
     raw = jload(row.get("open_hours"))
     return {
         "hours": hours_text(raw), "open_hours": raw or None, "photos": photos[:10],
@@ -287,7 +298,7 @@ def same_place(row, lead):
 
 def enrich():
     """Lead antigo (de antes dos extras) pedido por uma landing page: busca o lugar de novo e guarda os extras."""
-    for lead in rest("GET", "leads?details_status=eq.queued&order=updated_at&limit=20&select=id,place_id,name,address,lat,lng") or []:
+    for lead in rest("GET", "leads?details_status=eq.queued&order=updated_at&limit=20&select=id,place_id,name,address,lat,lng,prospect_status,landing_id") or []:
         print(f"▶ dados do Maps: {lead['name']}")
         rest("PATCH", f"leads?id=eq.{lead['id']}", {"details_status": "running"})
         try:
@@ -296,10 +307,16 @@ def enrich():
             row = next((r for r in rows if same_place(r, lead)), None)
             if not row:
                 raise RuntimeError("o lugar não apareceu na busca")
-            rest("PATCH", f"leads?id=eq.{lead['id']}", {"details": details(row), "details_status": "done"})
+            d = details(row)
+            rest("PATCH", f"leads?id=eq.{lead['id']}", {"details": d, "details_status": "done"})
+            print(f"  ✓ {len(d['photos'])} foto(s)")
+            # Prévia da prospecção pedida de novo ("redo"): refaz com as fotos novas
+            if lead.get("prospect_status") == "redo" and lead.get("landing_id"):
+                rest("PATCH", f"landing_pages?id=eq.{lead['landing_id']}", {"imported": None, "photos": [], "auto_status": "queued", "auto_instructions": None})
+                rest("PATCH", f"leads?id=eq.{lead['id']}", {"prospect_status": "building"})
         except Exception as e:
             print(f"  ✗ {e}")
-            rest("PATCH", f"leads?id=eq.{lead['id']}", {"details_status": "failed"})
+            rest("PATCH", f"leads?id=eq.{lead['id']}", {"details_status": "failed", **({"prospect_status": "ready"} if lead.get("prospect_status") == "redo" else {})})
 
 
 def run(search):
@@ -372,6 +389,12 @@ def add_test():
         return False
     spec = sys.argv[sys.argv.index("--test") + 1]
     if not spec.strip():
+        return False
+    if spec.strip() == "redo":  # prévias da prospecção sem foto: busca o lugar de novo no Maps e refaz a prévia
+        for r in rest("GET", "leads?prospect_status=eq.ready&status=eq.new&select=id,landing_id&limit=50") or []:
+            page = (rest("GET", f"landing_pages?id=eq.{r['landing_id']}&select=photos") or [{}])[0] if r.get("landing_id") else {}
+            if not page.get("photos"):
+                rest("PATCH", f"leads?id=eq.{r['id']}", {"prospect_status": "redo", "details_status": "queued"})
         return False
     if spec.strip() == "report":  # relatório da prospecção no log (para conferir pelo GitHub)
         rows = rest("GET", "leads?prospect_status=not.is.null&order=prospect_at.desc&limit=15&select=name,category,kind,website,instagram,prospect_status,prospect_message,landing_id,rating,reviews,details,details_status") or []
