@@ -709,7 +709,7 @@ function Editor({ page, onBack }: { page: LandingPage; onBack: () => void }) {
             {form.tier === "bio" && (
               <div className="mt-3 space-y-2 text-xs">
                 <p className="font-medium">Vídeo do topo (opcional)</p>
-                <p className="text-muted-foreground">Vídeo curto da pessoa (5 a 15 s, em pé, MP4 até 25 MB). Toca sozinho, sem som e em loop. Sem vídeo, a foto do topo fica com zoom lento.</p>
+                <p className="text-muted-foreground">Vídeo curto da pessoa (5 a 30 s, em pé, MP4 até 25 MB). Começa sozinho e em loop; o navegador só deixa começar mudo, então aparece o botão "Toque para ouvir" que liga o som. Sem vídeo, a foto do topo fica com zoom lento.</p>
                 <div className="flex items-center gap-3">
                   {form.video ? <video src={form.video} muted playsInline className="h-16 w-10 rounded border object-cover" /> : null}
                   <Button variant="outline" size="sm" disabled={busy === "upload"} onClick={() => videoInput.current?.click()}>{form.video ? "Trocar vídeo" : "Enviar vídeo"}</Button>
