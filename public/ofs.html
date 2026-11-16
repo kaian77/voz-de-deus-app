@@ -78,7 +78,7 @@ nav.links .btn{padding:12px 18px;font-size:14px}
 .loc b{display:block;color:var(--ink);font-weight:600}
 .logo-card{position:relative;border-radius:22px;overflow:hidden;box-shadow:0 40px 80px -30px rgba(23,59,48,.45),0 0 0 1px rgba(23,59,48,.06);transform:perspective(1200px) rotateY(-6deg) rotateX(2deg);transition:transform .8s cubic-bezier(.2,.8,.2,1)}
 .logo-card:hover{transform:none}
-.logo-card img{width:100%;aspect-ratio:1}
+.logo-card img{width:100%;height:auto;aspect-ratio:4/5;object-fit:cover;object-position:50% 45%}
 .since{position:absolute;left:-18px;bottom:34px;background:var(--ink);color:#fff;border-radius:14px;padding:14px 18px;box-shadow:0 20px 40px -16px rgba(0,0,0,.5)}
 .since b{display:block;font:500 34px/1 var(--serif)}
 .since span{font-size:12px;opacity:.8}
@@ -229,7 +229,10 @@ details p{padding:0 0 22px;color:var(--muted);max-width:62ch}
 .info p{font-size:14.5px;color:var(--muted)}
 .info a.lnk{margin-top:10px;font-size:14px}
 .map{margin-top:18px;border-radius:14px;overflow:hidden;border:1px solid #d6dfc8;aspect-ratio:16/9;background:var(--card)}
-.map iframe{width:100%;height:100%;border:0}
+.map{position:relative}
+.map iframe{width:100%;height:100%;border:0;pointer-events:none}
+.map-go{position:absolute;inset:0;z-index:2;display:flex;align-items:flex-end;justify-content:flex-end;padding:12px;text-decoration:none}
+.map-go span{background:var(--ink);color:#fff;font-weight:600;font-size:13.5px;padding:10px 14px;border-radius:8px;box-shadow:0 8px 20px -8px rgba(0,0,0,.5)}
 
 footer{background:var(--ink);color:#CBD7CB;font-size:13px}
 footer .wrap{padding-block:44px 30px}
@@ -320,10 +323,10 @@ footer a{text-decoration:none;color:#fff}
         <a class="btn" href="#especialidades">Encontre seu cuidado <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11 11 3M4.5 3H11v6.5"/></svg></a>
         <a class="lnk" href="#convenios">Consultar convênios <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11 11 3M4.5 3H11v6.5"/></svg></a>
       </div>
-      <a class="loc" data-maps href="#" target="_blank" rel="noopener"><i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg></i><span><b>Quadra 3, CL 16, Loja 01</b>Sobradinho · Brasília / DF · Como chegar</span></a>
+      <a class="loc" data-maps href="https://maps.app.goo.gl/3sNvZbCTmsdVkJ9g6?g_st=ac" target="_blank" rel="noopener"><i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg></i><span><b>Quadra 3, CL 16, Loja 01</b>Sobradinho · Brasília / DF · Como chegar</span></a>
     </div>
     <div class="visual">
-      <div class="logo-card"><img src="/ofs/logo.webp" alt="OFS Ortopedia e Fisioterapia Sobradinho · Saúde Integrada" width="753" height="753"></div>
+      <div class="logo-card"><img src="/ofs/fachada.webp" alt="Fachada da OFS · Ortopedia e Fisioterapia Sobradinho" width="1086" height="1448" fetchpriority="high"></div>
       <div class="since"><b>1998</b><span>cuidando de Sobradinho</span></div>
     </div>
   </div>
@@ -375,14 +378,14 @@ footer a{text-decoration:none;color:#fff}
 
 <section class="story" id="clinica">
   <div class="wrap">
-    <div class="photo"><img src="/ofs/fachada.webp" alt="Fachada da OFS em Sobradinho" loading="lazy" width="1000" height="1333"></div>
+    <div class="photo"><img src="/ofs/fisioterapia-3.webp" alt="Sala de fisioterapia da OFS" loading="lazy" width="820" height="1024"></div>
     <div>
       <p class="eyebrow">Nossa história</p>
       <h2>Faz parte da sua vida.<br>Faz parte de <i>Sobradinho.</i></h2>
       <p>A Ortopedia e Fisioterapia Sobradinho (OFS) está presente em Sobradinho desde 1998, oferecendo atendimento em saúde com respeito, escuta e atenção às necessidades de cada pessoa.</p>
       <p>Ao longo dessa trajetória, a OFS ampliou suas especialidades, reunindo diferentes serviços em um mesmo espaço, sempre valorizando o cuidado humanizado, acolhedor e individualizado.</p>
       <div class="nums"><div><b id="years">28</b><span>anos em Sobradinho</span></div><div><b>7</b><span>especialidades</span></div><div><b id="nPlans">50+</b><span>convênios aceitos</span></div></div>
-      <a class="lnk" data-maps href="#" target="_blank" rel="noopener">Venha conhecer a OFS <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11 11 3M4.5 3H11v6.5"/></svg></a>
+      <a class="lnk" data-maps href="https://maps.app.goo.gl/3sNvZbCTmsdVkJ9g6?g_st=ac" target="_blank" rel="noopener">Venha conhecer a OFS <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11 11 3M4.5 3H11v6.5"/></svg></a>
     </div>
   </div>
 </section>
@@ -429,11 +432,11 @@ footer a{text-decoration:none;color:#fff}
     </div>
     <div>
       <div class="info">
-        <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg><div><b>Como chegar</b><p>Quadra 3, CL 16, Loja 01<br>Sobradinho · Brasília / DF<br>CEP 73031-140</p><a class="lnk" data-maps href="#" target="_blank" rel="noopener">Abrir no Google Maps <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11 11 3M4.5 3H11v6.5"/></svg></a></div></div>
+        <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg><div><b>Como chegar</b><p>Quadra 3, CL 16, Loja 01<br>Sobradinho · Brasília / DF<br>CEP 73031-140</p><a class="lnk" data-maps href="https://maps.app.goo.gl/3sNvZbCTmsdVkJ9g6?g_st=ac" target="_blank" rel="noopener">Abrir no Google Maps <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11 11 3M4.5 3H11v6.5"/></svg></a></div></div>
         <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div><b>Horário de funcionamento</b><p>Segunda a sexta, das 8h às 18h<br>Atendimentos mediante agendamento.</p></div></div>
         <div><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></svg><div><b>Outros canais</b><p><a href="mailto:ortopediasobradinho@gmail.com">ortopediasobradinho@gmail.com</a><br><a href="https://instagram.com/ortopediasobradinho" target="_blank" rel="noopener">Instagram: @ortopediasobradinho ↗</a></p></div></div>
       </div>
-      <div class="map"><iframe title="Mapa da OFS" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=Ortopedia%20e%20Fisioterapia%20Sobradinho%2C%20Quadra%203%20CL%2016%20Loja%2001%2C%20Sobradinho%2C%20Bras%C3%ADlia%20-%20DF%2C%2073031-140&z=17&output=embed"></iframe></div>
+      <div class="map"><a class="map-go" href="https://maps.app.goo.gl/3sNvZbCTmsdVkJ9g6?g_st=ac" target="_blank" rel="noopener" aria-label="Abrir a OFS no Google Maps"><span>Abrir no Google Maps ↗</span></a><iframe title="Mapa da OFS" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=Ortopedia%20e%20Fisioterapia%20Sobradinho%2C%20Quadra%203%20CL%2016%20Loja%2001%2C%20Sobradinho%2C%20Bras%C3%ADlia%20-%20DF%2C%2073031-140&z=17&output=embed"></iframe></div>
     </div>
   </div>
 </section>
@@ -469,7 +472,7 @@ footer a{text-decoration:none;color:#fff}
 <script>
 (function(){
 const WA='5561981627180';
-const MAPS='https://maps.app.goo.gl/3sNvZbCTmsdVkJ9g6';
+const MAPS='https://maps.app.goo.gl/3sNvZbCTmsdVkJ9g6?g_st=ac';
 const MSG={
   geral:'Olá! Gostaria de informações sobre os atendimentos da OFS.',
   orientacao:'Olá! Conheci a OFS pelo site e gostaria de ajuda para entender os serviços disponíveis.',
