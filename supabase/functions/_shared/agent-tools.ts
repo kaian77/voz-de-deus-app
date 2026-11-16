@@ -260,6 +260,7 @@ const tools = {
       agent_instructions: z.string().optional().describe("Como o agente de mensagens deve atender"),
       agent_knowledge: z.string().optional().describe("Base de conhecimento: FAQ, links, preços, horários"),
       agent_handoff_message: z.string().optional(),
+      handoff_phone: z.string().optional().describe("WhatsApp que recebe o aviso quando a IA passa a conversa para uma pessoa"),
     }),
     run: async (ctx: Ctx, input: Record<string, unknown>) => {
       const { data, error } = await ctx.db.from("brand_settings").upsert({ user_id: ctx.userId, ...input, updated_at: new Date().toISOString() }).select().single();

@@ -180,6 +180,9 @@ export default function ClaudeApi() {
           <Field id="agent_handoff_message" label="Mensagem ao passar para você">
             <Input id="agent_handoff_message" className="h-9" value={val("agent_handoff_message")} onChange={set("agent_handoff_message")} placeholder="Vou chamar alguém da equipe para te responder." />
           </Field>
+          <Field id="handoff_phone" label="WhatsApp que recebe o aviso" hint="Quando a IA passa a conversa para uma pessoa, esse número recebe pelo WhatsApp da loja quem é, o motivo e as últimas mensagens.">
+            <Input id="handoff_phone" className="h-9" inputMode="tel" value={val("handoff_phone")} onChange={set("handoff_phone")} placeholder="61 99100-0000" />
+          </Field>
         </Row>
 
         <Row title="Autonomia do Claude" description="Defina se o Claude publica sozinho ou deixa os posts esperando a sua aprovação.">

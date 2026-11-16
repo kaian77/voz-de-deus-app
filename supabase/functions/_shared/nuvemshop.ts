@@ -88,6 +88,7 @@ export function orderSummary(o: any) {
     created_at: o.created_at,
     customer: o.contact_name ?? o.customer?.name,
     email: o.contact_email ?? o.customer?.email,
+    phone: o.contact_phone ?? o.customer?.phone ?? o.shipping_address?.phone ?? undefined,
     status: o.status, // open | closed | cancelled
     payment: PAYMENT_LABEL[o.payment_status] ?? o.payment_status,
     shipping: SHIPPING_LABEL[o.shipping_status] ?? o.shipping_status,
