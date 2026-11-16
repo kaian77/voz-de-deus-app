@@ -229,6 +229,7 @@ export interface BrandSettings {
   agent_instructions?: string | null;
   agent_knowledge?: string | null;
   agent_handoff_message?: string | null;
+  handoff_phone?: string | null;
   video_enabled?: boolean;
   marketplace_autopublish?: boolean;
   autopilot_enabled?: boolean;

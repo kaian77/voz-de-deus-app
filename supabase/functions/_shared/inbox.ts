@@ -2,7 +2,8 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4";
 import { igRequest, igTokenFor } from "./instagram.ts";
-import { agentAllowed, waSendText, wahaSendText, wahaTypeLikeHuman } from "./whatsapp.ts";
+import { agentAllowed, phoneKey, waSendText, wahaSendText, wahaTypeLikeHuman } from "./whatsapp.ts";
+import { sendWhatsAppTo } from "./sale-alerts.ts";
 import { type AgentTool, aiEnabled, brandContext, generateJSON, runAgent } from "./claude.ts";
 import { sleep } from "./util.ts";
 import { nsCoupons, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "./nuvemshop.ts";
@@ -203,7 +204,7 @@ export async function transcript(db: SupabaseClient, conversationId: string, lim
  * Ferramentas da loja para o agente: busca no catálogo inteiro, informações e políticas da loja,
  * cupons ativos e situação de pedido (só com número + e-mail da compra; sem isso nada do pedido é revelado).
  */
-function storeTools(store: { token: string; storeId: string } | null): AgentTool[] {
+function storeTools(store: { token: string; storeId: string } | null, contactPhone?: string | null): AgentTool[] {
   if (!store) return [];
   const { token, storeId } = store;
   return [
@@ -253,17 +254,23 @@ function storeTools(store: { token: string; storeId: string } | null): AgentTool
     },
     {
       name: "consultar_pedido",
-      description: "Situação de um pedido (pagamento, envio, transportadora, rastreio). Exige o número do pedido E o e-mail ou o nome completo de quem comprou, " +
-        "informados pela própria pessoa nesta conversa. Sem isso, peça antes de chamar. Também traz os canais da transportadora.",
+      description: "Situação de um pedido (pagamento, envio, transportadora, rastreio). Chame só com o número do pedido que a pessoa informou; " +
+        "se a resposta pedir confirmação, peça o e-mail ou o nome completo de quem comprou e chame de novo com email_ou_nome. Também traz os canais da transportadora.",
       input_schema: {
         type: "object",
         properties: { numero: { type: "string" }, email_ou_nome: { type: "string" } },
-        required: ["numero", "email_ou_nome"],
+        required: ["numero"],
       },
-      run: async ({ numero, email_ou_nome }: { numero: string; email_ou_nome: string }) => {
+      run: async ({ numero, email_ou_nome }: { numero: string; email_ou_nome?: string }) => {
         const order = await nsFindOrder(token, storeId, numero);
         if (!order) return { resultado: "pedido não encontrado; peça para conferir o número" };
-        if (!buyerMatches(order, email_ou_nome)) {
+        // No WhatsApp, o celular de quem conversa igual ao da compra já confirma quem é
+        const last8 = (v: unknown) => String(v ?? "").replace(/\D/g, "").slice(-8);
+        const samePhone = !!contactPhone && last8(order.phone).length === 8 && last8(order.phone) === last8(contactPhone);
+        if (!samePhone && !email_ou_nome) {
+          return { resultado: "para confirmar que é o comprador, peça o e-mail ou o nome completo usado na compra (não passe nenhum dado do pedido antes)" };
+        }
+        if (!samePhone && !buyerMatches(order, email_ou_nome ?? "")) {
           return { resultado: "o e-mail/nome não confere com o da compra; não passe nenhum dado do pedido, peça para conferir" };
         }
         return {
@@ -350,7 +357,8 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
   const store = await storeFor(db, conversation.user_id).catch(() => null);
   // Links de produto que a busca devolveu nesta resposta: a IA só pode mandar produto que a loja tem de verdade
   const found = new Set<string>();
-  const tools = storeTools(store).map((t) => t.name !== "buscar_produtos" ? t : {
+  const contactPhone = conversation.channel === "whatsapp" ? String(conversation.contact_id).split("@")[0] : null;
+  const tools = storeTools(store, contactPhone).map((t) => t.name !== "buscar_produtos" ? t : {
     ...t,
     run: async (input: { busca: string }) => {
       const out = await t.run!(input);
@@ -386,7 +394,7 @@ export async function draftReply(db: SupabaseClient, conversation: any) {
         `- Produto pedido pelo nome popular (ex.: "homem aranha") pode ter outro nome na loja (ex.: "Zé Aranha"): busque por palavras-chave. Só conta se for claramente o mesmo personagem/tema; senão a loja não tem.\n` +
         `- Cupom: quando pedirem desconto, passe os cupons da base de conhecimento/instruções (ou de cupons_ativos) — só códigos que vieram de lá, com as condições (primeira compra, valor mínimo, validade). ` +
         `Nunca passe cupom com nome de pessoa no código. Se não houver, diga com gentileza que no momento não há cupom ativo.\n` +
-        `- Pedido: peça o número do pedido e o e-mail (ou nome completo) de quem comprou; só depois consulte e passe status, transportadora e rastreio.\n` +
+        `- Pedido: peça só o número do pedido e consulte; se a consulta pedir confirmação, aí peça o e-mail ou o nome completo de quem comprou. Depois passe status, transportadora e rastreio.\n` +
         `- "Consta entregue mas não recebi": com muita gentileza e empatia, explique que a parte da loja é embalar com cuidado e postar, e que a entrega ` +
         `fica sob responsabilidade da transportadora. Passe o nome da transportadora, o código e o link de rastreio e os canais dela (contato_transportadora), ` +
         `sugira antes conferir com portaria, vizinhos ou familiares, e oriente a abrir a reclamação na transportadora com o código. ` +
@@ -423,8 +431,13 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
   if (isPaginasPro(acc?.meta)) return paginasproReply(db, conversation, inboundMessageId);
   if (brandOf(acc?.meta) === "noticias") return newsReply(db, conversation, inboundMessageId, acc?.meta); // só pedidos dos PDFs
   if (brandOf(acc?.meta) === "canal") return; // conta de canal (vídeos do YouTube): ninguém responde sozinho
-  const { data: settings } = await db.from("brand_settings").select("agent_enabled").eq("user_id", conversation.user_id).maybeSingle();
+  const { data: settings } = await db.from("brand_settings").select("agent_enabled,handoff_phone,sale_alert_phone").eq("user_id", conversation.user_id).maybeSingle();
   if (!settings?.agent_enabled) return;
+  // Mensagem da chefe ou do dono no número da loja (ex.: respondendo o aviso): a IA não conversa com eles
+  if (conversation.channel === "whatsapp") {
+    const me = phoneKey(conversation.contact_id);
+    if ([settings.handoff_phone, settings.sale_alert_phone].some((p) => p && phoneKey(p) === me)) return;
+  }
 
   // Espera um pouco: se a pessoa mandar várias mensagens seguidas, responde só a última (com todo o contexto)
   const isLatest = async () => {
@@ -448,6 +461,7 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
     await db.from("conversations").update({ status: "needs_human", handoff_reason: draft.handoff_reason || "Pedido de atendimento humano" }).eq("id", conversation.id);
     await notify(db, conversation.user_id, `💬 ${conversation.contact_name ?? conversation.contact_username ?? "Cliente"} precisa de você`,
       draft.handoff_reason || "Pedido de atendimento humano", "/studio/mensagens").catch(() => {});
+    await alertBoss(db, conversation, draft.handoff_reason || "Pedido de atendimento humano").catch((e) => console.error("aviso da chefe", e));
     // No modo pessoal não manda o aviso da loja ("vou chamar alguém da equipe")
     // No Instagram a IA não avisa nada no handoff, a não ser que tenha escrito um aviso (pedido de humano/reclamação)
     const text = draft.reply?.trim() || (draft.personal || conversation.channel === "instagram" ? "" : draft.settings?.agent_handoff_message);
@@ -455,4 +469,20 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
     return;
   }
   if (draft.reply.trim()) await sendMessage(db, conversation.id, draft.reply.trim(), "ai");
+}
+
+/** Avisa a pessoa que atende (brand_settings.handoff_phone) pelo WhatsApp da loja: quem é, onde, o motivo e as últimas mensagens. */
+// deno-lint-ignore no-explicit-any
+async function alertBoss(db: SupabaseClient, conversation: any, reason: string) {
+  const { data: st } = await db.from("brand_settings").select("handoff_phone").eq("user_id", conversation.user_id).maybeSingle();
+  if (!st?.handoff_phone) return;
+  const { data: msgs } = await db.from("messages").select("direction,text").eq("conversation_id", conversation.id)
+    .order("created_at", { ascending: false }).limit(4);
+  const name = conversation.contact_name ?? conversation.contact_username ?? "Cliente";
+  const where = conversation.channel === "whatsapp"
+    ? `WhatsApp · wa.me/${String(conversation.contact_id).split("@")[0].replace(/\D/g, "")}`
+    : conversation.channel === "instagram" ? `Instagram${conversation.contact_username ? ` · @${conversation.contact_username}` : ""}` : conversation.channel;
+  const last = (msgs ?? []).reverse().map((m) => `${m.direction === "in" ? "Cliente" : "Loja"}: ${String(m.text).slice(0, 200)}`).join("\n");
+  const text = `🔔 *Atendimento para você*\n${name} (${where})\nMotivo: ${reason}\n\n${last}\n\nResponda pelo app ou pelo Studio: https://voz-de-deus-app.vercel.app/studio/mensagens`;
+  await sendWhatsAppTo(db, conversation.user_id, st.handoff_phone, text);
 }
