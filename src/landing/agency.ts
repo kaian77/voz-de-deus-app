@@ -5,7 +5,7 @@
 import { OFFER, type Offer } from "../studio/lib/offer.js";
 
 
-const brl = (n: number) => n.toLocaleString("pt-BR");
+const brl = (n: number) => n.toLocaleString("pt-BR", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 });
 
 /** o = preços, links e WhatsApp (padrões de offer.ts com o que o dono salvou no Studio). */
 export function renderAgency(o: Offer = OFFER, opts: { agenda?: string } = {}): string {

@@ -16,8 +16,8 @@ const SITE = "https://paginaspro.app.br";
 
 /** Preços e links padrão (os mesmos de src/studio/lib/offer.ts); o dono muda em "Preços e links" (brand_settings.landing_offer). */
 const DEFAULT_OFFER: Record<string, number | string> = {
-  monthly: 49, oneTime: 297, upgradeMonthly: 49, upgradeOneTime: 247, change: 30, panelAddon: 19, premiumMonthly: 129, premiumOneTime: 997,
-  monthlyLink: "https://mpago.la/29WANe2", oneTimeLink: "https://mpago.la/1rDD3Gz",
+  monthly: 29.99, oneTime: 297, upgradeMonthly: 29.99, upgradeOneTime: 247, change: 30, panelAddon: 19, premiumMonthly: 129, premiumOneTime: 997,
+  monthlyLink: "https://mpago.la/2AgY1c3", oneTimeLink: "https://mpago.la/1rDD3Gz",
   premiumMonthlyLink: "https://mpago.la/1Bu8EjD", premiumOneTimeLink: "https://mpago.la/1YEqfgd",
   bioMonthly: 39, bioOneTime: 197, bioMonthlyLink: "", bioOneTimeLink: "",
 };
@@ -33,7 +33,7 @@ export async function offerFor(db: SupabaseClient, userId: string) {
   return o;
 }
 
-const brl = (n: unknown) => `R$ ${Number(n).toLocaleString("pt-BR")}`;
+const brl = (n: unknown) => `R$ ${Number(n).toLocaleString("pt-BR", { minimumFractionDigits: Number.isInteger(Number(n)) ? 0 : 2, maximumFractionDigits: 2 })}`;
 const pageUrl = (p: { slug: string; domain?: string | null; status: string }) =>
   p.status === "published" && p.domain ? `https://${p.domain}` : `${SITE}/p/${p.slug}`;
 
