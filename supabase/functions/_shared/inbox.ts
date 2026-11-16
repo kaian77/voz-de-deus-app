@@ -453,6 +453,18 @@ export async function autoReply(db: SupabaseClient, conversation: any, inboundMe
   const said = String(last?.text ?? "").replace(/^\[[^\]]*enviad[oa]\]$/, "");
   if (!/\p{L}/u.test(said)) return;
 
+  // Conversa que a equipe vem tocando pelo app (mensagens antigas da pessoa sem resposta aqui): a IA não tem o contexto
+  // (ex.: "guardou os meus?" de revendedora). Não responde: passa para a equipe, calada.
+  const { data: before } = await db.from("messages").select("direction,created_at").eq("conversation_id", conversation.id)
+    .neq("id", inboundMessageId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (before?.direction === "in" && Date.now() - new Date(before.created_at).getTime() > 2 * 3600_000) {
+    const reason = "Conversa antiga continuada (a IA não tem o contexto do que foi combinado)";
+    await db.from("conversations").update({ status: "needs_human", handoff_reason: reason }).eq("id", conversation.id);
+    await notify(db, conversation.user_id, `💬 ${conversation.contact_name ?? conversation.contact_username ?? "Cliente"} precisa de você`, reason, "/studio/mensagens").catch(() => {});
+    await alertBoss(db, conversation, reason).catch((e) => console.error("aviso da chefe", e));
+    return;
+  }
+
   const draft = await draftReply(db, conversation);
   // Chegou outra mensagem enquanto a IA pensava: descarta esta resposta (a da mensagem nova já vê tudo)
   if (!(await isLatest())) return;
