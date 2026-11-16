@@ -383,6 +383,11 @@ export interface Lead {
   last_touch_at?: string | null;
   replied_at?: string | null;
   instagram?: string | null;
+  /** "Enviar todos": na fila do envio automático (WAHA) */
+  send_after?: string | null;
+  send_text?: string | null;
+  send_error?: string | null;
+  bot_sent_at?: string | null;
   notes: string | null;
   contacted_at: string | null;
   created_at: string;
@@ -440,6 +445,11 @@ export interface ManualLead {
   last_touch_at?: string | null;
   replied_at?: string | null;
   instagram?: string | null;
+  /** "Enviar todos": na fila do envio automático (WAHA) */
+  send_after?: string | null;
+  send_text?: string | null;
+  send_error?: string | null;
+  bot_sent_at?: string | null;
   notes: string | null;
   contacted_at: string | null;
   created_at: string;

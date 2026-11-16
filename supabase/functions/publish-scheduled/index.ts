@@ -20,7 +20,7 @@ import { runMlSync, watchNewProducts } from "../_shared/ml-sync.ts";
 import { runShopeeSync } from "../_shared/shopee-sync.ts";
 import { ytAutopilot } from "../_shared/youtube.ts";
 import { runPaginasproJobs } from "../_shared/paginaspro-agent.ts";
-import { runProspecting } from "../_shared/prospect.ts";
+import { runProspectSends, runProspecting } from "../_shared/prospect.ts";
 import { sendPendingPush } from "../_shared/push.ts";
 import { runAgendaEmails } from "../_shared/agenda.ts";
 
@@ -110,10 +110,12 @@ Deno.serve(async (req) => {
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(youtube);
     // Prospecção: põe a prévia do próximo lead na fila (até o limite do dia); a mensagem fica pronta em Leads
     const prospect = await runProspecting(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
+    // "Enviar todos": 1 mensagem por vez pelo WhatsApp conectado (WAHA), espaçada, no horário comercial
+    const outbox = await runProspectSends(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     // PáginasPro: prévias pedidas pelo atendente (a IA leva ~1 min; roda em segundo plano)
     const paginaspro = runPaginasproJobs(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(paginaspro);
-    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, shopeesync, mlnew, sales, reviews, push, mlinbox, agenda, prospect });
+    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, shopeesync, mlnew, sales, reviews, push, mlinbox, agenda, prospect, outbox });
   } catch (err) {
     return handleError(err);
   }
