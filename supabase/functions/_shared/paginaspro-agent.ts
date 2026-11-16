@@ -10,7 +10,7 @@ import { sendMessage, transcript } from "./inbox.ts";
 import { notify } from "./push.ts";
 import { clientOffer } from "./mercadopago.ts";
 import { sleep } from "./util.ts";
-import { prospectFailed, prospectReady } from "./prospect.ts";
+import { previewCheckout, prospectFailed, prospectReady } from "./prospect.ts";
 
 const SITE = "https://paginaspro.app.br";
 
@@ -278,6 +278,8 @@ export async function runPaginasproJobs(db: SupabaseClient) {
       }
       if (String(page.slug).startsWith("rascunho-")) patch.slug = await uniqueSlug(db, page.name, page.id);
       const { data: saved } = await db.from("landing_pages").update(patch).eq("id", page.id).select().single();
+      // Prévia com "Gostei, quero o meu" (preços e link de pagamento só deste cliente)
+      await previewCheckout(db, page.id).catch((e) => console.error("checkout", e));
       const url = pageUrl(saved ?? { ...page, ...patch });
       if (page.conversation_id) {
         const first = page.name.split(/[\s·|-]+/)[0];

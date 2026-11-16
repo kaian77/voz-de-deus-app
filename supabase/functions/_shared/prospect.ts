@@ -292,3 +292,24 @@ export async function crmSent(db: SupabaseClient, userId: string, leadId: string
   await db.from("leads").update({ chat, last_touch_at: new Date().toISOString() }).eq("id", leadId);
   return { chat };
 }
+
+/** Barra "Gostei, quero o meu" da prévia: grava preços e links (à vista só deste cliente) em landing_pages.checkout. */
+export async function previewCheckout(db: SupabaseClient, pageId: string) {
+  const { data: page } = await db.from("landing_pages").select("id,user_id,name,lead_id,pay_links,tier").eq("id", pageId).maybeSingle();
+  if (!page) return;
+  const { data: lead } = page.lead_id ? await db.from("leads").select("kind").eq("id", page.lead_id).maybeSingle() : { data: null };
+  const offer = await offerFor(db, page.user_id);
+  const o = await clientOffer(db, page, offer).catch(() => offer);
+  const { data: settings } = await db.from("brand_settings").select("landing_offer").eq("user_id", page.user_id).maybeSingle();
+  const upgrade = lead?.kind === "upgrade";
+  const bio = page.tier === "bio";
+  const checkout = {
+    oneTime: Number(bio ? o.bioOneTime : upgrade ? o.upgradeOneTime : o.oneTime),
+    oneTimeLink: String((bio ? o.bioOneTimeLink : upgrade ? o.upgradeOneTimeLink : o.oneTimeLink) ?? "") || null,
+    monthly: Number(bio ? o.bioMonthly : upgrade ? o.upgradeMonthly : o.monthly),
+    monthlyLink: String((bio ? o.bioMonthlyLink : o.monthlyLink) ?? "") || null,
+    whatsapp: String((settings?.landing_offer as Record<string, unknown> | null)?.whatsapp ?? "5561992372216").replace(/\D/g, ""),
+    upgrade,
+  };
+  await db.from("landing_pages").update({ checkout }).eq("id", page.id);
+}
