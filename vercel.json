@@ -33,6 +33,10 @@
       "destination": "https://rrlxhnmfsmknzhqpfrhr.supabase.co/storage/v1/object/public/media/:path*"
     },
     {
+      "source": "/ofs",
+      "destination": "/ofs.html"
+    },
+    {
       "source": "/p/:slug",
       "destination": "/api/landing?slug=:slug"
     },
