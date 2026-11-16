@@ -238,6 +238,8 @@ export interface BrandSettings {
   quiz_buffer?: number;
   quiz_request?: number;
   pp_autopilot_per_week?: number;
+  prospect_enabled?: boolean;
+  prospect_per_day?: number;
   pp_autopilot_last_run?: string | null;
   pp_autopilot_error?: string | null;
   autopilot_last_run?: string | null;
@@ -363,6 +365,15 @@ export interface Lead {
   details: { hours?: string | null; photos?: string[]; category?: string | null; description?: string | null } | null;
   details_status: "queued" | "running" | "done" | "failed" | null;
   status: LeadStatus;
+  /** new = sem site (site novo); upgrade = já tem site (troca por um melhor, mais barato) */
+  kind?: "new" | "upgrade";
+  website?: string | null;
+  site_audit?: { ok: boolean; https: boolean; mobile: boolean; whatsapp: boolean; slow: boolean; title?: string; error?: string } | null;
+  /** Prospecção automática: building = montando a prévia; ready = mensagem pronta para enviar */
+  prospect_status?: "building" | "ready" | "sent" | "skipped" | "failed" | null;
+  prospect_message?: string | null;
+  prospect_at?: string | null;
+  landing_id?: string | null;
   notes: string | null;
   contacted_at: string | null;
   created_at: string;
@@ -402,6 +413,15 @@ export interface ManualLead {
   samples: { text: string; rate: number | null; product: string; url?: string }[];
   contact: { site?: string | null; phone?: string | null; instagram?: string | null } | null;
   status: LeadStatus;
+  /** new = sem site (site novo); upgrade = já tem site (troca por um melhor, mais barato) */
+  kind?: "new" | "upgrade";
+  website?: string | null;
+  site_audit?: { ok: boolean; https: boolean; mobile: boolean; whatsapp: boolean; slow: boolean; title?: string; error?: string } | null;
+  /** Prospecção automática: building = montando a prévia; ready = mensagem pronta para enviar */
+  prospect_status?: "building" | "ready" | "sent" | "skipped" | "failed" | null;
+  prospect_message?: string | null;
+  prospect_at?: string | null;
+  landing_id?: string | null;
   notes: string | null;
   contacted_at: string | null;
   created_at: string;

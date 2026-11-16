@@ -35,7 +35,7 @@ async function mp(path: string, body?: unknown): Promise<any> {
 }
 
 type Offer = Record<string, number | string>;
-const ONE_TIME = { oneTime: "Site PáginasPro", premiumOneTime: "Site Premium PáginasPro", bioOneTime: "Link da bio PáginasPro" } as const;
+const ONE_TIME = { oneTime: "Site PáginasPro", premiumOneTime: "Site Premium PáginasPro", bioOneTime: "Link da bio PáginasPro", upgradeOneTime: "Upgrade de site PáginasPro" } as const;
 type OneTimePlan = keyof typeof ONE_TIME;
 
 /** Links de pagamento à vista só deste cliente (guardados em landing_pages.pay_links; refeitos se o preço mudar).
@@ -72,6 +72,7 @@ export async function clientOffer(db: SupabaseClient, page: { id: string; name: 
     ...(links.oneTime ? { oneTimeLink: links.oneTime.url } : {}),
     ...(links.premiumOneTime ? { premiumOneTimeLink: links.premiumOneTime.url } : {}),
     ...(links.bioOneTime ? { bioOneTimeLink: links.bioOneTime.url } : {}),
+    ...(links.upgradeOneTime ? { upgradeOneTimeLink: links.upgradeOneTime.url } : {}),
   };
 }
 
@@ -92,7 +93,7 @@ async function onPayment(db: SupabaseClient, id: string) {
   const pay = await mp(`/v1/payments/${id}`);
   if (pay.status !== "approved") return { status: pay.status };
   const ref = String(pay.external_reference ?? "");
-  const m = ref.match(/^lp:([0-9a-f-]{36}):(oneTime|premiumOneTime|bioOneTime)$/);
+  const m = ref.match(/^lp:([0-9a-f-]{36}):(oneTime|premiumOneTime|bioOneTime|upgradeOneTime)$/);
   if (!m) return { ignored: "sem referência de landing" }; // pagamento pelos links fixos: o Bruno confere ("paguei" → aviso)
   const [, pageId, plan] = m;
   const { data: page } = await db.from("landing_pages").select("*").eq("id", pageId).maybeSingle();

@@ -33,6 +33,7 @@ const MY_AGENDA_SLUG = "paginaspro";
 const PRICE_FIELDS: [keyof Offer, string, "n" | "t"][] = [
   ["monthly", "Mensal (R$/mês)", "n"], ["oneTime", "Avulso (R$)", "n"], ["change", "Alteração avulsa (R$)", "n"], ["panelAddon", "Painel no avulso (R$/mês)", "n"],
   ["premiumMonthly", "Premium mensal (R$/mês)", "n"], ["premiumOneTime", "Premium à vista (R$)", "n"],
+  ["upgradeMonthly", "Upgrade de site mensal (R$/mês)", "n"], ["upgradeOneTime", "Upgrade de site à vista (R$)", "n"],
   ["bioMonthly", "Link da bio mensal (R$/mês)", "n"], ["bioOneTime", "Link da bio à vista (R$)", "n"],
   ["monthlyLink", "Link Mercado Pago · mensal", "t"], ["oneTimeLink", "Link Mercado Pago · avulso", "t"],
   ["premiumMonthlyLink", "Link Mercado Pago · Premium mensal", "t"], ["premiumOneTimeLink", "Link Mercado Pago · Premium à vista", "t"],

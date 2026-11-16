@@ -6,7 +6,7 @@ Fila: tabela lead_searches (status "queued"), criada pela tela Leads do Studio. 
 - acha a área no OpenStreetMap (Nominatim, grátis) e guarda o retângulo para o mapa do Studio;
 - roda o robô open source gosom/google-maps-scraper (sobe como container no workflow, API em localhost:8080),
   primeiro "tema em lugar" e, se vier pouco, bairro a bairro da área em volta (o Maps mostra no máximo ~120 por busca);
-- fica só com empresas SEM site (Instagram/Facebook/link de WhatsApp, agenda online e guia do bairro contam como "sem site") e COM celular;
+- fica com empresas COM celular; sem site (Instagram/Facebook/link de WhatsApp, agenda online e guia do bairro contam como "sem site") = lead "new", com site próprio = lead "upgrade";
 - ignora quem já está na lista (mesmo lugar ou mesmo número) e grava até N leads novos na tabela leads.
 
 Variáveis: SUPABASE_URL, SUPABASE_SERVICE_KEY, SCRAPER_URL (padrão http://localhost:8080).
@@ -231,9 +231,6 @@ def details(row):
 
 def reject_reason(row):
     """Por que o lugar não vira lead (None = vira). Fica no log para entender buscas que voltam vazias."""
-    site = (row.get("website") or "").strip()
-    if site and not NOT_A_SITE.search(site):
-        return "site"
     if not mobile(row.get("phone")):
         return "sem celular"
     if not (row.get("place_id") or row.get("cid") or row.get("link")) or not (row.get("title") or "").strip():
@@ -254,10 +251,13 @@ def to_lead(row, search):
         except ValueError:
             return None
 
+    # Quem já tem site próprio também vira lead: "upgrade" (a PáginasPro oferece uma versão melhor, mais barata)
+    own = bool(site and not NOT_A_SITE.search(site))
     return {
+        "kind": "upgrade" if own else "new", "website": site[:300] if own else None,
         "user_id": search["user_id"], "search_id": search["id"], "place_id": place[:300],
         "name": row["title"].strip()[:200], "category": (row.get("category") or "").strip()[:120] or None,
-        "phone": (row.get("phone") or "").strip()[:40], "whatsapp": wa, "social": site[:300] or None,
+        "phone": (row.get("phone") or "").strip()[:40], "whatsapp": wa, "social": None if own else (site[:300] or None),
         "address": (row.get("address") or "").strip()[:300] or None,
         "lat": num("latitude", float), "lng": num("longitude", float),
         "rating": num("review_rating", float), "reviews": num("review_count", lambda v: int(float(v))),

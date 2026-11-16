@@ -4,8 +4,11 @@
 export const OFFER = {
   /** WhatsApp do dono (só dígitos, com 55) usado no site da PáginasPro */
   whatsapp: "5561992372216",
-  monthly: 59,
-  oneTime: 397,
+  monthly: 49,
+  oneTime: 297,
+  /** Upgrade para quem já tem site (prospecção): mais barato */
+  upgradeMonthly: 49,
+  upgradeOneTime: 247,
   change: 30,
   panelAddon: 19,
   /** Links do Mercado Pago (criados pelo dono no app). Vazio = a mensagem sai sem link de pagamento. */
@@ -56,6 +59,9 @@ export function offerMessages(name: string, link?: string | null, o: Offer = OFF
           (o.premiumMonthlyLink ? `\n• mensal (cartão, todo mês): ${o.premiumMonthlyLink}` : "") +
           (o.premiumOneTimeLink ? `\n• à vista (Pix, cartão ou boleto): ${o.premiumOneTimeLink}` : "")
         : ""),
+    upgrade:
+      `Sobre o valor da troca do site da ${name}: ${brl(o.upgradeOneTime)} uma vez só (Pix, cartão ou boleto) ou ${brl(o.upgradeMonthly)} por mês com painel de visitas e alterações inclusas. ` +
+      `Eu cuido de tudo, inclusive de apontar o domínio que vocês já têm para o site novo.${preview}`,
     bio:
       `Para o link da bio do Instagram da ${name} eu faço uma página só sua no lugar do Linktree: vídeo seu no topo, seus números, abas para cada tipo de cliente, fotos e o botão do WhatsApp, tudo numa tela de celular.\n\n` +
       `• mensal: ${brl(o.bioMonthly)} por mês, com painel de visitas/cliques e alterações inclusas\n` +
