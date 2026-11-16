@@ -22,7 +22,7 @@ const DEFAULT_OFFER: Record<string, number | string> = {
   bioMonthly: 39, bioOneTime: 197, bioMonthlyLink: "", bioOneTimeLink: "",
 };
 
-async function offerFor(db: SupabaseClient, userId: string) {
+export async function offerFor(db: SupabaseClient, userId: string) {
   const { data } = await db.from("brand_settings").select("landing_offer").eq("user_id", userId).maybeSingle();
   const o = { ...DEFAULT_OFFER };
   for (const [k, v] of Object.entries((data?.landing_offer ?? {}) as Record<string, unknown>)) {
@@ -52,7 +52,7 @@ const FINAL: AgentTool = {
   },
 };
 
-function systemPrompt(o: Record<string, number | string>, channel: string) {
+export function systemPrompt(o: Record<string, number | string>, channel: string) {
   const link = (l: unknown) => (l ? ` · pagamento: ${l}` : "");
   return (
     `Você atende o ${channel === "whatsapp" ? "WhatsApp" : "direct do Instagram"} da PáginasPro em nome do Bruno Braga, em primeira pessoa ("eu faço", "te mando"). ` +
@@ -71,11 +71,9 @@ function systemPrompt(o: Record<string, number | string>, channel: string) {
     `Antes de chamar, se ainda faltar foto ou cor, pergunte uma vez ("quer mandar umas fotos do seu trabalho e as cores da marca? fica bem mais a sua cara"). ` +
     `Ao chamar, passe TUDO o que a pessoa contou nos campos (serviços e diferenciais completos, cores, WhatsApp) e diga que em 1 ou 2 minutos o link chega aqui.\n` +
     `Se a pessoa pedir mudança numa prévia que já existe, chame montar_previa com o campo ajuste.\n\n` +
-    `MODELOS (explique quando a pessoa perguntar como fica, quais modelos tem, ou ao passar os planos):\n` +
-    `- Normal: limpo e direto, com fotos, serviços, horário, mapa e botão do WhatsApp.\n` +
-    `- Premium: animado (foto em 3D que mexe com o dedo, título que entra palavra por palavra, galeria, conversa do WhatsApp animada). ` +
-    `Exemplo para ver no celular: o próprio site da PáginasPro, ${SITE}/inicio, é feito no estilo Premium.\n` +
-    `Se ela não escolher, o modelo é Normal.\n` +
+    `COMO FICA O SITE: todo site sai no modelo Premium da PáginasPro: animado (foto em 3D que mexe com o dedo, título que entra palavra por palavra, ` +
+    `galeria, conversa do WhatsApp animada), com fotos, serviços, horário, mapa e botão do WhatsApp. ` +
+    `Exemplo para ver no celular: o próprio site da PáginasPro, ${SITE}/inicio. Não existe versão "simples" para escolher.\n` +
     `- Link da bio: uma página de uma tela só, feita para o link da bio do Instagram, no lugar do Linktree: vídeo curto da pessoa no topo (ou a foto), ` +
     `o nome/assinatura, números reais (anos de atuação, clientes, cidade), abas por público (ex.: "Sou paciente" e "Sou dentista") e o botão do WhatsApp. ` +
     `Ofereça para quem usa Linktree ou só quer algo para a bio. Peça um vídeo curto (5 a 15 s, em pé) se a pessoa tiver; sem vídeo usa a foto. Modelo "bio" em montar_previa.\n\n` +
@@ -83,7 +81,6 @@ function systemPrompt(o: Record<string, number | string>, channel: string) {
     `- Mensal: ${brl(o.monthly)}/mês, sem taxa de entrada, inclui alterações sempre que precisar${link(o.monthlyLink)} (cartão, renova sozinho)\n` +
     `- Pagamento único: ${brl(o.oneTime)}, sem mensalidade; alteração depois ${brl(o.change)} cada${link(o.oneTimeLink)} (Pix, cartão ou boleto)\n` +
     `- Quem JÁ TEM site e quer trocar pelo nosso (upgrade): ${brl(o.upgradeOneTime)} uma vez só${link(o.upgradeOneTimeLink)} ou ${brl(o.upgradeMonthly)}/mês\n` +
-    `- Premium (animado, foto em 3D, galeria, igual ao site da PáginasPro): ${brl(o.premiumMonthly)}/mês${link(o.premiumMonthlyLink)} ou ${brl(o.premiumOneTime)} à vista${link(o.premiumOneTimeLink)}\n` +
     `- Link da bio (no lugar do Linktree): ${brl(Number(o.bioMonthly))}/mês${link(String(o.bioMonthlyLink ?? ""))} ou ${brl(Number(o.bioOneTime))} à vista${link(String(o.bioOneTimeLink ?? ""))}\n` +
     `Agenda online é opcional (${brl(Number(o.agendaMonthly) || 29)}/mês a mais, em qualquer plano): o cliente marca o horário pelo site, escolhe o profissional e o serviço, e o negócio controla tudo num painel com relatório; lembrete por e-mail 1 dia antes. Ofereça para quem atende com horário marcado (clínicas, salões, consultórios, escritórios).\n` +
     `Domínio próprio (.com.br) é opcional: o cliente compra (uns R$ 40/ano no Registro.br) e eu configuro.\n\n` +
@@ -151,7 +148,7 @@ export async function paginasproReply(db: SupabaseClient, conversation: any, inb
         servicos: { type: "string", description: "Serviços, diferenciais, tempo de atuação, formação e tudo de real que a pessoa contou" },
         cores: { type: "string", description: "Cores da marca que a pessoa pediu (ex.: 'rosa e dourado' ou '#E75A8D'); vazio para tirar do logo/fotos" },
         whatsapp: { type: "string", description: "WhatsApp do negócio com DDD (só números), se a pessoa passou" },
-        modelo: { type: "string", enum: ["normal", "premium", "bio"], description: "bio = link da bio (no lugar do Linktree)" },
+        modelo: { type: "string", enum: ["site", "bio"], description: "site = site completo (sempre no modelo Premium); bio = link da bio (no lugar do Linktree)" },
         ajuste: { type: "string", description: "Só para mudar uma prévia que já existe: o que a pessoa pediu" },
       },
       required: ["nome", "ramo"],
@@ -238,7 +235,7 @@ async function queuePreview(db: SupabaseClient, conversation: any, i: Record<str
     address: i.endereco || existing?.address || null, hours: i.horario || existing?.hours || null,
     notes: [existing?.notes, i.servicos, i.cores && `Cores da marca: ${i.cores}`].filter(Boolean).join("\n").slice(0, 3000) || null,
     whatsapp: waNumber(i.whatsapp) ?? existing?.whatsapp ?? (conversation.channel === "whatsapp" ? conversation.contact_id : null),
-    tier: i.modelo === "premium" || i.modelo === "bio" ? i.modelo : (existing?.tier ?? "normal"),
+    tier: i.modelo === "bio" ? "bio" : (existing?.tier === "bio" && !i.modelo ? "bio" : "premium"),
     video: video ?? existing?.video ?? null,
     photos, conversation_id: conversation.id, auto_status: "queued", auto_error: null,
     auto_instructions: i.ajuste
