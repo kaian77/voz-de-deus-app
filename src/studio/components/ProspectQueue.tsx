@@ -11,7 +11,8 @@ import { api } from "../lib/api";
 import { useSaveRow, useSettings } from "../lib/hooks";
 import type { LandingPage, Lead } from "../lib/types";
 import { Panel, WhatsAppIcon } from "./bits";
-import { humanize, waLink } from "../lib/crm";
+import { humanize, outboxEta, waLink } from "../lib/crm";
+import { SendAll } from "./SendAll";
 
 const startOfDay = () => {
   const d = new Date();
@@ -71,6 +72,7 @@ export default function ProspectQueue({ leads, pages }: { leads: Lead[]; pages: 
         <span className="rounded-full bg-secondary px-2.5 py-1">{waiting.length} na espera</span>
         {failed > 0 && <span className="rounded-full bg-secondary px-2.5 py-1 text-danger">{failed} falharam</span>}
       </div>
+      <div className="mt-3"><SendAll leads={ready} allLeads={leads} textOf={(l) => l.prospect_message ?? ""} label="Enviar todos" /></div>
       {enabled && !waiting.length && !ready.length && !building.length && (
         <p className="mt-3 text-xs text-muted-foreground">Sem leads novos na espera. Faça uma busca abaixo (ex.: "dentista, nutricionista" em um bairro) e o motor começa sozinho.</p>
       )}
@@ -88,10 +90,10 @@ export default function ProspectQueue({ leads, pages }: { leads: Lead[]; pages: 
                   {link && <a href={link} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs hover:underline">Prévia <ExternalLink className="h-3 w-3" /></a>}
                 </div>
                 <p className="line-clamp-3 whitespace-pre-line text-xs text-muted-foreground">{humanize(l.prospect_message ?? "")}</p>
-                <div className="flex gap-2">
+                {l.send_after ? <p className="text-xs text-sky-700">Na fila: sai por volta das {outboxEta(l)}</p> : <div className="flex gap-2">
                   <Button size="sm" className="h-8 flex-1" onClick={() => send(l)}><WhatsAppIcon className="mr-1.5 h-4 w-4" />Enviar</Button>
                   <Button size="sm" variant="ghost" className="h-8" onClick={() => skip(l)} title="Não enviar para este"><SkipForward className="h-4 w-4" /></Button>
-                </div>
+                </div>}
               </li>
             );
           })}

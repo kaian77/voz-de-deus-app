@@ -76,3 +76,16 @@ export function waLink(phone: string | null | undefined, text: string) {
 
 export const LOST_REASONS = ["Não respondeu", "Achou caro", "Já tem quem faça", "Não quer site agora", "Número errado", "Outro"];
 export const PLANS = ["À vista", "Mensal", "Upgrade", "Premium", "Link da bio"];
+
+/** "Enviar todos": horários espaçados (4 a 9 min, aleatório) a partir de agora ou do fim da fila atual. */
+export function outboxSchedule(count: number, after = Date.now()) {
+  const out: string[] = [];
+  let t = after;
+  for (let i = 0; i < count; i++) {
+    out.push(new Date(t).toISOString());
+    t += (4 + Math.random() * 5) * 60_000;
+  }
+  return out;
+}
+
+export const outboxEta = (l: Lead) => (l.send_after ? new Date(l.send_after).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : null);

@@ -4,6 +4,7 @@
 // A prévia em si sai pelo mesmo caminho do atendente (landing_pages.auto_status = queued → runPaginasproJobs).
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { igPublicProfile } from "./instagram.ts";
+import { wahaChatIdFor, wahaSendText } from "./whatsapp.ts";
 
 const SITE = "https://paginaspro.app.br";
 
@@ -153,4 +154,71 @@ export async function prospectReady(db: SupabaseClient, pageId: string) {
 /** Prévia do lead falhou: o lead sai da fila (não trava o motor). */
 export async function prospectFailed(db: SupabaseClient, leadId: string, error: string) {
   await db.from("leads").update({ prospect_status: "failed", prospect_message: error.slice(0, 300) }).eq("id", leadId).eq("prospect_status", "building");
+}
+
+// ---------------------------------------------------------------------------
+// "Enviar todos": o Studio põe os leads na fila (send_after espaçado 4 a 9 min, send_text com {saudacao}); o cron
+// manda 1 por vez pelo WhatsApp conectado no WAHA, só de seg a sáb das 8h às 20h (Brasília), no máximo 30 por dia
+// e com pelo menos 3 min entre um e outro. 3 erros seguidos pausam a fila e avisam no celular.
+// ---------------------------------------------------------------------------
+const BOT_DAILY_MAX = 30;
+
+function brasilia() {
+  const d = new Date(Date.now() - 3 * 3600_000);
+  return { hour: d.getUTCHours(), day: d.getUTCDay() };
+}
+
+const greetingNow = () => {
+  const h = brasilia().hour;
+  return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+};
+
+export async function runProspectSends(db: SupabaseClient) {
+  const { hour, day } = brasilia();
+  if (day === 0 || hour < 8 || hour >= 20) return null;
+  const now = new Date().toISOString();
+  const { data: next } = await db.from("leads").select("*").not("send_after", "is", null).lte("send_after", now).order("send_after").limit(1).maybeSingle();
+  if (!next) return null;
+  // Espaço mínimo e limite do dia (contando tudo o que o robô mandou)
+  const { count: recent } = await db.from("leads").select("id", { count: "exact", head: true }).eq("user_id", next.user_id).gte("bot_sent_at", new Date(Date.now() - 3 * 60_000).toISOString());
+  if (recent) return null;
+  const { count: today } = await db.from("leads").select("id", { count: "exact", head: true }).eq("user_id", next.user_id).gte("bot_sent_at", new Date(Date.now() - 24 * 3600_000).toISOString());
+  if ((today ?? 0) >= BOT_DAILY_MAX) return null;
+
+  const { data: acc } = await db.from("social_accounts").select("id,meta").eq("user_id", next.user_id).eq("platform", "whatsapp").eq("meta->>provider", "waha").limit(1).maybeSingle();
+  if (!acc) {
+    await pauseOutbox(db, next.user_id, "Conecte seu WhatsApp em Contas → WhatsApp (QR code) para o envio automático.");
+    return { paused: "sem whatsapp" };
+  }
+  const { data: token } = await db.from("account_tokens").select("access_token").eq("account_id", acc.id).maybeSingle();
+  const cfg = { base_url: acc.meta.base_url, session: acc.meta.session, api_key: token?.access_token || null };
+  // Trava: tira da fila antes de mandar (outra rodada do cron não manda duas vezes)
+  const { data: claimed } = await db.from("leads").update({ send_after: null, bot_sent_at: now }).eq("id", next.id).not("send_after", "is", null).select("id").maybeSingle();
+  if (!claimed) return null;
+  try {
+    const chatId = await wahaChatIdFor(cfg, String(next.whatsapp ?? ""));
+    await wahaSendText(cfg, chatId, String(next.send_text ?? "").split("{saudacao}").join(greetingNow()));
+    const first = next.status === "new";
+    await db.from("leads").update({
+      send_text: null, send_error: null, last_touch_at: now,
+      ...(first ? { status: "contacted", prospect_status: "sent", contacted_at: now } : { followups: (next.followups ?? 0) + 1 }),
+    }).eq("id", next.id);
+    return { sent: next.id };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const noWhats = /não tem WhatsApp/.test(msg);
+    await db.from("leads").update({ send_text: null, send_error: msg.slice(0, 200), ...(noWhats ? { status: "lost", lost_reason: "Número sem WhatsApp", closed_at: now } : {}) }).eq("id", next.id);
+    if (!noWhats) {
+      const { count: errors } = await db.from("leads").select("id", { count: "exact", head: true }).eq("user_id", next.user_id).not("send_error", "is", null).gte("bot_sent_at", new Date(Date.now() - 30 * 60_000).toISOString());
+      if ((errors ?? 0) >= 3) await pauseOutbox(db, next.user_id, `3 envios falharam seguidos (${msg.slice(0, 80)}). Confira o WhatsApp em Contas.`);
+    }
+    return { error: msg };
+  }
+}
+
+/** Para a fila (os leads voltam para onde estavam) e avisa no celular. */
+async function pauseOutbox(db: SupabaseClient, userId: string, why: string) {
+  await db.from("leads").update({ send_after: null, send_text: null, send_error: why.slice(0, 200) }).eq("user_id", userId).not("send_after", "is", null);
+  const { notify } = await import("./push.ts");
+  await notify(db, userId, "⏸️ Envio automático pausado", why, "/studio/crm").catch(() => undefined);
 }

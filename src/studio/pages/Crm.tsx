@@ -15,7 +15,8 @@ import { cn } from "@/lib/utils";
 import { useOffer, useSaveRow, useTable } from "../lib/hooks";
 import type { LandingPage, Lead } from "../lib/types";
 import { EmptyState, PageHeader, WhatsAppIcon } from "../components/bits";
-import { daysSince, followupMessage, humanize, LOST_REASONS, MAX_FOLLOWUPS, nextFollowupAt, PLANS, STAGES, stageOf, waLink, type Stage } from "../lib/crm";
+import { SendAll } from "../components/SendAll";
+import { daysSince, followupMessage, humanize, outboxEta, LOST_REASONS, MAX_FOLLOWUPS, nextFollowupAt, PLANS, STAGES, stageOf, waLink, type Stage } from "../lib/crm";
 import { offerMessages } from "../lib/offer";
 
 const brl = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -152,6 +153,8 @@ export default function Crm() {
                 <span className="ml-auto rounded-full bg-secondary px-2 text-[11px] tabular">{byStage[s.key].length}</span>
               </header>
               <p className="mb-2 px-1 text-[11px] text-muted-foreground">{s.hint}</p>
+              {s.key === "ready" && <div className="mb-2 px-1"><SendAll leads={byStage.ready} allLeads={leads} textOf={(l) => l.prospect_message ?? ""} label="Enviar todos" /></div>}
+              {s.key === "followup" && <div className="mb-2 px-1"><SendAll leads={byStage.followup.filter((l) => (l.followups ?? 0) < MAX_FOLLOWUPS)} allLeads={leads} textOf={(l) => { const p = pageOf(l); return followupMessage(l, p ? `https://paginaspro.app.br/p/${p.slug}` : null); }} label="Follow-up em todos" /></div>}
               <div className="space-y-2 lg:max-h-[70vh] lg:overflow-y-auto lg:pr-1">
                 {byStage[s.key].length === 0 && <p className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">Nada aqui</p>}
                 {byStage[s.key].slice(0, 80).map((l) => (
@@ -214,7 +217,8 @@ function LeadCard({ lead: l, stage, color, onOpen, actions }: { lead: Lead; stag
           {stage === "lost" && (l.lost_reason ?? "sem motivo")}
         </p>
       </button>
-      <div className="mt-2 flex gap-1.5">
+      {l.send_after ? <p className="mt-2 rounded-md bg-sky-50 px-2 py-1.5 text-[11px] text-sky-800">📤 Na fila: sai por volta das {outboxEta(l)}</p> : l.send_error ? <p className="mt-2 rounded-md bg-red-50 px-2 py-1.5 text-[11px] text-red-700">Envio automático falhou: {l.send_error}</p> : null}
+      {!l.send_after && <div className="mt-2 flex gap-1.5">
         {stage === "ready" && <Button size="sm" className="h-8 flex-1" disabled={!l.whatsapp} onClick={() => actions.send(l)}><WhatsAppIcon className="mr-1.5 h-4 w-4" />Enviar</Button>}
         {stage === "followup" && ((l.followups ?? 0) >= MAX_FOLLOWUPS
           ? <Button size="sm" variant="outline" className="h-8 flex-1" onClick={() => actions.lost(l, "Não respondeu")}><X className="mr-1.5 h-4 w-4" />Encerrar</Button>
@@ -222,7 +226,7 @@ function LeadCard({ lead: l, stage, color, onOpen, actions }: { lead: Lead; stag
         {(stage === "waiting" || stage === "followup") && <Button size="sm" variant="outline" className="h-8 shrink-0 px-2" onClick={() => actions.replied(l)} title="Respondeu"><MessageCircle className="h-4 w-4" /></Button>}
         {stage === "talking" && <Button size="sm" variant="outline" className="h-8 flex-1" onClick={onOpen}><Check className="mr-1.5 h-4 w-4" />Fechar negócio</Button>}
         {stage === "lost" && <Button size="sm" variant="ghost" className="h-8 flex-1 text-xs" onClick={() => actions.reopen(l)}><RotateCcw className="mr-1.5 h-3.5 w-3.5" />Reabrir</Button>}
-      </div>
+      </div>}
     </article>
   );
 }
