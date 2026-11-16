@@ -374,9 +374,10 @@ def add_test():
     if not spec.strip():
         return False
     if spec.strip() == "report":  # relatório da prospecção no log (para conferir pelo GitHub)
-        rows = rest("GET", "leads?prospect_status=not.is.null&order=prospect_at.desc&limit=15&select=name,category,kind,website,instagram,prospect_status,prospect_message,landing_id,rating,reviews") or []
+        rows = rest("GET", "leads?prospect_status=not.is.null&order=prospect_at.desc&limit=15&select=name,category,kind,website,instagram,prospect_status,prospect_message,landing_id,rating,reviews,details,details_status") or []
         for r in rows:
-            page = (rest("GET", f"landing_pages?id=eq.{r['landing_id']}&select=slug,status,tier,auto_status,auto_error") or [{}])[0] if r.get("landing_id") else {}
+            page = (rest("GET", f"landing_pages?id=eq.{r['landing_id']}&select=slug,status,tier,auto_status,auto_error,photos,imported") or [{}])[0] if r.get("landing_id") else {}
+            print(f"REPORT FOTOS | {r['name']} | maps {r.get('details_status')} {len((r.get('details') or {}).get('photos') or [])} fotos | página {len(page.get('photos') or [])} fotos | importado {json.dumps(page.get('imported'), ensure_ascii=False)[:300]}", file=sys.stderr)
             print(f"REPORT | {r['name']} | {r.get('category')} | {r['kind']} | {r['prospect_status']} | nota {r.get('rating')} ({r.get('reviews')}) | "
                   f"site {r.get('website') or '-'} | ig {r.get('instagram') or '-'} | página {page.get('status')}/{page.get('tier')}/{page.get('auto_status')} "
                   f"https://paginaspro.app.br/p/{page.get('slug')} | erro {page.get('auto_error') or '-'}", file=sys.stderr)
