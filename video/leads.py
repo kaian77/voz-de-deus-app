@@ -373,6 +373,16 @@ def add_test():
     spec = sys.argv[sys.argv.index("--test") + 1]
     if not spec.strip():
         return False
+    if spec.strip() == "report":  # relatório da prospecção no log (para conferir pelo GitHub)
+        rows = rest("GET", "leads?prospect_status=not.is.null&order=prospect_at.desc&limit=15&select=name,category,kind,website,instagram,prospect_status,prospect_message,landing_id,rating,reviews") or []
+        for r in rows:
+            page = (rest("GET", f"landing_pages?id=eq.{r['landing_id']}&select=slug,status,tier,auto_status,auto_error") or [{}])[0] if r.get("landing_id") else {}
+            print(f"REPORT | {r['name']} | {r.get('category')} | {r['kind']} | {r['prospect_status']} | nota {r.get('rating')} ({r.get('reviews')}) | "
+                  f"site {r.get('website') or '-'} | ig {r.get('instagram') or '-'} | página {page.get('status')}/{page.get('tier')}/{page.get('auto_status')} "
+                  f"https://paginaspro.app.br/p/{page.get('slug')} | erro {page.get('auto_error') or '-'}")
+            if r.get("prospect_message"):
+                print("REPORT MSG | " + r["prospect_message"].replace("\n", " / "))
+        return False
     q, place, n, extra = (spec.split("|") + ["", "", "20", ""])[:4]
     owner = (rest("GET", "brand_settings?select=user_id&limit=1") or [{}])[0].get("user_id")
     if owner and extra.strip() == "prospect":  # "tema|lugar|quantos|prospect": também liga a prospecção automática
