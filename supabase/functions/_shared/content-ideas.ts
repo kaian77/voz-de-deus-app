@@ -350,8 +350,8 @@ export async function generateIdeas(db: SupabaseClient, userId: string, opts: { 
       `\n\nCrie ${count} ideias para os próximos ${days} dias, distribuindo os temas pela mistura acima. ` +
       `Inclua datas/campanhas somente quando combinarem de verdade com o público e com os produtos. Prefira carrosséis ` +
       `com uma ideia útil, curiosa ou identificável mesmo quando não houver um produto adequado; não force uma venda em ` +
-      `toda publicação. Use "video" em cerca de 1 a cada 3 ideias, só quando um produto é a cara do tema e as fotos ` +
-      `disponíveis dão suporte ao conceito. Cada ideia num dia diferente, até ${days} dias a partir de hoje.`,
+      `toda publicação. ${settings?.auto_videos === false ? `Use SEMPRE "carousel" (o dono faz os vídeos à mão). ` : `Use "video" em cerca de 1 a cada 3 ideias, só quando um produto é a cara do tema e as fotos ` +
+      `disponíveis dão suporte ao conceito. `}Cada ideia num dia diferente, até ${days} dias a partir de hoje.`,
     "medium");
 
   const cache = new Map<number, string | null>();
@@ -361,6 +361,7 @@ export async function generateIdeas(db: SupabaseClient, userId: string, opts: { 
 
   for (const idea of ideas.slice(0, count)) {
     if (used.has(idea.key)) continue;
+    if (idea.format === "video" && settings?.auto_videos === false) continue; // vídeos desligados: só carrossel
     used.add(idea.key);
     try {
       const chosen = idea.product_ids.map((id) => byId.get(id)).filter((p): p is Product => !!p);

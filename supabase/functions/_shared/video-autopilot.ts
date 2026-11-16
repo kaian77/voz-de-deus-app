@@ -86,7 +86,7 @@ export async function runVideosFor(db: SupabaseClient, userId: string) {
 export async function runDailyVideos(db: SupabaseClient) {
   const now = brasiliaNow();
   if (now.hour !== 9) return undefined;
-  const { data: users } = await db.from("brand_settings").select("user_id, video_daily_last").gt("video_daily", 0).is("video_cycle_done_at", null);
+  const { data: users } = await db.from("brand_settings").select("user_id, video_daily_last").gt("video_daily", 0).neq("auto_videos", false).is("video_cycle_done_at", null);
   const out: Record<string, unknown>[] = [];
   for (const u of users ?? []) {
     if (u.video_daily_last === now.date) continue;
