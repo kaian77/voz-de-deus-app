@@ -1,0 +1,64 @@
+# Baixa arquivos da internet (fotos de produto, páginas) e publica na branch "assets-out" (assets/<pasta>/), para
+# montar vídeos e anúncios numa sessão sem acesso a esses sites. Opcional: print de página no celular (Playwright).
+name: Baixar arquivos
+
+on:
+  workflow_dispatch:
+    inputs:
+      folder:
+        description: "Pasta de saída"
+        required: true
+      urls:
+        description: "Links separados por espaço (nome=link ou só link)"
+        required: false
+        default: ""
+      screenshot:
+        description: "Página para print no celular (opcional)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Baixar
+        env:
+          URLS: ${{ inputs.urls }}
+          OUT: assets/${{ inputs.folder }}
+        run: |
+          mkdir -p "$OUT"; n=0
+          for item in $URLS; do
+            n=$((n+1)); if [[ $item == *=http* ]]; then name=${item%%=*}; url=${item#*=}; else url=$item; name=$(printf "%02d-%s" $n "$(basename "${url%%\?*}")"); fi
+            curl -sSfL --retry 2 -o "$OUT/$name" "$url" || echo "falhou: $url"
+          done
+          ls -la "$OUT"
+      - name: Print da página
+        if: inputs.screenshot != ''
+        env:
+          PAGE: ${{ inputs.screenshot }}
+          OUT: assets/${{ inputs.folder }}
+        run: |
+          npm i --no-save --no-audit --no-fund playwright@1.49.1 >/dev/null && npx playwright install --with-deps chromium >/dev/null
+          node -e "
+          const {chromium}=require('playwright');(async()=>{const b=await chromium.launch();
+          const p=await b.newPage({viewport:{width:390,height:844},deviceScaleFactor:3,isMobile:true,hasTouch:true,
+            userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'});
+          await p.goto(process.env.PAGE,{timeout:60000,waitUntil:'networkidle'}).catch(e=>console.log(e.message));
+          await p.waitForTimeout(4000);
+          await p.screenshot({path:process.env.OUT+'/page.png'});
+          await p.screenshot({path:process.env.OUT+'/page-full.png',fullPage:true});await b.close()})()"
+      - name: Publicar na branch assets-out
+        env:
+          OUT: assets/${{ inputs.folder }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mv assets /tmp/assets-new
+          if git fetch -q --depth 1 origin assets-out; then git checkout -q -B assets-out FETCH_HEAD; else git checkout -q --orphan assets-out && git rm -rf -q --cached .; fi
+          mkdir -p assets && cp -r /tmp/assets-new/* assets/
+          git add -f assets && git commit -qm "Arquivos: ${{ inputs.folder }}" && git push -q origin HEAD:assets-out
