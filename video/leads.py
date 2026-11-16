@@ -367,14 +367,16 @@ def run(search):
 
 
 def add_test():
-    """--test "tema|lugar|quantos": põe uma busca na fila do dono (teste pelo GitHub, sem abrir o Studio)."""
+    """--test "tema|lugar|quantos[|prospect]": põe uma busca na fila do dono (teste pelo GitHub, sem abrir o Studio); com "prospect" liga a prospecção automática."""
     if "--test" not in sys.argv:
         return False
     spec = sys.argv[sys.argv.index("--test") + 1]
     if not spec.strip():
         return False
-    q, place, n = (spec.split("|") + ["", "", "20"])[:3]
+    q, place, n, extra = (spec.split("|") + ["", "", "20", ""])[:4]
     owner = (rest("GET", "brand_settings?select=user_id&limit=1") or [{}])[0].get("user_id")
+    if owner and extra.strip() == "prospect":  # "tema|lugar|quantos|prospect": também liga a prospecção automática
+        rest("PATCH", f"brand_settings?user_id=eq.{owner}", {"prospect_enabled": True})
     if owner and q.strip() and place.strip():
         rest("POST", "lead_searches", {"user_id": owner, "query": q.strip(), "place": place.strip(), "wanted": int(n or 20)})
         return True
