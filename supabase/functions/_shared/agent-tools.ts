@@ -261,6 +261,7 @@ const tools = {
       agent_knowledge: z.string().optional().describe("Base de conhecimento: FAQ, links, preços, horários"),
       agent_handoff_message: z.string().optional(),
       handoff_phone: z.string().optional().describe("WhatsApp que recebe o aviso quando a IA passa a conversa para uma pessoa"),
+      auto_videos: z.boolean().optional().describe("Vídeos automáticos da loja (piloto automático e vídeos diários); false = só fotos e carrosséis"),
     }),
     run: async (ctx: Ctx, input: Record<string, unknown>) => {
       const { data, error } = await ctx.db.from("brand_settings").upsert({ user_id: ctx.userId, ...input, updated_at: new Date().toISOString() }).select().single();
