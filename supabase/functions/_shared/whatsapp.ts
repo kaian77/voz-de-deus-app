@@ -142,6 +142,15 @@ export async function wahaSendText(cfg: WahaConfig, chatId: string, text: string
   return typeof data.id === "string" ? data.id : data.id?._serialized;
 }
 
+/** Parece gente: marca como lida, mostra "digitando…" por um tempo de acordo com o tamanho do texto. */
+export async function wahaTypeLikeHuman(cfg: WahaConfig, chatId: string, text: string) {
+  await waha(cfg, "/api/sendSeen", { session: cfg.session, chatId }).catch(() => null);
+  await waha(cfg, "/api/startTyping", { session: cfg.session, chatId }).catch(() => null);
+  const ms = Math.min(12_000, 2_500 + text.length * 45 + Math.random() * 2_000);
+  await new Promise((r) => setTimeout(r, ms));
+  await waha(cfg, "/api/stopTyping", { session: cfg.session, chatId }).catch(() => null);
+}
+
 export function wahaSendSeen(cfg: WahaConfig, chatId: string) {
   return waha(cfg, "/api/sendSeen", { session: cfg.session, chatId }).catch(() => null);
 }
