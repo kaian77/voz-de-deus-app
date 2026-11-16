@@ -208,9 +208,10 @@ export async function runProspectSends(db: SupabaseClient) {
   const { count: today } = await db.from("leads").select("id", { count: "exact", head: true }).eq("user_id", next.user_id).gte("bot_sent_at", new Date(Date.now() - 24 * 3600_000).toISOString());
   if ((today ?? 0) >= BOT_DAILY_MAX) return null;
 
-  const { data: acc } = await db.from("social_accounts").select("id,meta").eq("user_id", next.user_id).eq("platform", "whatsapp").eq("meta->>provider", "waha").limit(1).maybeSingle();
+  // Prospecção só sai do WhatsApp marcado como PáginasPro: nunca do número da loja (puxar conversa em massa derruba o número)
+  const { data: acc } = await db.from("social_accounts").select("id,meta").eq("user_id", next.user_id).eq("platform", "whatsapp").eq("meta->>provider", "waha").eq("meta->>brand", "paginaspro").limit(1).maybeSingle();
   if (!acc) {
-    await pauseOutbox(db, next.user_id, "Conecte seu WhatsApp em Contas → WhatsApp (QR code) para o envio automático.");
+    await pauseOutbox(db, next.user_id, "Conecte um WhatsApp da PáginasPro em Contas → WhatsApp (QR code) e marque a marca PáginasPro. O número da loja não faz prospecção.");
     return { paused: "sem whatsapp" };
   }
   const { data: token } = await db.from("account_tokens").select("access_token").eq("account_id", acc.id).maybeSingle();

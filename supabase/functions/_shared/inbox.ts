@@ -2,7 +2,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4";
 import { igRequest, igTokenFor } from "./instagram.ts";
-import { agentAllowed, waSendText, wahaSendText } from "./whatsapp.ts";
+import { agentAllowed, waSendText, wahaSendText, wahaTypeLikeHuman } from "./whatsapp.ts";
 import { type AgentTool, aiEnabled, brandContext, generateJSON, runAgent } from "./claude.ts";
 import { sleep } from "./util.ts";
 import { nsCoupons, nsFindOrder, nsOrders, nsPages, nsProducts, nsStore, storeFor } from "./nuvemshop.ts";
@@ -166,7 +166,10 @@ export async function sendMessage(db: SupabaseClient, conversationId: string, te
     }
   } else if (isWaha) {
     const meta = conv.social_accounts.meta;
-    externalId = await wahaSendText({ base_url: meta.base_url, session: meta.session, api_key: token || null }, conv.contact_id, text);
+    const cfg = { base_url: meta.base_url, session: meta.session, api_key: token || null };
+    // Resposta da IA pelo WAHA: lê, "digita" e só então manda (resposta instantânea o tempo todo parece robô)
+    if (sender === "ai") await wahaTypeLikeHuman(cfg, conv.contact_id, text);
+    externalId = await wahaSendText(cfg, conv.contact_id, text);
   } else {
     externalId = await waSendText(token, accountExternalId, conv.contact_id, text);
   }
