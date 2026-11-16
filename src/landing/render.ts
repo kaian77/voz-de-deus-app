@@ -3,6 +3,7 @@
 // O layout é fixo e desenhado à mão; a IA só escreve os textos e escolhe cores, fontes e o estilo do topo.
 
 import { renderBio } from "./bio.js";
+import { checkoutHtml, type Checkout } from "./checkout.js";
 import { renderPremium } from "./premium.js";
 
 export type LandingContent = {
@@ -63,6 +64,8 @@ export type LandingData = {
   agenda?: { plans?: string[]; particular?: boolean; pros?: { id: string; name: string; role?: string }[]; services?: { name: string; pros?: string[] }[] } | null;
   /** Vídeo curto do topo (modelo "Link da bio") */
   video?: string | null;
+  /** Prévia: preços e links de pagamento da barra "Gostei, quero o meu" */
+  checkout?: Checkout | null;
   content: LandingContent;
 };
 
@@ -155,8 +158,12 @@ export const SAMPLE_HOURS = "Seg a sex: 8h às 18h (exemplo, confirmar)";
 /** opts.preview = link de prévia (faixa + sem indexar); opts.sample = mostra exemplo no que falta (prévia e Studio). */
 /** opts.track = conta visitas e cliques (só na página servida pela api/landing.ts, nunca na prévia do Studio). */
 export function renderLanding(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean; track?: boolean } = {}): string {
-  if (d.tier === "premium") return renderPremium(d, opts);
-  if (d.tier === "bio") return renderBio(d, opts);
+  const html = d.tier === "premium" ? renderPremium(d, opts) : d.tier === "bio" ? renderBio(d, opts) : renderNormal(d, opts);
+  // Prévia com preços: barra "Gostei, quero o meu" (pagar e publicar sozinho, ou falar com o Bruno)
+  return opts.preview && d.checkout ? html.replace(/<\/body>(?![\s\S]*<\/body>)/, `${checkoutHtml(d.name, d.checkout, opts.url)}</body>`) : html;
+}
+
+function renderNormal(d: LandingData, opts: { url?: string; preview?: boolean; sample?: boolean; track?: boolean }): string {
   const c = d.content;
   const f = FONTS[c.fonts] ?? FONTS.fraunces;
   const primary = hex(c.colors?.primary, "#2f5d50");

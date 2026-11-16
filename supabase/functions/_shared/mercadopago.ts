@@ -119,7 +119,15 @@ async function onSubscription(db: SupabaseClient, id: string) {
   const m = String(sub.external_reference ?? "").match(/^lp:([0-9a-f-]{36}):(monthly|premiumMonthly|bioMonthly)$/);
   const { data: page } = m ? await db.from("landing_pages").select("*").eq("id", m[1]).maybeSingle() : { data: null };
   if (!page) {
-    // Assinatura pelo link fixo: não dá para saber de qual cliente é; avisa o Bruno uma vez
+    // Assinatura pelo link fixo: acha a prévia em que o cliente tocou em "Assinar" nas últimas 6 h (só se for uma)
+    const { data: intents } = await db.from("landing_pages").select("*").eq("status", "preview")
+      .gte("monthly_intent_at", new Date(Date.now() - 6 * 3600_000).toISOString()).order("monthly_intent_at", { ascending: false }).limit(2);
+    const hit = intents?.length === 1 && Math.abs(Number(intents[0].checkout?.monthly ?? amount) - amount) < 0.5 ? intents[0] : null;
+    if (hit) {
+      if (!(await claim(db, { id: `preapproval:${id}`, user_id: hit.user_id, page_id: hit.id, plan: "monthly", amount, status: sub.status }))) return { duplicate: true };
+      return await publishPaid(db, hit, { plan: "monthly" }, amount);
+    }
+    // Sem como saber de qual cliente é: avisa o Bruno uma vez
     const { data: owner } = await db.from("social_accounts").select("user_id").eq("meta->>brand", "paginaspro").limit(1).maybeSingle();
     if (!owner) return { ignored: "sem dono" };
     if (!(await claim(db, { id: `preapproval:${id}`, user_id: owner.user_id, plan: "monthly", amount, status: sub.status }))) return { duplicate: true };

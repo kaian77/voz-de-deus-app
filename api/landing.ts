@@ -20,7 +20,7 @@ const EXPIRED = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><
 <body style="font-family:system-ui;display:grid;place-items:center;min-height:100vh;margin:0;color:#444;text-align:center;padding:24px"><div><p style="font-size:20px;margin:0 0 8px">Esta prévia expirou.</p><p style="margin:0">Fale com quem criou o site para ver a versão final.</p></div></body></html>`;
 
 // Colunas com leitura pública (migration 20261110000000_agenda.sql): nunca select=* (o anon não lê as colunas secretas)
-const PUBLIC_COLS = "name,niche,city,whatsapp,instagram,address,registry,hours,photos,logo,rating,reviews,tier,widget,content,status,slug,preview_until,domain,agenda_status,agenda_until,agenda";
+const PUBLIC_COLS = "name,niche,city,whatsapp,instagram,address,registry,hours,photos,logo,rating,reviews,tier,widget,video,checkout,content,status,slug,preview_until,domain,agenda_status,agenda_until,agenda";
 
 type Row = LandingData & { content: LandingData["content"] | null; status: string; slug: string; preview_until: string | null; domain: string | null };
 
@@ -101,6 +101,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   // Aviso do navegador do visitante (visita, clique no WhatsApp, rota no mapa): conta só página publicada
   const event = url.searchParams.get("e");
   if (event && KEY) {
+    // Prévia: cliente tocou em "Assinar" (mensal) -> a assinatura que chegar sem referência acha esta página
+    if (event === "checkout_monthly" && slug) {
+      await fetch(`${URL_}/rest/v1/rpc/landing_checkout_intent`, { method: "POST", headers, body: JSON.stringify({ p_slug: slug }) }).catch(() => {});
+    }
     if (["view", "whatsapp", "maps"].includes(event)) {
       await fetch(`${URL_}/rest/v1/rpc/landing_track`, {
         method: "POST", headers,

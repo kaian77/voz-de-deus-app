@@ -29,7 +29,7 @@ import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 import { notify, pushPublicKey, sendPendingPush } from "../_shared/push.ts";
 import { ML_SITES, runMlManualSearch } from "../_shared/manual-leads.ts";
 import { isBrax } from "../_shared/brand.ts";
-import { crmReply, crmSent, leadOffer } from "../_shared/prospect.ts";
+import { crmReply, crmSent, leadOffer, previewCheckout } from "../_shared/prospect.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -390,6 +390,8 @@ Deno.serve(async (req) => {
       }
       const { data, error } = await db.from("landing_pages").update(patch).eq("id", page.id).select().single();
       if (error) throw new HttpError(500, error.message);
+      // Prévia com "Gostei, quero o meu" (preços e link de pagamento só deste cliente)
+      if (data?.status === "preview" && action === "landing_publish") await previewCheckout(db, page.id).catch(() => undefined);
       return json(data);
     }
     if (action === "leads_search") {
