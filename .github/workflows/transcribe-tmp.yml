@@ -7,11 +7,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pip install -q faster-whisper
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -q faster-whisper numpy
       - run: |
           python3 -c "
+          import wave,numpy as np
           from faster_whisper import WhisperModel
+          w=wave.open('.tmp-audio/a.wav');a=np.frombuffer(w.readframes(w.getnframes()),np.int16).astype(np.float32)/32768
           m=WhisperModel('medium',device='cpu',compute_type='int8')
-          segs,_=m.transcribe('.tmp-audio/a.wav',language='pt',beam_size=5)
+          segs,_=m.transcribe(a,language='pt',beam_size=5)
           for s in segs: print('TX %.1f-%.1f: %s'%(s.start,s.end,s.text))
           "
