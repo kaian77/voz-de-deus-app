@@ -67,30 +67,29 @@ nav.links .btn{padding:12px 18px;font-size:14px}
 
 /* topo */
 .hero{position:relative;overflow:hidden}
-.hero .wm{position:absolute;right:-6%;top:6%;width:min(860px,80vw);opacity:.06;pointer-events:none;filter:grayscale(.2)}
+.hero .wm{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max(1500px,150vw);max-width:none;opacity:.05;pointer-events:none;filter:grayscale(.2)}
 .hero .wrap{position:relative;display:grid;grid-template-columns:1.2fr .8fr;gap:48px;align-items:center;padding-block:64px 56px}
 .hero h1{font-size:clamp(52px,7vw,92px);margin:18px 0 22px}
 .hero h1 i{font-style:italic}
 .hero .lead{margin-bottom:34px}
 .hero .ctas{display:flex;flex-wrap:wrap;align-items:center;gap:22px 30px}
-.loc{display:flex;align-items:center;gap:14px;margin-top:40px;text-decoration:none;font-size:14px;color:var(--muted);max-width:340px}
-.loc i{flex:none;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;color:var(--ink)}
+.loc{display:flex;align-items:center;gap:14px;margin-top:30px;text-decoration:none;font-size:14px;color:var(--muted);max-width:430px;background:#fff;border:1.5px solid var(--brand);border-radius:14px;padding:12px 16px 12px 12px;box-shadow:0 14px 30px -18px rgba(23,59,48,.55);transition:transform .2s,box-shadow .2s}
+.loc:hover{transform:translateY(-2px);box-shadow:0 18px 34px -16px rgba(23,59,48,.6)}
+.loc em{margin-left:auto;font-style:normal;font-weight:700;font-size:13.5px;color:#fff;background:var(--brand);border-radius:8px;padding:9px 12px;white-space:nowrap}
+.loc i{flex:none;width:46px;height:46px;border-radius:12px;background:var(--pale);display:grid;place-items:center;color:var(--brand)}
 .loc b{display:block;color:var(--ink);font-weight:600}
 .logo-card{position:relative;border-radius:22px;overflow:hidden;box-shadow:0 40px 80px -30px rgba(23,59,48,.45),0 0 0 1px rgba(23,59,48,.06);transform:perspective(1200px) rotateY(-6deg) rotateX(2deg);transition:transform .8s cubic-bezier(.2,.8,.2,1)}
 .logo-card:hover{transform:none}
 .logo-card img{width:100%;height:auto;aspect-ratio:1}
-.since{position:absolute;left:-18px;bottom:-26px;background:var(--ink);color:#fff;border-radius:14px;padding:14px 18px;box-shadow:0 20px 40px -16px rgba(0,0,0,.5)}
-.since b{display:block;font:500 34px/1 var(--serif)}
-.since span{font-size:12px;opacity:.8}
 .visual{position:relative;padding-left:18px}
 
 /* faixa */
-.band{background:var(--lime);overflow:hidden;border-block:1px solid rgba(23,59,48,.12)}
+.band{background:var(--brand);color:#fff;overflow:hidden;border-block:1px solid rgba(23,59,48,.12)}
 .band .track{display:flex;width:max-content;animation:marq 38s linear infinite}
 .band ul{display:flex;list-style:none;align-items:center}
 .band li{display:flex;align-items:center;gap:12px;font:600 21px var(--sans);padding:18px 26px;white-space:nowrap}
-.band li:after{content:"";width:7px;height:7px;border-radius:50%;background:var(--ink);margin-left:26px}
-.band svg{width:24px;height:24px}
+.band li:after{content:"";width:7px;height:7px;border-radius:50%;background:#fff;margin-left:26px}
+.band svg{width:24px;height:24px;stroke:#fff}
 @keyframes marq{to{transform:translateX(-50%)}}
 
 /* grupos */
@@ -173,9 +172,6 @@ section{padding-block:96px}
 .story h2{margin:18px 0 24px}
 .story p{color:var(--muted);max-width:52ch}
 .story p+p{margin-top:14px}
-.nums{display:flex;gap:36px;margin:30px 0 34px;flex-wrap:wrap}
-.nums b{display:block;font:500 44px/1 var(--serif);color:var(--ink)}
-.nums span{font-size:13px;color:var(--muted)}
 
 /* espaço */
 .space{padding-top:0}
@@ -289,15 +285,12 @@ footer a{text-decoration:none;color:#fff}
   .card{min-height:0}
   .filters .count{width:100%;margin-left:0}
   .steps ol{grid-template-columns:1fr}
-  .since{left:0}
   .hero .wrap{gap:28px;padding-block:20px 40px}
   .visual{order:-1;width:100%;max-width:440px;margin:0 auto;padding-left:0}
   .logo-card{transform:none;border-radius:18px}
-  .since{left:14px;bottom:-22px;padding:10px 14px;border-radius:12px}
   .visual{margin-bottom:22px}
-  .since b{font-size:26px}
   .hero h1{margin:14px 0 16px}
-  .loc{margin-top:28px}
+  .loc{margin-top:24px;max-width:none}
   nav.links .btn .full{display:none}
   .finder{padding:20px}
   .sheet{align-items:flex-end;padding:0}
@@ -330,11 +323,10 @@ footer a{text-decoration:none;color:#fff}
         <a class="btn" href="#especialidades">Encontre seu cuidado <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11 11 3M4.5 3H11v6.5"/></svg></a>
         <a class="lnk" href="#convenios">Consultar convênios <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11 11 3M4.5 3H11v6.5"/></svg></a>
       </div>
-      <a class="loc" data-maps href="https://maps.app.goo.gl/3sNvZbCTmsdVkJ9g6?g_st=ac" target="_blank" rel="noopener"><i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg></i><span><b>Quadra 3, CL 16, Loja 01</b>Sobradinho · Brasília / DF · Como chegar</span></a>
+      <a class="loc" data-maps href="https://maps.app.goo.gl/3sNvZbCTmsdVkJ9g6?g_st=ac" target="_blank" rel="noopener"><i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg></i><span><b>Quadra 3, CL 16, Loja 01</b>Sobradinho · Brasília / DF</span><em>Como chegar ↗</em></a>
     </div>
     <div class="visual">
       <div class="logo-card"><img src="/ofs/logo.webp" alt="OFS Ortopedia e Fisioterapia Sobradinho · Saúde Integrada: Acupuntura, Psicologia, Fisioterapia, Osteopatia e Saúde Mental" width="1254" height="1254" fetchpriority="high"></div>
-      <div class="since"><b>1998</b><span>cuidando de Sobradinho</span></div>
     </div>
   </div>
 </section>
@@ -374,7 +366,7 @@ footer a{text-decoration:none;color:#fff}
       <label for="fSpec">Especialidade</label>
       <select id="fSpec"><option value="">Todas as especialidades</option></select>
       <label for="fName">Nome do convênio</label>
-      <input id="fName" list="allPlans" placeholder="Ex.: GDF Saúde, Saúde Caixa, Care Plus" autocomplete="off">
+      <input id="fName" list="allPlans" placeholder="Ex.: Saúde Caixa, Care Plus, Omint" autocomplete="off">
       <datalist id="allPlans"></datalist>
       <div class="answer" id="answer" aria-live="polite"></div>
       <div class="result" id="result"></div>
@@ -389,10 +381,8 @@ footer a{text-decoration:none;color:#fff}
     <div>
       <p class="eyebrow">Nossa história</p>
       <h2>Faz parte da sua vida.<br>Faz parte de <i>Sobradinho.</i></h2>
-      <p>A Ortopedia e Fisioterapia Sobradinho (OFS) está presente em Sobradinho desde 1998, oferecendo atendimento em saúde com respeito, escuta e atenção às necessidades de cada pessoa.</p>
+      <p>A Ortopedia e Fisioterapia Sobradinho (OFS) está presente na cidade desde 1998, oferecendo atendimento em saúde com respeito, escuta e atenção às necessidades de cada pessoa.</p>
       <p>Ao longo dessa trajetória, a OFS ampliou suas especialidades, reunindo diferentes serviços em um mesmo espaço, sempre valorizando o cuidado humanizado, acolhedor e individualizado.</p>
-      <div class="nums"><div><b id="years">28</b><span>anos em Sobradinho</span></div><div><b>7</b><span>especialidades</span></div><div><b id="nPlans">50+</b><span>convênios aceitos</span></div></div>
-      <a class="lnk" data-maps href="https://maps.app.goo.gl/3sNvZbCTmsdVkJ9g6?g_st=ac" target="_blank" rel="noopener">Venha conhecer a OFS <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11 11 3M4.5 3H11v6.5"/></svg></a>
     </div>
   </div>
 </section>
@@ -489,9 +479,9 @@ const wa=t=>'https://wa.me/'+WA+'?text='+encodeURIComponent(t);
 
 /* listas oficiais de convênios (AMHP) enviadas pela clínica */
 const ACUP=["AFEB BRASAL","AFFEGO","ANAFE SAÚDE","BACEN","BRB (SAÚDE BRB)","CAESAN","CARE PLUS","CASEC (CODEVASF)","CASEMBRAPA (EMBRAPA)","CLIQUE MÉDICOS","CONAB","EMBRATEL (TELOS)","FAPES (BNDES)","FASCAL","LIFE EMPRESARIAL","OMINT SAÚDE","PF SAÚDE (POLÍCIA FEDERAL)","PLAN ASSISTE (MPU)","PLAS/JMU (STM)","PROASA","PRÓ-SAÚDE (CÂMARA DOS DEPUTADOS)","PRÓ-SAÚDE (TJDFT)","PRÓ-SOCIAL (TRF)","SAÚDE CAIXA","SERPRO","SIS SENADO","STF-MED (STF)","TRE SAÚDE","TRT SAÚDE","TST SAÚDE","UNAFISCO SAÚDE (PREMIUM)"];
-const PSI=["AFEB BRASAL","AFFEGO","ANAFE SAÚDE","BACEN","CAESAN","CARE PLUS","CASEC (CODEVASF)","CASEMBRAPA (EMBRAPA)","CLIQUE MÉDICOS","CNTI","CONAB","FAPES (BNDES)","FASCAL","GDF SAÚDE","LIFE EMPRESARIAL","OMINT SAÚDE","PF SAÚDE (POLÍCIA FEDERAL)","PLAN ASSISTE (MPU)","PLAS/JMU (STM)","PMDF - CONSULTAS MÉDICAS","PMDF - SAÚDE MENTAL E TERAPIAS","PROASA","PRÓ-SAÚDE (CÂMARA DOS DEPUTADOS)","PRÓ-SAÚDE (TJDFT)","PRÓ-SOCIAL (TRF)","REAL GRANDEZA (DEMAIS PLANOS)","REAL GRANDEZA (SALVUS E SALUTEM)","SAÚDE CAIXA","SERPRO","SIS SENADO","STF-MED (STF)","TRE SAÚDE","TRT SAÚDE","TST SAÚDE","UNAFISCO SAÚDE (DEMAIS PLANOS)","UNAFISCO SAÚDE (PREMIUM)"];
-const ORTO=["AFEB BRASAL","AFFEGO","ANAFE SAÚDE","BACEN","BRB (SAÚDE BRB)","CAEME - GO","CAESAN","CAMED","CARE PLUS","CASEC (CODEVASF)","CASEMBRAPA (EMBRAPA)","CBMDF","CLIQUE MÉDICOS","CNTI","CONAB","EMBRATEL (TELOS)","FAPES (BNDES)","FASCAL","GDF SAÚDE","GEAP","GRAVIA","LIFE EMPRESARIAL","LUMINAR SAÚDE (EVIDA)","NOTRE DAME","OMINT SAÚDE","PF SAÚDE (POLÍCIA FEDERAL)","PLAN ASSISTE (MPU)","PLAS/JMU (STM)","PMDF - CONSULTAS MÉDICAS","PROASA","PRÓ-SAÚDE (CÂMARA DOS DEPUTADOS)","PRÓ-SAÚDE (TJDFT)","PRÓ-SER (STJ)","PRÓ-SOCIAL (TRF)","REAL GRANDEZA (DEMAIS PLANOS)","REAL GRANDEZA (SALVUS E SALUTEM)","SAÚDE CAIXA","SAÚDE PETROBRAS","SERPRO","SIS SENADO","STF-MED (STF)","TRE SAÚDE","TRT SAÚDE","TST SAÚDE","UNAFISCO SAÚDE (PREMIUM)"];
-const FISIO=["AFEB BRASAL","AFFEGO","ANAFE SAÚDE","BACEN","CAEME - GO","CARE PLUS","CASEC (CODEVASF)","CASEMBRAPA (EMBRAPA)","CLIQUE MÉDICOS","CNTI","CONAB","EMBRATEL (TELOS)","FAPES (BNDES)","FASCAL","GDF SAÚDE","GRAVIA","LIFE EMPRESARIAL","LUMINAR SAÚDE (EVIDA)","NOTRE DAME","OMINT SAÚDE","PF SAÚDE (POLÍCIA FEDERAL)","PLAN ASSISTE (MPU)","PLAS/JMU (STM)","PMDF - CONSULTAS MÉDICAS","PMDF - SAÚDE MENTAL E TERAPIAS","PROASA","PRÓ-SAÚDE (CÂMARA DOS DEPUTADOS)","PRÓ-SAÚDE (TJDFT)","PRÓ-SOCIAL (TRF)","REAL GRANDEZA (DEMAIS PLANOS)","REAL GRANDEZA (SALVUS E SALUTEM)","SAÚDE CAIXA","SAÚDE PETROBRAS","SERPRO","SIS SENADO","STF-MED (STF)","TRE SAÚDE","TRT SAÚDE","UNAFISCO SAÚDE (PREMIUM)"];
+const PSI=["AFEB BRASAL","AFFEGO","ANAFE SAÚDE","BACEN","CAESAN","CARE PLUS","CASEC (CODEVASF)","CASEMBRAPA (EMBRAPA)","CLIQUE MÉDICOS","CNTI","CONAB","FAPES (BNDES)","FASCAL","LIFE EMPRESARIAL","OMINT SAÚDE","PF SAÚDE (POLÍCIA FEDERAL)","PLAN ASSISTE (MPU)","PLAS/JMU (STM)","PMDF - CONSULTAS MÉDICAS","PMDF - SAÚDE MENTAL E TERAPIAS","PROASA","PRÓ-SAÚDE (CÂMARA DOS DEPUTADOS)","PRÓ-SAÚDE (TJDFT)","PRÓ-SOCIAL (TRF)","REAL GRANDEZA (DEMAIS PLANOS)","REAL GRANDEZA (SALVUS E SALUTEM)","SAÚDE CAIXA","SERPRO","SIS SENADO","STF-MED (STF)","TRE SAÚDE","TRT SAÚDE","TST SAÚDE","UNAFISCO SAÚDE (DEMAIS PLANOS)","UNAFISCO SAÚDE (PREMIUM)"];
+const ORTO=["AFEB BRASAL","AFFEGO","ANAFE SAÚDE","BACEN","BRB (SAÚDE BRB)","CAEME - GO","CAESAN","CAMED","CARE PLUS","CASEC (CODEVASF)","CASEMBRAPA (EMBRAPA)","CBMDF","CLIQUE MÉDICOS","CNTI","CONAB","EMBRATEL (TELOS)","FAPES (BNDES)","FASCAL","GEAP","GRAVIA","LIFE EMPRESARIAL","LUMINAR SAÚDE (EVIDA)","NOTRE DAME","OMINT SAÚDE","PF SAÚDE (POLÍCIA FEDERAL)","PLAN ASSISTE (MPU)","PLAS/JMU (STM)","PMDF - CONSULTAS MÉDICAS","PROASA","PRÓ-SAÚDE (CÂMARA DOS DEPUTADOS)","PRÓ-SAÚDE (TJDFT)","PRÓ-SER (STJ)","PRÓ-SOCIAL (TRF)","REAL GRANDEZA (DEMAIS PLANOS)","REAL GRANDEZA (SALVUS E SALUTEM)","SAÚDE CAIXA","SAÚDE PETROBRAS","SERPRO","SIS SENADO","STF-MED (STF)","TRE SAÚDE","TRT SAÚDE","TST SAÚDE","UNAFISCO SAÚDE (PREMIUM)"];
+const FISIO=["AFEB BRASAL","AFFEGO","ANAFE SAÚDE","BACEN","CAEME - GO","CARE PLUS","CASEC (CODEVASF)","CASEMBRAPA (EMBRAPA)","CLIQUE MÉDICOS","CNTI","CONAB","EMBRATEL (TELOS)","FAPES (BNDES)","FASCAL","GRAVIA","LIFE EMPRESARIAL","LUMINAR SAÚDE (EVIDA)","NOTRE DAME","OMINT SAÚDE","PF SAÚDE (POLÍCIA FEDERAL)","PLAN ASSISTE (MPU)","PLAS/JMU (STM)","PMDF - CONSULTAS MÉDICAS","PMDF - SAÚDE MENTAL E TERAPIAS","PROASA","PRÓ-SAÚDE (CÂMARA DOS DEPUTADOS)","PRÓ-SAÚDE (TJDFT)","PRÓ-SOCIAL (TRF)","REAL GRANDEZA (DEMAIS PLANOS)","REAL GRANDEZA (SALVUS E SALUTEM)","SAÚDE CAIXA","SAÚDE PETROBRAS","SERPRO","SIS SENADO","STF-MED (STF)","TRE SAÚDE","TRT SAÚDE","UNAFISCO SAÚDE (PREMIUM)"];
 
 const I={
   acu:'<path d="M7 21V12M11 21v-6M15 21v-9"/><path d="M5 7c2-3 6-4 9-2l4 3c1 1 0 3-2 2l-3-1-5 2"/>',
@@ -509,8 +499,8 @@ const svg=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="#173B30" stroke-width
 const SPECS=[
   {id:'acupuntura',name:'Acupuntura',ic:'acu',g:'bem',desc:'Técnica da medicina tradicional chinesa que estimula pontos específicos do corpo com agulhas finas, para o alívio de dores e mais equilíbrio no dia a dia.',tags:['Presencial'],plans:ACUP},
   {id:'fisioterapia',name:'Fisioterapia',ic:'fis',g:'mov',desc:'Cuidado para recuperar movimentos, funcionalidade e qualidade de vida.',tags:['Presencial'],plans:FISIO,pro:'Responsável técnico: José Júnior · Crefito 168713'},
-  {id:'neuropsicologia',name:'Neuropsicologia',ic:'neu',g:'men',desc:'Avaliação e Reabilitação Neuropsicológica. Atendimento individualizado para identificar dificuldades cognitivas e desenvolver estratégias que favoreçam sua autonomia e as atividades do dia a dia.',tags:['Avaliação','Reabilitação'],plans:null},
-  {id:'ortopedia',name:'Ortopedia',ic:'ort',g:'mov',desc:'Avaliação médica de condições relacionadas aos ossos, músculos e articulações.',tags:['Consulta médica'],plans:ORTO,pro:'Médico ortopedista: Dr. Carlos Manzoni · CRM 7323'},
+  {id:'neuropsicologia',name:'Neuropsicologia',ic:'neu',g:'men',desc:'Avaliação e Reabilitação Neuropsicológica. Atendimento individualizado para identificar dificuldades cognitivas e desenvolver estratégias que favoreçam sua autonomia e as atividades do dia a dia.',tags:['Avaliação','Reabilitação'],plans:PSI},
+  {id:'ortopedia',name:'Ortopedia',ic:'ort',g:'mov',desc:'Avaliação médica de condições relacionadas aos ossos, músculos e articulações.',tags:['Atendimento médico'],plans:ORTO,pro:'Médico ortopedista: Dr. Carlos Manzoni · CRM 7323'},
   {id:'osteopatia',name:'Osteopatia',ic:'ost',g:'mov',desc:'Abordagem manual voltada à avaliação e ao cuidado musculoesquelético.',tags:['Mesmos convênios da fisioterapia'],plans:FISIO},
   {id:'psicologia',name:'Psicologia',ic:'psi',g:'men',desc:'Espaço de escuta e acompanhamento psicológico, presencial e online.',tags:['Presencial','Online'],plans:PSI},
   {id:'saude-mental',name:'Saúde mental',ic:'sm',g:'men',desc:'Atendimento médico em saúde mental, com acolhimento e acompanhamento.',tags:['Consulta médica'],plans:null}
@@ -569,7 +559,6 @@ if(location.hash){const id=location.hash.slice(1);if(SPECS.some(s=>s.id===id))se
 
 /* busca de convênio */
 const ALL=[...new Set(SPECS.flatMap(s=>s.plans||[]))].sort((a,b)=>a.localeCompare(b,'pt'));
-$('#nPlans').textContent=ALL.length;
 $('#allPlans').innerHTML=ALL.map(p=>`<option value="${p}">`).join('');
 $('#fSpec').innerHTML+=SPECS.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
 function find(){
@@ -608,7 +597,7 @@ lb.onclick=e=>{if(e.target===lb)closeLb()};
 const now=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Sao_Paulo'}));
 const d=now.getDay(),h=now.getHours()+now.getMinutes()/60,isOpen=d>=1&&d<=5&&h>=8&&h<18;
 $('#open').classList.toggle('closed',!isOpen);$('#openTxt').textContent=isOpen?'Aberto agora · seg a sex, 8h às 18h':'Seg a sex, das 8h às 18h';
-$('#years').textContent=now.getFullYear()-1998;$('#yr').textContent=now.getFullYear();
+$('#yr').textContent=now.getFullYear();
 
 /* menu */
 const nav=$('#nav');addEventListener('scroll',()=>nav.classList.toggle('scrolled',scrollY>10),{passive:true});
