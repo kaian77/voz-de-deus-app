@@ -67,7 +67,7 @@ nav.links .btn{padding:12px 18px;font-size:14px}
 
 /* topo */
 .hero{position:relative;overflow:hidden}
-.hero .wm{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:max(1500px,150vw);max-width:none;opacity:.05;pointer-events:none;filter:grayscale(.2)}
+.hero .wm{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(1150px,94vw);max-width:none;opacity:.06;pointer-events:none;filter:grayscale(.2)}
 .hero .wrap{position:relative;display:grid;grid-template-columns:1.2fr .8fr;gap:48px;align-items:center;padding-block:64px 56px}
 .hero h1{font-size:clamp(52px,7vw,92px);margin:18px 0 22px}
 .hero h1 i{font-style:italic}
@@ -463,7 +463,7 @@ footer a{text-decoration:none;color:#fff}
     <div>Cuidado, escuta e movimento.<br>Desde 1998, em Sobradinho.</div>
     <div style="display:grid;gap:8px;justify-items:end"><a href="#gerencia">Fale com a gerência</a><a href="#trabalhe">Trabalhe conosco</a><a href="#inicio">Voltar ao início ↑</a></div>
   </div>
-  <p class="rt" style="padding-top:20px"><b>Responsáveis técnicos</b><br>Ortopedia: Dr. Carlos Manzoni · CRM 7323<br>Fisioterapia: José Júnior · Crefito 168713</p>
+  <p class="rt" style="padding-top:20px"><b>Responsável técnico</b><br>Dr. Carlos Manzoni · CRM 7323</p>
   <div class="bot"><span>© <span id="yr">2026</span> OFS · Ortopedia e Fisioterapia Sobradinho</span><span>Informações de atendimento sujeitas à confirmação.</span></div>
 </div></footer>
 
@@ -516,16 +516,16 @@ const svg=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="#173B30" stroke-width
 /* especialidades em ordem alfabética (pedido da clínica) */
 const SPECS=[
   {id:'acupuntura',name:'Acupuntura',ic:'acu',g:'bem',desc:'Técnica da medicina tradicional chinesa que estimula pontos específicos do corpo com agulhas finas, para o alívio de dores e mais equilíbrio no dia a dia.',tags:['Presencial'],plans:ACUP},
-  {id:'fisioterapia',name:'Fisioterapia',ic:'fis',g:'mov',desc:'Cuidado para recuperar movimentos, funcionalidade e qualidade de vida.',tags:['Presencial'],plans:FISIO,pro:'Responsável técnico: José Júnior · Crefito 168713'},
-  {id:'neuropsicologia',name:'Neuropsicologia',ic:'neu',g:'men',desc:'Avaliação e Reabilitação Neuropsicológica. Atendimento individualizado para identificar dificuldades cognitivas e desenvolver estratégias que favoreçam sua autonomia e as atividades do dia a dia.',tags:['Avaliação','Reabilitação'],plans:PSI},
-  {id:'ortopedia',name:'Ortopedia',ic:'ort',g:'mov',desc:'Avaliação médica de condições relacionadas aos ossos, músculos e articulações.',tags:['Atendimento médico'],plans:ORTO,pro:'Médico ortopedista: Dr. Carlos Manzoni · CRM 7323'},
+  {id:'fisioterapia',name:'Fisioterapia',ic:'fis',g:'mov',desc:'Cuidado para recuperar movimentos, funcionalidade e qualidade de vida.',tags:['Presencial'],plans:FISIO},
+  {id:'neuropsicologia',name:'Neuropsicologia',ic:'neu',g:'men',desc:'Avaliação e Reabilitação Neuropsicológica. Atendimento individualizado para identificar dificuldades cognitivas e desenvolver estratégias que favoreçam sua autonomia e as atividades do dia a dia.',tags:['Avaliação','Reabilitação'],plans:null,only:true},
+  {id:'ortopedia',name:'Ortopedia',ic:'ort',g:'mov',desc:'Atendimento médico de condições relacionadas aos ossos, músculos e articulações.',tags:['Atendimento médico'],plans:ORTO,pro:'Médico ortopedista: Dr. Carlos Manzoni · CRM 7323'},
   {id:'osteopatia',name:'Osteopatia',ic:'ost',g:'mov',desc:'Abordagem manual voltada à avaliação e ao cuidado musculoesquelético.',tags:['Mesmos convênios da fisioterapia'],plans:FISIO},
   {id:'psicologia',name:'Psicologia',ic:'psi',g:'men',desc:'Espaço de escuta e acompanhamento psicológico, presencial e online.',tags:['Presencial','Online'],plans:PSI},
   {id:'saude-mental',name:'Saúde mental',ic:'sm',g:'men',desc:'Atendimento médico em saúde mental, com acolhimento e acompanhamento.',tags:['Consulta médica'],plans:null}
 ];
 const GROUPS=[{id:'mov',name:'Movimento & reabilitação',tab:'Movimento'},{id:'men',name:'Saúde mental & escuta',tab:'Saúde mental'},{id:'bem',name:'Cuidado & bem-estar',tab:'Bem-estar'}];
 const specMsg=s=>`Olá! Gostaria de informações sobre ${s.name}.`;
-const plansLabel=s=>s.plans?`${s.plans.length} convênios + particular`:'Convênios sob consulta';
+const plansLabel=s=>s.only?'Somente particular':s.plans?'Convênio + particular':'Convênios sob consulta';
 const norm=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 const $=s=>document.querySelector(s);
 const arrow='<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11 11 3M4.5 3H11v6.5"/></svg>';
@@ -557,14 +557,14 @@ document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{
 
 /* janela da especialidade */
 const sheet=$('#sheet');let cur=null;
-function chips(s,q){const nq=norm(q||'');const box=$('#shPlans');if(!s.plans){box.innerHTML='<span>Convênios sob consulta. Fale com a recepção.</span>';return}
+function chips(s,q){const nq=norm(q||'');const box=$('#shPlans');if(!s.plans){box.innerHTML=s.only?'<span>Atendimento somente particular. Valores com a recepção.</span>':'<span>Convênios sob consulta. Fale com a recepção.</span>';return}
   const list=s.plans.filter(p=>!nq||norm(p).includes(nq));
   box.innerHTML=list.length?list.map(p=>`<span>${p}</span>`).join(''):'<span>Não encontramos esse nome na lista. Confirme com a recepção.</span>'}
 function openSpec(id){const s=SPECS.find(x=>x.id===id);if(!s)return;cur=s;
   $('#shIc').innerHTML=svg(s.ic);$('#shTitle').textContent=s.name;$('#shDesc').textContent=s.desc;
   $('#shTags').innerHTML=[...s.tags,'Particular'].map(t=>`<span>${t}</span>`).join('');
   $('#shPro').textContent=s.pro||'';$('#shPro').hidden=!s.pro;
-  $('#shPlansH').textContent=s.plans?`${s.plans.length} convênios aceitos + particular`:'Convênios';
+  $('#shPlansH').textContent=s.only?'Atendimento':s.plans?'Convênios aceitos + particular':'Convênios';
   $('#shFind').hidden=!s.plans;$('#shFind').value='';chips(s,'');
   $('#shWa').href=wa(specMsg(s));sheet.classList.add('on');document.body.style.overflow='hidden';
   history.replaceState(null,'','#'+s.id);}
@@ -584,7 +584,7 @@ function find(){
   const ans=$('#answer');
   $('#result').innerHTML=list.map(s=>{
     let cls='',lbl=plansLabel(s);
-    if(q.length>=2){if(!s.plans){cls='';lbl='Sob consulta'}else{const hit=s.plans.find(p=>norm(p).includes(q));cls=hit?'yes':'no';lbl=hit?'✓ Aceita':'Não consta na lista'}}
+    if(q.length>=2){if(!s.plans){cls='';lbl=s.only?'Somente particular':'Sob consulta'}else{const hit=s.plans.find(p=>norm(p).includes(q));cls=hit?'yes':'no';lbl=hit?'✓ Aceita':'Não consta na lista'}}
     return `<div class="row ${cls}"><b>${s.name}</b><span>${lbl}</span></div>`}).join('');
   if(sid&&q.length<2){const s=list[0];$('#result').innerHTML+=s.plans?`<div class="chips">${s.plans.map(p=>`<span>${p}</span>`).join('')}</div>`:''}
   if(q.length>=2){
