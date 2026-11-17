@@ -1,0 +1,17 @@
+name: transcribe-tmp
+on:
+  push:
+    branches: [transcribe-tmp]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q faster-whisper
+      - run: |
+          python3 -c "
+          from faster_whisper import WhisperModel
+          m=WhisperModel('medium',device='cpu',compute_type='int8')
+          segs,_=m.transcribe('.tmp-audio/a.wav',language='pt',beam_size=5)
+          for s in segs: print('TX %.1f-%.1f: %s'%(s.start,s.end,s.text))
+          "
