@@ -252,6 +252,17 @@
       ],
       "destination": "/jogo",
       "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "(www\\.)?ofsobradinho\\.com\\.br"
+        }
+      ],
+      "destination": "/ofs",
+      "permanent": false
     }
   ]
 }
