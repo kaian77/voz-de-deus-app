@@ -33,6 +33,10 @@
       "destination": "https://rrlxhnmfsmknzhqpfrhr.supabase.co/storage/v1/object/public/media/:path*"
     },
     {
+      "source": "/bio/nutrimarinagusmao",
+      "destination": "/bio/nutrimarinagusmao/index.html"
+    },
+    {
       "source": "/ofs",
       "destination": "/ofs.html"
     },
