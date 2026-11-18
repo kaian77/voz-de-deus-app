@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nutri Marina Gusmão</title>
+<meta name="description" content="Nutricionista · Especialista em GLP-1 · +10 mil pacientes. O fim do efeito sanfona começa aqui.">
+<meta name="robots" content="noindex">
+<meta property="og:title" content="Nutri Marina Gusmão">
+<meta property="og:description" content="Especialista em GLP-1 · +10 mil pacientes. O fim do efeito sanfona começa aqui.">
+<meta property="og:image" content="/bio/nutrimarinagusmao/hero.jpg">
+<meta name="theme-color" content="#16110d">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#16110d;--card:#211913;--card2:#2a2019;--line:rgba(243,236,228,.12);--cream:#f3ece4;--muted:rgba(243,236,228,.62);--gold:#d2a77f;--gold2:#b98a62;--wa:#25d366}
+html{background:var(--bg)}
+body{font-family:Manrope,system-ui,sans-serif;background:var(--bg);color:var(--cream);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+.bgblur{position:fixed;inset:-60px;background:url(/bio/nutrimarinagusmao/hero.jpg) 70% 30%/cover;filter:blur(70px) brightness(.3) saturate(1.2);pointer-events:none}
+.app{position:relative;width:min(460px,100%);margin:0 auto;background:var(--bg);min-height:100vh;box-shadow:0 0 0 1px var(--line),0 40px 120px -40px #000;padding-bottom:110px}
+
+/* Topo */
+.top{position:relative;height:min(78vh,640px);overflow:hidden}
+.top img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:68% 18%;animation:kb 20s ease-in-out infinite alternate}
+@keyframes kb{from{transform:scale(1.03)}to{transform:scale(1.13) translate(-1.5%,-1%)}}
+.top:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(22,17,13,.35) 0%,transparent 22%,transparent 46%,rgba(22,17,13,.75) 74%,var(--bg) 100%)}
+.chip{position:absolute;top:16px;left:16px;z-index:2;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;letter-spacing:.02em;padding:8px 12px;border-radius:999px;background:rgba(22,17,13,.45);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.14)}
+.chip i{width:7px;height:7px;border-radius:50%;background:var(--wa);box-shadow:0 0 0 0 rgba(37,211,102,.6);animation:ping 2s infinite}
+@keyframes ping{70%{box-shadow:0 0 0 8px rgba(37,211,102,0)}100%{box-shadow:0 0 0 0 rgba(37,211,102,0)}}
+.brand{position:absolute;left:22px;right:22px;bottom:16px;z-index:2}
+.brand small{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--gold)}
+.brand h1{font-family:Allura,cursive;font-weight:400;font-size:clamp(62px,17vw,80px);line-height:.95;margin-top:4px;text-shadow:0 6px 30px rgba(0,0,0,.45)}
+.brand h1 svg{width:26px;height:26px;vertical-align:14px;margin-left:4px}
+.lead{padding:4px 22px 0;font-family:'Cormorant Garamond',serif;font-size:25px;line-height:1.2;font-weight:500}
+.lead em{color:var(--gold);font-style:italic}
+
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:20px 22px 0}
+.stats div{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px}
+.stats b{display:block;font-variant-numeric:lining-nums;font-family:'Cormorant Garamond',serif;font-weight:600;font-size:32px;line-height:1;color:var(--cream)}
+.stats span{display:block;font-size:12px;color:var(--muted);margin-top:6px;line-height:1.35}
+
+.cta{display:flex;align-items:center;justify-content:center;gap:10px;margin:20px 22px 0;background:linear-gradient(135deg,#f3ece4,#e6d3bf);color:#16110d;font-weight:700;font-size:16px;padding:18px 20px;border-radius:999px;animation:pulse 2.6s infinite;transition:transform .2s}
+.cta:active{transform:scale(.97)}
+.cta svg{color:#1faa53;flex:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(243,236,228,.35)}70%{box-shadow:0 0 0 15px rgba(243,236,228,0)}100%{box-shadow:0 0 0 0 rgba(243,236,228,0)}}
+.note{text-align:center;font-size:12px;color:var(--muted);margin-top:10px}
+
+/* Seções */
+.sec{padding:40px 22px 0}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--gold)}
+.sec h2{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:32px;line-height:1.05;margin-top:8px}
+.sec h2 em{font-style:italic;color:var(--gold)}
+.sec p.d{color:var(--muted);font-size:14.5px;line-height:1.6;margin-top:10px}
+
+/* Lugar do vídeo */
+.video{position:relative;margin-top:18px;aspect-ratio:9/12;border-radius:24px;overflow:hidden;background:radial-gradient(120% 80% at 70% 20%,#3a2b20,#1c1510);border:1.5px dashed rgba(210,167,127,.5);display:grid;place-items:center;text-align:center}
+.video .play{width:78px;height:78px;border-radius:50%;display:grid;place-items:center;background:rgba(243,236,228,.12);border:1px solid rgba(243,236,228,.3);backdrop-filter:blur(8px);margin:0 auto;animation:pulse 2.6s infinite}
+.video .play svg{width:30px;height:30px;margin-left:5px;color:var(--cream)}
+.video strong{display:block;margin-top:18px;font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600}
+.video span{display:block;margin-top:6px;font-size:12.5px;color:var(--muted)}
+.video .tag{position:absolute;top:14px;left:14px;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;background:rgba(22,17,13,.6);padding:7px 11px;border-radius:999px;border:1px solid var(--line)}
+
+/* Antes e depois (arrastar) */
+.ba{position:relative;margin-top:16px;aspect-ratio:4/5;border-radius:24px;overflow:hidden;user-select:none;touch-action:pan-y;border:1px solid var(--line);cursor:ew-resize}
+.ba .side{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px}
+.ba .before{padding-right:50%;background:linear-gradient(160deg,#2b2119,#1b140f)}
+.ba .after{padding-left:50%;background:linear-gradient(160deg,#5b4331,#3a2a1f);clip-path:inset(0 0 0 var(--x,50%))}
+.ba .side b{display:block;font-family:'Cormorant Garamond',serif;font-size:21px;line-height:1.1;font-weight:600}
+.ba .side small{display:block;font-size:12px;color:var(--muted);margin-top:6px}
+.ba .ic{width:46px;height:46px;margin:0 auto 12px;opacity:.75}
+.ba .lb{position:absolute;bottom:14px;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;padding:7px 11px;border-radius:999px;background:rgba(22,17,13,.6);border:1px solid var(--line);z-index:2}
+.ba .lb.l{left:14px}.ba .lb.r{right:14px;background:var(--gold);color:#16110d;border-color:transparent}
+.ba .bar{position:absolute;top:0;bottom:0;left:var(--x,50%);width:2px;margin-left:-1px;background:var(--cream);z-index:3}
+.ba .knob{position:absolute;top:84%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;background:var(--cream);color:#16110d;display:grid;place-items:center;font-weight:800;font-size:15px;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.mini{aspect-ratio:3/4;border-radius:18px;border:1.5px dashed rgba(210,167,127,.45);background:var(--card);display:grid;place-items:center;text-align:center;padding:12px;font-size:13px;font-weight:600;color:var(--muted)}
+.mini svg{width:30px;height:30px;margin:0 auto 8px;color:var(--gold);opacity:.8}
+
+/* Como posso ajudar */
+.help{display:grid;gap:10px;margin-top:18px}
+.hc{display:flex;gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;transition:transform .2s,background .2s}
+.hc:active{transform:scale(.98)}
+.hc .n{flex:none;width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:var(--card2);border:1px solid var(--line);font-size:20px}
+.hc div{flex:1;min-width:0}
+.hc b{display:block;font-size:15.5px}
+.hc small{display:block;font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.4}
+.hc em{font-style:normal;color:var(--muted);font-size:22px}
+
+/* Conteúdos */
+.posts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:18px}
+.posts a{position:relative;border-radius:16px;overflow:hidden;aspect-ratio:4/5;background:var(--card)}
+.posts img{width:100%;height:100%;object-fit:cover;transition:transform .5s}
+.posts a:active img{transform:scale(1.05)}
+
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.tags span{font-size:12.5px;padding:7px 12px;border-radius:999px;border:1px solid var(--line);color:#e9e2d8}
+
+.links{display:grid;gap:10px;padding:34px 22px 0}
+.lk{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:15px 16px;font-weight:600;font-size:15px}
+.lk svg{color:var(--gold);flex:none}
+.lk span{flex:1}
+.lk em{font-style:normal;color:var(--muted);font-size:22px}
+
+footer{padding:36px 22px 0;text-align:center;font-size:12px;color:var(--muted);line-height:1.7}
+footer a{color:var(--gold)}
+
+/* Botão fixo */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;justify-content:center;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,rgba(22,17,13,.92) 40%);transform:translateY(120%);transition:transform .45s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+.dock.on{transform:none;pointer-events:auto}
+.dock a{width:min(428px,100%);display:flex;align-items:center;justify-content:center;gap:10px;background:var(--wa);color:#08321a;font-weight:800;font-size:15.5px;padding:16px;border-radius:999px;box-shadow:0 12px 30px -8px rgba(37,211,102,.6)}
+
+.up{opacity:0;transform:translateY(18px);transition:opacity .7s,transform .7s cubic-bezier(.2,.8,.2,1)}
+.up.in{opacity:1;transform:none}
+.top .brand,.lead,.stats,.cta{animation:rise .8s cubic-bezier(.2,.8,.2,1) both}
+.lead{animation-delay:.1s}.stats{animation-delay:.2s}.cta{animation-delay:.3s}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.up{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="bgblur" aria-hidden="true"></div>
+<main class="app">
+
+<header class="top">
+  <img src="/bio/nutrimarinagusmao/hero.jpg" alt="Nutri Marina Gusmão">
+  <div class="chip"><i></i>Atendimento pelo WhatsApp</div>
+  <div class="brand">
+    <small>Nutricionista · Especialista em GLP-1</small>
+    <h1>Marina Gusmão<svg viewBox="0 0 24 24" aria-label="Perfil verificado"><path fill="#3897f0" d="M12 1.5l2.6 1.9 3.2-.1 1 3 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1 3-3.2-.1L12 22.5l-2.6-1.9-3.2.1-1-3-2.6-1.9 1-3.1-1-3.1 2.6-1.9 1-3 3.2.1z"/><path fill="#fff" d="M10.6 15.6l-3.2-3.2 1.3-1.3 1.9 1.9 4.7-4.7 1.3 1.3z"/></svg></h1>
+  </div>
+</header>
+
+<p class="lead">O fim do <em>efeito sanfona</em> começa aqui.</p>
+
+<div class="stats">
+  <div><b data-n="10">+10 mil</b><span>pacientes atendidos</span></div>
+  <div><b>GLP-1</b><span>especialista em Ozempic, Mounjaro e afins</span></div>
+</div>
+
+<a class="cta" id="mainCta" href="https://wa.link/qsbkec" target="_blank" rel="noopener">
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M17.5 14.4c-.3-.1-1.8-.9-2-1-.3-.1-.5-.1-.7.1-.2.3-.8 1-.9 1.2-.2.2-.3.2-.6.1-.3-.1-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.2-.2.2-.3.3-.5.1-.2 0-.4 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.1.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.2-.3-.3-.6-.4zM12 21.8c-1.8 0-3.5-.5-5-1.4l-.4-.2-3.7 1 1-3.6-.2-.4c-1-1.6-1.5-3.4-1.5-5.2 0-5.4 4.4-9.8 9.8-9.8 2.6 0 5.1 1 6.9 2.9 1.8 1.8 2.9 4.3 2.9 6.9 0 5.4-4.4 9.8-9.8 9.8zm8.4-18.2C18.2 1.3 15.2 0 12 0 5.5 0 .1 5.3.1 11.9c0 2.1.5 4.1 1.6 5.9L0 24l6.3-1.6c1.7.9 3.7 1.4 5.7 1.4 6.6 0 11.9-5.3 11.9-11.9 0-3.2-1.2-6.2-3.5-8.4z"/></svg>
+  Quero agendar minha consulta
+</a>
+<p class="note">Você fala direto pelo WhatsApp</p>
+
+<section class="sec up">
+  <p class="eyebrow">Resultados reais</p>
+  <h2>Quem viveu, <em>conta</em>.</h2>
+  <div class="video">
+    <span class="tag">▶ Vídeo</span>
+    <div>
+      <div class="play"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.5v15l13-7.5z"/></svg></div>
+      <strong>Vídeo de antes e depois aqui</strong>
+      <span>Depoimento de paciente</span>
+    </div>
+  </div>
+
+  <div class="ba" id="ba" aria-label="Arraste para comparar antes e depois">
+    <div class="side before"><div><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg><b>Foto de antes aqui</b><small>arraste ↔</small></div></div>
+    <div class="side after"><div><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg><b>Foto de depois aqui</b><small>arraste ↔</small></div></div>
+    <span class="lb l">Antes</span><span class="lb r">Depois</span>
+    <div class="bar"><div class="knob">↔</div></div>
+  </div>
+
+  <div class="pair">
+    <div class="mini"><div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>Foto antes e depois aqui</div></div>
+    <div class="mini"><div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>Foto antes e depois aqui</div></div>
+  </div>
+</section>
+
+<section class="sec up">
+  <p class="eyebrow">Como posso te ajudar</p>
+  <h2>Escolha o <em>seu caminho</em></h2>
+  <div class="help">
+    <a class="hc" href="https://wa.link/qsbkec" target="_blank" rel="noopener"><span class="n">🥗</span><div><b>Acompanhamento nutricional</b><small>Plano feito para a sua rotina, para emagrecer sem voltar a engordar</small></div><em>›</em></a>
+    <a class="hc" href="https://wa.link/qsbkec" target="_blank" rel="noopener"><span class="n">💉</span><div><b>Uso de GLP-1 com acompanhamento</b><small>Ozempic, Mounjaro e tirzepatida com nutrição e treino do jeito certo</small></div><em>›</em></a>
+    <a class="hc" href="https://www.instagram.com/nutrimarinagusmao/" target="_blank" rel="noopener"><span class="n">🏋️</span><div><b>Treino</b><small>Dicas de treino de força nos destaques do Instagram</small></div><em>›</em></a>
+    <a class="hc" href="https://www.instagram.com/nutrimarinagusmao/" target="_blank" rel="noopener"><span class="n">💬</span><div><b>Canal Nutridas</b><small>Meu canal no Instagram com conteúdo toda semana</small></div><em>›</em></a>
+  </div>
+</section>
+
+<section class="sec up">
+  <p class="eyebrow">Conteúdos</p>
+  <h2>Os que todo mundo <em>salva</em></h2>
+  <div class="posts">
+    <a href="https://www.instagram.com/nutrimarinagusmao/" target="_blank" rel="noopener"><img src="/bio/nutrimarinagusmao/post1.jpg" alt="Você pode treinar todos os dias" loading="lazy"></a>
+    <a href="https://www.instagram.com/nutrimarinagusmao/" target="_blank" rel="noopener"><img src="/bio/nutrimarinagusmao/post2.jpg" alt="Melhores industrializados para emagrecimento" loading="lazy"></a>
+    <a href="https://www.instagram.com/nutrimarinagusmao/" target="_blank" rel="noopener"><img src="/bio/nutrimarinagusmao/post3.jpg" alt="Quem usa Mounjaro não pode" loading="lazy"></a>
+    <a href="https://www.instagram.com/nutrimarinagusmao/" target="_blank" rel="noopener"><img src="/bio/nutrimarinagusmao/post4.jpg" alt="Risco nos olhos por uso de Ozempic e Mounjaro" loading="lazy"></a>
+  </div>
+  <div class="tags"><span>Emagrecimento</span><span>Efeito sanfona</span><span>GLP-1</span><span>Ozempic</span><span>Mounjaro</span><span>Treino de força</span><span>Proteína</span></div>
+</section>
+
+<nav class="links up">
+  <a class="lk" href="https://www.instagram.com/nutrimarinagusmao/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 7.3A4.7 4.7 0 1 0 12 16.7 4.7 4.7 0 0 0 12 7.3Zm0 7.7a3 3 0 1 1 0-6 3 3 0 0 1 0 6Zm6-7.9a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0ZM21.9 8c-.1-1.6-.4-3-1.6-4.2S17.6 2.2 16 2.1C14.4 2 9.6 2 8 2.1 6.4 2.2 5 2.5 3.8 3.7S2.2 6.4 2.1 8C2 9.6 2 14.4 2.1 16c.1 1.6.4 3 1.6 4.2s2.6 1.5 4.2 1.6c1.6.1 6.4.1 8 0 1.6-.1 3-.4 4.2-1.6s1.5-2.6 1.6-4.2c.1-1.6.1-6.4 0-8Zm-2.1 9.7a3.3 3.3 0 0 1-1.8 1.8c-1.3.5-4.3.4-5.7.4s-4.4.1-5.7-.4a3.3 3.3 0 0 1-1.8-1.8c-.5-1.3-.4-4.3-.4-5.7s-.1-4.4.4-5.7A3.3 3.3 0 0 1 6.6 4.5C7.9 4 10.9 4.1 12.3 4.1s4.4-.1 5.7.4a3.3 3.3 0 0 1 1.8 1.8c.5 1.3.4 4.3.4 5.7s.1 4.4-.4 5.7Z"/></svg><span>@nutrimarinagusmao</span><em>›</em></a>
+  <a class="lk" href="https://www.threads.net/@nutrimarinagusmao" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M17.3 11.1c-.1 0-.2-.1-.3-.1-.2-2.9-1.8-4.6-4.5-4.6-1.6 0-2.9.7-3.7 1.9l1.5 1c.6-.9 1.5-1.1 2.2-1.1 1 0 1.7.3 2.1.9.3.4.5 1 .6 1.7-.8-.1-1.6-.2-2.5-.1-2.5.1-4.1 1.6-4 3.6.1 1 .6 1.9 1.4 2.4.7.5 1.6.7 2.6.6 1.3-.1 2.3-.5 3-1.4.5-.7.9-1.6 1-2.7.6.4 1.1.9 1.3 1.5.5 1.1.5 2.8-.9 4.3-1.3 1.3-2.8 1.8-5.1 1.8-2.6 0-4.5-.8-5.8-2.4-1.2-1.5-1.8-3.6-1.8-6.3s.6-4.8 1.8-6.3c1.3-1.6 3.2-2.4 5.8-2.4 2.6 0 4.5.8 5.9 2.4.7.8 1.2 1.8 1.5 2.9l1.8-.5c-.4-1.4-1-2.6-1.9-3.6C17.4 1 15.1 0 12.1 0 9 0 6.7 1 5.1 3 3.7 4.8 3 7.2 3 12s.7 7.2 2.1 9C6.7 23 9 24 12.1 24c2.7 0 4.6-.7 6.2-2.3 2.1-2.1 2-4.7 1.3-6.3-.5-1.2-1.4-2.1-2.3-2.7v-1.6zm-4.6 4.3c-1.1.1-2.2-.4-2.3-1.4 0-.8.5-1.6 2.3-1.7h.6c.6 0 1.2.1 1.8.2-.2 2.4-1.3 2.8-2.4 2.9z"/></svg><span>Threads</span><em>›</em></a>
+</nav>
+
+<footer>
+  Nutri Marina Gusmão · Nutricionista<br>
+  <span style="opacity:.7">Página de demonstração feita por <a href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">PáginasPro</a></span>
+</footer>
+</main>
+
+<div class="dock" id="dock"><a href="https://wa.link/qsbkec" target="_blank" rel="noopener">
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M17.5 14.4c-.3-.1-1.8-.9-2-1-.3-.1-.5-.1-.7.1-.2.3-.8 1-.9 1.2-.2.2-.3.2-.6.1-.3-.1-1.3-.5-2.4-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.2-.2.2-.3.3-.5.1-.2 0-.4 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.1.2 2.1 3.2 5.1 4.5.7.3 1.3.5 1.7.6.7.2 1.4.2 1.9.1.6-.1 1.8-.7 2-1.4.2-.7.2-1.3.2-1.4-.1-.2-.3-.3-.6-.4z"/></svg>
+  Agendar pelo WhatsApp</a></div>
+
+<script>
+(function(){
+// +10 mil contando
+var n=document.querySelector('[data-n]');if(n){var t0=null;requestAnimationFrame(function s(t){t0=t0||t;var p=Math.min((t-t0)/1300,1);n.textContent='+'+Math.round(10*(1-Math.pow(1-p,3)))+' mil';if(p<1)requestAnimationFrame(s)})}
+// Seções aparecendo
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12});
+document.querySelectorAll('.up').forEach(function(el){io.observe(el)});
+// Botão fixo quando o principal sai da tela
+var cta=document.getElementById('mainCta'),dock=document.getElementById('dock');
+new IntersectionObserver(function(es){dock.classList.toggle('on',!es[0].isIntersecting&&es[0].boundingClientRect.top<0)}).observe(cta);
+// Antes × depois arrastando
+var ba=document.getElementById('ba');
+function set(x){var r=ba.getBoundingClientRect();var p=Math.max(4,Math.min(96,(x-r.left)/r.width*100));ba.style.setProperty('--x',p+'%')}
+var drag=false;
+ba.addEventListener('pointerdown',function(e){drag=true;set(e.clientX)});
+window.addEventListener('pointermove',function(e){if(drag)set(e.clientX)});
+window.addEventListener('pointerup',function(){drag=false});
+ba.addEventListener('touchmove',function(e){set(e.touches[0].clientX)},{passive:true});
+// Mexe sozinho uma vez para mostrar que arrasta
+var shown=false;new IntersectionObserver(function(es){if(es[0].isIntersecting&&!shown){shown=true;var t0=null;requestAnimationFrame(function a(t){t0=t0||t;var k=(t-t0)/1600;if(k>1){ba.style.setProperty('--x','50%');return}ba.style.setProperty('--x',(50+Math.sin(k*Math.PI*2)*22)+'%');requestAnimationFrame(a)})}},{threshold:.5}).observe(ba);
+})();
+</script>
+</body>
+</html>
