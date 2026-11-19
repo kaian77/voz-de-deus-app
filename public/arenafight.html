@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CT Arena Fight · Muay Thai e Boxe em Quixadá</title>
+<meta name="description" content="CT Arena Fight · Daniel Junior Muay Thai. Turmas de Muay Thai e Boxe, Personal Fight e aula experimental em Quixadá/CE.">
+<meta name="robots" content="noindex">
+<meta property="og:title" content="CT Arena Fight · Encontre sua melhor versão">
+<meta property="og:description" content="Muay Thai e Boxe em Quixadá/CE com o professor Daniel Junior. Agende sua aula experimental.">
+<meta property="og:image" content="/arenafight/equipe-zaut.webp">
+<meta name="theme-color" content="#0a0a0b">
+<link rel="icon" href="/arenafight/daniel-junior-selo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0a0b;--bg2:#121214;--card:#17171a;--line:rgba(255,255,255,.09);--red:#e10600;--red2:#ff2a1f;--ink:#f5f5f4;--muted:#a3a3a8;--steel:#cfd0d6;--wa:#25d366}
+html{scroll-behavior:smooth;background:var(--bg)}
+body{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+.wrap{width:min(1160px,100% - 40px);margin:0 auto}
+.dsp{font-family:'Bebas Neue',Impact,sans-serif;font-weight:400;letter-spacing:.01em;line-height:.92}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-size:12px;font-weight:800;letter-spacing:.24em;text-transform:uppercase;color:var(--red2)}
+.eyebrow:before{content:"";width:26px;height:2px;background:var(--red)}
+h2.dsp{font-size:clamp(46px,8vw,86px);margin-top:12px}
+h2 .r{color:var(--red2)}
+.lead{color:var(--muted);font-size:16.5px;line-height:1.65;max-width:560px;margin-top:14px}
+section{padding:96px 0 0}
+
+/* botões */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;font-weight:800;font-size:15px;letter-spacing:.02em;padding:16px 22px;border-radius:12px;transition:transform .2s,box-shadow .2s,background .2s;cursor:pointer;border:0}
+.btn:active{transform:scale(.97)}
+.btn.red{background:var(--red);color:#fff;box-shadow:0 14px 34px -12px rgba(225,6,0,.8)}
+.btn.red:hover{background:var(--red2)}
+.btn.ghost{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:#fff;backdrop-filter:blur(10px)}
+.btn svg{flex:none}
+
+/* topo */
+.nav{position:fixed;top:0;left:0;right:0;z-index:30;transition:background .3s,box-shadow .3s}
+.nav.s{background:rgba(10,10,11,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 1px 0 var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;height:72px;gap:16px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{height:40px;width:auto}
+.brand b{font-family:'Bebas Neue';font-weight:400;font-size:24px;letter-spacing:.04em;line-height:1}
+.brand small{display:block;font-size:10.5px;color:var(--muted);letter-spacing:.18em;font-weight:700}
+.nav ul{display:flex;gap:26px;list-style:none;font-size:14px;font-weight:600;color:#d6d6d9}
+.nav ul a:hover{color:#fff}
+.nav .btn{padding:11px 16px;font-size:13.5px}
+@media (max-width:860px){.nav ul{display:none}.brand b{font-size:20px}.brand small{display:none}.brand img{height:30px}}
+@media (max-width:380px){.brand span{display:none}}
+
+.hero{position:relative;min-height:100svh;display:flex;align-items:flex-end;overflow:hidden;padding:120px 0 64px}
+.hero .bg{position:absolute;inset:0}
+.hero .bg img{width:100%;height:100%;object-fit:cover;object-position:60% 40%;filter:grayscale(.25) contrast(1.1);transform:scale(1.08);animation:zoom 20s ease-in-out infinite alternate}
+@keyframes zoom{to{transform:scale(1.18) translate(-1.5%,-1%)}}
+.hero .bg:after{content:"";position:absolute;inset:0;background:radial-gradient(90% 70% at 85% 10%,rgba(225,6,0,.35),transparent 60%),linear-gradient(180deg,rgba(10,10,11,.55) 0%,rgba(10,10,11,.35) 35%,rgba(10,10,11,.92) 78%,var(--bg) 100%)}
+.hero .wrap{position:relative;z-index:2}
+.hero .selo{width:92px;height:92px;margin-bottom:22px;filter:drop-shadow(0 10px 30px rgba(225,6,0,.45));animation:pop .9s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes pop{from{opacity:0;transform:scale(.6) rotate(-20deg)}}
+.hero h1{font-size:clamp(70px,15vw,168px)}
+.hero h1 span{display:block;overflow:hidden}
+.hero h1 span i{display:block;font-style:normal;animation:up .9s cubic-bezier(.2,.8,.2,1) both}
+.hero h1 span:nth-child(2) i{animation-delay:.12s;color:var(--red2)}
+.hero h1 span:nth-child(3) i{animation-delay:.24s;-webkit-text-stroke:2px #fff;color:transparent}
+@keyframes up{from{transform:translateY(105%)}}
+.hero p{color:#dcdcdf;font-size:clamp(16px,2.2vw,19px);line-height:1.6;max-width:520px;margin-top:20px;animation:fade 1s .4s both}
+@keyframes fade{from{opacity:0;transform:translateY(14px)}}
+.hero .ctas{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px;animation:fade 1s .55s both}
+.chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:34px;animation:fade 1s .7s both}
+.chips span{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;padding:9px 14px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(8px)}
+.chips span b{color:var(--red2)}
+
+/* faixa */
+.band{background:var(--red);transform:rotate(-2deg);margin:0 -20px;padding:14px 0;overflow:hidden;box-shadow:0 20px 50px -20px rgba(225,6,0,.6)}
+.band div{display:flex;gap:42px;width:max-content;animation:mq 28s linear infinite;font-family:'Bebas Neue';font-size:34px;letter-spacing:.05em;white-space:nowrap}
+.band div span:after{content:"✦";margin-left:42px;font-size:22px;vertical-align:4px}
+@keyframes mq{to{transform:translateX(-50%)}}
+
+/* benefícios */
+.ben{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:40px}
+.ben div{position:relative;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px 22px;overflow:hidden;transition:transform .3s,border-color .3s}
+.ben div:hover{transform:translateY(-4px);border-color:rgba(225,6,0,.5)}
+.ben div:before{content:"";position:absolute;right:-30px;top:-30px;width:110px;height:110px;border-radius:50%;background:radial-gradient(circle,rgba(225,6,0,.35),transparent 70%)}
+.ben svg{width:38px;height:38px;color:var(--red2)}
+.ben b{display:block;font-family:'Bebas Neue';font-weight:400;font-size:30px;letter-spacing:.03em;margin-top:18px}
+.ben p{color:var(--muted);font-size:14px;line-height:1.55;margin-top:6px}
+@media (max-width:860px){.ben{grid-template-columns:1fr 1fr}}
+
+/* modalidades */
+.mods{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px}
+.mod{position:relative;border-radius:24px;overflow:hidden;min-height:440px;display:flex;align-items:flex-end;isolation:isolate}
+.mod img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2;transition:transform .8s cubic-bezier(.2,.8,.2,1)}
+.mod:hover img{transform:scale(1.06)}
+.mod:after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,transparent 30%,rgba(10,10,11,.95))}
+.mod div{padding:28px}
+.mod h3{font-size:62px}
+.mod p{color:#d4d4d8;font-size:15px;line-height:1.55;margin-top:6px;max-width:420px}
+.mod .tag{display:inline-block;margin-bottom:12px;background:var(--red);font-size:11px;font-weight:800;letter-spacing:.16em;padding:6px 10px;border-radius:6px;text-transform:uppercase}
+@media (max-width:760px){.mods{grid-template-columns:1fr}.mod{min-height:360px}}
+
+/* horários */
+.tabs{display:inline-flex;gap:4px;padding:5px;border-radius:14px;background:var(--card);border:1px solid var(--line);margin-top:30px}
+.tabs button{border:0;background:none;color:var(--muted);font:700 14px Inter,sans-serif;padding:12px 18px;border-radius:10px;cursor:pointer;transition:background .25s,color .25s}
+.tabs button[aria-selected=true]{background:var(--red);color:#fff}
+.now{display:flex;align-items:center;gap:12px;margin-top:20px;padding:16px 18px;border-radius:16px;background:linear-gradient(90deg,rgba(225,6,0,.18),rgba(225,6,0,.04));border:1px solid rgba(225,6,0,.35);font-size:15px}
+.now i{flex:none;width:10px;height:10px;border-radius:50%;background:var(--red2);box-shadow:0 0 0 0 rgba(255,42,31,.7);animation:ping 1.8s infinite}
+@keyframes ping{70%{box-shadow:0 0 0 12px rgba(255,42,31,0)}100%{box-shadow:0 0 0 0 rgba(255,42,31,0)}}
+.now b{color:#fff}
+.pane{margin-top:20px}
+.pane[hidden]{display:none}
+.days{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.days span{font-size:12.5px;font-weight:800;letter-spacing:.06em;padding:8px 12px;border-radius:8px;background:var(--card);border:1px solid var(--line);color:var(--muted)}
+.days span.on{background:#fff;color:#0a0a0b;border-color:#fff}
+.locs{display:grid;grid-template-columns:1.3fr 1fr;gap:14px}
+.loc{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px}
+.loc h3{font-size:34px}
+.loc small{display:block;color:var(--muted);font-size:13px;margin-top:4px}
+.slots{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.slot{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:96px;padding:14px 16px;border-radius:14px;background:var(--bg2);border:1px solid var(--line);transition:border-color .2s,transform .2s,background .2s}
+.slot:hover{border-color:var(--red);transform:translateY(-2px)}
+.slot b{font-family:'Bebas Neue';font-weight:400;font-size:34px;line-height:1}
+.slot span{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+.slot.next{background:var(--red);border-color:var(--red)}
+.slot.next span{color:#ffd7d4}
+.warn{display:flex;gap:10px;align-items:center;margin-top:16px;font-size:13.5px;font-weight:700;color:#ffd1ce}
+@media (max-width:760px){.locs{grid-template-columns:1fr}}
+
+/* personal */
+.pf{display:grid;grid-template-columns:1.05fr 1fr;gap:16px}
+.pf .card{background:linear-gradient(160deg,#1c0b0b,#120b0b 40%,var(--card));border:1px solid rgba(225,6,0,.3);border-radius:24px;padding:28px}
+.feat{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+.feat span{display:flex;gap:10px;align-items:center;font-size:14px;font-weight:700;padding:14px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.feat span:before{content:"";flex:none;width:8px;height:8px;border-radius:2px;background:var(--red2);transform:rotate(45deg)}
+.feat span.w{grid-column:1/-1}
+.price{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:22px}
+.price small{color:var(--muted);font-size:14px;font-weight:600}
+.price b{font-family:'Bebas Neue';font-weight:400;font-size:58px;line-height:1;color:#fff}
+.price b em{font-style:normal;font-size:30px;color:var(--red2)}
+.turnos{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
+.turno{background:var(--bg2);border:1px solid var(--line);border-radius:18px;padding:18px}
+.turno h4{font-size:12px;letter-spacing:.18em;color:var(--muted);font-weight:800}
+.turno ul{list-style:none;margin-top:10px;display:grid;gap:6px}
+.turno li{font-family:'Bebas Neue';font-size:30px;line-height:1}
+@media (max-width:860px){.pf{grid-template-columns:1fr}}
+
+/* professor */
+.prof{display:grid;grid-template-columns:.85fr 1.15fr;gap:40px;align-items:center}
+.ph{position:relative}
+.ph img.p{width:100%;aspect-ratio:3.2/4;object-fit:cover;object-position:50% 30%;border-radius:26px;box-shadow:0 40px 80px -30px rgba(0,0,0,.8)}
+.ph:before{content:"";position:absolute;inset:18px -18px -18px 18px;border:2px solid var(--red);border-radius:26px;z-index:-1}
+.ph .s{position:absolute;right:-16px;bottom:-16px;width:120px;height:120px;filter:drop-shadow(0 10px 30px rgba(0,0,0,.6));animation:spin 30s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.prof h2 small{display:block;font-family:Inter;font-size:14px;font-weight:700;letter-spacing:.2em;color:var(--muted);margin-top:10px}
+.tl{list-style:none;margin-top:24px;display:grid;gap:10px}
+.tl li{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-size:15px;line-height:1.45}
+.tl li b{flex:none;min-width:66px;font-family:'Bebas Neue';font-weight:400;font-size:22px;color:var(--red2);line-height:1.15}
+@media (max-width:860px){.prof{grid-template-columns:1fr}.ph{max-width:420px;margin:0 auto 10px}}
+
+.mosaic{display:grid;grid-auto-flow:dense;grid-template-columns:repeat(4,1fr);grid-auto-rows:150px;gap:10px;margin-top:40px}
+.mosaic button{border:0;padding:0;border-radius:16px;overflow:hidden;cursor:zoom-in;background:var(--card)}
+.mosaic img{width:100%;height:100%;object-fit:cover;transition:transform .6s}
+.mosaic button:hover img{transform:scale(1.07)}
+.mosaic .t2{grid-row:span 2}.mosaic .w2{grid-column:span 2}
+@media (max-width:760px){.mosaic{grid-template-columns:1fr 1fr;grid-auto-rows:130px}}
+
+/* turmas */
+.years{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin-top:30px;padding-bottom:4px}
+.years::-webkit-scrollbar{display:none}
+.years button{flex:none;border:1px solid var(--line);background:var(--card);color:var(--muted);font-family:'Bebas Neue';font-size:26px;padding:8px 18px;border-radius:12px;cursor:pointer;transition:all .25s}
+.years button.on{background:var(--red);border-color:var(--red);color:#fff}
+.stage{position:relative;margin:16px auto 0;max-width:900px;border-radius:24px;overflow:hidden;aspect-ratio:16/9;background:var(--card)}
+.stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transform:scale(1.04);transition:opacity .6s,transform 1.2s}
+.stage img.on{opacity:1;transform:none}
+.stage .cap{position:absolute;left:0;right:0;bottom:0;padding:60px 22px 18px;background:linear-gradient(transparent,rgba(0,0,0,.85));display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.stage .cap b{font-family:'Bebas Neue';font-weight:400;font-size:56px;line-height:.9}
+.stage .cap span{font-size:13px;color:#ddd;text-align:right}
+.count{max-width:900px;margin-left:auto;margin-right:auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:16px}
+.count div{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}
+.count b{display:block;font-family:'Bebas Neue';font-weight:400;font-size:48px;line-height:1;color:#fff}
+.count span{font-size:13px;color:var(--muted)}
+
+/* parceiro + contato */
+.partner{position:relative;overflow:hidden;border-radius:28px;padding:44px 32px;background:var(--red);display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap}
+.partner:after{content:"";position:absolute;right:-60px;top:-60px;width:320px;height:320px;background:url(/arenafight/daniel-junior-selo.png) center/contain no-repeat;opacity:.12;transform:rotate(-12deg)}
+.partner h2{font-size:clamp(44px,7vw,72px);margin:0}
+.partner p{max-width:520px;margin-top:8px;color:#ffe3e1;font-size:15.5px;line-height:1.6}
+.partner .btn{background:#0a0a0b;color:#fff;position:relative;z-index:1}
+.contact{display:grid;grid-template-columns:1fr 1.1fr;gap:16px;margin-top:40px}
+.cards{display:grid;gap:10px}
+.ci{display:flex;gap:16px;align-items:center;padding:18px;border-radius:18px;background:var(--card);border:1px solid var(--line);transition:border-color .2s}
+.ci:hover{border-color:rgba(225,6,0,.5)}
+.ci .ic{flex:none;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;background:rgba(225,6,0,.14);color:var(--red2)}
+.ci b{display:block;font-size:15.5px}
+.ci small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.map{position:relative;border-radius:22px;overflow:hidden;border:1px solid var(--line);background:#f7e04a}
+.map img{width:100%;height:100%;object-fit:cover}
+.map a{position:absolute;left:14px;right:14px;bottom:14px}
+@media (max-width:860px){.contact{grid-template-columns:1fr}}
+
+footer{margin-top:90px;padding:40px 0 120px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+footer .wrap{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+footer img{height:34px}
+
+.fab{position:fixed;right:18px;bottom:18px;z-index:40;width:62px;height:62px;border-radius:50%;background:var(--wa);display:grid;place-items:center;color:#fff;box-shadow:0 14px 34px -8px rgba(37,211,102,.7);animation:wa 2.6s infinite}
+@keyframes wa{0%{box-shadow:0 0 0 0 rgba(37,211,102,.5)}70%{box-shadow:0 0 0 16px rgba(37,211,102,0)}100%{box-shadow:0 0 0 0 rgba(37,211,102,0)}}
+
+.lb{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:20px}
+.lb.on{display:flex}
+.lb img{max-height:88vh;border-radius:14px}
+.lb button{position:absolute;top:16px;right:16px;width:46px;height:46px;border-radius:50%;border:0;background:#fff;font-size:22px;cursor:pointer}
+
+.rv{opacity:0;transform:translateY(26px);transition:opacity .8s,transform .8s cubic-bezier(.2,.8,.2,1)}
+.rv.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<header class="nav" id="nav"><div class="wrap">
+  <a class="brand" href="#topo"><img src="/arenafight/asas.png" alt="Arena Fight"><span><b>CT ARENA FIGHT</b><small>DANIEL JUNIOR MUAY THAI</small></span></a>
+  <ul><li><a href="#modalidades">Modalidades</a></li><li><a href="#horarios">Horários</a></li><li><a href="#personal">Personal Fight</a></li><li><a href="#professor">Professor</a></li><li><a href="#contato">Contato</a></li></ul>
+  <a class="btn red" data-wa="exp" href="#">Aula experimental</a>
+</div></header>
+
+<section class="hero" id="topo">
+  <div class="bg"><img src="/arenafight/equipe-zaut.webp" alt="Alunos do CT Arena Fight"></div>
+  <div class="wrap">
+    <img class="selo" src="/arenafight/daniel-junior-selo.png" alt="Daniel Junior Muay Thai">
+    <h1 class="dsp"><span><i>Encontre</i></span><span><i>sua melhor</i></span><span><i>versão</i></span></h1>
+    <p>As artes marciais conectam você com sua melhor versão de uma maneira única. Não importa o tamanho do desafio: você só precisa dar o <b>primeiro passo</b>.</p>
+    <div class="ctas">
+      <a class="btn red" data-wa="exp" href="#"><svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.2 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .6l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l2 1c.3.1.5.2.5.3.1.2.1.8-.2 1.4Z"/></svg>Agendar aula experimental</a>
+      <a class="btn ghost" href="#horarios">Ver horários</a>
+    </div>
+    <div class="chips"><span><b>●</b> Muay Thai &amp; Boxe</span><span>Turmas desde <b>2017</b></span><span>Professor <b>grau preto</b></span><span>Quixadá · CE</span></div>
+  </div>
+</section>
+
+<div style="overflow:hidden;padding:30px 0 10px"><div class="band" aria-hidden="true"><div><span>Muay Thai</span><span>Boxe</span><span>Defesa pessoal</span><span>Perda de peso</span><span>Autoestima</span><span>Resistência</span><span>#TransformeSe</span><span>Muay Thai</span><span>Boxe</span><span>Defesa pessoal</span><span>Perda de peso</span><span>Autoestima</span><span>Resistência</span><span>#TransformeSe</span></div></div></div>
+
+<section id="beneficios"><div class="wrap">
+  <p class="eyebrow rv">Benefícios</p>
+  <h2 class="dsp rv">Transforme-se <span class="r">por inteiro</span></h2>
+  <div class="ben">
+    <div class="rv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3Z"/><path d="M9 12l2 2 4-4"/></svg><b>Defesa pessoal</b><p>Técnica e confiança para se proteger no dia a dia.</p></div>
+    <div class="rv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 2c1 3 4 4.5 4 8.5a4 4 0 0 1-8 0C8 8 10 7 10 5"/><path d="M6 14a6 6 0 0 0 12 0"/></svg><b>Perda de peso</b><p>Treino intenso que queima calorias e condiciona o corpo.</p></div>
+    <div class="rv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01"/></svg><b>Autoestima</b><p>Cada treino vencido é uma conquista que você leva para a vida.</p></div>
+    <div class="rv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg><b>Resistência</b><p>Mais fôlego, força e disciplina a cada semana.</p></div>
+  </div>
+</div></section>
+
+<section id="modalidades"><div class="wrap">
+  <p class="eyebrow rv">Nossas modalidades</p>
+  <h2 class="dsp rv">Escolha sua <span class="r">luta</span></h2>
+  <div class="mods">
+    <a class="mod rv" data-wa="muay" href="#"><img src="/arenafight/muaythai.webp" alt="Turma de Muay Thai" loading="lazy"><div><span class="tag">Turmas + particular</span><h3 class="dsp">Muay Thai</h3><p>A arte das oito armas: socos, chutes, joelhadas e cotoveladas, com a escola de quem treinou na Tailândia.</p></div></a>
+    <a class="mod rv" data-wa="boxe" href="#"><img src="/arenafight/boxe.webp" alt="Treino de Boxe" loading="lazy"><div><span class="tag">Aulas particulares</span><h3 class="dsp">Boxe</h3><p>Base, esquiva, combinações e muito condicionamento, com o campeão do TNC de Boxe.</p></div></a>
+  </div>
+</div></section>
+
+<section id="horarios"><div class="wrap">
+  <p class="eyebrow rv">Horários</p>
+  <h2 class="dsp rv">Treine no seu <span class="r">horário</span></h2>
+  <div class="tabs rv" role="tablist"><button role="tab" aria-selected="true" data-t="0">Turmas</button><button role="tab" aria-selected="false" data-t="1">Personal Fight</button></div>
+  <div class="now rv" id="now"><i></i><span id="nowTxt">Carregando a próxima aula…</span></div>
+
+  <div class="pane" data-p="0">
+    <div class="days" id="days"><span data-d="1">SEG</span><span data-d="2">TER</span><span data-d="3">QUA</span><span data-d="4">QUI</span></div>
+    <div class="locs">
+      <div class="loc rv"><h3 class="dsp">Muay Thai · CT Arena Fight</h3><small>Segunda a quinta · toque no horário para agendar</small><div class="slots" data-loc="CT Arena Fight" data-h="6,11,17,18,19"></div></div>
+      <div class="loc rv"><h3 class="dsp">Muay Thai · Zaut</h3><small>Segunda a quinta · na Zaut Arena</small><div class="slots" data-loc="Zaut" data-h="8,16"></div></div>
+    </div>
+    <p class="warn">⚠ Todas as aulas precisam de agendamento.</p>
+  </div>
+
+  <div class="pane" data-p="1" hidden>
+    <div class="locs">
+      <div class="loc"><h3 class="dsp">Horários do Personal</h3><small>Segunda a sexta · toque para agendar</small><div class="slots" data-loc="Personal Fight" data-h="6,7,9,10,12,14,15,20,21"></div></div>
+      <div class="loc"><h3 class="dsp">Como funciona</h3><small>Treino individual ou em grupo de até 6 pessoas, com local e horário exclusivos.</small><a class="btn red" style="margin-top:18px" href="#personal">Conhecer o Personal Fight</a></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="personal"><div class="wrap">
+  <p class="eyebrow rv">Aulas particulares de Muay Thai ou Boxe</p>
+  <h2 class="dsp rv">Personal <span class="r">Fight</span></h2>
+  <div class="pf" style="margin-top:34px">
+    <div class="card rv">
+      <p class="lead" style="margin-top:0;color:#e4e4e7">Treino feito para você, com atenção total do professor, no seu ritmo e no seu objetivo.</p>
+      <div class="feat"><span>Treino personalizado</span><span>Local exclusivo</span><span>Horário exclusivo</span><span>Segunda a sexta</span><span class="w">Individual ou em grupo de até 6 pessoas</span></div>
+      <div class="price"><small>Planos a partir de</small><b><em>R$</em> 99,90</b></div>
+      <a class="btn red" data-wa="personal" href="#" style="margin-top:20px;width:100%">Quero meu Personal Fight</a>
+    </div>
+    <div class="rv">
+      <div class="turnos">
+        <div class="turno"><h4>MANHÃ</h4><ul><li>06h00</li><li>07h00</li><li>09h00</li><li>10h00</li></ul></div>
+        <div class="turno"><h4>TARDE</h4><ul><li>12h00</li><li>14h00</li><li>15h00</li></ul></div>
+        <div class="turno"><h4>NOITE</h4><ul><li>20h00</li><li>21h00</li></ul></div>
+      </div>
+      <div class="mod" style="min-height:250px;margin-top:10px"><img src="/arenafight/conq-cinturao.webp" alt="Daniel Junior com cinturão" loading="lazy" style="object-position:50% 25%"><div><span class="tag">Com o próprio campeão</span><p style="font-weight:700;color:#fff">Aula com o professor Daniel Junior, grau preto de Muay Thai.</p></div></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="professor"><div class="wrap">
+  <div class="prof">
+    <div class="ph rv"><img class="p" src="/arenafight/daniel.webp" alt="Daniel Junior com suas medalhas" loading="lazy"><img class="s" src="/arenafight/daniel-junior-selo.png" alt=""></div>
+    <div>
+      <p class="eyebrow rv">Seu professor</p>
+      <h2 class="dsp rv">Daniel <span class="r">Junior</span><small>INSTRUTOR E ATLETA DE MUAY THAI</small></h2>
+      <ul class="tl">
+        <li class="rv"><b>Grau</b>Grau preto de Muay Thai · proprietário do CT Arena Fight</li>
+        <li class="rv"><b>2021–23</b>Tricampeão Cearense e atual dono do cinturão do Campeonato Cearense do GP 85 kg</li>
+        <li class="rv"><b>2022</b>Campeão Norte e Nordeste</li>
+        <li class="rv"><b>2023</b>Campeão Brasileiro</li>
+        <li class="rv"><b>2023·24</b>Vice-campeão mundial</li>
+        <li class="rv"><b>🇹🇭</b>Uma temporada de treinos na Tailândia</li>
+        <li class="rv"><b>Boxe</b>Campeão do TNC de Boxe</li>
+      </ul>
+      <a class="btn red rv" data-wa="exp" href="#" style="margin-top:22px">Treinar com o Daniel</a>
+    </div>
+  </div>
+  <div class="mosaic">
+    <button class="w2 rv"><img src="/arenafight/conq-wbc.webp" alt="WBC Amazing Muay Thai 2023" loading="lazy"></button>
+    <button class="t2 rv"><img src="/arenafight/conq-cinturao.webp" alt="Cinturão no ringue" loading="lazy"></button>
+    <button class="t2 rv"><img src="/arenafight/conq-2.webp" alt="Pódio WBC" loading="lazy"></button>
+    <button class="rv"><img src="/arenafight/conq-brasileiro.webp" alt="Campeonato Brasileiro" loading="lazy"></button>
+    <button class="rv"><img src="/arenafight/conq-3.webp" alt="Cinturão" loading="lazy"></button>
+    <button class="w2 rv"><img src="/arenafight/conq-tailandia.webp" alt="Tailândia" loading="lazy"></button>
+  </div>
+</div></section>
+
+<section id="turmas"><div class="wrap">
+  <p class="eyebrow rv">Nossa história</p>
+  <h2 class="dsp rv">Conheça nossas <span class="r">turmas</span></h2>
+  <p class="lead rv">Uma família que cresce todo ano. Toque nos anos e veja a evolução.</p>
+  <div class="years rv" id="years"></div>
+  <div class="stage rv" id="stage"><div class="cap"><b id="capY"></b><span id="capT"></span></div></div>
+  <div class="count rv"><div><b>2017</b><span>primeira turma registrada</span></div><div><b>2</b><span>modalidades: Muay Thai e Boxe</span></div><div><b>2</b><span>exames de grau em 2022 e 2023</span></div></div>
+</div></section>
+
+<section id="parceiros"><div class="wrap">
+  <div class="partner rv">
+    <div style="position:relative;z-index:1"><h2 class="dsp">Seja um parceiro</h2><p>Sua marca junto com quem treina, compete e representa Quixadá dentro e fora do ringue.</p></div>
+    <a class="btn" data-wa="parceiro" href="#">Quero patrocinar</a>
+  </div>
+</div></section>
+
+<section id="contato"><div class="wrap">
+  <p class="eyebrow rv">Fale conosco</p>
+  <h2 class="dsp rv">Bora <span class="r">treinar?</span></h2>
+  <div class="contact">
+    <div class="cards">
+      <a class="ci rv" data-wa="exp" href="#"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.2 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .6l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l2 1c.3.1.5.2.5.3.1.2.1.8-.2 1.4Z"/></svg></span><span><b>WhatsApp</b><small>(88) 9 8839-9482</small></span></a>
+      <a class="ci rv" id="mapsLink" href="#" target="_blank" rel="noopener"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z"/></svg></span><span><b>Rua Francisco Enéas de Lima, nº 1482</b><small>Centro · Quixadá/CE · toque para abrir no mapa</small></span></a>
+      <a class="ci rv" href="https://www.instagram.com/ctarenaf/" target="_blank" rel="noopener"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg></span><span><b>@ctarenaf</b><small>Instagram do CT</small></span></a>
+      <a class="ci rv" href="https://www.instagram.com/danieljunircrf/" target="_blank" rel="noopener"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg></span><span><b>@danieljunircrf</b><small>Instagram do professor</small></span></a>
+    </div>
+    <div class="map rv"><img src="/arenafight/mapa.webp" alt="Mapa: veja como chegar no novo endereço do CT Arena Fight" loading="lazy"><a class="btn red" id="mapsBtn" href="#" target="_blank" rel="noopener">Abrir no Google Maps ↗</a></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <img src="/arenafight/asas.png" alt="Arena Fight">
+  <span>© <span id="yr"></span> CT Arena Fight · Daniel Junior Muay Thai · Quixadá/CE</span>
+  <span style="opacity:.7">Site por <a href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener" style="color:#fff">PáginasPro</a></span>
+</div></footer>
+
+<a class="fab" data-wa="exp" href="#" aria-label="Falar no WhatsApp"><svg width="30" height="30" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.2 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .6l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l2 1c.3.1.5.2.5.3.1.2.1.8-.2 1.4Z"/></svg></a>
+
+<div class="lb" id="lb"><img alt=""><button aria-label="Fechar">✕</button></div>
+
+<script>
+(function(){
+var WA='5588988399482';
+var MSG={
+  exp:'Olá! Vim pelo site e quero agendar uma aula experimental no CT Arena Fight.',
+  muay:'Olá! Vim pelo site e quero saber sobre as aulas de Muay Thai.',
+  boxe:'Olá! Vim pelo site e quero saber sobre as aulas de Boxe.',
+  personal:'Olá! Vim pelo site e quero saber sobre o Personal Fight (aulas particulares).',
+  parceiro:'Olá! Vim pelo site e quero ser parceiro/patrocinador do CT Arena Fight.'
+};
+function wa(t){return 'https://wa.me/'+WA+'?text='+encodeURIComponent(t)}
+document.querySelectorAll('[data-wa]').forEach(function(a){a.href=wa(MSG[a.dataset.wa]);a.target='_blank';a.rel='noopener'});
+var MAPS='https://www.google.com/maps/search/?api=1&query='+encodeURIComponent('CT Arena Fight, Rua Francisco Enéas de Lima, 1482, Centro, Quixadá - CE');
+document.getElementById('mapsLink').href=MAPS;document.getElementById('mapsBtn').href=MAPS;
+document.getElementById('yr').textContent=new Date().getFullYear();
+
+// topo muda ao rolar
+var nav=document.getElementById('nav');addEventListener('scroll',function(){nav.classList.toggle('s',scrollY>40)},{passive:true});
+
+// hora de Quixadá (UTC-3)
+function local(){var d=new Date(Date.now()-3*3600e3);return {dow:d.getUTCDay(),h:d.getUTCHours(),m:d.getUTCMinutes()}}
+var DN=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+function hh(h){return (h<10?'0':'')+h+'h'}
+
+// horários em botões
+function nextFor(hours,days){var t=local();for(var k=0;k<8;k++){var d=(t.dow+k)%7;if(days.indexOf(d)<0)continue;for(var i=0;i<hours.length;i++){if(k===0&&(hours[i]<t.h||(hours[i]===t.h&&t.m>0)))continue;return {k:k,d:d,h:hours[i]}}}return null}
+document.querySelectorAll('.slots').forEach(function(box){
+  var hours=box.dataset.h.split(',').map(Number),loc=box.dataset.loc,personal=loc==='Personal Fight';
+  var days=personal?[1,2,3,4,5]:[1,2,3,4];var nx=nextFor(hours,days);
+  hours.forEach(function(h){var a=document.createElement('a');a.className='slot'+(nx&&nx.h===h?' next':'');
+    var lbl=h<12?'MANHÃ':h<18?'TARDE':'NOITE';if(nx&&nx.h===h)lbl=nx.k===0?'PRÓXIMA · HOJE':nx.k===1?'PRÓXIMA · AMANHÃ':'PRÓXIMA · '+DN[nx.d].toUpperCase();
+    a.innerHTML='<b>'+hh(h)+'</b><span>'+lbl+'</span>';
+    var txt=personal?'Olá! Vim pelo site e quero agendar um Personal Fight às '+hh(h)+'.':'Olá! Vim pelo site e quero agendar a aula de Muay Thai das '+hh(h)+' ('+loc+').';
+    a.href=wa(txt);a.target='_blank';a.rel='noopener';box.appendChild(a)});
+});
+// dia de hoje e próxima turma
+var t=local();document.querySelectorAll('#days span').forEach(function(s){s.classList.toggle('on',+s.dataset.d===t.dow)});
+var all=[6,8,11,16,17,18,19],nx=nextFor(all,[1,2,3,4]);
+if(nx){var where=(nx.h===8||nx.h===16)?'na Zaut':'no CT Arena Fight';var when=nx.k===0?'hoje':nx.k===1?'amanhã':DN[nx.d];
+document.getElementById('nowTxt').innerHTML='Próxima turma: <b>'+when+' às '+hh(nx.h)+'</b> '+where+'. Agende antes pelo WhatsApp.'}
+
+// abas
+var tabs=document.querySelectorAll('.tabs button');tabs.forEach(function(b){b.addEventListener('click',function(){tabs.forEach(function(x){x.setAttribute('aria-selected',x===b)});
+document.querySelectorAll('.pane').forEach(function(p){p.hidden=p.dataset.p!==b.dataset.t});document.getElementById('now').style.display=b.dataset.t==='0'?'':'none'})});
+
+// turmas por ano
+var Y=[['2017','turma-2017','Turma de 2017'],['2018','turma-2018','Turma de 2018'],['2019','turma-2019','Turma de 2019'],['2020','turma-2020','Turma de 2020'],['2021','turma-2021','Turma de 2021'],['2022','turma-2022','Turma de 2022'],['2023 · 1','turma-2023a','Turma de 2023'],['2023 · 2','turma-2023b','Turma de 2023'],['Grau 2022 · 1','grau-2022a','Exame de grau 2022'],['Grau 2022 · 2','grau-2022b','Exame de grau 2022'],['Grau 2023 · 1','grau-2023a','Exame de grau 2023'],['Grau 2023 · 2','grau-2023b','Exame de grau 2023'],['2024','turma-2024','Turma de 2024 · Zaut Arena'],['2024/25 · 1','turma-2024a','Turmas de 2024 e 2025'],['2024/25 · 2','turma-2025','Turmas de 2024 e 2025']];
+var yb=document.getElementById('years'),st=document.getElementById('stage'),imgs=[],cur=0,hold=0;
+Y.forEach(function(y,i){var b=document.createElement('button');b.textContent=y[0].trim();b.onclick=function(){hold=Date.now();show(i)};yb.appendChild(b);
+var im=document.createElement('img');im.src='/arenafight/'+y[1]+'.webp';im.alt=y[2];im.loading='lazy';st.insertBefore(im,st.firstChild);imgs.push(im)});
+function show(i){cur=i;imgs.forEach(function(im,k){im.classList.toggle('on',k===i)});[].forEach.call(yb.children,function(b,k){b.classList.toggle('on',k===i)});
+var b=yb.children[i];yb.scrollTo({left:b.offsetLeft-yb.clientWidth/2+b.clientWidth/2,behavior:'smooth'});
+document.getElementById('capY').textContent=Y[i][0].trim();document.getElementById('capT').textContent=Y[i][2]}
+show(0);setInterval(function(){if(Date.now()-hold>9000&&st.getBoundingClientRect().top<innerHeight)show((cur+1)%Y.length)},3800);
+
+// lightbox
+var lb=document.getElementById('lb');document.querySelectorAll('.mosaic button').forEach(function(b){b.onclick=function(){lb.querySelector('img').src=b.querySelector('img').src;lb.classList.add('on')}});
+lb.onclick=function(e){if(e.target!==lb.querySelector('img'))lb.classList.remove('on')};
+
+// aparecer ao rolar
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.12});
+document.querySelectorAll('.rv').forEach(function(el){io.observe(el)});
+})();
+</script>
+</body>
+</html>

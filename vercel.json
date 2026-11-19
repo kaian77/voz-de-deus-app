@@ -37,6 +37,10 @@
       "destination": "/bio/nutrimarinagusmao/index.html"
     },
     {
+      "source": "/arenafight",
+      "destination": "/arenafight.html"
+    },
+    {
       "source": "/ofs",
       "destination": "/ofs.html"
     },
