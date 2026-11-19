@@ -158,6 +158,37 @@ def duration(video):
         return 0.0
 
 
+VOD_HOSTS = re.compile(r"(twitch\.tv|kick\.com|youtube\.com|youtu\.be)", re.I)
+VOD_CHUNK = 1500  # live gravada: corta um pedaço de 25 min por rodada (maratona de horas não cabe de uma vez)
+
+
+def vod_duration(url):
+    out = subprocess.run(["yt-dlp", "--no-warnings", "--skip-download", "--print", "duration", url],
+                         capture_output=True, text=True, timeout=180).stdout.strip().splitlines()
+    try:
+        return float(out[0])
+    except (IndexError, ValueError):
+        return 0.0
+
+
+def vod_chunks(url, done_ids):
+    """Pedaços de 25 min da live gravada que ainda não viraram cortes (os mais recentes primeiro)."""
+    total = vod_duration(url)
+    if total <= 0:
+        raise RuntimeError("não consegui ler a live (link privado, apagado ou fora do ar?)")
+    starts = list(range(0, int(total), VOD_CHUNK))
+    return [(f"vod@{s0}", f"live {s0 // 60}-{min(total, s0 + VOD_CHUNK) // 60:.0f} min") for s0 in reversed(starts) if f"vod@{s0}" not in done_ids]
+
+
+def download_vod(url, fid, folder):
+    s0 = int(fid.split("@")[1])
+    out = os.path.join(folder, f"vod-{s0}.mp4")
+    subprocess.run(["yt-dlp", "--no-warnings", "-q", "-f", "best[height<=1080][ext=mp4]/best[height<=1080]/best",
+                    "--download-sections", f"*{s0}-{s0 + VOD_CHUNK}", "--force-keyframes-at-cuts",
+                    "--merge-output-format", "mp4", "-o", out, url], check=True, timeout=3000)
+    return out
+
+
 def download_direct(url, folder):
     out = os.path.join(folder, "video.mp4")
     req = urllib.request.Request(url, headers={"User-Agent": "BraxStudio/1.0"})
@@ -490,8 +521,11 @@ def process(source):
     patch_source(sid, status="processing", error=None)
     made = 0
     with tempfile.TemporaryDirectory() as work:
+        vod = bool(VOD_HOSTS.search(source["url"])) and "drive.google.com" not in source["url"]
         if "drive.google.com" in source["url"]:
             files = [f for f in drive_files(source["url"], work) if f[0] not in done_ids]
+        elif vod:  # live gravada (Twitch/Kick/YouTube) de campanha que libera os cortes
+            files = vod_chunks(source["url"], done_ids)[:1]
         else:
             files = [("direct", "video.mp4")] if "direct" not in done_ids else []
         if not files:
@@ -501,9 +535,10 @@ def process(source):
         edited = bool(source.get("edited"))  # campanha manda cortes prontos (curtos): cada um vira um corte nosso
         for fid, name in files[:6 if edited else 2]:  # vídeos novos por rodada (tempo do workflow)
             log(f"  baixando {name}…")
-            video = download(fid, name, work, source.get("mirror_url")) if fid != "direct" else download_direct(source["url"], work)
+            video = download_vod(source["url"], fid, work) if vod else \
+                download(fid, name, work, source.get("mirror_url")) if fid != "direct" else download_direct(source["url"], work)
             total = duration(video)
-            if total < 180 and len(files) > 1 and not edited:  # vinheta/teaser curto: não vale cortar se tem episódio
+            if total < 180 and len(files) > 1 and not edited and not vod:  # vinheta/teaser curto: não vale cortar se tem episódio
                 log(f"  {name} tem só {total:.0f}s, pulando")
                 drop(video)
                 continue
