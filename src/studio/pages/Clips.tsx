@@ -54,7 +54,7 @@ export default function Clips() {
         rules: r.rules || f.rules, url: r.url || f.url,
       }));
       if (r.only_link) toast.message("Peguei o link da pasta. Para o resto, cole também o texto das regras ou o link do briefing (Google Docs).");
-      else toast.success(r.url ? "Preenchido! Confira e clique em Começar." : "Preenchido! Falta o link da pasta do Drive.");
+      else toast.success(r.url ? "Preenchido! Confira e clique em Começar." : "Preenchido! Falta o link da pasta do Drive ou da live.");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -87,7 +87,7 @@ export default function Clips() {
 
   const add = async () => {
     if (!chosen) return toast.error("Escolha o canal de cortes");
-    if (!form.url.trim()) return toast.error("Cole o link da pasta do Drive da campanha");
+    if (!form.url.trim()) return toast.error("Cole o link da pasta do Drive ou da live gravada da campanha");
     setSending(true);
     try {
       const r = await api.invoke<{ started: boolean }>("ai", {
@@ -145,7 +145,7 @@ export default function Clips() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Link da pasta (ou do vídeo) no Google Drive</Label>
-              <Input value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://drive.google.com/drive/folders/…" />
+              <Input value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="Pasta do Drive ou live gravada (Twitch, Kick, YouTube)" />
             </div>
             {editing && (
               <div className="space-y-1.5">
