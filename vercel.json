@@ -41,6 +41,14 @@
       "destination": "/arenafight.html"
     },
     {
+      "source": "/drtino",
+      "destination": "/drtino/index.html"
+    },
+    {
+      "source": "/implante/:slug",
+      "destination": "/implante.html"
+    },
+    {
       "source": "/ofs",
       "destination": "/ofs.html"
     },
@@ -142,6 +150,15 @@
     },
     {
       "source": "/predio/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/implante/(.*)",
       "headers": [
         {
           "key": "X-Robots-Tag",

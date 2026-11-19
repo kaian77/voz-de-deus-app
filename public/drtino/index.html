@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dr. Tino · Dr. Neifre Pereira, DMD</title>
+<meta name="description" content="Dr. Neifre Pereira (Dr. Tino), DMD · Orlando, Florida · Tino Dental LAB LLC · Cursos de implante guiado.">
+<meta name="robots" content="noindex">
+<meta property="og:title" content="Dr. Tino · Dr. Neifre Pereira, DMD">
+<meta property="og:description" content="Orlando, Florida · Tino Dental LAB · Implante guiado en 3D">
+<meta property="og:image" content="/drtino/retrato.webp">
+<meta name="theme-color" content="#0b0a08">
+<link rel="icon" href="/drtino/tdl-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0b0a08;--card:#16130f;--card2:#1d1913;--line:rgba(228,199,123,.18);--gold:#e4c77b;--gold2:#c9a24d;--ink:#f4efe6;--muted:#a99f8e;--wa:#25d366}
+html{background:var(--bg)}
+body{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+.bgblur{position:fixed;inset:-60px;background:url(/drtino/retrato.webp) center 30%/cover;filter:blur(70px) brightness(.25) grayscale(1);pointer-events:none}
+.app{position:relative;width:min(480px,100%);margin:0 auto;background:var(--bg);min-height:100vh;box-shadow:0 0 0 1px var(--line);padding-bottom:110px}
+html:not([lang=en]) [data-en]{display:none!important}
+html[lang=en] [data-es]{display:none!important}
+.lng{position:absolute;top:14px;right:14px;z-index:5;border:1px solid rgba(228,199,123,.4);background:rgba(11,10,8,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:var(--ink);font:600 13px Inter,sans-serif;padding:9px 13px;border-radius:999px;cursor:pointer}
+
+.top{position:relative;height:min(76vh,620px);overflow:hidden}
+.top>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 22%;animation:kb 22s ease-in-out infinite alternate}
+@keyframes kb{from{transform:scale(1.02)}to{transform:scale(1.1)}}
+.top:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,10,8,.2),transparent 30%,transparent 50%,rgba(11,10,8,.85) 78%,var(--bg))}
+.brand{position:absolute;left:22px;right:22px;bottom:16px;z-index:2;animation:rise .9s cubic-bezier(.2,.8,.2,1) both}
+.brand small{display:block;font-size:11px;font-weight:700;letter-spacing:.24em;color:var(--gold);text-transform:uppercase}
+.brand h1{font-family:Cinzel,serif;font-weight:600;font-size:clamp(30px,8.5vw,40px);line-height:1.08;margin-top:8px;letter-spacing:.02em}
+.brand h1 svg{width:22px;height:22px;vertical-align:2px;margin-left:6px}
+.brand p{color:#d8cfbf;font-size:14.5px;margin-top:6px}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}}
+.line{height:1px;margin:0 22px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.5}
+
+.creds{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:18px 22px 0}
+.creds div{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 10px;text-align:center}
+.creds b{display:block;font-family:Cinzel,serif;font-size:19px;color:var(--gold)}
+.creds span{display:block;font-size:11px;color:var(--muted);margin-top:4px;line-height:1.35}
+
+.cta{display:flex;align-items:center;justify-content:center;gap:10px;margin:18px 22px 0;background:linear-gradient(135deg,#f0d99a,#c9a24d);color:#16110b;font-weight:800;font-size:16px;padding:17px 18px;border-radius:999px;animation:pulse 2.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(228,199,123,.4)}70%{box-shadow:0 0 0 15px rgba(228,199,123,0)}100%{box-shadow:0 0 0 0 rgba(228,199,123,0)}}
+.cta svg{flex:none}
+
+.sec{padding:38px 22px 0}
+.eb{font-size:11px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--gold)}
+.sec h2{font-family:Cinzel,serif;font-weight:600;font-size:26px;line-height:1.15;margin-top:8px}
+.sec p.d{color:var(--muted);font-size:14.5px;line-height:1.6;margin-top:8px}
+
+.d3{position:relative;display:block;margin-top:16px;border-radius:22px;overflow:hidden;border:1px solid rgba(228,199,123,.45);background:radial-gradient(120% 100% at 30% 20%,#2c2318,#120f0b);padding:22px;isolation:isolate}
+.d3:before{content:"";position:absolute;right:-30px;top:-20px;width:220px;height:220px;background:radial-gradient(circle,rgba(228,199,123,.25),transparent 65%);z-index:-1}
+.d3 .tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.18em;background:var(--gold);color:#16110b;padding:5px 9px;border-radius:6px}
+.d3 b{display:block;font-family:Cinzel,serif;font-size:23px;margin-top:12px;line-height:1.15}
+.d3 span{display:block;color:#d0c6b4;font-size:14px;line-height:1.5;margin-top:6px;max-width:300px}
+.d3 .go{display:inline-flex;align-items:center;gap:8px;margin-top:14px;font-weight:700;color:var(--gold)}
+.d3 svg.imp{position:absolute;right:16px;bottom:10px;width:92px;height:150px;opacity:.95;animation:spinY 4s linear infinite}
+@keyframes spinY{0%{transform:translateY(0)}50%{transform:translateY(-6px)}100%{transform:translateY(0)}}
+
+.lab{display:flex;gap:14px;align-items:center;margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px}
+.lab img{width:72px;height:72px;border-radius:50%;flex:none;box-shadow:0 0 0 1px rgba(228,199,123,.4)}
+.lab b{display:block;font-family:Cinzel,serif;font-size:17px}
+.lab small{display:block;color:var(--muted);font-size:13px;margin-top:3px;line-height:1.4}
+.wide{margin-top:10px;border-radius:20px;overflow:hidden;aspect-ratio:16/9}
+.wide img{width:100%;height:100%;object-fit:cover;filter:grayscale(.2)}
+
+.course{margin-top:16px;background:linear-gradient(160deg,#1f1810,var(--card));border:1px solid var(--line);border-radius:22px;overflow:hidden}
+.course .ph{aspect-ratio:16/10.5}
+.course .ph img{width:100%;height:100%;object-fit:cover}
+.course .in{padding:18px}
+.course .st{font-size:10.5px;font-weight:800;letter-spacing:.18em;color:var(--gold)}
+.course h3{font-family:Cinzel,serif;font-weight:600;font-size:19px;line-height:1.25;margin-top:6px}
+.course ul{list-style:none;margin-top:12px;display:grid;gap:8px;font-size:13.5px;color:#d6cdbd}
+.course li{display:flex;gap:10px}
+.course li i{font-style:normal;flex:none;width:20px;text-align:center}
+.btn2{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;border:1px solid rgba(228,199,123,.5);color:var(--gold);font-weight:700;font-size:14.5px;padding:14px;border-radius:999px}
+
+.car{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;margin:16px -22px 0;padding:0 22px;scrollbar-width:none}
+.car::-webkit-scrollbar{display:none}
+.car figure{flex:none;width:78%;scroll-snap-align:center;border-radius:18px;overflow:hidden;background:var(--card);border:1px solid var(--line)}
+.car img{width:100%;aspect-ratio:3/4;object-fit:cover}
+.car figcaption{padding:10px 12px;font-size:12.5px;color:#d0c6b4;line-height:1.4}
+.car figcaption b{display:block;color:var(--ink);font-size:13.5px}
+
+.guests{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.guests span{font-size:12.5px;padding:7px 12px;border-radius:999px;border:1px solid var(--line);color:#e9e1d2}
+
+.links{display:grid;gap:10px;padding:34px 22px 0}
+.lk{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:15px 16px;font-weight:600;font-size:15px}
+.lk svg{color:var(--gold);flex:none}
+.lk span{flex:1}
+.lk em{font-style:normal;color:var(--muted);font-size:22px}
+footer{padding:34px 22px 0;text-align:center;font-size:12px;color:var(--muted);line-height:1.7}
+footer a{color:var(--gold)}
+
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;justify-content:center;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,rgba(11,10,8,.94) 40%);transform:translateY(120%);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.dock.on{transform:none}
+.dock a{width:min(448px,100%);display:flex;align-items:center;justify-content:center;gap:10px;background:var(--wa);color:#08321a;font-weight:800;font-size:15.5px;padding:16px;border-radius:999px;box-shadow:0 12px 30px -8px rgba(37,211,102,.6)}
+.up{opacity:0;transform:translateY(18px);transition:opacity .7s,transform .7s cubic-bezier(.2,.8,.2,1)}
+.up.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.up{opacity:1;transform:none}}
+.wm{position:fixed;inset:0;z-index:40;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Ctext x='10' y='120' transform='rotate(-24 150 100)' font-family='Arial' font-size='26' font-weight='700' fill='%23ffffff' fill-opacity='.10'%3EVISTA PREVIA %C2%B7 PREVIEW%3C/text%3E%3C/svg%3E")}
+.pv{position:fixed;top:0;left:0;right:0;z-index:41;text-align:center;font:700 11px Inter,sans-serif;letter-spacing:.14em;color:#16110b;background:#e4c77b;padding:6px 10px}
+.lng{top:36px!important}
+.d3>b,.d3>span{padding-right:84px}
+</style>
+</head>
+<body>
+<div class="bgblur" aria-hidden="true"></div>
+<div class="wm" aria-hidden="true"></div>
+<div class="pv">VISTA PREVIA · PREVIEW · PáginasPro</div>
+<main class="app">
+<button class="lng" id="lng" type="button"><span data-es>🌐 English</span><span data-en>🌐 Español</span></button>
+
+<header class="top">
+  <img src="/drtino/retrato.webp" alt="Dr. Neifre Pereira (Dr. Tino)">
+  <div class="brand">
+    <small>Dentist · DMD · Orlando, Florida</small>
+    <h1>Dr. Neifre Pereira<svg viewBox="0 0 24 24" aria-label="verified"><path fill="#3897f0" d="M12 1.5l2.6 1.9 3.2-.1 1 3 2.6 1.9-1 3.1 1 3.1-2.6 1.9-1 3-3.2-.1L12 22.5l-2.6-1.9-3.2.1-1-3-2.6-1.9 1-3.1-1-3.1 2.6-1.9 1-3 3.2-.1z"/><path fill="#fff" d="M10.6 15.6l-3.2-3.2 1.3-1.3 1.9 1.9 4.7-4.7 1.3 1.3z"/></svg></h1>
+    <p><span data-es>Dr. Tino · Dentista cubano en Orlando, Florida 🇨🇺 🇺🇸</span><span data-en>Dr. Tino · Cuban dentist in Orlando, Florida 🇨🇺 🇺🇸</span></p>
+  </div>
+</header>
+
+<div class="creds">
+  <div><b>2014</b><span>DMD 🇨🇺</span></div>
+  <div><b>2023</b><span>DMD 🇺🇸</span></div>
+  <div><b>AEGD</b><span><span data-es>Postdoctorado</span><span data-en>Postdoctoral</span> ’24–’25</span></div>
+</div>
+
+<a class="cta" id="mainCta" data-wa="geral" href="#"><svg viewBox="0 0 24 24" width="22" height="22"><path fill="#128c4a" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.2 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .6l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l2 1c.3.1.5.2.5.3.1.2.1.8-.2 1.4Z"/></svg><span data-es>Hablar con el Dr. Tino</span><span data-en>Message Dr. Tino</span></a>
+
+<section class="sec up">
+  <p class="eb"><span data-es>Nuevo</span><span data-en>New</span></p>
+  <a class="d3" href="/implante/drtino">
+    <span class="tag">3D</span>
+    <b><span data-es>Implante guiado,<br>paso a paso en 3D</span><span data-en>Guided implant,<br>step by step in 3D</span></b>
+    <span><span data-es>Planificación, guía quirúrgica, fresado, implante y corona. Gire, corte y explore.</span><span data-en>Planning, surgical guide, drilling, implant and crown. Rotate, cut and explore.</span></span>
+    <em class="go" style="font-style:normal"><span data-es>Ver en 3D</span><span data-en>View in 3D</span> →</em>
+    <svg class="imp" viewBox="0 0 60 100" aria-hidden="true"><defs><linearGradient id="ti" x1="0" x2="1"><stop offset="0" stop-color="#6f7780"/><stop offset=".45" stop-color="#e6e9ee"/><stop offset="1" stop-color="#7b838c"/></linearGradient><linearGradient id="au" x1="0" x2="1"><stop offset="0" stop-color="#9b7a35"/><stop offset=".5" stop-color="#f0d99a"/><stop offset="1" stop-color="#a7843c"/></linearGradient></defs><path d="M22 4h16l3 22H19z" fill="url(#au)"/><path d="M17 28h26l-2 52-8 14h-6l-8-14z" fill="url(#ti)"/><g stroke="#5b636c" stroke-width="2.4" fill="none"><path d="M16 34 44 30M16 42 44 38M17 50 43 46M17 58 43 54M18 66 42 62M19 74 41 70M21 82 39 78"/></g></svg>
+  </a>
+</section>
+
+<section class="sec up">
+  <p class="eb">Owner</p>
+  <h2>Tino Dental LAB LLC<sup style="font-size:12px">®</sup></h2>
+  <div class="lab"><img src="/drtino/tdl-logo.png" alt="TDL Production"><div><b>TDL Production</b><small><span data-es>Fundador y propietario · Tino Dental LAB LLC</span><span data-en>Founder &amp; owner · Tino Dental LAB LLC</span></small></div></div>
+  <div class="wide"><img src="/drtino/lab-cadeira.webp" alt="Tino Dental LAB" loading="lazy"></div>
+</section>
+
+<section class="sec up">
+  <p class="eb"><span data-es>Educación continua</span><span data-en>Continuing education</span></p>
+  <h2><span data-es>Cursos de implante guiado</span><span data-en>Guided implant courses</span></h2>
+  <div class="course">
+    <div class="ph"><img src="/drtino/curso-30-out.webp" alt="Dr. N. Pereira y Dr. Osvaldo Maeso" loading="lazy"></div>
+    <div class="in">
+      <span class="st"><span data-es>ÚLTIMO CURSO</span><span data-en>LATEST COURSE</span></span>
+      <h3>Digital Guided Implant Placement &amp; Critical Elements</h3>
+      <ul>
+        <li><i>👥</i><span>Dr. N. Pereira (Dr. Tino) · Dr. Osvaldo Maeso</span></li>
+        <li><i>📅</i><span data-es>30 de octubre de 2026 · 9:00 AM – 3:00 PM</span><span data-en>October 30, 2026 · 9:00 AM – 3:00 PM</span></li>
+        <li><i>📍</i><span>Fairfield by Marriott Luquillo Beach · Puerto Rico</span></li>
+        <li><i>🎓</i><span>7 CE credits · Colegio de Cirujanos Dentistas de Puerto Rico · Distrito Este</span></li>
+      </ul>
+      <a class="btn2" data-wa="curso" href="#"><span data-es>Quiero saber del próximo curso</span><span data-en>Tell me about the next course</span> →</a>
+    </div>
+  </div>
+  <div class="car">
+    <figure><img src="/drtino/curso-flyer.webp" alt="" loading="lazy"><figcaption><b>Digital Guided</b><span data-es>Un camino guiado hacia implantes predecibles</span><span data-en>A guided pathway to predictable implants</span></figcaption></figure>
+    <figure><img src="/drtino/curso-grupo.webp" alt="" loading="lazy"><figcaption><b><span data-es>En el curso</span><span data-en>At the course</span></b>Digital Guided Implant Placement</figcaption></figure>
+    <figure><img src="/drtino/curso-palco.webp" alt="" loading="lazy"><figcaption><b><span data-es>En el escenario</span><span data-en>On stage</span></b><span data-es>Dr. Tino</span><span data-en>Dr. Tino</span></figcaption></figure>
+  </div>
+</section>
+
+<section class="sec up">
+  <p class="eb"><span data-es>Casos clínicos</span><span data-en>Clinical cases</span></p>
+  <h2><span data-es>Precisión en cada caso</span><span data-en>Precision in every case</span></h2>
+  <div class="car">
+    <figure><img src="/drtino/apical-guiada.webp" alt="" loading="lazy"><figcaption><b>Guided Apical Surgery</b>Fractured file removal · tooth #9</figcaption></figure>
+    <figure><img src="/drtino/perfil-emergencia.webp" alt="" loading="lazy"><figcaption><b>Emergence Profile</b><span data-es>Relación implante y perfil de emergencia</span><span data-en>Implant to emergence profile relationship</span></figcaption></figure>
+    <figure><img src="/drtino/enxerto.webp" alt="" loading="lazy"><figcaption><b><span data-es>Injerto gingival</span><span data-en>Gingival graft</span></b>Supremo Easy Graft</figcaption></figure>
+    <figure><img src="/drtino/clinica-lupa.webp" alt="" loading="lazy"><figcaption><b><span data-es>En la clínica</span><span data-en>In the clinic</span></b><span data-es>Trabajo con magnificación</span><span data-en>Working under magnification</span></figcaption></figure>
+  </div>
+</section>
+
+<section class="sec up">
+  <p class="eb"><span data-es>Serie</span><span data-en>Series</span></p>
+  <h2>The Tino Dental Lab Experience</h2>
+  <p class="d"><span data-es>Conversaciones con colegas de la odontología.</span><span data-en>Conversations with fellow dentists.</span></p>
+  <div class="car">
+    <figure><img src="/drtino/exp-yalissy.webp" alt="" loading="lazy"><figcaption><b>featuring Dr. Yalissy Quintero</b></figcaption></figure>
+    <figure><img src="/drtino/exp-cesar.webp" alt="" loading="lazy"><figcaption><b>featuring Dr. Cesar N. Marquez</b></figcaption></figure>
+  </div>
+  <div class="guests"><span>Dr. Yalissy Quintero</span><span>Dr. Cesar N. Marquez</span><span>Dr. Sussell Leon</span><span>Dr. Eliud Padilla</span><span>Dr. Lien Herrero</span></div>
+</section>
+
+<nav class="links up">
+  <a class="lk" href="https://www.instagram.com/tino_dmd23/" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg><span>@tino_dmd23</span><em>›</em></a>
+  <a class="lk" href="https://www.threads.net/@tino_dmd23" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M17.3 11.1c-.1 0-.2-.1-.3-.1-.2-2.9-1.8-4.6-4.5-4.6-1.6 0-2.9.7-3.7 1.9l1.5 1c.6-.9 1.5-1.1 2.2-1.1 1 0 1.7.3 2.1.9.3.4.5 1 .6 1.7-.8-.1-1.6-.2-2.5-.1-2.5.1-4.1 1.6-4 3.6.1 1 .6 1.9 1.4 2.4.7.5 1.6.7 2.6.6 1.3-.1 2.3-.5 3-1.4.5-.7.9-1.6 1-2.7.6.4 1.1.9 1.3 1.5.5 1.1.5 2.8-.9 4.3-1.3 1.3-2.8 1.8-5.1 1.8-2.6 0-4.5-.8-5.8-2.4-1.2-1.5-1.8-3.6-1.8-6.3s.6-4.8 1.8-6.3c1.3-1.6 3.2-2.4 5.8-2.4 2.6 0 4.5.8 5.9 2.4.7.8 1.2 1.8 1.5 2.9l1.8-.5c-.4-1.4-1-2.6-1.9-3.6C17.4 1 15.1 0 12.1 0 9 0 6.7 1 5.1 3 3.7 4.8 3 7.2 3 12s.7 7.2 2.1 9C6.7 23 9 24 12.1 24c2.7 0 4.6-.7 6.2-2.3 2.1-2.1 2-4.7 1.3-6.3-.5-1.2-1.4-2.1-2.3-2.7v-1.6zm-4.6 4.3c-1.1.1-2.2-.4-2.3-1.4 0-.8.5-1.6 2.3-1.7h.6c.6 0 1.2.1 1.8.2-.2 2.4-1.3 2.8-2.4 2.9z"/></svg><span>Threads</span><em>›</em></a>
+  <a class="lk" data-wa="geral" href="#"><svg width="18" height="18" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.2 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .6l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.1 1 2.1 1.3 2.4 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l2 1c.3.1.5.2.5.3.1.2.1.8-.2 1.4Z"/></svg><span>WhatsApp</span><em>›</em></a>
+</nav>
+
+<footer>Dr. Neifre Pereira, DMD (Dr. Tino) · Orlando, Florida<br><span style="opacity:.7"><span data-es>Demostración hecha por</span><span data-en>Demo made by</span> <a href="https://paginaspro.app.br/inicio" target="_blank" rel="noopener">PáginasPro</a></span></footer>
+</main>
+
+<div class="dock" id="dock"><a data-wa="geral" href="#"><span data-es>Agendar con el Dr. Tino</span><span data-en>Book with Dr. Tino</span></a></div>
+
+<script>
+(function(){
+var root=document.documentElement,K='tino_lang';
+var lang=new URLSearchParams(location.search).get('lang');
+if(!lang){try{lang=localStorage.getItem(K)}catch(e){}}
+if(!lang)lang=(navigator.language||'es').toLowerCase().indexOf('en')===0?'en':'es';
+var WA='14807437008';
+var MSG={geral:{es:'¡Hola, Dr. Tino! Vi su página y me gustaría más información.',en:'Hi Dr. Tino! I saw your page and I would like more information.'},
+curso:{es:'¡Hola, Dr. Tino! Me gustaría saber del próximo curso de implante guiado.',en:'Hi Dr. Tino! I would like to know about the next guided implant course.'}};
+function set(l){lang=l;root.lang=l;try{localStorage.setItem(K,l)}catch(e){}
+document.querySelectorAll('[data-wa]').forEach(function(a){a.href='https://wa.me/'+WA+'?text='+encodeURIComponent(MSG[a.dataset.wa][l]);a.target='_blank';a.rel='noopener'});
+var d=document.querySelector('.d3');d.href='/implante/drtino?lang='+l}
+set(lang);
+document.getElementById('lng').onclick=function(){set(lang==='es'?'en':'es')};
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}})},{threshold:.1});
+document.querySelectorAll('.up').forEach(function(el){io.observe(el)});
+var dock=document.getElementById('dock');new IntersectionObserver(function(es){dock.classList.toggle('on',!es[0].isIntersecting&&es[0].boundingClientRect.top<0)}).observe(document.getElementById('mainCta'));
+})();
+</script>
+</body>
+</html>
