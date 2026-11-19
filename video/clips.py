@@ -171,16 +171,40 @@ def vod_duration(url):
         return 0.0
 
 
+def latest_vods(url, n=3):
+    """Link de canal da Twitch (twitch.tv/<nome>) = as últimas lives gravadas dele; link de vídeo = ele mesmo."""
+    m = re.match(r"https?://(?:www\.|m\.)?twitch\.tv/([A-Za-z0-9_]+)/?$", url.strip())
+    if not m:
+        return [url]
+    out = subprocess.run(["yt-dlp", "--no-warnings", "--flat-playlist", "--playlist-items", f"1:{n}", "--print", "url",
+                          f"https://www.twitch.tv/{m.group(1)}/videos?filter=archives&sort=time"],
+                         capture_output=True, text=True, timeout=180).stdout.split()
+    return [u for u in out if "/videos/" in u] or [url]
+
+
 def vod_chunks(url, done_ids):
-    """Pedaços de 25 min da live gravada que ainda não viraram cortes (os mais recentes primeiro)."""
-    total = vod_duration(url)
-    if total <= 0:
+    """Pedaços de 25 min das lives gravadas que ainda não viraram cortes (a live mais nova e o fim dela primeiro)."""
+    chunks = []
+    for vod in latest_vods(url):
+        total = vod_duration(vod)
+        if total <= 0:
+            continue
+        tag = re.sub(r"\W", "", vod.rstrip("/").split("/")[-1])[-20:]
+        for s0 in reversed(range(0, int(total), VOD_CHUNK)):
+            fid = f"vod:{tag}@{s0}"
+            if fid not in done_ids:
+                chunks.append((fid, f"live {tag} {s0 // 60}-{min(total, s0 + VOD_CHUNK) // 60:.0f} min", vod))
+    if not chunks and not done_ids:
         raise RuntimeError("não consegui ler a live (link privado, apagado ou fora do ar?)")
-    starts = list(range(0, int(total), VOD_CHUNK))
-    return [(f"vod@{s0}", f"live {s0 // 60}-{min(total, s0 + VOD_CHUNK) // 60:.0f} min") for s0 in reversed(starts) if f"vod@{s0}" not in done_ids]
+    VOD_URLS.update({c[0]: c[2] for c in chunks})
+    return [c[:2] for c in chunks]
+
+
+VOD_URLS = {}
 
 
 def download_vod(url, fid, folder):
+    url = VOD_URLS.get(fid, url)
     s0 = int(fid.split("@")[1])
     out = os.path.join(folder, f"vod-{s0}.mp4")
     subprocess.run(["yt-dlp", "--no-warnings", "-q", "-f", "best[height<=1080][ext=mp4]/best[height<=1080]/best",
@@ -505,9 +529,45 @@ def make_clip(source, channel, clip, video, words, logo, work, when, name, row_i
     key = f"{source['user_id']}/clips/{name}"
     thumb = yt.storage_upload(thumb_path, key + ".jpg", "image/jpeg")
     preview = yt.storage_upload(small, key + ".mp4", "video/mp4")
+    if source.get("post_to"):  # campanha só de TikTok/Instagram: post do Studio, nada no YouTube
+        social_clip(source, clip, final, thumb, preview, when, work, key, row_id)
+        log(f"    ✓ {', '.join(source['post_to'])} ({mode}) → publica {when.isoformat()}")
+        return None
     vid = upload_clip(source, channel, clip, final, thumb, preview, when, work, row_id)
     log(f"    ✓ https://youtu.be/{vid} ({mode}) → publica {when.isoformat()}")
     return vid
+
+
+def social_clip(source, clip, final, thumb, preview, when, work, key, row_id=None):
+    """Corte para Reels/TikTok: cópia leve no storage + post agendado no Studio (o publisher publica no Instagram e manda
+    para a caixa de entrada do TikTok) + linha em yt_videos (sem youtube_id) para aparecer na lista de Cortes."""
+    light = os.path.join(work, "social.mp4")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", final, "-c:v", "libx264", "-preset", "medium", "-crf", "24",
+                    "-maxrate", "4000k", "-bufsize", "8M", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", light], check=True)
+    url = yt.storage_upload(light, key + "-social.mp4", "video/mp4")
+    tags = [h if h.startswith("#") else "#" + h for h in (source.get("hashtags") or "").split() if h.strip("#")]
+    credit = (source.get("credit") or "").strip()
+    caption = "\n\n".join(x for x in [clip["youtube_title"], credit, " ".join(tags)] if x)[:2100]
+    targets = source["post_to"]
+    for platform, account in targets.items():
+        rest("POST", "posts", {
+            "user_id": source["user_id"], "title": clip["screen_title"][:120], "caption": caption,
+            "kind": "reel" if platform == "instagram" else "video", "platforms": [platform],
+            "media": [{"url": url, "type": "video"}], "scheduled_at": when.isoformat(), "status": "scheduled", "created_by": "agent",
+            "options": {"account_ids": {platform: account}, "source": "clips", "clip_source": source["id"],
+                        **({"tiktok": {"mode": "inbox"}} if platform == "tiktok" else {})},
+        })
+    row = {
+        "user_id": source["user_id"], "channel_ref": source["channel_ref"], "kind": "clip", "status": "uploaded", "error": None,
+        "topic": source["campaign"], "angle": clip.get("why"), "title": clip["youtube_title"][:100], "youtube_id": None,
+        "publish_at": when.isoformat(), "thumbnail_url": thumb, "preview_url": preview, "duration_s": round(clip["end"] - clip["start"], 1),
+        "script": {"source_id": source["id"], "file": clip.get("file"), "start": clip["start"], "end": clip["end"],
+                   "screen_title": clip["screen_title"], "social": list(targets)},
+    }
+    if row_id:
+        rest("PATCH", f"yt_videos?id=eq.{row_id}", {**row, "updated_at": now().isoformat()})
+    else:
+        rest("POST", "yt_videos", row)
 
 
 def process(source):

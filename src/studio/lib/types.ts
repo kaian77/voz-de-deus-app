@@ -677,6 +677,8 @@ export interface ClipSource {
   mirror_url: string | null;
   /** a campanha manda cortes prontos (curtos, com legenda): sem recorte do rosto nem legenda nossa */
   edited: boolean;
+  /** campanha só de TikTok/Instagram: contas onde o corte é postado (sem YouTube) */
+  post_to: { instagram?: string; tiktok?: string } | null;
   clips_wanted: number;
   per_day: number;
   status: "queued" | "processing" | "done" | "failed";
