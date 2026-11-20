@@ -1,4 +1,4 @@
-// FORMA — app de treino com personal por câmera. Telas: Hoje, Treinos, Agenda, Metas, Vídeos.
+// FORMA — app de treino com personal por câmera. Telas: Hoje, Treinos, Agenda, Metas, Ranking, Perfil (+ Vídeos).
 import "./style.css";
 import {
   DAY_NAMES, DAY_SHORT, EXERCISES, formScore, parseDay, records, store, streak, suggestion, today, totalReps, uid, weekStart,
@@ -7,8 +7,9 @@ import {
 import { shareVideo, startWorkout } from "./workout";
 import { recordings } from "./rec";
 import { drawTonhao, TONHAO } from "./tonhao";
+import { social, perfil, studentView, socialClick, socialChange, editing, getPlan, setPlan, boot } from "./social";
 
-type Tab = "hoje" | "treinos" | "agenda" | "metas" | "videos";
+export type Tab = "hoje" | "treinos" | "agenda" | "metas" | "videos" | "ranking" | "perfil" | "aluno";
 const app = document.getElementById("app")!;
 let tab: Tab = (new URLSearchParams(location.search).get("aba") as Tab) || "hoje";
 let agendaMonth = new Date();
@@ -22,16 +23,29 @@ function itemLine(it: PlanItem) {
   return `${it.sets}× ${it.reps}${e.timed ? "s" : ""}${it.kg ? ` · ${it.kg} kg` : ""}`;
 }
 
-function render() {
+export function goTab(t: Tab) {
+  tab = t;
+  if (t !== "treinos") editing.v = null;
+  history.replaceState(null, "", `${location.pathname}?aba=${t}`);
+  render();
+boot();
+  scrollTo(0, 0);
+}
+
+export function render() {
+  const nav = tab === "videos" || tab === "aluno" ? "perfil" : tab;
   app.innerHTML = `
-    <main class="page">${({ hoje, treinos, agenda, metas, videos } as Record<Tab, () => string>)[tab]()}</main>
+    <main class="page">${({ hoje, treinos, agenda, metas, videos, ranking: social, perfil, aluno: studentView } as Record<Tab, () => string>)[tab]()}</main>
     <nav class="tabs">
-      ${([["hoje", "🏠", "Hoje"], ["treinos", "📋", "Treinos"], ["agenda", "📅", "Agenda"], ["metas", "🎯", "Metas"], ["videos", "🎬", "Vídeos"]] as const)
-        .map(([k, i, n]) => `<button data-tab="${k}" class="${tab === k ? "on" : ""}"><span>${i}</span>${n}</button>`).join("")}
+      ${([["hoje", "🏠", "Hoje"], ["treinos", "📋", "Treinos"], ["agenda", "📅", "Agenda"], ["metas", "🎯", "Metas"], ["ranking", "🏆", "Ranking"], ["perfil", "👤", "Perfil"]] as const)
+        .map(([k, i, n]) => `<button data-tab="${k}" class="${nav === k ? "on" : ""}"><span>${i}</span>${n}</button>`).join("")}
     </nav>`;
   if (tab === "videos") loadVideos();
   if (tab === "metas") drawWeight();
 }
+
+import { cloud, deleteWorkout, saveWorkout } from "./cloud";
+const planBy = () => String((cloud.me?.data as { planBy?: string } | undefined)?.planBy ?? "");
 
 // ---------------- Hoje ----------------
 function hoje() {
@@ -58,6 +72,7 @@ function hoje() {
     </header>
     <section class="card today">
       <div class="row between"><h2>${DAY_NAMES[d]}${day ? ` · ${esc(day.name)}` : ""}</h2>${doneToday ? `<span class="tag ok">✓ Feito</span>` : ""}</div>
+      ${planBy() ? `<small class="muted">Treino montado pelo personal ${esc(planBy())}</small>` : ""}
       ${day && day.items.length ? `
         <ul class="exlist">${day.items.map((it) => {
           const sug = suggestion(hist, it);
@@ -87,11 +102,13 @@ function hoje() {
 
 // ---------------- Treinos (montar a semana) ----------------
 function treinos() {
-  const plan = store.plan();
+  const plan = getPlan();
   const day = plan[editDay];
   return `
-    <h1 class="title">Seus treinos</h1>
-    <p class="muted">Monte o treino de cada dia: séries, repetições, carga e descanso.</p>
+    ${editing.v ? `<button class="link back" data-tab="aluno">‹ Voltar para ${esc(editing.v.name)}</button>
+    <h1 class="title">Treino de ${esc(editing.v.name)}</h1>
+    <p class="muted">O que você mudar aqui vai direto para o celular do aluno.</p>` : `<h1 class="title">Seus treinos</h1>
+    <p class="muted">Monte o treino de cada dia: séries, repetições, carga e descanso.</p>`}
     <div class="days">${DAY_NAMES.map((n, i) => `<button data-day="${i}" class="${i === editDay ? "on" : ""} ${plan[i] ? "has" : ""}">${DAY_SHORT[i]}<small>${plan[i] ? esc(plan[i]!.name).slice(0, 8) : "folga"}</small></button>`).join("")}</div>
     <section class="card">
       <div class="row between">
@@ -115,7 +132,7 @@ function treinos() {
           <select id="add-ex">${Object.values(EXERCISES).map((e) => `<option value="${e.id}">${e.emoji} ${e.name}</option>`).join("")}</select>
           <button class="btn" data-add>+ Adicionar</button>
         </div>
-        ${day.items.length ? `<button class="btn ghost" data-go="day:${editDay}">▶ Fazer este treino agora</button>` : ""}
+        ${day.items.length && !editing.v ? `<button class="btn ghost" data-go="day:${editDay}">▶ Fazer este treino agora</button>` : ""}
       ` : `<p class="muted">Dia de folga. Ligue "Dia de treino" para montar.</p>`}
     </section>
     <section class="card">
@@ -255,6 +272,7 @@ function metas() {
       <label class="switch"><input type="checkbox" id="p-voice" ${prefs.voice ? "checked" : ""}><span>Personal falando no fone</span></label>
       <label class="switch"><input type="checkbox" id="p-record" ${prefs.record ? "checked" : ""}><span>Gravar o treino com o esqueleto</span></label>
       <label class="switch"><input type="checkbox" id="p-strict" ${prefs.strictPullup ? "checked" : ""}><span>Barra rigorosa (queixo inteiro acima da barra)</span></label>
+      <label class="switch"><input type="checkbox" id="p-laugh" ${prefs.laugh ? "checked" : ""}><span>Tonhão dá risada e zera a série se errar 3 seguidas 😂</span></label>
       <label class="field">Contagem antes de começar (s)<input type="number" id="p-count" min="3" max="30" value="${prefs.countdown}" inputmode="numeric"></label>
       <button class="btn ghost" data-prefs>Salvar ajustes</button>
     </section>`;
@@ -318,10 +336,11 @@ function go(name: string, items: PlanItem[]) {
 }
 
 app.addEventListener("click", (e) => {
-  const el = (e.target as HTMLElement).closest<HTMLElement>("button, [data-sel]");
+  const el = (e.target as HTMLElement).closest<HTMLElement>("button, [data-sel], [data-stud]");
   if (!el) return;
   const d = el.dataset;
-  if (d.tab) { tab = d.tab as Tab; history.replaceState(null, "", `?aba=${tab}`); render(); scrollTo(0, 0); return; }
+  if (d.tab) { goTab(d.tab as Tab); return; }
+  if (socialClick(el)) return;
   if (d.go) {
     const plan = store.plan();
     if (d.go === "today") { const day = plan[new Date().getDay()]; if (day?.items.length) go(day.name, day.items); }
@@ -334,22 +353,22 @@ app.addEventListener("click", (e) => {
     return;
   }
   // treinos
-  const plan = store.plan();
+  const plan = getPlan();
   if (d.day) { editDay = +d.day; render(); return; }
   if (d.add !== undefined) {
     const ex = (document.getElementById("add-ex") as HTMLSelectElement).value as ExId;
     plan[editDay]!.items.push({ ex, sets: 3, reps: EXERCISES[ex].timed ? 30 : 10, rest: 60 });
-    store.setPlan(plan); render(); return;
+    setPlan(plan); render(); return;
   }
-  if (d.rm) { plan[editDay]!.items.splice(+d.rm, 1); store.setPlan(plan); render(); return; }
+  if (d.rm) { plan[editDay]!.items.splice(+d.rm, 1); setPlan(plan); render(); return; }
   if (d.mv) {
     const [i, dir] = d.mv.split(":").map(Number);
     const items = plan[editDay]!.items;
     const j = i + dir;
-    if (j >= 0 && j < items.length) { [items[i], items[j]] = [items[j], items[i]]; store.setPlan(plan); render(); }
+    if (j >= 0 && j < items.length) { [items[i], items[j]] = [items[j], items[i]]; setPlan(plan); render(); }
     return;
   }
-  if (d.preset) { if (confirm("Trocar a semana inteira por este modelo?")) { store.setPlan(structuredClone(PRESETS[d.preset])); render(); } return; }
+  if (d.preset) { if (confirm("Trocar a semana inteira por este modelo?")) { setPlan(structuredClone(PRESETS[d.preset])); render(); } return; }
   // agenda
   if (d.month) { agendaMonth = new Date(agendaMonth.getFullYear(), agendaMonth.getMonth() + +d.month, 1); render(); return; }
   if (d.sel) { selDay = d.sel; render(); return; }
@@ -358,10 +377,12 @@ app.addEventListener("click", (e) => {
     const name = prompt("Qual treino você fez?", p?.name ?? "Treino") ?? "";
     if (!name) return;
     const at = parseDay(selDay).getTime() + 12 * 3600e3;
-    store.addSession({ id: uid(), date: selDay, started: at, ended: at + 45 * 60e3, name, exercises: [] });
+    const ses = { id: uid(), date: selDay, started: at, ended: at + 45 * 60e3, name, exercises: [] };
+    store.addSession(ses);
+    saveWorkout(ses);
     render(); return;
   }
-  if (d.del) { if (confirm("Apagar este registro?")) { store.removeSession(d.del); render(); } return; }
+  if (d.del) { if (confirm("Apagar este registro?")) { store.removeSession(d.del); deleteWorkout(d.del); render(); } return; }
   // metas
   if (d.weight !== undefined) {
     const kg = +(document.getElementById("w-kg") as HTMLInputElement).value;
@@ -372,7 +393,7 @@ app.addEventListener("click", (e) => {
   }
   if (d.prefs !== undefined) {
     const v = (id: string) => document.getElementById(id) as HTMLInputElement;
-    store.setPrefs({ name: v("p-name").value.trim(), voice: v("p-voice").checked, record: v("p-record").checked, strictPullup: v("p-strict").checked, countdown: Math.max(3, +v("p-count").value || 5) });
+    store.setPrefs({ name: v("p-name").value.trim(), voice: v("p-voice").checked, record: v("p-record").checked, strictPullup: v("p-strict").checked, countdown: Math.max(3, +v("p-count").value || 5), laugh: v("p-laugh").checked, sendVideos: store.prefs().sendVideos });
     el.textContent = "✓ Salvo";
     return;
   }
@@ -380,17 +401,18 @@ app.addEventListener("click", (e) => {
 
 app.addEventListener("change", (e) => {
   const t = e.target as HTMLInputElement;
-  const plan = store.plan();
+  if (socialChange(t)) return;
+  const plan = getPlan();
   if (t.id === "d-on") {
     plan[editDay] = t.checked ? { name: "Treino", items: [] } : null;
-    store.setPlan(plan); render(); return;
+    setPlan(plan); render(); return;
   }
-  if (t.id === "d-name" && plan[editDay]) { plan[editDay]!.name = t.value.trim() || "Treino"; store.setPlan(plan); return; }
+  if (t.id === "d-name" && plan[editDay]) { plan[editDay]!.name = t.value.trim() || "Treino"; setPlan(plan); return; }
   if (t.dataset.f && plan[editDay]) {
     const [i, k] = t.dataset.f.split(":");
     const it = plan[editDay]!.items[+i] as unknown as Record<string, number | undefined>;
     it[k] = t.value === "" ? (k === "kg" ? undefined : 1) : +t.value;
-    store.setPlan(plan); return;
+    setPlan(plan); return;
   }
   if (t.id === "f-ex") {
     const timed = EXERCISES[t.value as ExId].timed;

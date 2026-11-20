@@ -2,7 +2,8 @@
 // Tudo fica neste aparelho (localStorage); as gravações ficam no IndexedDB (rec.ts).
 
 export type ExId =
-  | "squat" | "pushup" | "pullup" | "curl" | "press" | "lunge" | "plank" | "lateral" | "bridge" | "jack";
+  | "squat" | "pushup" | "pullup" | "curl" | "press" | "lunge" | "plank" | "lateral" | "bridge" | "jack"
+  | "stiff" | "row" | "burpee" | "situp";
 
 export interface ExerciseInfo {
   id: ExId;
@@ -35,6 +36,14 @@ export const EXERCISES: Record<ExId, ExerciseInfo> = {
     tips: ["Suba até a linha do ombro", "Não passe muito do ombro", "Cotovelo levemente dobrado"] },
   bridge: { id: "bridge", name: "Elevação de quadril", view: "lado", muscles: "Glúteo", emoji: "🍑",
     tips: ["Suba até o corpo ficar reto do ombro ao joelho", "Aperte o glúteo lá em cima"] },
+  stiff: { id: "stiff", name: "Stiff", view: "lado", muscles: "Posterior de coxa e glúteo", emoji: "🏋️",
+    tips: ["Quadril vai para trás", "Joelho quase esticado", "Costas retas, peso perto da perna", "Desça até o tronco ficar quase paralelo ao chão"] },
+  row: { id: "row", name: "Remada curvada", view: "lado", muscles: "Costas", emoji: "🚣",
+    tips: ["Tronco inclinado à frente e parado", "Puxe o peso até a barriga", "Cotovelo passa do corpo", "Estique o braço embaixo"] },
+  burpee: { id: "burpee", name: "Burpee", view: "lado", muscles: "Corpo todo e cardio", emoji: "🔥",
+    tips: ["Agacha e põe as mãos no chão", "Joga as pernas para trás até a prancha", "Volta e levanta com um pulo"] },
+  situp: { id: "situp", name: "Abdominal", view: "lado", muscles: "Abdômen", emoji: "🧘",
+    tips: ["Deitado, joelhos dobrados", "Suba o tronco até perto dos joelhos", "Desça devagar até as costas no chão", "Não puxe a cabeça com as mãos"] },
   jack: { id: "jack", name: "Polichinelo", view: "frente", muscles: "Cardio", emoji: "⭐",
     tips: ["Mãos se encontram em cima da cabeça", "Pés abrem mais que o ombro"] },
 };
@@ -110,8 +119,12 @@ function load<T>(key: string, fallback: T): T {
     return fallback;
   }
 }
-function save(key: string, v: unknown) {
+/** Avisado a cada gravação (a nuvem sobe as mudanças). */
+export const onSave: { fn: ((key: string) => void) | null } = { fn: null };
+
+function save(key: string, v: unknown, silent = false) {
   try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* sem espaço ou bloqueado */ }
+  if (!silent) onSave.fn?.(key);
 }
 
 export const store = {
@@ -126,10 +139,18 @@ export const store = {
   addWeight: (w: WeightLog) => save(K.weight, [...store.weights().filter((x) => x.date !== w.date), w].sort((a, b) => a.date.localeCompare(b.date))),
   prefs: (): Prefs => ({ ...DEFAULT_PREFS, ...load(K.prefs, {}) }),
   setPrefs: (p: Prefs) => save(K.prefs, p),
+  /** Grava o que veio da nuvem sem disparar outro envio. */
+  replace: (d: { plan?: WeekPlan; goals?: Goals; weights?: WeightLog[]; prefs?: Partial<Prefs>; history?: Session[] }) => {
+    if (d.plan) save(K.plan, d.plan, true);
+    if (d.goals) save(K.goals, d.goals, true);
+    if (d.weights) save(K.weight, d.weights, true);
+    if (d.prefs) save(K.prefs, { ...store.prefs(), ...d.prefs }, true);
+    if (d.history) save(K.hist, d.history.slice(0, 1000), true);
+  },
 };
 
-export interface Prefs { voice: boolean; record: boolean; strictPullup: boolean; countdown: number; name: string }
-const DEFAULT_PREFS: Prefs = { voice: true, record: true, strictPullup: true, countdown: 5, name: "" };
+export interface Prefs { voice: boolean; record: boolean; strictPullup: boolean; countdown: number; name: string; laugh: boolean; sendVideos: boolean }
+const DEFAULT_PREFS: Prefs = { voice: true, record: true, strictPullup: true, countdown: 5, name: "", laugh: true, sendVideos: false };
 
 export function today(d = new Date()): string {
   const z = (n: number) => String(n).padStart(2, "0");

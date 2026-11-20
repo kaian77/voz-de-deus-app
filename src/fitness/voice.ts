@@ -54,8 +54,9 @@ export function audio() {
   return ctx;
 }
 
-export function beep(kind: "rep" | "bad" | "go" | "done" | "tick") {
+export function beep(kind: "rep" | "bad" | "go" | "done" | "tick" | "laugh") {
   const c = audio();
+  if (kind === "laugh") return laugh(c);
   const notes: Record<typeof kind, [number, number, number][]> = {
     rep: [[880, 0, 0.09]],
     bad: [[220, 0, 0.18]],
@@ -77,6 +78,30 @@ export function beep(kind: "rep" | "bad" | "go" | "done" | "tick") {
     if (recDest) g.connect(recDest);
     o.start(t);
     o.stop(t + d + 0.05);
+  }
+}
+
+/** Risada sintetizada: "ha-ha-ha-ha" descendo (vogal com 2 formantes). */
+function laugh(c: AudioContext) {
+  for (let i = 0; i < 6; i++) {
+    const t = c.currentTime + i * 0.17;
+    const o = c.createOscillator();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(260 - i * 14, t);
+    o.frequency.linearRampToValueAtTime(200 - i * 14, t + 0.12);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    for (const [f, q, v] of [[800, 6, 1], [1250, 8, 0.6]] as const) {
+      const bp = c.createBiquadFilter();
+      bp.type = "bandpass"; bp.frequency.value = f; bp.Q.value = q;
+      const gg = c.createGain(); gg.gain.value = v;
+      o.connect(bp); bp.connect(gg); gg.connect(g);
+    }
+    g.connect(c.destination);
+    if (recDest) g.connect(recDest);
+    o.start(t); o.stop(t + 0.15);
   }
 }
 

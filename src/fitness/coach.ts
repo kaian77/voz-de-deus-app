@@ -333,8 +333,118 @@ class Jack extends Analyzer {
   }
 }
 
+class Stiff extends Analyzer {
+  update(p: Frame) {
+    const l = limbs(side(p));
+    const o = this.base(need(p, [l.sh, l.hip, l.kn, l.an]));
+    if (!o.visible) return o;
+    const hip = angle(p[l.sh], p[l.hip], p[l.kn]);
+    const knee = angle(p[l.hip], p[l.kn], p[l.an]);
+    o.metric = `quadril ${Math.round(hip)}°`;
+    o.progress = clamp01((170 - hip) / 75);
+    const r = this.r;
+    if (r.phase === "top" && hip < 150) r.start();
+    if (r.phase === "moving") {
+      r.track(hip);
+      if (knee < 135) r.flag("Joelho quase esticado, quem desce é o quadril", [l.kn], o);
+      // o punho (peso) tem que descer perto da perna
+      if (p[l.wr].v > 0.5 && Math.abs(p[l.wr].x - p[l.kn].x) > dist(p[l.hip], p[l.kn]) * 0.55 && hip < 130)
+        r.flag("Peso perto da perna", [l.wr], o);
+      if (hip > 165) {
+        if (r.min > 110) { r.flag("Desce mais, leva o quadril para trás", [l.hip], o); o.rep = r.end(false); }
+        else o.rep = r.end(true);
+      }
+    }
+    return o;
+  }
+}
+
+class Row extends Analyzer {
+  private lean0 = 0;
+  update(p: Frame) {
+    const l = limbs(side(p));
+    const o = this.base(need(p, [l.sh, l.el, l.wr, l.hip]));
+    if (!o.visible) return o;
+    const lean = fromVertical(p[l.sh], p[l.hip]);
+    const el = angle(p[l.sh], p[l.el], p[l.wr]);
+    o.metric = `cotovelo ${Math.round(el)}°`;
+    o.progress = clamp01((165 - el) / 85);
+    if (lean < 25) { o.cue = "Incline o tronco à frente"; o.bad.add(l.sh); o.bad.add(l.hip); return o; }
+    const r = this.r;
+    if (r.phase === "top" && el < 135) { r.start(); this.lean0 = lean; }
+    if (r.phase === "moving") {
+      r.track(el);
+      if (Math.abs(lean - this.lean0) > 15) r.flag("Tronco parado, só o braço puxa", [l.sh, l.hip], o);
+      if (el > 150) {
+        if (r.min > 95) { r.flag("Puxa até a barriga", [l.el], o); o.rep = r.end(false); }
+        else o.rep = r.end(true);
+      }
+    }
+    return o;
+  }
+}
+
+class Burpee extends Analyzer {
+  private stage: "up" | "down" | "plank" = "up";
+  private plank = false;
+  private sag = false;
+  update(p: Frame) {
+    const l = limbs(side(p));
+    const o = this.base(need(p, [l.sh, l.hip, l.kn, l.an], 0.45));
+    if (!o.visible) return o;
+    const lean = fromVertical(p[l.sh], p[l.hip]);
+    const knee = angle(p[l.hip], p[l.kn], p[l.an]);
+    const flat = horizontal(p, l) && lean > 60;
+    const standing = lean < 25 && knee > 155;
+    o.progress = this.stage === "up" ? 0 : this.stage === "down" ? 0.5 : 1;
+    if (this.stage === "up" && !standing && (knee < 120 || lean > 40)) { this.stage = "down"; this.plank = false; this.sag = false; this.r.issues.clear(); }
+    if (this.stage !== "up") {
+      if (flat) {
+        this.plank = true; this.stage = "plank";
+        if (angle(p[l.sh], p[l.hip], p[l.an]) < 150) this.sag = true;
+      }
+      if (standing) {
+        this.stage = "up";
+        if (!this.plank) { this.r.flag("Joga as pernas para trás até a prancha", [l.an], o); o.rep = this.r.end(false); }
+        else {
+          if (this.sag) this.r.flag("Na prancha, corpo reto", [l.hip], o);
+          o.rep = this.r.end(true);
+        }
+      }
+    }
+    o.metric = this.stage === "plank" ? "prancha ✓" : this.stage === "down" ? "agachou" : "em pé";
+    return o;
+  }
+}
+
+class Situp extends Analyzer {
+  update(p: Frame) {
+    const l = limbs(side(p));
+    const o = this.base(need(p, [l.sh, l.hip, l.kn]));
+    if (!o.visible) return o;
+    // tronco em relação ao chão: 0 = deitado, 90 = sentado
+    const elev = 90 - fromVertical(p[l.sh], p[l.hip]);
+    o.metric = `tronco ${Math.round(elev)}°`;
+    o.progress = clamp01(elev / 60);
+    const r = this.r;
+    if (r.phase === "top" && elev > 22) r.start();
+    if (r.phase === "moving") {
+      r.track(elev);
+      // mão puxando a cabeça para a frente
+      const ear = p[l.sh === 11 ? 7 : 8];
+      if (ear.v > 0.5 && p[l.wr].v > 0.5 && dist(p[l.wr], ear) < dist(p[l.sh], p[l.el]) * 0.5 && fromVertical(ear, p[l.sh]) < 15 && elev < 40)
+        r.flag("Não puxa a cabeça com a mão", [l.wr], o);
+      if (elev < 12) {
+        if (r.max < 45) { r.flag("Sobe mais o tronco", [l.sh], o); o.rep = r.end(false); }
+        else o.rep = r.end(true);
+      }
+    }
+    return o;
+  }
+}
+
 export function makeAnalyzer(ex: ExId, o: Opts): Analyzer {
-  const C = { squat: Squat, pushup: Pushup, pullup: Pullup, curl: Curl, press: Press, lunge: Lunge, plank: Plank, lateral: Lateral, bridge: Bridge, jack: Jack }[ex];
+  const C = { squat: Squat, pushup: Pushup, pullup: Pullup, curl: Curl, press: Press, lunge: Lunge, plank: Plank, lateral: Lateral, bridge: Bridge, jack: Jack, stiff: Stiff, row: Row, burpee: Burpee, situp: Situp }[ex];
   return new C(o);
 }
 
