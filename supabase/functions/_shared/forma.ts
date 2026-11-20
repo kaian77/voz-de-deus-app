@@ -1,14 +1,14 @@
 // App de treino FORMA (/treino): conta própria (e-mail + senha; NÃO é o login do Studio), nuvem dos treinos,
-// modo personal (alunos, treino montado pelo personal, vídeos), desafios e ranking, lembrete no celular.
+// desafios e ranking, lembrete no celular. Sem personal humano: o foco é treinar sozinho com o Tonhão.
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { HttpError, sha256Hex } from "./util.ts";
 import { pushPublicKey, sendWebPush } from "./push.ts";
 
 type Db = SupabaseClient;
 type Obj = Record<string, unknown>;
-export interface FUser { id: string; email: string; name: string; role: "aluno" | "personal"; code: string; personal_id: string | null; data: Obj; data_at: string }
+export interface FUser { id: string; email: string; name: string; code: string; data: Obj; data_at: string }
 
-const COLS = "id, email, name, role, code, personal_id, data, data_at";
+const COLS = "id, email, name, code, data, data_at";
 const TIMED = new Set(["plank"]);
 
 // ---------------------------------------------------------------- senha e sessão
@@ -59,10 +59,9 @@ export async function signup(db: Db, b: Obj) {
   if (!name) throw new HttpError(400, "Coloque seu nome.");
   const { data: exists } = await db.from("forma_users").select("id").eq("email", email).maybeSingle();
   if (exists) throw new HttpError(400, "Já existe conta com esse e-mail. Toque em Entrar.");
-  const role = b.role === "personal" ? "personal" : "aluno";
   let user: FUser | null = null;
   for (let i = 0; i < 5 && !user; i++) {
-    const { data, error } = await db.from("forma_users").insert({ email, pass: await hashPassword(pass), name, role, code: newCode(), data: (b.data as Obj) ?? {} }).select(COLS).single();
+    const { data, error } = await db.from("forma_users").insert({ email, pass: await hashPassword(pass), name, code: newCode(), data: (b.data as Obj) ?? {} }).select(COLS).single();
     if (!error) user = data as FUser;
     else if (!String(error.message).includes("code")) throw new HttpError(400, "Não deu para criar a conta. Tente de novo.");
   }
@@ -95,17 +94,10 @@ function stats(w: Obj) {
   return { reps, perfect };
 }
 
-async function personalOf(db: Db, u: FUser) {
-  if (!u.personal_id) return null;
-  const { data } = await db.from("forma_users").select("id, name, code").eq("id", u.personal_id).maybeSingle();
-  return data;
-}
-
 export async function me(db: Db, u: FUser) {
   const { data: workouts } = await db.from("forma_workouts").select("data").eq("user_id", u.id).order("day", { ascending: false }).limit(500);
   return {
-    user: { id: u.id, email: u.email, name: u.name, role: u.role, code: u.code },
-    personal: await personalOf(db, u),
+    user: { id: u.id, email: u.email, name: u.name },
     data: u.data,
     data_at: u.data_at,
     workouts: (workouts ?? []).map((w) => w.data),
@@ -123,7 +115,6 @@ export async function saveData(db: Db, u: FUser, b: Obj) {
 export async function saveProfile(db: Db, u: FUser, b: Obj) {
   const patch: Obj = {};
   if (b.name !== undefined) patch.name = cleanName(b.name) || u.name;
-  if (b.role === "aluno" || b.role === "personal") patch.role = b.role;
   await db.from("forma_users").update(patch).eq("id", u.id);
   return { ok: true };
 }
@@ -133,8 +124,71 @@ export async function saveWorkouts(db: Db, u: FUser, b: Obj) {
   const rows = list.filter((w) => typeof w.id === "string" && /^\d{4}-\d{2}-\d{2}$/.test(String(w.date))).map((w) => ({
     id: String(w.id).slice(0, 40), user_id: u.id, day: String(w.date), data: w, ...stats(w),
   }));
-  if (rows.length) await db.from("forma_workouts").upsert(rows, { onConflict: "user_id,id" });
+  if (!rows.length) return { ok: true, saved: 0 };
+  // placar antes e depois: quem ficou para trás recebe o aviso "passou de você"
+  const wk = weekStartISO(), today = brNow().toISOString().slice(0, 10);
+  const fresh = rows.some((r) => r.day >= wk);
+  const before = fresh ? await weekTotals(db, wk) : null;
+  const chBefore = fresh ? await myChallengeScores(db, u) : [];
+  await db.from("forma_workouts").upsert(rows, { onConflict: "user_id,id" });
+  if (fresh) {
+    const after = await weekTotals(db, wk);
+    await notifyPassed(db, u, before!, after, "semana", "");
+    for (const c of chBefore) {
+      if (c.ends < today || c.starts > today) continue;
+      const now = await scores(db, c.members, c.starts, c.ends, c.ex);
+      await notifyPassed(db, u, c.scores, now, `ch:${c.code}`, c.title);
+    }
+  }
   return { ok: true, saved: rows.length };
+}
+
+async function weekTotals(db: Db, wk: string) {
+  const { data } = await db.from("forma_workouts").select("user_id, perfect").gte("day", wk).limit(20000);
+  const m = new Map<string, number>();
+  for (const w of data ?? []) m.set(w.user_id, (m.get(w.user_id) ?? 0) + w.perfect);
+  return m;
+}
+
+async function myChallengeScores(db: Db, u: FUser) {
+  const { data: mine } = await db.from("forma_challenge_members").select("challenge_id").eq("user_id", u.id).limit(20);
+  const ids = (mine ?? []).map((m) => m.challenge_id);
+  if (!ids.length) return [];
+  const today = brNow().toISOString().slice(0, 10);
+  const { data: list } = await db.from("forma_challenges").select("id, code, title, ex, starts, ends").in("id", ids).gte("ends", today).limit(10);
+  const out = [];
+  for (const c of list ?? []) {
+    const { data: mem } = await db.from("forma_challenge_members").select("user_id").eq("challenge_id", c.id).limit(200);
+    const members = (mem ?? []).map((m) => m.user_id);
+    out.push({ ...c, members, scores: await scores(db, members, c.starts, c.ends, c.ex) });
+  }
+  return out;
+}
+
+/** Quem estava na frente (ou empatado) e ficou para trás ganha o aviso — 1 por dia por pessoa e lugar. */
+async function notifyPassed(db: Db, u: FUser, before: Map<string, number>, after: Map<string, number>, scope: string, title: string) {
+  const old = before.get(u.id) ?? 0, now = after.get(u.id) ?? 0;
+  if (now <= old) return;
+  const passed = [...before.entries()].filter(([id, v]) => id !== u.id && v > 0 && v >= old && v < now).map(([id]) => id).slice(0, 30);
+  if (!passed.length) return;
+  const day = brNow().toISOString().slice(0, 10);
+  const name = firstName(u.name) || "Alguém";
+  const { data: fresh } = await db.from("forma_passes")
+    .upsert(passed.map((id) => ({ user_id: id, by_id: u.id, by_name: name, scope, title, day })), { onConflict: "user_id,by_id,scope,day", ignoreDuplicates: true })
+    .select("user_id");
+  const ids = (fresh ?? []).map((r) => r.user_id);
+  if (!ids.length) return;
+  const { data: subs } = await db.from("forma_push").select("id, user_id, endpoint, p256dh, auth").in("user_id", ids).eq("passes", true);
+  const where = scope === "semana" ? "no ranking da semana" : `no desafio "${title}"`;
+  for (const s of subs ?? []) {
+    const r = await sendWebPush(db, s, { title: `🔥 ${name} passou de você!`, body: `${name} acabou de passar de você ${where}. Bora treinar e pegar o lugar de volta? 💪`, url: "/treino?aba=ranking" });
+    if (r === "gone") await db.from("forma_push").delete().eq("id", s.id);
+  }
+}
+
+export async function passes(db: Db, u: FUser) {
+  const { data } = await db.from("forma_passes").select("by_name, scope, title, created_at").eq("user_id", u.id).order("created_at", { ascending: false }).limit(10);
+  return { passes: data ?? [] };
 }
 
 export async function deleteWorkout(db: Db, u: FUser, id: unknown) {
@@ -142,112 +196,11 @@ export async function deleteWorkout(db: Db, u: FUser, id: unknown) {
   return { ok: true };
 }
 
-// ---------------------------------------------------------------- personal e alunos
-export async function linkPersonal(db: Db, u: FUser, code: unknown) {
-  const c = String(code ?? "").trim().toUpperCase();
-  if (!c) {
-    await db.from("forma_users").update({ personal_id: null }).eq("id", u.id);
-    return { ok: true, personal: null };
-  }
-  const { data: p } = await db.from("forma_users").select("id, name, code, role").eq("code", c).maybeSingle();
-  if (!p || p.role !== "personal") throw new HttpError(400, "Código de personal não encontrado.");
-  if (p.id === u.id) throw new HttpError(400, "Esse é o seu próprio código.");
-  await db.from("forma_users").update({ personal_id: p.id }).eq("id", u.id);
-  return { ok: true, personal: { id: p.id, name: p.name, code: p.code } };
-}
-
 const weekStartISO = () => {
   const d = brNow();
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 };
-
-export async function students(db: Db, u: FUser) {
-  if (u.role !== "personal") throw new HttpError(403, "Só para conta de personal.");
-  const { data: list } = await db.from("forma_users").select("id, name, data").eq("personal_id", u.id).order("name").limit(300);
-  const ids = (list ?? []).map((s) => s.id);
-  const since = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
-  const { data: ws } = ids.length ? await db.from("forma_workouts").select("user_id, day, reps, perfect").in("user_id", ids).gte("day", since) : { data: [] };
-  const { data: vids } = ids.length ? await db.from("forma_videos").select("user_id").in("user_id", ids).eq("uploaded", true).is("seen_at", null) : { data: [] };
-  const wk = weekStartISO();
-  return {
-    code: u.code,
-    students: (list ?? []).map((s) => {
-      const mine = (ws ?? []).filter((w) => w.user_id === s.id);
-      const reps = mine.reduce((a, w) => a + w.reps, 0), perfect = mine.reduce((a, w) => a + w.perfect, 0);
-      return {
-        id: s.id, name: s.name,
-        week: new Set(mine.filter((w) => w.day >= wk).map((w) => w.day)).size,
-        perWeek: Number((s.data as Obj)?.goals && ((s.data as Obj).goals as Obj).perWeek) || 0,
-        last: mine.map((w) => w.day).sort().pop() ?? null,
-        form: reps ? Math.round((perfect / reps) * 100) : null,
-        newVideos: (vids ?? []).filter((v) => v.user_id === s.id).length,
-      };
-    }),
-  };
-}
-
-async function myStudent(db: Db, u: FUser, id: unknown) {
-  if (u.role !== "personal") throw new HttpError(403, "Só para conta de personal.");
-  const { data } = await db.from("forma_users").select(COLS).eq("id", String(id)).eq("personal_id", u.id).maybeSingle();
-  if (!data) throw new HttpError(404, "Aluno não encontrado.");
-  return data as FUser;
-}
-
-export async function student(db: Db, u: FUser, id: unknown) {
-  const s = await myStudent(db, u, id);
-  const { data: workouts } = await db.from("forma_workouts").select("data").eq("user_id", s.id).order("day", { ascending: false }).limit(120);
-  const { data: videos } = await db.from("forma_videos").select("id, title, secs, seen_at, created_at").eq("user_id", s.id).eq("uploaded", true).order("created_at", { ascending: false }).limit(30);
-  return { student: { id: s.id, name: s.name }, data: s.data, workouts: (workouts ?? []).map((w) => w.data), videos: videos ?? [] };
-}
-
-export async function setStudentPlan(db: Db, u: FUser, b: Obj) {
-  const s = await myStudent(db, u, b.id);
-  if (!Array.isArray(b.plan) || b.plan.length !== 7) throw new HttpError(400, "Treino inválido.");
-  await db.from("forma_users").update({ data: { ...s.data, plan: b.plan, planBy: u.name, planAt: new Date().toISOString() }, data_at: new Date().toISOString() }).eq("id", s.id);
-  return { ok: true };
-}
-
-// ---------------------------------------------------------------- vídeos para o personal
-export async function videoUpload(db: Db, u: FUser, b: Obj) {
-  if (!u.personal_id) throw new HttpError(400, "Ligue sua conta a um personal primeiro.");
-  const type = String(b.type ?? "").startsWith("video/webm") ? "webm" : "mp4";
-  const size = Number(b.size) || 0;
-  if (size > 60 * 1024 * 1024) throw new HttpError(400, "Vídeo grande demais (máx. 60 MB). Grave um treino mais curto.");
-  const { count } = await db.from("forma_videos").select("id", { count: "exact", head: true }).eq("user_id", u.id).gte("created_at", new Date(Date.now() - 86400_000).toISOString());
-  if ((count ?? 0) >= 5) throw new HttpError(400, "Limite de 5 vídeos por dia.");
-  const path = `${u.id}/${crypto.randomUUID()}.${type}`;
-  const { data, error } = await db.storage.from("forma").createSignedUploadUrl(path);
-  if (error || !data) throw new HttpError(500, "Não deu para preparar o envio.");
-  const { data: row } = await db.from("forma_videos").insert({ user_id: u.id, path, title: String(b.title ?? "").slice(0, 80), secs: Number(b.secs) || 0 }).select("id").single();
-  return { id: row!.id, url: data.signedUrl, token: data.token, path };
-}
-
-export async function videoDone(db: Db, u: FUser, id: unknown) {
-  await db.from("forma_videos").update({ uploaded: true }).eq("id", String(id)).eq("user_id", u.id);
-  return { ok: true };
-}
-
-export async function videoUrl(db: Db, u: FUser, id: unknown) {
-  const { data: v } = await db.from("forma_videos").select("id, path, user_id").eq("id", String(id)).maybeSingle();
-  if (!v) throw new HttpError(404, "Vídeo não encontrado.");
-  if (v.user_id !== u.id) {
-    await myStudent(db, u, v.user_id);
-    await db.from("forma_videos").update({ seen_at: new Date().toISOString() }).eq("id", v.id).is("seen_at", null);
-  }
-  const { data } = await db.storage.from("forma").createSignedUrl(v.path, 3600);
-  if (!data) throw new HttpError(404, "Vídeo não está mais disponível.");
-  return { url: data.signedUrl };
-}
-
-/** Faxina: vídeo de aluno some em 14 dias (banda/espaço do plano grátis). */
-export async function cleanupFormaVideos(db: Db) {
-  const { data } = await db.from("forma_videos").select("id, path").lt("created_at", new Date(Date.now() - 14 * 86400_000).toISOString()).limit(100);
-  if (!data?.length) return 0;
-  await db.storage.from("forma").remove(data.map((v) => v.path));
-  await db.from("forma_videos").delete().in("id", data.map((v) => v.id));
-  return data.length;
-}
 
 // ---------------------------------------------------------------- ranking e desafios
 async function scores(db: Db, ids: string[], from: string, to: string, ex?: string) {
@@ -269,7 +222,7 @@ async function scores(db: Db, ids: string[], from: string, to: string, ex?: stri
 const firstName = (n: string) => n.split(" ").slice(0, 2).join(" ");
 
 export async function ranking(db: Db, u: FUser) {
-  const wk = weekStartISO(), today = brNow().toISOString().slice(0, 10);
+  const wk = weekStartISO();
   const { data } = await db.from("forma_workouts").select("user_id, perfect").gte("day", wk).limit(10000);
   const tot = new Map<string, number>();
   for (const w of data ?? []) tot.set(w.user_id, (tot.get(w.user_id) ?? 0) + w.perfect);
@@ -278,19 +231,10 @@ export async function ranking(db: Db, u: FUser) {
   const ids = top.slice(0, 50).map(([id]) => id);
   const { data: names } = ids.length ? await db.from("forma_users").select("id, name").in("id", ids) : { data: [] };
   const nm = new Map((names ?? []).map((n) => [n.id, firstName(n.name)]));
-  // turma do personal (o personal e os alunos dele)
-  const groupOwner = u.role === "personal" ? u.id : u.personal_id;
-  let group: { name: string; score: number; me: boolean }[] = [];
-  if (groupOwner) {
-    const { data: members } = await db.from("forma_users").select("id, name").or(`id.eq.${groupOwner},personal_id.eq.${groupOwner}`).limit(300);
-    const sc = await scores(db, (members ?? []).map((m) => m.id), wk, today);
-    group = (members ?? []).map((m) => ({ name: firstName(m.name), score: sc.get(m.id) ?? 0, me: m.id === u.id })).sort((a, b) => b.score - a.score);
-  }
   return {
     week: wk,
     top: top.slice(0, 50).map(([id, v]) => ({ name: nm.get(id) ?? "Atleta", score: v, me: id === u.id })),
     me: pos >= 0 ? { pos: pos + 1, score: top[pos][1], total: top.length } : null,
-    group,
   };
 }
 
@@ -352,7 +296,7 @@ export async function pushSubscribe(db: Db, u: FUser, b: Obj) {
   if (!sub.endpoint?.startsWith("https://") || !sub.keys?.p256dh || !sub.keys?.auth) throw new HttpError(400, "Inscrição inválida.");
   const at = /^\d{2}:\d{2}$/.test(String(b.at)) ? String(b.at) : "18:00";
   const days = (Array.isArray(b.days) ? b.days : [1, 2, 3, 4, 5]).map(Number).filter((d) => d >= 0 && d <= 6);
-  await db.from("forma_push").upsert({ user_id: u.id, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, remind_at: at, days }, { onConflict: "endpoint" });
+  await db.from("forma_push").upsert({ user_id: u.id, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, remind_at: at, days, remind: b.remind !== false, passes: b.passes !== false }, { onConflict: "endpoint" });
   return { ok: true };
 }
 
@@ -363,7 +307,7 @@ export async function pushOff(db: Db, u: FUser, endpoint: unknown) {
 
 export async function pushTest(db: Db, u: FUser) {
   const { data } = await db.from("forma_push").select("*").eq("user_id", u.id);
-  for (const s of data ?? []) await sendWebPush(db, s, { title: "💪 FORMA", body: "Lembrete ligado! Vou te chamar na hora do treino.", url: "/treino" });
+  for (const s of data ?? []) await sendWebPush(db, s, { title: "💪 FORMA", body: "Avisos ligados! É assim que eles vão chegar.", url: "/treino" });
   return { ok: true, devices: data?.length ?? 0 };
 }
 
@@ -378,7 +322,7 @@ export async function runFormaReminders(db: Db) {
   const hhmm = now.toISOString().slice(11, 16);
   const today = now.toISOString().slice(0, 10);
   const dow = now.getUTCDay();
-  const { data } = await db.from("forma_push").select("id, user_id, endpoint, p256dh, auth, remind_at, days, last_sent").lte("remind_at", hhmm).limit(500);
+  const { data } = await db.from("forma_push").select("id, user_id, endpoint, p256dh, auth, remind_at, days, last_sent").eq("remind", true).lte("remind_at", hhmm).limit(500);
   const due = (data ?? []).filter((s) => s.days.includes(dow) && s.last_sent !== today && minutesBetween(s.remind_at, hhmm) <= 30);
   let sent = 0;
   for (const s of due) {

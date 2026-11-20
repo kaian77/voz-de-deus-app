@@ -1,9 +1,10 @@
 // Tonhão, o personal musculoso: desenhado por código (sem imagens), faz cada exercício do jeito certo.
 // Cada exercício = 2 poses (começo e meio do movimento) num quadro 100x100; a animação vai e volta.
 import type { ExId } from "./data";
+import { drawTonhao3D } from "./tonhao3d";
 
-type XY = [number, number];
-interface Pose {
+export type XY = [number, number];
+export interface Pose {
   head: XY; neck: XY;
   lSh: XY; rSh: XY; lEl: XY; rEl: XY; lWr: XY; rWr: XY;
   lHip: XY; rHip: XY; lKn: XY; rKn: XY; lAn: XY; rAn: XY;
@@ -31,17 +32,24 @@ function front(o: Front): Pose {
   };
 }
 
+/** Espelha a pose (x → 100 − x): todo exercício de lado fica com o Tonhão virado para a direita. */
+function mir(p: Pose): Pose {
+  const o = {} as Pose;
+  for (const k of Object.keys(p) as (keyof Pose)[]) o[k] = [100 - p[k][0], p[k][1]];
+  return o;
+}
+
 const STAND_LEGS = { hip: [[44, 52], [56, 52]] as [XY, XY], kn: [[44, 72], [56, 72]] as [XY, XY], an: [[44, 92], [56, 92]] as [XY, XY] };
 
-interface Anim { a: Pose; b: Pose; view: "lado" | "frente"; floor: number; prop?: "bar" | "dumbbell"; speed: number }
+export interface Anim { a: Pose; b: Pose; view: "lado" | "frente"; floor: number; prop?: "bar" | "dumbbell"; speed: number }
 
-const ANIMS: Record<ExId, Anim> = {
+export const ANIMS: Record<ExId, Anim> = {
   squat: { view: "lado", floor: 95, speed: 0.45,
     a: side({ head: [50, 11], sh: [50, 23], el: [60, 26], wr: [72, 26], hip: [50, 52], kn: [51, 73], an: [50, 93], toe: [58, 95] }),
     b: side({ head: [47, 36], sh: [46, 46], el: [58, 47], wr: [70, 46], hip: [33, 67], kn: [56, 69], an: [50, 93], toe: [58, 95] }) },
   pushup: { view: "lado", floor: 90, speed: 0.5,
-    a: side({ head: [17, 56], sh: [26, 62], el: [27, 75], wr: [27, 88], hip: [56, 66], kn: [72, 70], an: [88, 74], toe: [91, 89] }),
-    b: side({ head: [16, 74], sh: [26, 78], el: [37, 76], wr: [27, 88], hip: [56, 80], kn: [72, 82], an: [88, 84], toe: [91, 89] }) },
+    a: mir(side({ head: [17, 56], sh: [26, 62], el: [27, 75], wr: [27, 88], hip: [56, 66], kn: [72, 70], an: [88, 74], toe: [91, 89] })),
+    b: mir(side({ head: [16, 74], sh: [26, 78], el: [37, 76], wr: [27, 88], hip: [56, 80], kn: [72, 82], an: [88, 84], toe: [91, 89] })) },
   pullup: { view: "frente", floor: 200, prop: "bar", speed: 0.4,
     a: front({ head: [50, 32], sh: [[40, 42], [60, 42]], el: [[38, 26], [62, 26]], wr: [[36, 10], [64, 10]], hip: [[45, 66], [55, 66]], kn: [[46, 82], [54, 82]], an: [[47, 97], [53, 97]] }),
     b: front({ head: [50, 6], sh: [[40, 22], [60, 22]], el: [[28, 24], [72, 24]], wr: [[36, 10], [64, 10]], hip: [[45, 47], [55, 47]], kn: [[46, 64], [54, 64]], an: [[47, 80], [53, 80]] }) },
@@ -55,8 +63,8 @@ const ANIMS: Record<ExId, Anim> = {
     a: side({ head: [50, 11], sh: [50, 23], el: [50, 38], wr: [50, 50], hip: [50, 52], kn: [55, 72], an: [56, 93], toe: [63, 95], kn2: [45, 72], an2: [40, 93], toe2: [46, 95] }),
     b: side({ head: [48, 27], sh: [48, 39], el: [48, 54], wr: [48, 66], hip: [48, 67], kn: [66, 69], an: [64, 93], toe: [71, 95], kn2: [42, 89], an2: [26, 90], toe2: [26, 95] }) },
   plank: { view: "lado", floor: 90, speed: 0.25,
-    a: side({ head: [16, 64], sh: [26, 70], el: [26, 87], wr: [38, 87], hip: [56, 72], kn: [72, 75], an: [88, 78], toe: [91, 89] }),
-    b: side({ head: [16, 63], sh: [26, 69.5], el: [26, 87], wr: [38, 87], hip: [56, 71.5], kn: [72, 74.5], an: [88, 78], toe: [91, 89] }) },
+    a: mir(side({ head: [16, 64], sh: [26, 70], el: [26, 87], wr: [38, 87], hip: [56, 72], kn: [72, 75], an: [88, 78], toe: [91, 89] })),
+    b: mir(side({ head: [16, 63], sh: [26, 69.5], el: [26, 87], wr: [38, 87], hip: [56, 71.5], kn: [72, 74.5], an: [88, 78], toe: [91, 89] })) },
   lateral: { view: "frente", floor: 95, prop: "dumbbell", speed: 0.45,
     a: front({ head: [50, 14], sh: [[40, 26], [60, 26]], el: [[36, 40], [64, 40]], wr: [[35, 53], [65, 53]], ...STAND_LEGS }),
     b: front({ head: [50, 14], sh: [[40, 26], [60, 26]], el: [[25, 27], [75, 27]], wr: [[12, 29], [88, 29]], ...STAND_LEGS }) },
@@ -71,7 +79,7 @@ const ANIMS: Record<ExId, Anim> = {
     b: side({ head: [72, 30], sh: [64, 35], el: [52, 34], wr: [57, 49], hip: [40, 55], kn: [48, 74], an: [45, 93], toe: [53, 95] }) },
   burpee: { view: "lado", floor: 92, speed: 0.4,
     a: side({ head: [48, 30], sh: [46, 40], el: [56, 55], wr: [58, 70], hip: [32, 62], kn: [52, 66], an: [44, 90], toe: [52, 92] }),
-    b: side({ head: [17, 58], sh: [26, 64], el: [27, 77], wr: [27, 90], hip: [56, 68], kn: [72, 72], an: [88, 76], toe: [91, 91] }) },
+    b: mir(side({ head: [17, 58], sh: [26, 64], el: [27, 77], wr: [27, 90], hip: [56, 68], kn: [72, 72], an: [88, 76], toe: [91, 91] })) },
   situp: { view: "lado", floor: 92, speed: 0.45,
     a: side({ head: [13, 85], sh: [24, 87], el: [20, 80], wr: [16, 86], hip: [50, 87], kn: [64, 72], an: [76, 89], toe: [83, 91] }),
     b: side({ head: [44, 50], sh: [44, 61], el: [38, 55], wr: [42, 50], hip: [50, 87], kn: [64, 72], an: [76, 89], toe: [83, 91] }) },
@@ -84,7 +92,7 @@ const SKIN = "#c98a5e", SKIN_D = "#a36a43", SKIN_L = "#e0a77c", SHORTS = "#111",
 
 const lerp = (a: XY, b: XY, t: number): XY => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
-function poseAt(an: Anim, time: number): Pose {
+export function poseAt(an: Anim, time: number): Pose {
   // vai e volta, parando um pouquinho em cada ponta
   const ph = (time * an.speed) % 1;
   const t = 0.5 - 0.5 * Math.cos(ph * Math.PI * 2);
@@ -196,6 +204,7 @@ export interface TonhaoOpts { time: number; x: number; y: number; size: number; 
 
 /** Desenha o Tonhão fazendo o exercício. (x, y) = canto de cima; size = lado do quadro. */
 export function drawTonhao(g: CanvasRenderingContext2D, ex: ExId, o: TonhaoOpts) {
+  if (drawTonhao3D(g, ex, o)) return;
   const an = ANIMS[ex];
   const p = poseAt(an, o.time);
   g.save();
