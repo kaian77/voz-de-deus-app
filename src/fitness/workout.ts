@@ -7,6 +7,7 @@ import { audio, beep, numberWord, recDest, say, setVoice } from "./voice";
 import { Recorder, recordings, extOf } from "./rec";
 import { drawTonhao, intro, TONHAO } from "./tonhao";
 import { saveWorkout } from "./cloud";
+import { MET, preloadArt } from "./exart";
 
 interface Rect { x: number; y: number; w: number; h: number }
 type Phase = "loading" | "prep" | "work" | "rest" | "done";
@@ -17,6 +18,7 @@ export interface WorkoutOpts { name: string; items: PlanItem[]; onClose: () => v
 
 export async function startWorkout(o: WorkoutOpts) {
   const prefs = store.prefs();
+  preloadArt(o.items.map((i) => i.ex));
   setVoice(prefs.voice);
   audio();
   const root = document.createElement("div");
@@ -221,6 +223,10 @@ export async function startWorkout(o: WorkoutOpts) {
     let total = 0, ok = 0;
     for (const e of session.exercises) for (const s of e.sets) { total += s.reps; ok += s.good; }
     const mins = Math.max(1, Math.round((Date.now() - started) / 60000));
+    // calorias: MET médio dos exercícios × peso × horas (peso anotado em Metas; sem peso, 75 kg)
+    const kg = store.weights().slice(-1)[0]?.kg ?? 75;
+    const mets = session.exercises.map((e) => MET[e.ex] ?? 5);
+    const kcal = Math.round(((mets.reduce((a, b) => a + b, 0) / Math.max(1, mets.length)) * kg * (Date.now() - started)) / 3600000);
     modal.hidden = false;
     modal.innerHTML = `
       <div class="sum">
@@ -230,6 +236,7 @@ export async function startWorkout(o: WorkoutOpts) {
           <div><b>${total}</b><span>repetições</span></div>
           <div><b>${total ? Math.round((ok / total) * 100) : 0}%</b><span>forma certa</span></div>
           <div><b>${mins}</b><span>minutos</span></div>
+          <div><b>${kcal}</b><span>kcal (estimado)</span></div>
         </div>
         ${prs.length ? `<div class="sum-pr">🔥 Novo recorde: ${prs.map(([k, v]) => `${EXERCISES[k as keyof typeof EXERCISES].name} (${v})`).join(", ")}</div>` : ""}
         <ul class="sum-list">${session.exercises.map((e) => `<li><span>${EXERCISES[e.ex].emoji} ${EXERCISES[e.ex].name}</span><span>${e.sets.map((s) => (EXERCISES[e.ex].timed ? `${s.secs}s` : `${s.good}/${s.reps}`)).join(" · ")}</span></li>`).join("")}</ul>
