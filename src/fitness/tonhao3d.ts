@@ -216,6 +216,10 @@ function applyPose(p: Pose, side: boolean) {
     const local = pi >= 0 ? worldQ[pi].clone().invert().multiply(worldQ[i]) : worldQ[i];
     bones[i].quaternion.copy(local);
   });
+  // respiração: o peito abre e fecha de leve
+  const br = Math.sin(performance.now() / 650) * 0.025;
+  const ci = BONES.findIndex((b) => b[0] === "chest");
+  bones[ci].quaternion.multiply(tmpQ.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -br));
   // posição do quadril
   const h3 = to3(hip, side);
   const off = new THREE.Vector3(0, J.pelvis[1] - J.hipL[1], 0).applyQuaternion(qTorso);
@@ -236,8 +240,9 @@ export function drawTonhao3D(g: CanvasRenderingContext2D, ex: ExId, o: Draw3D): 
   if (px !== size) { renderer.setSize(px, px, false); size = px; }
   // câmera em 3/4 para dar profundidade
   const tgt = new THREE.Vector3(0, Y(46), 0);
-  const d = 0.98 / Math.tan(THREE.MathUtils.degToRad(14));
-  const a = THREE.MathUtils.degToRad(side ? 24 : -18);
+  const d = 1.06 / Math.tan(THREE.MathUtils.degToRad(14));
+  // câmera girando devagar em volta dele (dá vida e mostra o corpo em 3D)
+  const a = THREE.MathUtils.degToRad((side ? 24 : -18) + Math.sin(o.time * 0.35) * 14);
   camera.position.copy(tgt).add(side ? new THREE.Vector3(Math.cos(a) * d, 0.32, Math.sin(a) * d) : new THREE.Vector3(Math.sin(a) * d, 0.32, Math.cos(a) * d));
   camera.lookAt(tgt);
   bar.visible = an.prop === "bar";

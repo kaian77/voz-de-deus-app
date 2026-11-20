@@ -205,8 +205,9 @@ export interface TonhaoOpts { time: number; x: number; y: number; size: number; 
 
 /** Desenha o Tonhão fazendo o exercício. (x, y) = canto de cima; size = lado do quadro. */
 export function drawTonhao(g: CanvasRenderingContext2D, ex: ExId, o: TonhaoOpts) {
-  if (drawArt(g, ex, { ...o, speed: ANIMS[ex].speed })) return;
+  // 1º o Tonhão 3D animado; se o celular não tiver WebGL (ou antes de carregar), a ilustração; por último o desenho 2D
   if (drawTonhao3D(g, ex, o)) return;
+  if (drawArt(g, ex, { ...o, speed: ANIMS[ex].speed })) return;
   const an = ANIMS[ex];
   const p = poseAt(an, o.time);
   g.save();
