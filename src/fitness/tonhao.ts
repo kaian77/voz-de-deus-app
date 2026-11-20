@@ -2,6 +2,7 @@
 // Cada exercício = 2 poses (começo e meio do movimento) num quadro 100x100; a animação vai e volta.
 import type { ExId } from "./data";
 import { drawTonhao3D } from "./tonhao3d";
+import { drawArt } from "./exart";
 
 export type XY = [number, number];
 export interface Pose {
@@ -204,6 +205,7 @@ export interface TonhaoOpts { time: number; x: number; y: number; size: number; 
 
 /** Desenha o Tonhão fazendo o exercício. (x, y) = canto de cima; size = lado do quadro. */
 export function drawTonhao(g: CanvasRenderingContext2D, ex: ExId, o: TonhaoOpts) {
+  if (drawArt(g, ex, { ...o, speed: ANIMS[ex].speed })) return;
   if (drawTonhao3D(g, ex, o)) return;
   const an = ANIMS[ex];
   const p = poseAt(an, o.time);

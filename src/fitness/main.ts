@@ -7,6 +7,7 @@ import {
 import { shareVideo, startWorkout } from "./workout";
 import { recordings } from "./rec";
 import { drawTonhao, TONHAO } from "./tonhao";
+import { CREDIT } from "./exart";
 import { social, perfil, socialClick, boot, resetSocial } from "./social";
 
 export type Tab = "hoje" | "treinos" | "agenda" | "metas" | "videos" | "ranking" | "perfil";
@@ -97,6 +98,7 @@ function hoje() {
       <h2>O ${TONHAO} mostra e corrige</h2>
       <p class="muted">Antes de cada exercício ele mostra como faz. Se você errar, ele aparece no canto da tela fazendo certo e fala a correção no fone.</p>
       <div class="grid2">${Object.values(EXERCISES).map((e) => `<div class="mini"><canvas class="tz" data-ex="${e.id}"></canvas><b>${e.name}</b><small>celular de ${e.view} · ${e.tips[0]}</small></div>`).join("")}</div>
+      <p class="credit">${CREDIT}</p>
     </section>`;
 }
 

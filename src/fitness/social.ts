@@ -2,6 +2,7 @@
 // Os dados vêm da função `forma` (cloud.ts) e ficam guardados aqui para a tela não piscar.
 import { api, cloud, login, logout, refresh, reminderOff, reminderOn, reminderSaved, signup } from "./cloud";
 import { DAY_SHORT, EXERCISES, type ExId } from "./data";
+import { CREDIT } from "./exart";
 import { goTab, render } from "./main";
 
 const esc = (s: string) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -99,7 +100,8 @@ function localCards() {
       <h2>🎬 Meus vídeos</h2>
       <p class="muted">Os treinos gravados com o esqueleto ficam no celular.</p>
       <button class="btn ghost" data-tab="videos">Abrir meus vídeos</button>
-    </section>`;
+    </section>
+    <p class="credit">${CREDIT}</p>`;
 }
 
 const fmtDay = (d: string) => { const [y, m, dd] = d.split("-"); return `${dd}/${m}${y === String(new Date().getFullYear()) ? "" : `/${y}`}`; };
