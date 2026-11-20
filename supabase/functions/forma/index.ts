@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
       case "save_workouts": return json(await F.saveWorkouts(db, u, b));
       case "delete_workout": return json(await F.deleteWorkout(db, u, b.id));
       case "ranking": return json(await F.ranking(db, u));
+      case "passes": return json(await F.passes(db, u));
       case "challenges": return json(await F.challenges(db, u));
       case "challenge_create": return json(await F.challengeCreate(db, u, b));
       case "challenge_join": return json(await F.challengeJoin(db, u, b.code));

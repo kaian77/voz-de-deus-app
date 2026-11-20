@@ -124,8 +124,71 @@ export async function saveWorkouts(db: Db, u: FUser, b: Obj) {
   const rows = list.filter((w) => typeof w.id === "string" && /^\d{4}-\d{2}-\d{2}$/.test(String(w.date))).map((w) => ({
     id: String(w.id).slice(0, 40), user_id: u.id, day: String(w.date), data: w, ...stats(w),
   }));
-  if (rows.length) await db.from("forma_workouts").upsert(rows, { onConflict: "user_id,id" });
+  if (!rows.length) return { ok: true, saved: 0 };
+  // placar antes e depois: quem ficou para trás recebe o aviso "passou de você"
+  const wk = weekStartISO(), today = brNow().toISOString().slice(0, 10);
+  const fresh = rows.some((r) => r.day >= wk);
+  const before = fresh ? await weekTotals(db, wk) : null;
+  const chBefore = fresh ? await myChallengeScores(db, u) : [];
+  await db.from("forma_workouts").upsert(rows, { onConflict: "user_id,id" });
+  if (fresh) {
+    const after = await weekTotals(db, wk);
+    await notifyPassed(db, u, before!, after, "semana", "");
+    for (const c of chBefore) {
+      if (c.ends < today || c.starts > today) continue;
+      const now = await scores(db, c.members, c.starts, c.ends, c.ex);
+      await notifyPassed(db, u, c.scores, now, `ch:${c.code}`, c.title);
+    }
+  }
   return { ok: true, saved: rows.length };
+}
+
+async function weekTotals(db: Db, wk: string) {
+  const { data } = await db.from("forma_workouts").select("user_id, perfect").gte("day", wk).limit(20000);
+  const m = new Map<string, number>();
+  for (const w of data ?? []) m.set(w.user_id, (m.get(w.user_id) ?? 0) + w.perfect);
+  return m;
+}
+
+async function myChallengeScores(db: Db, u: FUser) {
+  const { data: mine } = await db.from("forma_challenge_members").select("challenge_id").eq("user_id", u.id).limit(20);
+  const ids = (mine ?? []).map((m) => m.challenge_id);
+  if (!ids.length) return [];
+  const today = brNow().toISOString().slice(0, 10);
+  const { data: list } = await db.from("forma_challenges").select("id, code, title, ex, starts, ends").in("id", ids).gte("ends", today).limit(10);
+  const out = [];
+  for (const c of list ?? []) {
+    const { data: mem } = await db.from("forma_challenge_members").select("user_id").eq("challenge_id", c.id).limit(200);
+    const members = (mem ?? []).map((m) => m.user_id);
+    out.push({ ...c, members, scores: await scores(db, members, c.starts, c.ends, c.ex) });
+  }
+  return out;
+}
+
+/** Quem estava na frente (ou empatado) e ficou para trás ganha o aviso — 1 por dia por pessoa e lugar. */
+async function notifyPassed(db: Db, u: FUser, before: Map<string, number>, after: Map<string, number>, scope: string, title: string) {
+  const old = before.get(u.id) ?? 0, now = after.get(u.id) ?? 0;
+  if (now <= old) return;
+  const passed = [...before.entries()].filter(([id, v]) => id !== u.id && v > 0 && v >= old && v < now).map(([id]) => id).slice(0, 30);
+  if (!passed.length) return;
+  const day = brNow().toISOString().slice(0, 10);
+  const name = firstName(u.name) || "Alguém";
+  const { data: fresh } = await db.from("forma_passes")
+    .upsert(passed.map((id) => ({ user_id: id, by_id: u.id, by_name: name, scope, title, day })), { onConflict: "user_id,by_id,scope,day", ignoreDuplicates: true })
+    .select("user_id");
+  const ids = (fresh ?? []).map((r) => r.user_id);
+  if (!ids.length) return;
+  const { data: subs } = await db.from("forma_push").select("id, user_id, endpoint, p256dh, auth").in("user_id", ids).eq("passes", true);
+  const where = scope === "semana" ? "no ranking da semana" : `no desafio "${title}"`;
+  for (const s of subs ?? []) {
+    const r = await sendWebPush(db, s, { title: `🔥 ${name} passou de você!`, body: `${name} acabou de passar de você ${where}. Bora treinar e pegar o lugar de volta? 💪`, url: "/treino?aba=ranking" });
+    if (r === "gone") await db.from("forma_push").delete().eq("id", s.id);
+  }
+}
+
+export async function passes(db: Db, u: FUser) {
+  const { data } = await db.from("forma_passes").select("by_name, scope, title, created_at").eq("user_id", u.id).order("created_at", { ascending: false }).limit(10);
+  return { passes: data ?? [] };
 }
 
 export async function deleteWorkout(db: Db, u: FUser, id: unknown) {
@@ -233,7 +296,7 @@ export async function pushSubscribe(db: Db, u: FUser, b: Obj) {
   if (!sub.endpoint?.startsWith("https://") || !sub.keys?.p256dh || !sub.keys?.auth) throw new HttpError(400, "Inscrição inválida.");
   const at = /^\d{2}:\d{2}$/.test(String(b.at)) ? String(b.at) : "18:00";
   const days = (Array.isArray(b.days) ? b.days : [1, 2, 3, 4, 5]).map(Number).filter((d) => d >= 0 && d <= 6);
-  await db.from("forma_push").upsert({ user_id: u.id, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, remind_at: at, days }, { onConflict: "endpoint" });
+  await db.from("forma_push").upsert({ user_id: u.id, endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, remind_at: at, days, remind: b.remind !== false, passes: b.passes !== false }, { onConflict: "endpoint" });
   return { ok: true };
 }
 
@@ -244,7 +307,7 @@ export async function pushOff(db: Db, u: FUser, endpoint: unknown) {
 
 export async function pushTest(db: Db, u: FUser) {
   const { data } = await db.from("forma_push").select("*").eq("user_id", u.id);
-  for (const s of data ?? []) await sendWebPush(db, s, { title: "💪 FORMA", body: "Lembrete ligado! Vou te chamar na hora do treino.", url: "/treino" });
+  for (const s of data ?? []) await sendWebPush(db, s, { title: "💪 FORMA", body: "Avisos ligados! É assim que eles vão chegar.", url: "/treino" });
   return { ok: true, devices: data?.length ?? 0 };
 }
 
@@ -259,7 +322,7 @@ export async function runFormaReminders(db: Db) {
   const hhmm = now.toISOString().slice(11, 16);
   const today = now.toISOString().slice(0, 10);
   const dow = now.getUTCDay();
-  const { data } = await db.from("forma_push").select("id, user_id, endpoint, p256dh, auth, remind_at, days, last_sent").lte("remind_at", hhmm).limit(500);
+  const { data } = await db.from("forma_push").select("id, user_id, endpoint, p256dh, auth, remind_at, days, last_sent").eq("remind", true).lte("remind_at", hhmm).limit(500);
   const due = (data ?? []).filter((s) => s.days.includes(dow) && s.last_sent !== today && minutesBetween(s.remind_at, hhmm) <= 30);
   let sent = 0;
   for (const s of due) {

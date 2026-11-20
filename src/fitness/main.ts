@@ -7,7 +7,7 @@ import {
 import { shareVideo, startWorkout } from "./workout";
 import { recordings } from "./rec";
 import { drawTonhao, TONHAO } from "./tonhao";
-import { social, perfil, socialClick, boot } from "./social";
+import { social, perfil, socialClick, boot, resetSocial } from "./social";
 
 export type Tab = "hoje" | "treinos" | "agenda" | "metas" | "videos" | "ranking" | "perfil";
 const getPlan = () => store.plan();
@@ -27,6 +27,7 @@ function itemLine(it: PlanItem) {
 
 export function goTab(t: Tab) {
   tab = t;
+  if (t === "ranking") resetSocial();
   history.replaceState(null, "", `${location.pathname}?aba=${t}`);
   render();
 boot();
@@ -424,8 +425,12 @@ app.addEventListener("change", (e) => {
 render();
 
 // Tonhão animado nos cartões dos exercícios
+let lastAnim = 0;
 function animate() {
   requestAnimationFrame(animate);
+  // ~20 quadros/s nos cartões: o Tonhão 3D é desenhado um por um e não precisa de mais no celular
+  if (performance.now() - lastAnim < 48) return;
+  lastAnim = performance.now();
   const t = performance.now() / 1000;
   document.querySelectorAll<HTMLCanvasElement>("canvas.tz").forEach((c) => {
     const r = c.getBoundingClientRect();

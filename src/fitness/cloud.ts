@@ -107,7 +107,7 @@ function b64ToBytes(b64: string) {
   return Uint8Array.from(s, (c) => c.charCodeAt(0));
 }
 
-export async function reminderOn(at: string, days: number[]) {
+export async function reminderOn(at: string, days: number[], remind = true, passes = true) {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("Este navegador não tem aviso. No iPhone, primeiro adicione o FORMA à tela inicial e abra por lá.");
   const perm = await Notification.requestPermission();
   if (perm !== "granted") throw new Error("Você não liberou os avisos. Libere nas configurações do navegador.");
@@ -116,8 +116,8 @@ export async function reminderOn(at: string, days: number[]) {
   const { key } = await api<{ key: string }>("push_key");
   let sub = await reg.pushManager.getSubscription();
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
-  await api("push_subscribe", { sub: sub.toJSON(), at, days });
-  ls.set("forma_remind", JSON.stringify({ at, days }));
+  await api("push_subscribe", { sub: sub.toJSON(), at, days, remind, passes });
+  ls.set("forma_remind", JSON.stringify({ at, days, remind, passes }));
   await api("push_test");
 }
 
@@ -128,6 +128,6 @@ export async function reminderOff() {
   ls.set("forma_remind", null);
 }
 
-export function reminderSaved(): { at: string; days: number[] } | null {
+export function reminderSaved(): { at: string; days: number[]; remind?: boolean; passes?: boolean } | null {
   try { return JSON.parse(ls.get("forma_remind") || "null"); } catch { return null; }
 }

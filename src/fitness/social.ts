@@ -14,9 +14,13 @@ interface Ranking { week: string; top: Board[]; me: { pos: number; score: number
 interface Challenge { code: string; title: string; ex: ExId; starts: string; ends: string; board: Board[] }
 let rank: Ranking | null = null;
 let chs: Challenge[] | null = null;
+let passed: { by_name: string; scope: string; title: string; created_at: string }[] | null = null;
 let authMode: "entrar" | "criar" = "criar";
 let msg = "";
 let busy = false;
+
+/** Ao abrir a aba Ranking: busca de novo (o placar muda a cada treino). */
+export function resetSocial() { rank = null; chs = null; passed = null; }
 
 function note(t: string) { msg = t; render(); }
 
@@ -78,12 +82,13 @@ export function perfil() {
       <div class="row between"><div><b>${esc(u.name)}</b><small>${esc(u.email)}</small></div><button class="btn ghost small" data-logout>Sair</button></div>
     </section>
     <section class="card">
-      <h2>⏰ Lembrete de treino</h2>
-      <p class="muted">O celular avisa na hora marcada, só nos dias em que você ainda não treinou.</p>
+      <h2>🔔 Avisos no celular</h2>
+      <label class="switch"><input type="checkbox" id="r-passes" ${rem?.passes === false ? "" : "checked"}><span>Quando alguém passar de mim no ranking ou num desafio</span></label>
+      <label class="switch"><input type="checkbox" id="r-remind" ${rem?.remind === false ? "" : "checked"}><span>Lembrete de treino (só nos dias em que eu ainda não treinei)</span></label>
       <div class="nums"><label>Horário<input type="time" id="r-at" value="${rem?.at ?? "18:00"}"></label></div>
       <div class="days small">${DAY_SHORT.map((x, i) => `<button data-rday="${i}" class="${days.includes(i) ? "on" : ""}">${x}</button>`).join("")}</div>
-      <button class="btn" data-remind>${rem ? "Salvar lembrete" : "🔔 Ligar lembrete"}</button>
-      ${rem ? `<button class="link" data-remind-off>Desligar lembrete</button>` : ""}
+      <button class="btn" data-remind>${rem ? "Salvar avisos" : "🔔 Ligar avisos"}</button>
+      ${rem ? `<button class="link" data-remind-off>Desligar todos os avisos</button>` : ""}
     </section>
     ${localCards()}`;
 }
@@ -104,10 +109,16 @@ export function social() {
   if (!cloud.session || !cloud.me) return `<h1 class="title">Ranking</h1>${authCard("Entre para ver o ranking da semana e desafiar seus amigos.")}`;
   if (!rank) loadRank();
   if (!chs) loadChallenges();
+  if (!passed) loadPasses();
   const board = (b: Board[], unit = "") => b.length ? `<ol class="board">${b.map((r, i) => `<li class="${r.me ? "me" : ""}"><span class="pos">${i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</span><span class="nm">${esc(r.name)}${r.me ? " (você)" : ""}</span><b>${r.score}${unit}</b></li>`).join("")}</ol>` : `<p class="muted">Ninguém pontuou ainda. Seja o primeiro!</p>`;
   return `
     <h1 class="title">Ranking</h1>
     ${msg ? `<p class="msg">${esc(msg)}</p>` : ""}
+    ${passed?.length ? `<section class="card passes">
+      <h2>🔥 Passaram de você</h2>
+      <ul class="mini-list">${passed.slice(0, 5).map((x) => `<li><b>${esc(x.by_name)}</b> passou de você ${x.scope === "semana" ? "no ranking da semana" : `no desafio "${esc(x.title)}"`} <small style="display:inline">· ${ago(x.created_at)}</small></li>`).join("")}</ul>
+      <button class="btn" data-tab="hoje">💪 Treinar agora e pegar o lugar de volta</button>
+    </section>` : ""}
     <section class="card">
       <h2>🏆 Repetições perfeitas na semana</h2>
       <p class="muted">Só conta repetição que o Tonhão aprovou.</p>
@@ -139,6 +150,18 @@ async function loadRank() {
   try { rank = await api<Ranking>("ranking"); } catch { rank = { week: "", top: [], me: null }; }
   render();
 }
+async function loadPasses() {
+  try { passed = (await api<{ passes: typeof passed }>("passes")).passes; } catch { passed = []; }
+  render();
+}
+
+function ago(iso: string) {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 60) return `há ${Math.max(1, m)} min`;
+  if (m < 1440) return `há ${Math.round(m / 60)} h`;
+  return `há ${Math.round(m / 1440)} dia${m >= 2880 ? "s" : ""}`;
+}
+
 async function loadChallenges() {
   try { chs = (await api<{ challenges: Challenge[] }>("challenges")).challenges; } catch { chs = []; }
   render();
@@ -158,7 +181,7 @@ export function socialClick(el: HTMLElement): boolean {
     const email = val("a-email"), pass = val("a-pass");
     run(async () => {
       if (authMode === "criar") await signup(email, pass, val("a-name")); else await login(email, pass);
-      rank = null; chs = null;
+      rank = null; chs = null; passed = null;
       await pending();
     });
     return true;
@@ -167,10 +190,11 @@ export function socialClick(el: HTMLElement): boolean {
   if (d.rday) { el.classList.toggle("on"); return true; }
   if (d.remind !== undefined) {
     const days = [...document.querySelectorAll<HTMLElement>("[data-rday].on")].map((b) => Number(b.dataset.rday));
-    run(() => reminderOn(val("r-at") || "18:00", days), "✓ Lembrete ligado! Mandei um aviso de teste.");
+    const chk = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.checked ?? true;
+    run(() => reminderOn(val("r-at") || "18:00", days, chk("r-remind"), chk("r-passes")), "✓ Avisos ligados! Mandei um aviso de teste.");
     return true;
   }
-  if (d.remindOff !== undefined) { run(reminderOff, "Lembrete desligado."); return true; }
+  if (d.remindOff !== undefined) { run(reminderOff, "Avisos desligados."); return true; }
   if (d.chNew !== undefined) {
     run(async () => {
       const r = await api<{ code: string }>("challenge_create", { title: val("c-title") || "Desafio", ex: val("c-ex"), days: Number(val("c-days")) });
