@@ -1,6 +1,6 @@
 // Tonhão, o personal musculoso: desenhado por código (sem imagens), faz cada exercício do jeito certo.
 // Cada exercício = 2 poses (começo e meio do movimento) num quadro 100x100; a animação vai e volta.
-import type { ExId } from "./data";
+import { EXERCISES, type CamId, type ExId } from "./data";
 import { drawTonhao3D } from "./tonhao3d";
 import { drawArt } from "./exart";
 
@@ -44,7 +44,7 @@ const STAND_LEGS = { hip: [[44, 52], [56, 52]] as [XY, XY], kn: [[44, 72], [56, 
 
 export interface Anim { a: Pose; b: Pose; view: "lado" | "frente"; floor: number; prop?: "bar" | "dumbbell"; speed: number }
 
-export const ANIMS: Record<ExId, Anim> = {
+export const ANIMS: Record<CamId, Anim> = {
   squat: { view: "lado", floor: 95, speed: 0.45,
     a: side({ head: [50, 11], sh: [50, 23], el: [60, 26], wr: [72, 26], hip: [50, 52], kn: [51, 73], an: [50, 93], toe: [58, 95] }),
     b: side({ head: [47, 36], sh: [46, 46], el: [58, 47], wr: [70, 46], hip: [33, 67], kn: [56, 69], an: [50, 93], toe: [58, 95] }) },
@@ -203,12 +203,38 @@ function torso(g: CanvasRenderingContext2D, p: Pose, view: "lado" | "frente") {
 
 export interface TonhaoOpts { time: number; x: number; y: number; size: number; bg?: boolean; flip?: boolean }
 
+/** Exercício da biblioteca sem animação: cartão com o símbolo do grupo e o aparelho. */
+function drawIcon(g: CanvasRenderingContext2D, ex: ExId, o: TonhaoOpts) {
+  const e = EXERCISES[ex];
+  const s = o.size;
+  g.save();
+  g.translate(o.x, o.y);
+  const gr = g.createLinearGradient(0, 0, s, s);
+  gr.addColorStop(0, "#1f2632"); gr.addColorStop(1, "#11151b");
+  g.fillStyle = gr;
+  g.beginPath(); g.roundRect(0, 0, s, s, s * 0.08); g.fill();
+  if (o.bg) { g.strokeStyle = "rgba(212,255,63,.85)"; g.lineWidth = Math.max(2, s / 90); g.stroke(); }
+  const bob = Math.sin(o.time * 3) * s * 0.015;
+  g.textAlign = "center";
+  g.font = `${s * 0.34}px system-ui, sans-serif`;
+  g.fillText(e?.emoji ?? "💪", s / 2, s * 0.52 + bob);
+  g.fillStyle = "#d4ff3f";
+  g.font = `800 ${s * 0.075}px "Inter Tight", system-ui, sans-serif`;
+  g.fillText((e?.equip ?? "").toUpperCase(), s / 2, s * 0.72);
+  g.fillStyle = "rgba(255,255,255,.6)";
+  g.font = `600 ${s * 0.06}px "Inter Tight", system-ui, sans-serif`;
+  g.fillText(e?.timed ? "o tempo corre sozinho" : "conte com o +1", s / 2, s * 0.84);
+  g.restore();
+}
+
 /** Desenha o Tonhão fazendo o exercício. (x, y) = canto de cima; size = lado do quadro. */
 export function drawTonhao(g: CanvasRenderingContext2D, ex: ExId, o: TonhaoOpts) {
   // 1º o Tonhão 3D animado; se o celular não tiver WebGL (ou antes de carregar), a ilustração; por último o desenho 2D
-  if (drawTonhao3D(g, ex, o)) return;
-  if (drawArt(g, ex, { ...o, speed: ANIMS[ex].speed })) return;
-  const an = ANIMS[ex];
+  const key = EXERCISES[ex]?.anim;
+  if (!key) return drawIcon(g, ex, o);
+  if (drawTonhao3D(g, key, o)) return;
+  if (drawArt(g, key, { ...o, speed: ANIMS[key].speed })) return;
+  const an = ANIMS[key];
   const p = poseAt(an, o.time);
   g.save();
   g.translate(o.x, o.y);

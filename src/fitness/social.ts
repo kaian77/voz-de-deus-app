@@ -131,7 +131,7 @@ export function social() {
       <p class="muted">Crie um desafio e mande o link para os amigos. Ganha quem fizer mais repetições perfeitas do exercício no período.</p>
       <label class="field">Nome<input id="c-title" placeholder="Ex.: Quem faz mais barra"></label>
       <div class="nums">
-        <label>Exercício<select id="c-ex">${Object.values(EXERCISES).map((e) => `<option value="${e.id}">${e.name}</option>`).join("")}</select></label>
+        <label>Exercício<select id="c-ex">${Object.values(EXERCISES).filter((e) => e.coach).map((e) => `<option value="${e.id}">${e.name}</option>`).join("")}</select></label>
         <label>Dura<select id="c-days"><option value="1">1 dia</option><option value="7" selected>7 dias</option><option value="15">15 dias</option><option value="30">30 dias</option></select></label>
       </div>
       <button class="btn" data-ch-new>Criar desafio</button>

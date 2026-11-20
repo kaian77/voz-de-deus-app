@@ -4,7 +4,7 @@
 import * as THREE from "three";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import type { ExId } from "./data";
+import type { CamId } from "./data";
 import { ANIMS, poseAt, type Pose, type XY } from "./tonhao";
 import { BONES, J, type V3 } from "./tonhao-body";
 
@@ -227,8 +227,8 @@ function applyPose(p: Pose, side: boolean, floor: number) {
   bones[0].position.copy(h3.add(off));
 }
 
-const frames = new Map<ExId, { cx: number; cy: number; half: number }>();
-function frameOf(ex: ExId) {
+const frames = new Map<CamId, { cx: number; cy: number; half: number }>();
+function frameOf(ex: CamId) {
   let f = frames.get(ex);
   if (f) return f;
   const an = ANIMS[ex];
@@ -250,7 +250,7 @@ export interface Draw3D { time: number; x: number; y: number; size: number; bg?:
 if (typeof window !== "undefined") init();
 
 /** Desenha o Tonhão 3D no canvas 2D. Devolve false se o 3D ainda não está pronto (aí vale o desenho 2D). */
-export function drawTonhao3D(g: CanvasRenderingContext2D, ex: ExId, o: Draw3D): boolean {
+export function drawTonhao3D(g: CanvasRenderingContext2D, ex: CamId, o: Draw3D): boolean {
   if (!ready || failed || !renderer) return false;
   const an = ANIMS[ex];
   const side = an.view === "lado";

@@ -1,6 +1,6 @@
 // O "personal": lê os pontos do corpo de cada quadro, conta as repetições e acha o erro na hora.
 // Cada exercício é uma máquina de estados (em cima → descendo → embaixo → subindo) com regras de forma.
-import type { ExId } from "./data";
+import type { CamId } from "./data";
 import { angle, dist, fromVertical, limbs, mid, P, side, type Pt } from "./pose";
 
 export interface CoachOut {
@@ -443,7 +443,7 @@ class Situp extends Analyzer {
   }
 }
 
-export function makeAnalyzer(ex: ExId, o: Opts): Analyzer {
+export function makeAnalyzer(ex: CamId, o: Opts): Analyzer {
   const C = { squat: Squat, pushup: Pushup, pullup: Pullup, curl: Curl, press: Press, lunge: Lunge, plank: Plank, lateral: Lateral, bridge: Bridge, jack: Jack, stiff: Stiff, row: Row, burpee: Burpee, situp: Situp }[ex];
   return new C(o);
 }
