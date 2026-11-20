@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => ({
   // tour3d.html = Tour 3D da PáginasPro (/3d/<slug>, rewrite no vercel.json), página separada do Studio.
   build: {
     rollupOptions: {
-      input: { main: path.resolve(__dirname, "index.html"), tour3d: path.resolve(__dirname, "tour3d.html"), corrida: path.resolve(__dirname, "corrida.html"), montagem: path.resolve(__dirname, "montagem.html"), coracao: path.resolve(__dirname, "coracao.html"), implante: path.resolve(__dirname, "implante.html"), predio: path.resolve(__dirname, "predio.html"), jogo: path.resolve(__dirname, "jogo.html"), resgate: path.resolve(__dirname, "resgate.html") },
+      input: { main: path.resolve(__dirname, "index.html"), tour3d: path.resolve(__dirname, "tour3d.html"), corrida: path.resolve(__dirname, "corrida.html"), montagem: path.resolve(__dirname, "montagem.html"), coracao: path.resolve(__dirname, "coracao.html"), implante: path.resolve(__dirname, "implante.html"), predio: path.resolve(__dirname, "predio.html"), jogo: path.resolve(__dirname, "jogo.html"), resgate: path.resolve(__dirname, "resgate.html"), treino: path.resolve(__dirname, "treino.html") },
     },
   },
 }));

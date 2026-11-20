@@ -1,0 +1,16 @@
+{
+  "name": "FORMA · personal com IA",
+  "short_name": "FORMA",
+  "description": "Treino com personal pela câmera: conta as repetições e corrige a postura na hora.",
+  "start_url": "/treino",
+  "scope": "/treino",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
+  "icons": [
+    { "src": "/treino/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/treino/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/treino/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
