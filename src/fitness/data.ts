@@ -1,9 +1,14 @@
 // Dados do app de treino: exercícios, treinos por dia da semana, histórico, metas e peso.
 // Tudo fica neste aparelho (localStorage); as gravações ficam no IndexedDB (rec.ts).
 
-export type ExId =
+import { LIB } from "./lib";
+
+/** Exercícios que a câmera corrige (cada um tem a sua regra em coach.ts e animação do Tonhão). */
+export type CamId =
   | "squat" | "pushup" | "pullup" | "curl" | "press" | "lunge" | "plank" | "lateral" | "bridge" | "jack"
   | "stiff" | "row" | "burpee" | "situp";
+/** Qualquer exercício: os da câmera ou os da biblioteca ("l0054"...). */
+export type ExId = string;
 
 export interface ExerciseInfo {
   id: ExId;
@@ -15,6 +20,14 @@ export interface ExerciseInfo {
   muscles: string;
   tips: string[];
   emoji: string;
+  /** Regra da câmera usada (o próprio id nos 14; na biblioteca, o movimento igual). Sem = contagem por toque. */
+  coach?: CamId;
+  /** Animação do Tonhão (coach ou o movimento parecido). */
+  anim?: CamId;
+  group?: string;
+  equip?: string;
+  met?: number;
+  lib?: boolean;
 }
 
 export const EXERCISES: Record<ExId, ExerciseInfo> = {
@@ -47,6 +60,22 @@ export const EXERCISES: Record<ExId, ExerciseInfo> = {
   jack: { id: "jack", name: "Polichinelo", view: "frente", muscles: "Cardio", emoji: "⭐",
     tips: ["Mãos se encontram em cima da cabeça", "Pés abrem mais que o ombro"] },
 };
+
+for (const e of Object.values(EXERCISES)) { e.coach = e.id as CamId; e.anim = e.id as CamId; }
+export const CAM_IDS = Object.keys(EXERCISES) as CamId[];
+
+const GROUP_EMOJI: Record<string, string> = { Peito: "🏋️", Pernas: "🦵", Glúteo: "🍑", Posterior: "🦵", Ombros: "🙌", Braços: "💪", Costas: "🚣", Cardio: "❤️" };
+for (const l of LIB) {
+  EXERCISES[l.id] = {
+    id: l.id, name: l.name, view: l.view ?? "lado", timed: l.timed, muscles: l.muscles, tips: l.steps,
+    emoji: GROUP_EMOJI[l.group] ?? "💪", coach: l.coach, anim: l.coach ?? l.anim, group: l.group, equip: l.equip, met: l.met, lib: true,
+  };
+}
+
+/** Exercício desconhecido (apagado da biblioteca): mostra algo em vez de quebrar. */
+export function exInfo(id: ExId): ExerciseInfo {
+  return EXERCISES[id] ?? { id, name: id, view: "lado", muscles: "", tips: [], emoji: "💪", lib: true };
+}
 
 export interface PlanItem {
   ex: ExId;

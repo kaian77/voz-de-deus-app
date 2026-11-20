@@ -7,7 +7,7 @@ import { audio, beep, numberWord, recDest, say, setVoice } from "./voice";
 import { Recorder, recordings, extOf } from "./rec";
 import { drawTonhao, intro, TONHAO } from "./tonhao";
 import { saveWorkout } from "./cloud";
-import { MET, preloadArt } from "./exart";
+import { metOf, preloadArt } from "./exart";
 
 interface Rect { x: number; y: number; w: number; h: number }
 type Phase = "loading" | "prep" | "work" | "rest" | "done";
@@ -59,7 +59,10 @@ export async function startWorkout(o: WorkoutOpts) {
   let ei = 0, setNo = 1, reps = 0, good = 0, secs = 0;
   let setIssues = new Set<string>();
   const logs: ExLog[] = o.items.map((it) => ({ ex: it.ex, target: it.reps, kg: it.kg, sets: [] }));
-  let analyzer: Analyzer = makeAnalyzer(o.items[0].ex, prefs);
+  // exercício da biblioteca sem regra de câmera: contagem por toque (+1) ou tempo correndo sozinho
+  const mk = (ex: string): Analyzer | null => { const c = EXERCISES[ex]?.coach; return c ? makeAnalyzer(c, prefs) : null; };
+  let analyzer: Analyzer | null = mk(o.items[0].ex);
+  let manualAt = 0;
   let timer = 0; // fim do descanso / contagem (ms)
   let lastOut: CoachOut | null = null;
   let feedback = "", feedbackAt = 0, feedbackBad = false;
@@ -100,7 +103,7 @@ export async function startWorkout(o: WorkoutOpts) {
     const it = item(), inf = info();
     const unit = inf.timed ? "segundos" : "repetições";
     if (first) {
-      say(`${intro(inf.name, inf.tips, !introduced)} ${it.sets} séries de ${it.reps} ${unit}. Deixa o celular de ${inf.view === "lado" ? "lado" : "frente"} para você, pegando o corpo inteiro.`, { now: true });
+      say(`${intro(inf.name, inf.tips, !introduced)} ${it.sets} séries de ${it.reps} ${unit}. ${inf.coach ? `Deixa o celular de ${inf.view === "lado" ? "lado" : "frente"} para você, pegando o corpo inteiro.` : inf.timed ? "O tempo corre sozinho, é só ir." : "Toque no mais um a cada repetição."}`, { now: true });
       introduced = true;
     }
     phase = "prep";
@@ -111,7 +114,8 @@ export async function startWorkout(o: WorkoutOpts) {
   function startSet() {
     phase = "work";
     reps = 0; good = 0; secs = 0; setIssues = new Set(); miss = 0;
-    analyzer = makeAnalyzer(item().ex, prefs);
+    analyzer = mk(item().ex);
+    manualAt = performance.now();
     beep("go");
     say("Vai!", { now: true });
     show("Vai!");
@@ -225,7 +229,7 @@ export async function startWorkout(o: WorkoutOpts) {
     const mins = Math.max(1, Math.round((Date.now() - started) / 60000));
     // calorias: MET médio dos exercícios × peso × horas (peso anotado em Metas; sem peso, 75 kg)
     const kg = store.weights().slice(-1)[0]?.kg ?? 75;
-    const mets = session.exercises.map((e) => MET[e.ex] ?? 5);
+    const mets = session.exercises.map((e) => metOf(e.ex));
     const kcal = Math.round(((mets.reduce((a, b) => a + b, 0) / Math.max(1, mets.length)) * kg * (Date.now() - started)) / 3600000);
     modal.hidden = false;
     modal.innerHTML = `
@@ -418,7 +422,7 @@ export async function startWorkout(o: WorkoutOpts) {
       y += u * 8;
       text(`${phase === "rest" ? "A seguir: " : ""}${ninf.name} · série ${setNo}/${nx.sets}`, W / 2, y, u * 4.2, "#fff", "center", 700);
       y += u * 6;
-      text(`${nx.reps} ${ninf.timed ? "segundos" : "repetições"} · celular de ${ninf.view}`, W / 2, y, u * 3.6, "rgba(255,255,255,.75)", "center", 600);
+      text(`${nx.reps} ${ninf.timed ? "segundos" : "repetições"} · ${ninf.coach ? `celular de ${ninf.view}` : ninf.timed ? "tempo corre sozinho" : "toque +1 a cada repetição"}`, W / 2, y, u * 3.6, "rgba(255,255,255,.75)", "center", 600);
       y += u * 8;
       ninf.tips.slice(0, 3).forEach((t, i) => text(`✓ ${t}`, W / 2, y + i * u * 5.2, u * 3.4, "rgba(255,255,255,.9)", "center", 600));
     }
@@ -457,15 +461,27 @@ export async function startWorkout(o: WorkoutOpts) {
       const lm = res.landmarks?.[0];
       if (lm) {
         pts = smoother.push(lm.map((q) => ({ x: q.x * aspect, y: q.y, v: q.visibility ?? 1 })));
-        if (phase === "work") onCoach(analyzer.update(pts));
+        if (phase === "work" && analyzer) onCoach(analyzer.update(pts));
         else lastOut = null;
       } else {
         pts = null;
-        if (phase === "work") onCoach({ bad: new Set(), visible: false, progress: 0 });
+        if (phase === "work" && analyzer) onCoach({ bad: new Set(), visible: false, progress: 0 });
       }
     }
     if (pts) drawSkeleton(pts, phase === "work" ? lastOut : null, mirror, W, aspect, r);
 
+    // sem câmera corrigindo e por tempo (cardio, prancha da biblioteca): o tempo corre sozinho
+    if (!paused && phase === "work" && !analyzer && info().timed) {
+      const now = performance.now();
+      secs += Math.min(0.25, (now - manualAt) / 1000);
+      manualAt = now;
+      const left = Math.ceil(item().reps - secs);
+      if (left !== lastTick && (left === 10 || left === 30 || left === 60 || (left <= 3 && left > 0))) {
+        lastTick = left;
+        say(left >= 10 ? `Faltam ${left} segundos` : numberWord(left), { now: true });
+      }
+      if (secs >= item().reps) finishSet();
+    }
     // tempo das fases
     if (!paused && (phase === "prep" || phase === "rest")) {
       const left = Math.ceil((timer - Date.now()) / 1000);

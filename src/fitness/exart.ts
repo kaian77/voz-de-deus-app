@@ -2,18 +2,18 @@
 // visível — está no Perfil e embaixo da lista de exercícios; NÃO usar as animações pagas de premium-samples).
 // Cada exercício tem a posição inicial e a final (public/treino/ex/<id>-start|peak.webp); a imagem vai e volta entre
 // as duas com uma troca suave, como uma animação. Exercício parado (prancha, burpee) tem uma só ("main").
-import type { ExId } from "./data";
+import { EXERCISES, type CamId, type ExId } from "./data";
 
 /** Gasto do exercício (MET do RepDB) para estimar as calorias. */
-export const MET: Record<ExId, number> = {
+export const MET: Record<CamId, number> = {
   squat: 6, pushup: 5, pullup: 6, curl: 5, press: 6, lunge: 6, plank: 3.5, lateral: 5, bridge: 3.5, jack: 8, stiff: 6, row: 6, burpee: 8, situp: 5,
 };
 
-const SINGLE = new Set<ExId>(["plank", "burpee"]);
+const SINGLE = new Set<CamId>(["plank", "burpee"]);
 export const CREDIT = `Ilustrações e dados dos exercícios: <a href="https://repdb.co" target="_blank" rel="nofollow noopener">Exercise data by RepDB (repdb.co)</a>`;
 
 interface Pair { a: HTMLImageElement; b: HTMLImageElement | null; ok: boolean }
-const cache = new Map<ExId, Pair>();
+const cache = new Map<CamId, Pair>();
 
 function img(src: string, done: () => void) {
   const i = new Image();
@@ -23,7 +23,7 @@ function img(src: string, done: () => void) {
   return i;
 }
 
-function get(ex: ExId): Pair {
+function get(ex: CamId): Pair {
   let p = cache.get(ex);
   if (p) return p;
   let left = SINGLE.has(ex) ? 1 : 2;
@@ -36,12 +36,15 @@ function get(ex: ExId): Pair {
 }
 
 /** Carrega todas antes (a tela do treino não fica esperando). */
-export function preloadArt(list: ExId[]) { for (const e of list) get(e); }
+export function preloadArt(list: ExId[]) { for (const e of list) { const k = EXERCISES[e]?.anim; if (k) get(k); } }
+
+/** Gasto (MET) de qualquer exercício. */
+export function metOf(ex: ExId) { return (MET as Record<string, number>)[ex] ?? EXERCISES[ex]?.met ?? 5; }
 
 export interface ArtOpts { time: number; x: number; y: number; size: number; bg?: boolean; speed?: number }
 
 /** Desenha a ilustração "animada". Devolve false se ainda não carregou (aí vale o Tonhão 3D/2D). */
-export function drawArt(g: CanvasRenderingContext2D, ex: ExId, o: ArtOpts): boolean {
+export function drawArt(g: CanvasRenderingContext2D, ex: CamId, o: ArtOpts): boolean {
   const p = get(ex);
   if (!p.ok) return false;
   const s = o.size;

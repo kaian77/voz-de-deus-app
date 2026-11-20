@@ -1,6 +1,6 @@
 // Tonhão, o personal musculoso: desenhado por código (sem imagens), faz cada exercício do jeito certo.
 // Cada exercício = 2 poses (começo e meio do movimento) num quadro 100x100; a animação vai e volta.
-import type { ExId } from "./data";
+import { EXERCISES, type CamId, type ExId } from "./data";
 import { drawTonhao3D } from "./tonhao3d";
 import { drawArt } from "./exart";
 
@@ -44,7 +44,7 @@ const STAND_LEGS = { hip: [[44, 52], [56, 52]] as [XY, XY], kn: [[44, 72], [56, 
 
 export interface Anim { a: Pose; b: Pose; view: "lado" | "frente"; floor: number; prop?: "bar" | "dumbbell"; speed: number }
 
-export const ANIMS: Record<ExId, Anim> = {
+export const ANIMS: Record<CamId, Anim> = {
   squat: { view: "lado", floor: 95, speed: 0.45,
     a: side({ head: [50, 11], sh: [50, 23], el: [60, 26], wr: [72, 26], hip: [50, 52], kn: [51, 73], an: [50, 93], toe: [58, 95] }),
     b: side({ head: [47, 36], sh: [46, 46], el: [58, 47], wr: [70, 46], hip: [33, 67], kn: [56, 69], an: [50, 93], toe: [58, 95] }) },
@@ -64,8 +64,8 @@ export const ANIMS: Record<ExId, Anim> = {
     a: side({ head: [50, 11], sh: [50, 23], el: [50, 38], wr: [50, 50], hip: [50, 52], kn: [55, 72], an: [56, 93], toe: [63, 95], kn2: [45, 72], an2: [40, 93], toe2: [46, 95] }),
     b: side({ head: [48, 27], sh: [48, 39], el: [48, 54], wr: [48, 66], hip: [48, 67], kn: [66, 69], an: [64, 93], toe: [71, 95], kn2: [42, 89], an2: [26, 90], toe2: [26, 95] }) },
   plank: { view: "lado", floor: 90, speed: 0.25,
-    a: mir(side({ head: [16, 64], sh: [26, 70], el: [26, 87], wr: [38, 87], hip: [56, 72], kn: [72, 75], an: [88, 78], toe: [91, 89] })),
-    b: mir(side({ head: [16, 63], sh: [26, 69.5], el: [26, 87], wr: [38, 87], hip: [56, 71.5], kn: [72, 74.5], an: [88, 78], toe: [91, 89] })) },
+    a: mir(side({ head: [16, 64], sh: [26, 70], el: [27, 87], wr: [14, 87.5], hip: [56, 72], kn: [72, 75], an: [88, 78], toe: [91, 89] })),
+    b: mir(side({ head: [16, 63], sh: [26, 69.5], el: [27, 87], wr: [14, 87.5], hip: [56, 71.5], kn: [72, 74.5], an: [88, 78], toe: [91, 89] })) },
   lateral: { view: "frente", floor: 95, prop: "dumbbell", speed: 0.45,
     a: front({ head: [50, 14], sh: [[40, 26], [60, 26]], el: [[36, 40], [64, 40]], wr: [[35, 53], [65, 53]], ...STAND_LEGS }),
     b: front({ head: [50, 14], sh: [[40, 26], [60, 26]], el: [[25, 27], [75, 27]], wr: [[12, 29], [88, 29]], ...STAND_LEGS }) },
@@ -203,12 +203,38 @@ function torso(g: CanvasRenderingContext2D, p: Pose, view: "lado" | "frente") {
 
 export interface TonhaoOpts { time: number; x: number; y: number; size: number; bg?: boolean; flip?: boolean }
 
+/** Exercício da biblioteca sem animação: cartão com o símbolo do grupo e o aparelho. */
+function drawIcon(g: CanvasRenderingContext2D, ex: ExId, o: TonhaoOpts) {
+  const e = EXERCISES[ex];
+  const s = o.size;
+  g.save();
+  g.translate(o.x, o.y);
+  const gr = g.createLinearGradient(0, 0, s, s);
+  gr.addColorStop(0, "#1f2632"); gr.addColorStop(1, "#11151b");
+  g.fillStyle = gr;
+  g.beginPath(); g.roundRect(0, 0, s, s, s * 0.08); g.fill();
+  if (o.bg) { g.strokeStyle = "rgba(212,255,63,.85)"; g.lineWidth = Math.max(2, s / 90); g.stroke(); }
+  const bob = Math.sin(o.time * 3) * s * 0.015;
+  g.textAlign = "center";
+  g.font = `${s * 0.34}px system-ui, sans-serif`;
+  g.fillText(e?.emoji ?? "💪", s / 2, s * 0.52 + bob);
+  g.fillStyle = "#d4ff3f";
+  g.font = `800 ${s * 0.075}px "Inter Tight", system-ui, sans-serif`;
+  g.fillText((e?.equip ?? "").toUpperCase(), s / 2, s * 0.72);
+  g.fillStyle = "rgba(255,255,255,.6)";
+  g.font = `600 ${s * 0.06}px "Inter Tight", system-ui, sans-serif`;
+  g.fillText(e?.timed ? "o tempo corre sozinho" : "conte com o +1", s / 2, s * 0.84);
+  g.restore();
+}
+
 /** Desenha o Tonhão fazendo o exercício. (x, y) = canto de cima; size = lado do quadro. */
 export function drawTonhao(g: CanvasRenderingContext2D, ex: ExId, o: TonhaoOpts) {
   // 1º o Tonhão 3D animado; se o celular não tiver WebGL (ou antes de carregar), a ilustração; por último o desenho 2D
-  if (drawTonhao3D(g, ex, o)) return;
-  if (drawArt(g, ex, { ...o, speed: ANIMS[ex].speed })) return;
-  const an = ANIMS[ex];
+  const key = EXERCISES[ex]?.anim;
+  if (!key) return drawIcon(g, ex, o);
+  if (drawTonhao3D(g, key, o)) return;
+  if (drawArt(g, key, { ...o, speed: ANIMS[key].speed })) return;
+  const an = ANIMS[key];
   const p = poseAt(an, o.time);
   g.save();
   g.translate(o.x, o.y);

@@ -139,3 +139,10 @@ video.pv { width: 100%; border-radius: 12px; background: #000; max-height: 70vh;
 .credit { font-size: 11px; color: var(--muted); margin: 12px 0 0; text-align: center; }
 .credit a { color: var(--muted); }
 .mini canvas { background: #dcebf8; }
+
+.libx { border-top: 1px solid var(--line); padding: 10px 0; }
+.libx summary { display: flex; justify-content: space-between; gap: 10px; cursor: pointer; font-weight: 700; list-style: none; }
+.libx summary::-webkit-details-marker { display: none; }
+.libx summary small { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.libx ol { margin: 8px 0; padding-left: 20px; font-size: 14px; line-height: 1.5; }
+.libx .btn.small { margin-top: 4px; }

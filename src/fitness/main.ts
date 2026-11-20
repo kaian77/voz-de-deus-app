@@ -10,7 +10,7 @@ import { drawTonhao, TONHAO } from "./tonhao";
 import { CREDIT } from "./exart";
 import { social, perfil, socialClick, boot, resetSocial } from "./social";
 
-export type Tab = "hoje" | "treinos" | "agenda" | "metas" | "videos" | "ranking" | "perfil";
+export type Tab = "hoje" | "treinos" | "agenda" | "metas" | "videos" | "ranking" | "perfil" | "biblioteca";
 const getPlan = () => store.plan();
 const setPlan = (p: ReturnType<typeof store.plan>) => store.setPlan(p);
 const app = document.getElementById("app")!;
@@ -36,9 +36,9 @@ boot();
 }
 
 export function render() {
-  const nav = tab === "videos" ? "perfil" : tab;
+  const nav = tab === "videos" ? "perfil" : tab === "biblioteca" ? "hoje" : tab;
   app.innerHTML = `
-    <main class="page">${({ hoje, treinos, agenda, metas, videos, ranking: social, perfil } as Record<Tab, () => string>)[tab]()}</main>
+    <main class="page">${({ hoje, treinos, agenda, metas, videos, ranking: social, perfil, biblioteca } as Record<Tab, () => string>)[tab]()}</main>
     <nav class="tabs">
       ${([["hoje", "🏠", "Hoje"], ["treinos", "📋", "Treinos"], ["agenda", "📅", "Agenda"], ["metas", "🎯", "Metas"], ["ranking", "🏆", "Ranking"], ["perfil", "👤", "Perfil"]] as const)
         .map(([k, i, n]) => `<button data-tab="${k}" class="${nav === k ? "on" : ""}"><span>${i}</span>${n}</button>`).join("")}
@@ -87,7 +87,7 @@ function hoje() {
       <h2>Treino livre</h2>
       <p class="muted">Escolha um exercício, as séries e as repetições.</p>
       <div class="free">
-        <select id="f-ex">${Object.values(EXERCISES).map((e) => `<option value="${e.id}">${e.emoji} ${e.name}</option>`).join("")}</select>
+        <select id="f-ex">${exOptions()}</select>
         <label>Séries<input id="f-sets" type="number" min="1" max="20" value="3" inputmode="numeric"></label>
         <label><span id="f-unit">Repetições</span><input id="f-reps" type="number" min="1" max="300" value="10" inputmode="numeric"></label>
         <label>Descanso (s)<input id="f-rest" type="number" min="0" max="600" value="60" inputmode="numeric"></label>
@@ -97,9 +97,47 @@ function hoje() {
     <section class="card">
       <h2>O ${TONHAO} mostra e corrige</h2>
       <p class="muted">Antes de cada exercício ele mostra como faz. Se você errar, ele aparece no canto da tela fazendo certo e fala a correção no fone.</p>
-      <div class="grid2">${Object.values(EXERCISES).map((e) => `<div class="mini"><canvas class="tz" data-ex="${e.id}"></canvas><b>${e.name}</b><small>celular de ${e.view} · ${e.tips[0]}</small></div>`).join("")}</div>
+      <div class="grid2">${Object.values(EXERCISES).filter((e) => !e.lib).map((e) => `<div class="mini"><canvas class="tz" data-ex="${e.id}"></canvas><b>${e.name}</b><small>celular de ${e.view} · ${e.tips[0]}</small></div>`).join("")}</div>
       <p class="credit">${CREDIT}</p>
+    </section>
+    <section class="card">
+      <h2>📚 Biblioteca de academia</h2>
+      <p class="muted">${Object.values(EXERCISES).filter((e) => e.lib).length} exercícios de máquina, cabo, barra, halteres e cardio, com o passo a passo. Monte o treino com eles em Treinos.</p>
+      <button class="btn ghost" data-tab="biblioteca">Abrir a biblioteca</button>
     </section>`;
+}
+
+/** Opções de exercício agrupadas: primeiro os que a câmera corrige, depois a biblioteca por grupo. */
+function exOptions() {
+  const all = Object.values(EXERCISES);
+  const opt = (e: (typeof all)[number]) => `<option value="${e.id}">${e.emoji} ${esc(e.name)}${e.timed && e.lib ? " (tempo)" : ""}</option>`;
+  const cam = all.filter((e) => e.coach);
+  const groups = new Map<string, typeof all>();
+  for (const e of all.filter((x) => !x.coach)) groups.set(e.group ?? "Outros", [...(groups.get(e.group ?? "Outros") ?? []), e]);
+  return `<optgroup label="📷 A câmera corrige">${cam.map(opt).join("")}</optgroup>` +
+    [...groups.entries()].map(([g, l]) => `<optgroup label="${esc(g)} · contagem por toque">${l.map(opt).join("")}</optgroup>`).join("");
+}
+
+// ---------------- Biblioteca ----------------
+function biblioteca() {
+  const lib = Object.values(EXERCISES).filter((e) => e.lib);
+  const groups = new Map<string, typeof lib>();
+  for (const e of lib) groups.set(e.group ?? "Outros", [...(groups.get(e.group ?? "Outros") ?? []), e]);
+  return `
+    <button class="link back" data-tab="hoje">‹ Hoje</button>
+    <h1 class="title">Biblioteca</h1>
+    <p class="muted">📷 = a câmera corrige · ⏱ = o tempo corre sozinho · 👆 = conte com o +1</p>
+    ${[...groups.entries()].map(([g, l]) => `
+      <section class="card">
+        <h2>${esc(g)}</h2>
+        ${l.map((e) => `
+          <details class="libx">
+            <summary><span>${e.coach ? "📷" : e.timed ? "⏱" : "👆"} ${esc(e.name)}</span><small>${esc(e.equip ?? "")}</small></summary>
+            <p class="muted">${esc(e.muscles)}</p>
+            <ol>${e.tips.map((t) => `<li>${esc(t)}</li>`).join("")}</ol>
+            <button class="btn small" data-quick="${e.id}">▶ Fazer agora</button>
+          </details>`).join("")}
+      </section>`).join("")}`;
 }
 
 // ---------------- Treinos (montar a semana) ----------------
@@ -129,7 +167,7 @@ function treinos() {
             </div>
           </div>`).join("")}</div>
         <div class="add">
-          <select id="add-ex">${Object.values(EXERCISES).map((e) => `<option value="${e.id}">${e.emoji} ${e.name}</option>`).join("")}</select>
+          <select id="add-ex">${exOptions()}</select>
           <button class="btn" data-add>+ Adicionar</button>
         </div>
         ${day.items.length ? `<button class="btn ghost" data-go="day:${editDay}">▶ Fazer este treino agora</button>` : ""}
@@ -341,6 +379,11 @@ app.addEventListener("click", (e) => {
   const d = el.dataset;
   if (d.tab) { goTab(d.tab as Tab); return; }
   if (socialClick(el)) return;
+  if (d.quick) {
+    const e = EXERCISES[d.quick];
+    go(e.name, [{ ex: e.id, sets: e.timed ? 1 : 3, reps: e.timed ? 600 : 12, rest: 60 }]);
+    return;
+  }
   if (d.go) {
     const plan = store.plan();
     if (d.go === "today") { const day = plan[new Date().getDay()]; if (day?.items.length) go(day.name, day.items); }
@@ -357,7 +400,7 @@ app.addEventListener("click", (e) => {
   if (d.day) { editDay = +d.day; render(); return; }
   if (d.add !== undefined) {
     const ex = (document.getElementById("add-ex") as HTMLSelectElement).value as ExId;
-    plan[editDay]!.items.push({ ex, sets: 3, reps: EXERCISES[ex].timed ? 30 : 10, rest: 60 });
+    plan[editDay]!.items.push({ ex, sets: EXERCISES[ex].timed && EXERCISES[ex].lib ? 1 : 3, reps: EXERCISES[ex].timed ? (EXERCISES[ex].lib ? 600 : 30) : 10, rest: 60 });
     setPlan(plan); render(); return;
   }
   if (d.rm) { plan[editDay]!.items.splice(+d.rm, 1); setPlan(plan); render(); return; }
@@ -416,7 +459,7 @@ app.addEventListener("change", (e) => {
   if (t.id === "f-ex") {
     const timed = EXERCISES[t.value as ExId].timed;
     document.getElementById("f-unit")!.textContent = timed ? "Segundos" : "Repetições";
-    (document.getElementById("f-reps") as HTMLInputElement).value = timed ? "30" : "10";
+    (document.getElementById("f-reps") as HTMLInputElement).value = timed ? (EXERCISES[t.value].lib ? "300" : "30") : "10";
   }
   if (t.id === "g-week" || t.id === "g-reps") {
     store.setGoals({ ...store.goals(), perWeek: +(document.getElementById("g-week") as HTMLInputElement).value || 4, monthlyReps: +(document.getElementById("g-reps") as HTMLInputElement).value || 1500 });
