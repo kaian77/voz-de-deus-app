@@ -61,3 +61,16 @@ export async function sendPendingPush(db: SupabaseClient) {
   }
   return out;
 }
+
+/** Manda um aviso para uma inscrição qualquer (app FORMA). "gone" = aparelho desinscrito, apagar. */
+export async function sendWebPush(db: SupabaseClient, sub: { endpoint: string; p256dh: string; auth: string }, payload: { title: string; body: string; url: string }) {
+  const app = await vapid(db);
+  try {
+    await app.subscribe({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } })
+      .pushTextMessage(JSON.stringify(payload), { urgency: webpush.Urgency.High, ttl: 3 * 3600 });
+    return "ok" as const;
+  } catch (e) {
+    if (e instanceof webpush.PushMessageError && (e.isGone() || e.response.status === 404)) return "gone" as const;
+    return e instanceof Error ? e.message : String(e);
+  }
+}

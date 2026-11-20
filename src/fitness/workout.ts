@@ -6,6 +6,7 @@ import { BONES, loadPose, Smoother, type Pt } from "./pose";
 import { audio, beep, numberWord, recDest, say, setVoice } from "./voice";
 import { Recorder, recordings, extOf } from "./rec";
 import { drawTonhao, intro, TONHAO } from "./tonhao";
+import { cloud, saveWorkout, sendVideo } from "./cloud";
 
 interface Rect { x: number; y: number; w: number; h: number }
 type Phase = "loading" | "prep" | "work" | "rest" | "done";
@@ -66,6 +67,8 @@ export async function startWorkout(o: WorkoutOpts) {
   let lastHold = 0;
   let pipUntil = 0;
   let introduced = false;
+  let miss = 0; // erros seguidos na série
+  let laughUntil = 0;
   const started = Date.now();
   const smoother = new Smoother();
   const rec = new Recorder();
@@ -105,7 +108,7 @@ export async function startWorkout(o: WorkoutOpts) {
 
   function startSet() {
     phase = "work";
-    reps = 0; good = 0; secs = 0; setIssues = new Set();
+    reps = 0; good = 0; secs = 0; setIssues = new Set(); miss = 0;
     analyzer = makeAnalyzer(item().ex, prefs);
     beep("go");
     say("Vai!", { now: true });
@@ -144,6 +147,8 @@ export async function startWorkout(o: WorkoutOpts) {
     if (out.cue && !out.rep) { show(out.cue, out.bad.size > 0); say(out.cue, { gap: 4000 }); }
     if (out.rep) {
       for (const i of out.rep.issues) setIssues.add(i);
+      miss = out.rep.good ? 0 : miss + 1;
+      if (miss >= 3 && prefs.laugh) return laughReset();
       if (out.rep.counted) {
         reps++;
         if (out.rep.good) good++;
@@ -178,6 +183,23 @@ export async function startWorkout(o: WorkoutOpts) {
     }
   }
 
+  /** Errou 3 seguidas: o Tonhão dá risada e a série volta do zero. */
+  function laughReset() {
+    miss = 0;
+    reps = 0; good = 0;
+    setIssues.add("Série zerada: errou 3 seguidas");
+    laughUntil = Date.now() + 4500;
+    pipUntil = laughUntil;
+    beep("laugh");
+    const lines = [
+      "Rá rá rá rá! Tá de brincadeira comigo, né? Errou três seguidas. Volta do zero!",
+      "Rá rá rá! Assim não dá, campeão! Vamos de novo, do zero!",
+      "Ka ka ka ka! Isso aí foi qualquer coisa, menos exercício. Zera e faz direito!",
+    ];
+    say(lines[Math.floor(Math.random() * lines.length)], { now: true });
+    show("😂 Errou demais! Série zerada, do zero!", true);
+  }
+
   async function finish() {
     if (phase === "done") return;
     phase = "done";
@@ -185,7 +207,7 @@ export async function startWorkout(o: WorkoutOpts) {
     beep("done");
     const before = records(store.history());
     const session: Session = { id: uid(), date: today(), started, ended: Date.now(), name: o.name, exercises: logs.filter((l) => l.sets.length) };
-    if (session.exercises.length) store.addSession(session);
+    if (session.exercises.length) { store.addSession(session); saveWorkout(session); }
     const after = records(store.history());
     const prs = Object.entries(after).filter(([k, v]) => (v ?? 0) > ((before as Record<string, number>)[k] ?? 0) && (before as Record<string, number>)[k] !== undefined);
     // segura 1 s para o vídeo pegar o "Treino concluído"
@@ -213,10 +235,20 @@ export async function startWorkout(o: WorkoutOpts) {
         <ul class="sum-list">${session.exercises.map((e) => `<li><span>${EXERCISES[e.ex].emoji} ${EXERCISES[e.ex].name}</span><span>${e.sets.map((s) => (EXERCISES[e.ex].timed ? `${s.secs}s` : `${s.good}/${s.reps}`)).join(" · ")}</span></li>`).join("")}</ul>
         ${session.exercises.flatMap((e) => e.sets.flatMap((s) => s.issues)).length ? `<div class="sum-tip"><b>Para melhorar:</b> ${[...new Set(session.exercises.flatMap((e) => e.sets.flatMap((s) => s.issues)))].slice(0, 3).join(" · ")}</div>` : ""}
         ${recId ? `<button class="btn" data-a="save">🎬 Salvar o vídeo no celular</button>` : ""}
+        ${recId && cloud.me?.personal ? `<button class="btn ghost" data-a="send">📤 Mandar o vídeo para ${cloud.me.personal.name.split(" ")[0]}</button>` : ""}
         <button class="btn ghost" data-a="exit">Fechar</button>
       </div>`;
     if (recId && video) {
       modal.querySelector('[data-a="save"]')!.addEventListener("click", () => shareVideo(video.blob, o.name));
+      const sendBtn = modal.querySelector<HTMLButtonElement>('[data-a="send"]');
+      const send = async () => {
+        if (!sendBtn || sendBtn.disabled) return;
+        sendBtn.disabled = true; sendBtn.textContent = "Enviando…";
+        try { await sendVideo(video.blob, `${o.name} · ${new Date().toLocaleDateString("pt-BR")}`, video.secs); sendBtn.textContent = "✓ Vídeo enviado para o personal"; }
+        catch (e) { sendBtn.disabled = false; sendBtn.textContent = `⚠️ ${(e as Error).message} Toque para tentar de novo.`; }
+      };
+      sendBtn?.addEventListener("click", send);
+      if (prefs.sendVideos) send();
     }
     modal.querySelector('[data-a="exit"]')!.addEventListener("click", close);
   }
@@ -354,7 +386,9 @@ export async function startWorkout(o: WorkoutOpts) {
       const px = W - S - u * 4, py = u * 50;
       drawTonhao(g, it.ex, { time: performance.now() / 1000, x: px, y: py, size: S, bg: true });
       rr(px, py - u * 6.5, S, u * 6, u * 2); g.fillStyle = LIME; g.fill();
-      text(`${TONHAO}: assim ó! 👇`, px + S / 2, py - u * 2.2, u * 3.4, "#111", "center", 900);
+      const laughing = Date.now() < laughUntil;
+      if (laughing) { rr(px, py - u * 6.5, S, u * 6, u * 2); g.fillStyle = RED; g.fill(); }
+      text(laughing ? "KKKK! DO ZERO! 😂" : `${TONHAO}: assim ó! 👇`, px + S / 2, py - u * 2.2, u * 3.4, laughing ? "#fff" : "#111", "center", 900);
     }
 
     // mensagem do personal

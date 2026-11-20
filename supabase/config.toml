@@ -50,3 +50,7 @@ verify_jwt = false
 # Agenda online da PáginasPro: página de agendamento (paciente) e painel do profissional (sessão própria)
 [functions.agenda]
 verify_jwt = false
+
+# App de treino FORMA (/treino): conta própria (e-mail + senha), separada do login do Studio
+[functions.forma]
+verify_jwt = false
