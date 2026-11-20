@@ -170,7 +170,7 @@ function dir2(a: XY, b: XY, side: boolean, rest: THREE.Vector3): THREE.Vector3 {
   return new THREE.Vector3((dx / l) * k, (dy / l) * k, rest.z).normalize();
 }
 
-function applyPose(p: Pose, side: boolean) {
+function applyPose(p: Pose, side: boolean, floor: number) {
   const mid = (a: XY, b: XY): XY => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
   const hip = mid(p.lHip, p.rHip), sh = mid(p.lSh, p.rSh);
   // tronco: "para cima" do quadril ao ombro; "para a frente" de lado = perpendicular no desenho
@@ -195,7 +195,8 @@ function applyPose(p: Pose, side: boolean) {
     const q = pick(n);
     target[`upperArm${n}`] = [q.sh, q.el];
     target[`foreArm${n}`] = [q.el, q.wr];
-    target[`hand${n}`] = [q.el, q.wr];
+    // mão apoiada no chão (flexão, prancha, burpee): espalmada, apontando para a frente (lado da cabeça)
+    target[`hand${n}`] = q.wr[1] >= floor - 6 ? [q.wr, [q.wr[0] + (p.head[0] >= q.wr[0] ? 9 : -9), q.wr[1] + 0.5]] : [q.el, q.wr];
     target[`thigh${n}`] = [q.hip, q.kn];
     target[`shin${n}`] = [q.kn, q.an];
     target[`foot${n}`] = [q.an, q.toe];
@@ -226,6 +227,24 @@ function applyPose(p: Pose, side: boolean) {
   bones[0].position.copy(h3.add(off));
 }
 
+const frames = new Map<ExId, { cx: number; cy: number; half: number }>();
+function frameOf(ex: ExId) {
+  let f = frames.get(ex);
+  if (f) return f;
+  const an = ANIMS[ex];
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const p of [an.a, an.b]) for (const v of Object.values(p) as XY[]) {
+    x0 = Math.min(x0, v[0]); x1 = Math.max(x1, v[0]); y0 = Math.min(y0, v[1]); y1 = Math.max(y1, v[1]);
+  }
+  y0 -= 9; // cabeça (o ponto é o centro dela)
+  if (an.prop === "bar") y0 -= 4;
+  y1 = Math.min(y1 + 2, an.floor + 2);
+  const w = (x1 - x0) * S, h = (y1 - y0) * S;
+  f = { cx: ((x0 + x1) / 2 - 50) * S, cy: Y((y0 + y1) / 2), half: Math.max(0.62, Math.max(w, h) * 0.6) };
+  frames.set(ex, f);
+  return f;
+}
+
 export interface Draw3D { time: number; x: number; y: number; size: number; bg?: boolean; flip?: boolean }
 
 if (typeof window !== "undefined") init();
@@ -235,12 +254,14 @@ export function drawTonhao3D(g: CanvasRenderingContext2D, ex: ExId, o: Draw3D): 
   if (!ready || failed || !renderer) return false;
   const an = ANIMS[ex];
   const side = an.view === "lado";
-  applyPose(poseAt(an, o.time), side);
+  applyPose(poseAt(an, o.time), side, an.floor);
   const px = Math.max(64, Math.min(1024, Math.round(o.size)));
   if (px !== size) { renderer.setSize(px, px, false); size = px; }
   // câmera em 3/4 para dar profundidade
-  const tgt = new THREE.Vector3(0, Y(46), 0);
-  const d = 1.06 / Math.tan(THREE.MathUtils.degToRad(14));
+  // enquadra o exercício: centro e tamanho pelas duas poses (deitado fica grande, em pé inteiro)
+  const fr = frameOf(ex);
+  const tgt = new THREE.Vector3(side ? 0 : fr.cx, fr.cy, side ? fr.cx : 0);
+  const d = fr.half / Math.tan(THREE.MathUtils.degToRad(14));
   // câmera girando devagar em volta dele (dá vida e mostra o corpo em 3D)
   const a = THREE.MathUtils.degToRad((side ? 24 : -18) + Math.sin(o.time * 0.35) * 14);
   camera.position.copy(tgt).add(side ? new THREE.Vector3(Math.cos(a) * d, 0.32, Math.sin(a) * d) : new THREE.Vector3(Math.sin(a) * d, 0.32, Math.cos(a) * d));
