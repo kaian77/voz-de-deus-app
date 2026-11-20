@@ -10,8 +10,7 @@ const ls = {
 };
 
 export interface Me {
-  user: { id: string; email: string; name: string; role: "aluno" | "personal"; code: string };
-  personal: { id: string; name: string; code: string } | null;
+  user: { id: string; email: string; name: string };
   data: Record<string, unknown>;
   workouts: Session[];
 }
@@ -42,7 +41,7 @@ function localData() {
 /** Junta o que veio da nuvem com o que está no aparelho. */
 function merge(m: Me, firstLogin: boolean) {
   cloud.me = m;
-  const d = m.data as { plan?: WeekPlan; goals?: never; weights?: never; planBy?: string };
+  const d = m.data as { plan?: WeekPlan; goals?: never; weights?: never };
   const cloudEmpty = !d.plan && !d.goals;
   if (cloudEmpty || (firstLogin && !d.plan)) {
     api("save_data", { data: localData() }).catch(() => {});
@@ -58,8 +57,8 @@ function merge(m: Me, firstLogin: boolean) {
   store.replace({ history: all });
 }
 
-export async function signup(email: string, pass: string, name: string, role: "aluno" | "personal") {
-  const r = await api<Me & { session: string }>("signup", { email, pass, name, role, data: localData() });
+export async function signup(email: string, pass: string, name: string) {
+  const r = await api<Me & { session: string }>("signup", { email, pass, name, data: localData() });
   ls.set(KEY, r.session);
   merge(r, true);
 }
@@ -76,7 +75,7 @@ export async function logout() {
   cloud.me = null;
 }
 
-/** Ao abrir o app: puxa da nuvem (treino que o personal mudou, treinos de outro aparelho). */
+/** Ao abrir o app: puxa da nuvem (treinos e plano de outro aparelho). */
 export async function refresh() {
   if (!cloud.session) return null;
   try {
@@ -100,14 +99,6 @@ export function saveWorkout(s: Session) {
 }
 export function deleteWorkout(id: string) {
   if (cloud.session) api("delete_workout", { id }).catch(() => {});
-}
-
-/** Manda o vídeo do treino para o personal (link assinado do storage). */
-export async function sendVideo(blob: Blob, title: string, secs: number) {
-  const up = await api<{ id: string; url: string }>("video_upload", { title, secs, size: blob.size, type: blob.type });
-  const r = await fetch(up.url, { method: "PUT", headers: { "Content-Type": blob.type || "video/mp4", "x-upsert": "true" }, body: blob });
-  if (!r.ok) throw new Error("O envio do vídeo falhou. Tente de novo no Wi-Fi.");
-  await api("video_done", { id: up.id });
 }
 
 // ---------- lembrete no celular ----------

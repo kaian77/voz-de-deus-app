@@ -6,7 +6,7 @@ import { BONES, loadPose, Smoother, type Pt } from "./pose";
 import { audio, beep, numberWord, recDest, say, setVoice } from "./voice";
 import { Recorder, recordings, extOf } from "./rec";
 import { drawTonhao, intro, TONHAO } from "./tonhao";
-import { cloud, saveWorkout, sendVideo } from "./cloud";
+import { saveWorkout } from "./cloud";
 
 interface Rect { x: number; y: number; w: number; h: number }
 type Phase = "loading" | "prep" | "work" | "rest" | "done";
@@ -235,20 +235,10 @@ export async function startWorkout(o: WorkoutOpts) {
         <ul class="sum-list">${session.exercises.map((e) => `<li><span>${EXERCISES[e.ex].emoji} ${EXERCISES[e.ex].name}</span><span>${e.sets.map((s) => (EXERCISES[e.ex].timed ? `${s.secs}s` : `${s.good}/${s.reps}`)).join(" · ")}</span></li>`).join("")}</ul>
         ${session.exercises.flatMap((e) => e.sets.flatMap((s) => s.issues)).length ? `<div class="sum-tip"><b>Para melhorar:</b> ${[...new Set(session.exercises.flatMap((e) => e.sets.flatMap((s) => s.issues)))].slice(0, 3).join(" · ")}</div>` : ""}
         ${recId ? `<button class="btn" data-a="save">🎬 Salvar o vídeo no celular</button>` : ""}
-        ${recId && cloud.me?.personal ? `<button class="btn ghost" data-a="send">📤 Mandar o vídeo para ${cloud.me.personal.name.split(" ")[0]}</button>` : ""}
         <button class="btn ghost" data-a="exit">Fechar</button>
       </div>`;
     if (recId && video) {
       modal.querySelector('[data-a="save"]')!.addEventListener("click", () => shareVideo(video.blob, o.name));
-      const sendBtn = modal.querySelector<HTMLButtonElement>('[data-a="send"]');
-      const send = async () => {
-        if (!sendBtn || sendBtn.disabled) return;
-        sendBtn.disabled = true; sendBtn.textContent = "Enviando…";
-        try { await sendVideo(video.blob, `${o.name} · ${new Date().toLocaleDateString("pt-BR")}`, video.secs); sendBtn.textContent = "✓ Vídeo enviado para o personal"; }
-        catch (e) { sendBtn.disabled = false; sendBtn.textContent = `⚠️ ${(e as Error).message} Toque para tentar de novo.`; }
-      };
-      sendBtn?.addEventListener("click", send);
-      if (prefs.sendVideos) send();
     }
     modal.querySelector('[data-a="exit"]')!.addEventListener("click", close);
   }

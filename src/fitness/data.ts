@@ -149,8 +149,8 @@ export const store = {
   },
 };
 
-export interface Prefs { voice: boolean; record: boolean; strictPullup: boolean; countdown: number; name: string; laugh: boolean; sendVideos: boolean }
-const DEFAULT_PREFS: Prefs = { voice: true, record: true, strictPullup: true, countdown: 5, name: "", laugh: true, sendVideos: false };
+export interface Prefs { voice: boolean; record: boolean; strictPullup: boolean; countdown: number; name: string; laugh: boolean }
+const DEFAULT_PREFS: Prefs = { voice: true, record: true, strictPullup: true, countdown: 5, name: "", laugh: true };
 
 export function today(d = new Date()): string {
   const z = (n: number) => String(n).padStart(2, "0");

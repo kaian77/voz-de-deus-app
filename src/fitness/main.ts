@@ -7,9 +7,11 @@ import {
 import { shareVideo, startWorkout } from "./workout";
 import { recordings } from "./rec";
 import { drawTonhao, TONHAO } from "./tonhao";
-import { social, perfil, studentView, socialClick, socialChange, editing, getPlan, setPlan, boot } from "./social";
+import { social, perfil, socialClick, boot } from "./social";
 
-export type Tab = "hoje" | "treinos" | "agenda" | "metas" | "videos" | "ranking" | "perfil" | "aluno";
+export type Tab = "hoje" | "treinos" | "agenda" | "metas" | "videos" | "ranking" | "perfil";
+const getPlan = () => store.plan();
+const setPlan = (p: ReturnType<typeof store.plan>) => store.setPlan(p);
 const app = document.getElementById("app")!;
 let tab: Tab = (new URLSearchParams(location.search).get("aba") as Tab) || "hoje";
 let agendaMonth = new Date();
@@ -25,7 +27,6 @@ function itemLine(it: PlanItem) {
 
 export function goTab(t: Tab) {
   tab = t;
-  if (t !== "treinos") editing.v = null;
   history.replaceState(null, "", `${location.pathname}?aba=${t}`);
   render();
 boot();
@@ -33,9 +34,9 @@ boot();
 }
 
 export function render() {
-  const nav = tab === "videos" || tab === "aluno" ? "perfil" : tab;
+  const nav = tab === "videos" ? "perfil" : tab;
   app.innerHTML = `
-    <main class="page">${({ hoje, treinos, agenda, metas, videos, ranking: social, perfil, aluno: studentView } as Record<Tab, () => string>)[tab]()}</main>
+    <main class="page">${({ hoje, treinos, agenda, metas, videos, ranking: social, perfil } as Record<Tab, () => string>)[tab]()}</main>
     <nav class="tabs">
       ${([["hoje", "🏠", "Hoje"], ["treinos", "📋", "Treinos"], ["agenda", "📅", "Agenda"], ["metas", "🎯", "Metas"], ["ranking", "🏆", "Ranking"], ["perfil", "👤", "Perfil"]] as const)
         .map(([k, i, n]) => `<button data-tab="${k}" class="${nav === k ? "on" : ""}"><span>${i}</span>${n}</button>`).join("")}
@@ -44,8 +45,7 @@ export function render() {
   if (tab === "metas") drawWeight();
 }
 
-import { cloud, deleteWorkout, saveWorkout } from "./cloud";
-const planBy = () => String((cloud.me?.data as { planBy?: string } | undefined)?.planBy ?? "");
+import { deleteWorkout, saveWorkout } from "./cloud";
 
 // ---------------- Hoje ----------------
 function hoje() {
@@ -72,7 +72,6 @@ function hoje() {
     </header>
     <section class="card today">
       <div class="row between"><h2>${DAY_NAMES[d]}${day ? ` · ${esc(day.name)}` : ""}</h2>${doneToday ? `<span class="tag ok">✓ Feito</span>` : ""}</div>
-      ${planBy() ? `<small class="muted">Treino montado pelo personal ${esc(planBy())}</small>` : ""}
       ${day && day.items.length ? `
         <ul class="exlist">${day.items.map((it) => {
           const sug = suggestion(hist, it);
@@ -105,10 +104,8 @@ function treinos() {
   const plan = getPlan();
   const day = plan[editDay];
   return `
-    ${editing.v ? `<button class="link back" data-tab="aluno">‹ Voltar para ${esc(editing.v.name)}</button>
-    <h1 class="title">Treino de ${esc(editing.v.name)}</h1>
-    <p class="muted">O que você mudar aqui vai direto para o celular do aluno.</p>` : `<h1 class="title">Seus treinos</h1>
-    <p class="muted">Monte o treino de cada dia: séries, repetições, carga e descanso.</p>`}
+    <h1 class="title">Seus treinos</h1>
+    <p class="muted">Monte o treino de cada dia: séries, repetições, carga e descanso.</p>
     <div class="days">${DAY_NAMES.map((n, i) => `<button data-day="${i}" class="${i === editDay ? "on" : ""} ${plan[i] ? "has" : ""}">${DAY_SHORT[i]}<small>${plan[i] ? esc(plan[i]!.name).slice(0, 8) : "folga"}</small></button>`).join("")}</div>
     <section class="card">
       <div class="row between">
@@ -132,7 +129,7 @@ function treinos() {
           <select id="add-ex">${Object.values(EXERCISES).map((e) => `<option value="${e.id}">${e.emoji} ${e.name}</option>`).join("")}</select>
           <button class="btn" data-add>+ Adicionar</button>
         </div>
-        ${day.items.length && !editing.v ? `<button class="btn ghost" data-go="day:${editDay}">▶ Fazer este treino agora</button>` : ""}
+        ${day.items.length ? `<button class="btn ghost" data-go="day:${editDay}">▶ Fazer este treino agora</button>` : ""}
       ` : `<p class="muted">Dia de folga. Ligue "Dia de treino" para montar.</p>`}
     </section>
     <section class="card">
@@ -268,7 +265,7 @@ function metas() {
     </section>
     <section class="card">
       <h2>⚙️ Ajustes</h2>
-      <label class="field">Seu nome<input id="p-name" value="${esc(prefs.name)}" placeholder="Como o personal te chama"></label>
+      <label class="field">Seu nome<input id="p-name" value="${esc(prefs.name)}" placeholder="Como o Tonhão te chama"></label>
       <label class="switch"><input type="checkbox" id="p-voice" ${prefs.voice ? "checked" : ""}><span>Personal falando no fone</span></label>
       <label class="switch"><input type="checkbox" id="p-record" ${prefs.record ? "checked" : ""}><span>Gravar o treino com o esqueleto</span></label>
       <label class="switch"><input type="checkbox" id="p-strict" ${prefs.strictPullup ? "checked" : ""}><span>Barra rigorosa (queixo inteiro acima da barra)</span></label>
@@ -393,7 +390,7 @@ app.addEventListener("click", (e) => {
   }
   if (d.prefs !== undefined) {
     const v = (id: string) => document.getElementById(id) as HTMLInputElement;
-    store.setPrefs({ name: v("p-name").value.trim(), voice: v("p-voice").checked, record: v("p-record").checked, strictPullup: v("p-strict").checked, countdown: Math.max(3, +v("p-count").value || 5), laugh: v("p-laugh").checked, sendVideos: store.prefs().sendVideos });
+    store.setPrefs({ name: v("p-name").value.trim(), voice: v("p-voice").checked, record: v("p-record").checked, strictPullup: v("p-strict").checked, countdown: Math.max(3, +v("p-count").value || 5), laugh: v("p-laugh").checked });
     el.textContent = "✓ Salvo";
     return;
   }
@@ -401,7 +398,6 @@ app.addEventListener("click", (e) => {
 
 app.addEventListener("change", (e) => {
   const t = e.target as HTMLInputElement;
-  if (socialChange(t)) return;
   const plan = getPlan();
   if (t.id === "d-on") {
     plan[editDay] = t.checked ? { name: "Treino", items: [] } : null;

@@ -23,13 +23,6 @@ Deno.serve(async (req) => {
       case "profile": return json(await F.saveProfile(db, u, b));
       case "save_workouts": return json(await F.saveWorkouts(db, u, b));
       case "delete_workout": return json(await F.deleteWorkout(db, u, b.id));
-      case "link_personal": return json(await F.linkPersonal(db, u, b.code));
-      case "students": return json(await F.students(db, u));
-      case "student": return json(await F.student(db, u, b.id));
-      case "student_plan": return json(await F.setStudentPlan(db, u, b));
-      case "video_upload": return json(await F.videoUpload(db, u, b));
-      case "video_done": return json(await F.videoDone(db, u, b.id));
-      case "video_url": return json(await F.videoUrl(db, u, b.id));
       case "ranking": return json(await F.ranking(db, u));
       case "challenges": return json(await F.challenges(db, u));
       case "challenge_create": return json(await F.challengeCreate(db, u, b));
