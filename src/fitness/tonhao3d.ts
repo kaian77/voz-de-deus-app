@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { CamId } from "./data";
 import { ANIMS, poseAt, type Pose, type XY } from "./tonhao";
 import { BONES, J, type V3 } from "./tonhao-body";
@@ -145,10 +146,104 @@ async function init() {
       hb.add(d);
       bells.push(d);
     }
+    try { await loadXbot(); mesh.visible = false; } catch { xb = null; }
     ready = true;
   } catch {
     failed = true;
   }
+}
+
+// ---------- boneco profissional (Xbot, do Mixamo; vem nos exemplos do three.js) — o Tonhão "veste" esse corpo
+interface XB {
+  root: THREE.Object3D; hips: THREE.Bone; bones: THREE.Bone[];
+  restQ: Map<THREE.Bone, THREE.Quaternion>; restDir: Map<THREE.Bone, THREE.Vector3>; map: Map<THREE.Bone, string>;
+  hipOff: THREE.Vector3; hands: [THREE.Bone, THREE.Bone]; spine2: THREE.Bone | null;
+}
+let xb: XB | null = null;
+const worldTarget: Record<string, THREE.Vector3> = {};
+const MIX: Record<string, [string, string]> = {
+  neck: ["Neck", "Head"], head: ["Head", "HeadTop_End"],
+  upperArmL: ["LeftArm", "LeftForeArm"], foreArmL: ["LeftForeArm", "LeftHand"], handL: ["LeftHand", "LeftHandMiddle1"],
+  upperArmR: ["RightArm", "RightForeArm"], foreArmR: ["RightForeArm", "RightHand"], handR: ["RightHand", "RightHandMiddle1"],
+  thighL: ["LeftUpLeg", "LeftLeg"], shinL: ["LeftLeg", "LeftFoot"], footL: ["LeftFoot", "LeftToeBase"],
+  thighR: ["RightUpLeg", "RightLeg"], shinR: ["RightLeg", "RightFoot"], footR: ["RightFoot", "RightToeBase"],
+};
+
+async function loadXbot() {
+  const gltf = await new GLTFLoader().loadAsync("/treino/xbot.glb");
+  const model = gltf.scene;
+  const holder = new THREE.Group();
+  holder.add(model);
+  scene.add(holder);
+  const find = (n: string) => { let b: THREE.Bone | null = null; model.traverse((o) => { if ((o as THREE.Bone).isBone && o.name.replace(/^mixamorig:?/, "") === n) b = o as THREE.Bone; }); return b as THREE.Bone | null; };
+  holder.updateMatrixWorld(true);
+  // de frente para +z (o braço esquerdo do boneco no +x); se não, vira 180°
+  const la = find("LeftArm")!, ra = find("RightArm")!;
+  if (la.getWorldPosition(new THREE.Vector3()).x < ra.getWorldPosition(new THREE.Vector3()).x) holder.rotation.y = Math.PI;
+  holder.updateMatrixWorld(true);
+  const hips = find("Hips")!;
+  const bones: THREE.Bone[] = [];
+  hips.traverse((o) => { if ((o as THREE.Bone).isBone) bones.push(o as THREE.Bone); });
+  const restQ = new Map<THREE.Bone, THREE.Quaternion>(), restDir = new Map<THREE.Bone, THREE.Vector3>(), map = new Map<THREE.Bone, string>();
+  for (const b of bones) restQ.set(b, b.getWorldQuaternion(new THREE.Quaternion()));
+  for (const [ours, [bn, cn]] of Object.entries(MIX)) {
+    const b = find(bn), c = find(cn);
+    if (!b || !c) continue;
+    map.set(b, ours);
+    restDir.set(b, c.getWorldPosition(new THREE.Vector3()).sub(b.getWorldPosition(new THREE.Vector3())).normalize());
+  }
+  const lu = find("LeftUpLeg")!.getWorldPosition(new THREE.Vector3()), ru = find("RightUpLeg")!.getWorldPosition(new THREE.Vector3());
+  const hipOff = hips.getWorldPosition(new THREE.Vector3()).sub(lu.add(ru).multiplyScalar(0.5));
+  // material: manequim grafite com juntas verde-limão (cor da FORMA)
+  model.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    m.frustumCulled = false;
+    const joints = /joint/i.test(m.name);
+    m.material = new THREE.MeshPhysicalMaterial(joints
+      ? { color: 0xd4ff3f, roughness: 0.35, metalness: 0.1, emissive: 0x2a3300, clearcoat: 0.5 }
+      : { color: 0x3a404a, roughness: 0.32, metalness: 0.15, clearcoat: 0.7, clearcoatRoughness: 0.2, sheen: 0.3, sheenColor: new THREE.Color(0x9fb4d0) });
+  });
+  // halteres na mão do boneco (posicionados a cada quadro)
+  const hands: [THREE.Bone, THREE.Bone] = [find("LeftHand")!, find("RightHand")!];
+  for (const d of bells) { d.removeFromParent(); scene.add(d); }
+  xb = { root: holder, hips, bones, restQ, restDir, map, hipOff, hands, spine2: find("Spine2") };
+}
+
+function poseXbot(qTorso: THREE.Quaternion, hipMid: THREE.Vector3) {
+  const x = xb!;
+  const delta = new Map<THREE.Bone, THREE.Quaternion>();
+  const newQ = new Map<THREE.Bone, THREE.Quaternion>();
+  const cur = new THREE.Vector3();
+  for (const b of x.bones) {
+    const parent = b.parent as THREE.Bone;
+    const pd = b === x.hips ? null : delta.get(parent) ?? new THREE.Quaternion();
+    let d: THREE.Quaternion;
+    const ours = x.map.get(b);
+    if (b === x.hips) d = qTorso.clone();
+    else if (ours && worldTarget[ours]) {
+      cur.copy(x.restDir.get(b)!).applyQuaternion(pd!);
+      d = new THREE.Quaternion().setFromUnitVectors(cur, worldTarget[ours]).multiply(pd!);
+    } else d = pd!.clone();
+    // respiração no peito
+    if (b === x.spine2) d.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.sin(performance.now() / 650) * 0.03));
+    delta.set(b, d);
+    const q = d.clone().multiply(x.restQ.get(b)!);
+    newQ.set(b, q);
+    const pw = b === x.hips ? b.parent!.getWorldQuaternion(new THREE.Quaternion()) : newQ.get(parent)!;
+    b.quaternion.copy(pw.clone().invert().multiply(q));
+  }
+  const pos = hipMid.clone().add(x.hipOff.clone().applyQuaternion(qTorso));
+  x.hips.parent!.updateMatrixWorld(true);
+  x.hips.position.copy(x.hips.parent!.worldToLocal(pos));
+  x.root.updateMatrixWorld(true);
+  // halteres seguem as mãos
+  x.hands.forEach((h, i) => {
+    const p = h.getWorldPosition(new THREE.Vector3());
+    const dir = worldTarget[i ? "handR" : "handL"] ?? new THREE.Vector3(0, -1, 0);
+    bells[i].position.copy(p.addScaledVector(dir, 0.07));
+    bells[i].quaternion.identity();
+  });
 }
 
 // ---------- pose: cada osso aponta para onde o desenho 2D aponta
@@ -200,6 +295,14 @@ function applyPose(p: Pose, side: boolean, floor: number) {
     target[`thigh${n}`] = [q.hip, q.kn];
     target[`shin${n}`] = [q.kn, q.an];
     target[`foot${n}`] = [q.an, q.toe];
+  }
+  for (const [name] of BONES) {
+    if (target[name]) worldTarget[name] = dir2(target[name][0], target[name][1], side, restDir[BONES.findIndex((b) => b[0] === name)]);
+  }
+  if (xb) {
+    const mid3 = to3(hip, side);
+    poseXbot(qTorso, mid3);
+    return;
   }
   BONES.forEach(([name], i) => {
     const pi = parentIdx[i];
@@ -269,10 +372,14 @@ export function drawTonhao3D(g: CanvasRenderingContext2D, ex: CamId, o: Draw3D):
   bar.visible = an.prop === "bar";
   if (bar.visible) {
     const p = poseAt(an, o.time);
-    bar.position.set(0, Y((p.lWr[1] + p.rWr[1]) / 2) + 0.01, 0);
+    if (xb) {
+      // barra presa nas mãos do boneco
+      const l = xb.hands[0].getWorldPosition(new THREE.Vector3()), r = xb.hands[1].getWorldPosition(new THREE.Vector3());
+      bar.position.set(0, (l.y + r.y) / 2 + 0.085, (l.z + r.z) / 2);
+    } else bar.position.set(0, Y((p.lWr[1] + p.rWr[1]) / 2) + 0.01, 0);
   }
   for (const b of bells) b.visible = an.prop === "dumbbell";
-  const h = bones[0].position;
+  const h = xb ? xb.hips.getWorldPosition(new THREE.Vector3()) : bones[0].position;
   shadow.visible = an.floor < 120;
   shadow.position.set(h.x, Y(an.floor) + 0.002, h.z);
   shadow.scale.set(1.3, 0.9, 1);
