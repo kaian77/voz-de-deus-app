@@ -16,6 +16,7 @@ Ferramenta interna da Brax Pins Mania (loja de pins, braxpinsmania.com.br; IG @b
 - Desenvolva na branch indicada pela sessão; leve para a `main` por PR e faça o merge (o dono autorizou).
 - Antes de subir: `npx tsc --noEmit -p tsconfig.app.json`, `npm run build`, e `deno check` nas functions alteradas.
 - Commits/PRs sem identificador de modelo.
+- Ao terminar uma mudança num app (ex.: FORMA), mandar o link dele no fim da resposta (pedido do dono: https://voz-de-deus-app.vercel.app/treino).
 
 ## Estado das integrações
 - Instagram: app da Meta publicado (Live), empresa verificada; análise do app aprovada em 25/10/2026 (instagram_business_basic, _manage_comments, _manage_messages): comentários e DMs valem para qualquer conta, não só testadores.
