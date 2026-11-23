@@ -337,3 +337,5 @@ label.btn.file input { position: absolute; inset: 0; opacity: 0; }
 .admin { margin-top: 18px; text-align: left; }
 .admin h2 { margin-top: 0; }
 @keyframes fadeIn { from { opacity: 0; } }
+.demo-bar { display: grid; gap: 8px; background: #fff6d8; border: 1.5px solid #f2d27a; border-radius: 18px; padding: 12px 14px; margin-bottom: 12px; font-size: 14.5px; text-align: center; }
+.demo-bar .btn { margin: 0; }
