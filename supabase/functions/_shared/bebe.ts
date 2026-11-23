@@ -565,6 +565,7 @@ export async function roomAI(db: Db, u: BUser, b: Obj) {
   return { room: r };
 }
 
+const CHEAP_MODEL = "claude-haiku-5-5";
 const BotSchema = z.object({
   answer: z.string(),
   add: z.array(z.object({ name: z.string(), cat: z.enum(CATS), size: z.string(), color: z.string(), qty: z.number() })),
@@ -632,5 +633,6 @@ export async function babybot(db: Db, u: BUser, b: Obj) {
   const { data: f } = await db.from("bebe_families").select("data").eq("id", String(b.family)).single();
   const hist = ((b.history as { q: string; a: string }[]) ?? []).slice(-4).map((h) => `Pessoa: ${String(h.q).slice(0, 300)}\nBabyBot: ${String(h.a).slice(0, 500)}`).join("\n");
   const prompt = `DADOS DA FAMÍLIA:\n${familyBrief(f?.data as Fam, String(b.baby ?? ""))}\n\n${hist ? `CONVERSA ATÉ AGORA:\n${hist}\n\n` : ""}PERGUNTA: ${q}`;
-  return await generateJSON(BotSchema, BOT_RULES, prompt, "low");
+  // pergunta do BabyBot é a tarefa mais simples (só texto): vai no modelo mais barato
+  return await generateJSON(BotSchema, BOT_RULES, prompt, "low", [], CHEAP_MODEL);
 }
