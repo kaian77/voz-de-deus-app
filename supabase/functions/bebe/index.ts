@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
       case "photo_get": return json(await B.photoGet(db, u, b));
       case "photo_clean": return json(await B.photoClean(db, u, b));
       case "receipt_ai": return json(await B.receiptAI(db, u, b));
+      case "room_ai": return json(await B.roomAI(db, u, b));
       case "babybot": return json(await B.babybot(db, u, b));
       case "access": return json(await B.accessOf(db, u));
       case "subscribe": return json(await B.subscribe(db, u));

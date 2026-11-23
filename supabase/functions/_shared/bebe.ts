@@ -521,6 +521,33 @@ export async function receiptAI(db: Db, u: BUser, b: Obj) {
   return { receipt: r };
 }
 
+const RoomSchema = z.object({
+  pieces: z.enum(["guarda", "comoda", "ambos", "nenhum"]),
+  finish: z.enum(["branco", "carvalho", "nogueira", "rosa", "salvia"]),
+  wall: z.string(),
+  floor: z.enum(["madeira", "clara", "escura"]),
+  rug: z.string(),
+  light: z.enum(["quente", "fria"]),
+  note: z.string(),
+});
+const ROOM_RULES = `Você olha a foto de um quarto de bebê e descreve só o que dá para ver, para o app montar um quarto 3D parecido.
+- pieces: "guarda" se aparece só guarda-roupa (armário alto com portas), "comoda" se aparece só cômoda (móvel baixo com gavetas, com ou sem porta), "ambos" se aparecem os dois, "nenhum" se não aparece nenhum dos dois ou a foto não é de um quarto.
+- finish: cor do móvel mais parecida entre branco, carvalho (madeira clara), nogueira (madeira escura), rosa e salvia (verde claro).
+- wall: cor da parede em hexadecimal (#rrggbb), aproximada; rug: cor do tapete em hexadecimal, "" se não houver tapete.
+- floor: madeira (piso de madeira média), clara (piso claro/porcelanato) ou escura.
+- light: quente se a luz é amarelada, fria se é branca.
+- note: uma frase curta em português dizendo o que você viu (ex.: "Vi uma cômoda branca com tampo de madeira e parede rosa clara"). Não invente objetos que não aparecem.`;
+
+export async function roomAI(db: Db, u: BUser, b: Obj) {
+  const img = String(b.image ?? "");
+  if (!/^data:image\/(jpeg|png|webp);base64,/.test(img) || img.length > 3_000_000) throw new HttpError(400, "Foto inválida ou grande demais.");
+  await aiQuota(db, u);
+  const r = await generateJSON(RoomSchema, ROOM_RULES, "Descreva este quarto e devolva o JSON.", "low", [img]);
+  if (!/^#[0-9a-f]{6}$/i.test(r.wall)) r.wall = "";
+  if (!/^#[0-9a-f]{6}$/i.test(r.rug)) r.rug = "";
+  return { room: r };
+}
+
 const BotSchema = z.object({
   answer: z.string(),
   add: z.array(z.object({ name: z.string(), cat: z.enum(CATS), size: z.string(), color: z.string(), qty: z.number() })),

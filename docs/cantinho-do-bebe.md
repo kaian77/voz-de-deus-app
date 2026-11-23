@@ -64,6 +64,12 @@ conflito de versão, "só ver", apagar conta; limpa tudo no fim). Passou em 23/1
   tampo, base recortada em ondinhas, pés bolinha e puxadores de madeira; 4 gavetas `c1`-`c4` (mesmas 4 divisões por idade
   das gavetas do guarda-roupa, `isDrawer`) e porta `cporta` com 2 janelinhas arredondadas (varão com roupinhas menores e
   prateleira de sapatinhos: `cat` sapato vai para a prateleira). Também no modo simples (2D).
+- **Móveis do quarto** (`wardrobe.pieces`: guarda / comoda / ambos; `comps()` em `store.ts`): na 1ª vez a tela
+  Quarto pergunta o que a família tem (`roomSetup` em `bot.ts`, também em Personalizar → "Trocar os móveis",
+  `#quarto/moveis`) e o 3D, o 2D, as etiquetas e o relatório mostram só esses móveis (um só fica no meio da cena; peça
+  guardada num móvel que saiu vira "sem lugar"). "Tirar foto do quarto": ação `room_ai` (IA vê os móveis, cor da
+  madeira entre os 5 acabamentos, parede/tapete em hex, chão claro/madeira/escuro, luz) → "Montar meu quarto assim"
+  grava `pieces/finish/wall/floor/rug/light`. Gavetas e portas continuam as do app (não é cópia exata do móvel).
 - **Assinatura** (sem Play Store): 7 dias grátis e depois R$ 29,90/mês no Mercado Pago. `bebe_users.trial_until`/`plan`
   /`sub_id`/`plan_at`; `accessOf` (`_shared/bebe.ts`) = active (dele ou de alguém da família) / trial / expired; vencido
   = tela `#assinar` (o resto bloqueia, menos conta/backup/privacidade; dados continuam guardados). Com

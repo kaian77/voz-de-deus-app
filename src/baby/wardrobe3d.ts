@@ -80,7 +80,6 @@ const LOW = 0.72; // altura onde começa a parte de cima
 const XL = -W / 2, XM = XL + LEFT, XR = W / 2;
 // cômoda ao lado (4 gavetas à esquerda e porta com 2 janelinhas à direita, tampo e base recortada de madeira, pés bolinha)
 const CW = 1.0, CH = 0.92, CD = 0.46, CLW = 0.5;
-const BX = -0.53, DX = BX + W / 2 + 0.06 + CW / 2; // guarda-roupa e cômoda lado a lado, centralizados
 const CY0 = 0.17, CY1 = CH - 0.03, CXD = -CW / 2 + CLW; // chão e teto de dentro da cômoda, divisória
 
 export class Wardrobe3D {
@@ -91,10 +90,19 @@ export class Wardrobe3D {
   private wood!: THREE.MeshStandardMaterial;
   private inner = new THREE.MeshStandardMaterial({ color: 0xf6f1ea, roughness: 0.8 });
   private metal = new THREE.MeshStandardMaterial({ color: 0xd6b98c, roughness: 0.3, metalness: 0.9 });
-  private doors: { g: THREE.Group; open: number; want: number; sign: 1 | -1 }[] = [];
+  private doors: { g: THREE.Group; open: number; want: number; sign: 1 | -1; k: 0 | 1 | 2 }[] = [];
+  /** porta pelo número (0/1 guarda-roupa, 2 cômoda); móvel que não existe = porta de mentira */
+  private door(k: 0 | 1 | 2) {
+    return this.doors.find((d) => d.k === k) ?? { want: 0 };
+  }
   private drawers: { g: THREE.Group; out: number; want: number; id: CompId; box: THREE.Group; max: number; wx: number; wz: number }[] = [];
   private hits: { mesh: THREE.Object3D; id: CompId | "door0" | "door1" | "door2" }[] = [];
   private dresser = new THREE.Group();
+  /** onde fica cada móvel (os dois lado a lado, centralizados; um só fica no meio) */
+  private bx = 0;
+  private dx = 0;
+  private hasW = true;
+  private hasC = true;
   private oak = new THREE.MeshStandardMaterial({ map: woodTex(FINISH.carvalho), roughness: 0.55 });
   private contents = new Map<CompId, THREE.Group>();
   /** peças tocáveis (cada uma sabe o id do item) e o chão de cada divisão das gavetas */
@@ -114,6 +122,13 @@ export class Wardrobe3D {
   onSelect: (id: CompId) => void = () => {};
 
   constructor(private el: HTMLElement, w: Wardrobe, name: string) {
+    const p = w.pieces ?? "ambos";
+    this.hasW = p !== "comoda";
+    this.hasC = p !== "guarda";
+    if (this.hasW && this.hasC) {
+      this.bx = -0.53;
+      this.dx = this.bx + W / 2 + 0.06 + CW / 2;
+    }
     this.r = new THREE.WebGLRenderer({ antialias: true });
     this.r.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.r.outputColorSpace = THREE.SRGBColorSpace;
@@ -136,7 +151,7 @@ export class Wardrobe3D {
     this.ctl.maxPolarAngle = Math.PI * 0.55;
     this.ctl.minAzimuthAngle = -1.2;
     this.ctl.maxAzimuthAngle = 1.2;
-    this.room();
+    this.room(w);
     this.build(w.finish);
     this.setName(name);
     this.setLight(w.light);
@@ -147,12 +162,12 @@ export class Wardrobe3D {
   }
 
   // ---------- quarto em volta (chão de madeira, parede com rodapé, tapete, luz)
-  private room() {
+  private room(w: Wardrobe) {
     const fl = document.createElement("canvas");
     fl.width = fl.height = 512;
     const x = fl.getContext("2d")!;
     for (let i = 0; i < 8; i++) {
-      x.fillStyle = ["#d9c2a5", "#d3b998", "#dcc7ab", "#cfb593"][i % 4];
+      x.fillStyle = (w.floor === "clara" ? ["#ece6dc", "#e6dfd3", "#efe9e0", "#e3dccf"] : w.floor === "escura" ? ["#7b5a42", "#71523b", "#82614a", "#6b4c36"] : ["#d9c2a5", "#d3b998", "#dcc7ab", "#cfb593"])[i % 4];
       x.fillRect(0, i * 64, 512, 64);
       x.fillStyle = "rgba(90,60,30,0.18)";
       x.fillRect(0, i * 64, 512, 2);
@@ -166,7 +181,7 @@ export class Wardrobe3D {
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     this.scene.add(floor);
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(8, 3.2), new THREE.MeshStandardMaterial({ color: 0xf4e3e4, roughness: 0.95 }));
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(8, 3.2), new THREE.MeshStandardMaterial({ color: w.wall || 0xf4e3e4, roughness: 0.95 }));
     wall.position.set(0, 1.6, -D / 2 - 0.06);
     wall.receiveShadow = true;
     this.scene.add(wall);
@@ -187,7 +202,7 @@ export class Wardrobe3D {
       m.scale.setScalar(s);
       this.scene.add(m);
     }
-    const rug = new THREE.Mesh(new THREE.CircleGeometry(1.05, 48), new THREE.MeshStandardMaterial({ color: 0xf7efe6, roughness: 1 }));
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(1.05, 48), new THREE.MeshStandardMaterial({ color: w.rug || 0xf7efe6, roughness: 1 }));
     rug.rotation.x = -Math.PI / 2;
     rug.position.set(0, 0.004, 0.95);
     rug.receiveShadow = true;
@@ -207,7 +222,7 @@ export class Wardrobe3D {
     this.scene.add(this.key);
     // luzinha dentro do móvel (acende com a porta aberta)
     this.lamp = new THREE.PointLight(0xfff1d6, 0, 1.6, 1.5);
-    this.lamp.position.set(BX - 0.3, 1.7, 0.05);
+    this.lamp.position.set(this.bx - 0.3, 1.7, 0.05);
     this.scene.add(this.lamp);
   }
 
@@ -225,7 +240,13 @@ export class Wardrobe3D {
     const f = FINISH[finish];
     this.wood = new THREE.MeshStandardMaterial({ map: woodTex(f), roughness: f.rough });
     const b = this.body;
-    b.position.x = BX;
+    b.position.x = this.bx;
+    if (!this.hasW) {
+      // só a cômoda: a plaquinha com o nome vai em cima dela
+      this.buildDresser();
+      this.namePlate(this.dresser, CH + 0.12);
+      return;
+    }
     this.scene.add(b);
     const zf = D / 2;
     this.panel(T, H, D, XL + T / 2, H / 2, 0, this.wood, b); // laterais
@@ -275,7 +296,7 @@ export class Wardrobe3D {
         g.add(hinge);
       }
       b.add(g);
-      this.doors.push({ g, open: 0, want: 0, sign });
+      this.doors.push({ g, open: 0, want: 0, sign, k: idx });
       this.hits.push({ mesh: p, id: idx ? "door1" : "door0" });
     };
     door(XL, LEFT, 1, 0);
@@ -314,22 +335,25 @@ export class Wardrobe3D {
       box.userData = { y: by + 0.005, bw, bd, zb: zf - bd };
       g.add(box);
       b.add(g);
-      this.drawers.push({ g, out: 0, want: 0, id, box, max: 0.36, wx: BX + (XL + XM) / 2, wz: zf });
+      this.drawers.push({ g, out: 0, want: 0, id, box, max: 0.36, wx: this.bx + (XL + XM) / 2, wz: zf });
       this.hits.push({ mesh: front, id });
     });
-    this.buildDresser();
-    // plaquinha com o nome em cima
+    if (this.hasC) this.buildDresser();
+    this.namePlate(b, H + 0.13);
+  }
+  /** plaquinha com o nome em cima do móvel */
+  private namePlate(parent: THREE.Group, y: number) {
     this.plate = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.155), new THREE.MeshStandardMaterial({ roughness: 0.4 }));
-    this.plate.position.set(0, H + 0.13, 0.02);
-    b.add(this.plate);
-    const stand = this.panel(0.66, 0.012, 0.06, 0, H + 0.036, 0.02, this.metal, b);
+    this.plate.position.set(0, y, 0.02);
+    parent.add(this.plate);
+    const stand = this.panel(0.66, 0.012, 0.06, 0, y - 0.094, 0.02, this.metal, parent);
     stand.castShadow = false;
   }
 
   // ---------- a cômoda (como a da foto: corpo na cor do acabamento, tampo/base/pés/puxadores de madeira)
   private buildDresser() {
     const c = this.dresser;
-    c.position.set(DX, 0, -D / 2 + CD / 2); // encostada na mesma parede
+    c.position.set(this.dx, 0, -D / 2 + CD / 2); // encostada na mesma parede
     this.scene.add(c);
     const zf = CD / 2, w = CW;
     this.panel(T, CY1 - CY0 + T, CD, -w / 2 + T / 2, (CY0 + CY1) / 2, 0, this.wood, c); // laterais
@@ -413,7 +437,7 @@ export class Wardrobe3D {
     knob.position.set(-dw + 0.04, 0.44, 0.04);
     g.add(knob);
     c.add(g);
-    this.doors.push({ g, open: 0, want: 0, sign: -1 });
+    this.doors.push({ g, open: 0, want: 0, sign: -1, k: 2 });
     this.hits.push({ mesh: dm, id: "door2" });
     // dentro da porta: varão em cima e prateleira dos sapatinhos embaixo
     const cx = (CXD + w / 2) / 2, iw = w / 2 - CXD - T;
@@ -669,21 +693,22 @@ export class Wardrobe3D {
       this.focus(new THREE.Vector3(d.wx, d.box.userData.y as number, d.wz + d.max / 2), new THREE.Vector3(0.35, 1.05, 1.15));
       return;
     }
-    if (id === "cabide") this.doors[0].want = on ? 1 : 0;
-    if (id === "prat1" || id === "prat2") this.doors[1].want = on ? 1 : 0;
-    if (id === "cporta") this.doors[2].want = on ? 1 : 0;
-    if (id === "cabide") this.focus(new THREE.Vector3(BX - 0.3, 1.3, 0), new THREE.Vector3(0.9, 0.25, 2.1));
-    if (id === "prat1" || id === "prat2") this.focus(new THREE.Vector3(BX + 0.5, 1.3, 0), new THREE.Vector3(-0.6, 0.25, 1.9));
-    if (id === "sapateira") this.focus(new THREE.Vector3(BX + 0.5, 0.3, 0.2), new THREE.Vector3(0.2, 0.7, 1.4));
-    if (id === "cporta") this.focus(new THREE.Vector3(DX + (CXD + CW / 2) / 2, 0.5, 0.1), new THREE.Vector3(-0.7, 0.35, 1.4));
+    if (id === "cabide") this.door(0).want = on ? 1 : 0;
+    if (id === "prat1" || id === "prat2") this.door(1).want = on ? 1 : 0;
+    if (id === "cporta") this.door(2).want = on ? 1 : 0;
+    if (id === "cabide") this.focus(new THREE.Vector3(this.bx - 0.3, 1.3, 0), new THREE.Vector3(0.9, 0.25, 2.1));
+    if (id === "prat1" || id === "prat2") this.focus(new THREE.Vector3(this.bx + 0.5, 1.3, 0), new THREE.Vector3(-0.6, 0.25, 1.9));
+    if (id === "sapateira") this.focus(new THREE.Vector3(this.bx + 0.5, 0.3, 0.2), new THREE.Vector3(0.2, 0.7, 1.4));
+    if (id === "cporta") this.focus(new THREE.Vector3(this.dx + (CXD + CW / 2) / 2, 0.5, 0.1), new THREE.Vector3(-0.7, 0.35, 1.4));
   }
   closeAll() {
     for (const d of this.doors) d.want = 0;
     for (const d of this.drawers) d.want = 0;
-    this.focus(new THREE.Vector3(0, 0.95, 0), this.home());
+    this.focus(this.homeTarget(), this.home());
   }
   toggleDoor(i: 0 | 1 | 2) {
-    this.doors[i].want = this.doors[i].want ? 0 : 1;
+    const d = this.door(i);
+    d.want = d.want ? 0 : 1;
   }
   private flyTo: { target: THREE.Vector3; pos: THREE.Vector3 } | null = null;
   /** câmera vai para alvo + deslocamento (celular em pé afasta mais) */
@@ -691,7 +716,12 @@ export class Wardrobe3D {
     const k = this.cam.aspect < 1 ? 1.35 : 1;
     this.flyTo = { target, pos: target.clone().addScaledVector(off, k) };
   }
+  private homeTarget() {
+    return new THREE.Vector3(0, this.hasW ? 0.95 : 0.5, 0);
+  }
   private home() {
+    if (!this.hasC) return new THREE.Vector3(1.4, 0.55, 3.4);
+    if (!this.hasW) return new THREE.Vector3(0.8, 0.75, 2.3);
     return new THREE.Vector3(1.2, 0.7, 4.4);
   }
 
@@ -729,7 +759,7 @@ export class Wardrobe3D {
       if (h.id === "door0" || h.id === "door1" || h.id === "door2") {
         const i = Number(h.id.slice(4)) as 0 | 1 | 2;
         this.toggleDoor(i);
-        if (this.doors[i].want) this.onSelect((["cabide", "prat1", "cporta"] as const)[i]);
+        if (this.door(i).want) this.onSelect((["cabide", "prat1", "cporta"] as const)[i]);
         return;
       }
       const d = this.drawers.find((x) => x.id === h.id);
@@ -766,7 +796,7 @@ export class Wardrobe3D {
     if (!this.started) {
       // primeira vista: o móvel inteiro com a plaquinha
       this.started = true;
-      this.ctl.target.set(0, 0.95, 0);
+      this.ctl.target.copy(this.homeTarget());
       this.cam.position.copy(this.ctl.target).addScaledVector(this.home(), w < h ? 1.45 : 1);
     }
   }
