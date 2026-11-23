@@ -2,8 +2,6 @@
 name: Cantinho do bebê (teste)
 on:
   workflow_dispatch:
-  push:
-    branches: [bebe-teste]
 jobs:
   teste:
     runs-on: ubuntu-latest

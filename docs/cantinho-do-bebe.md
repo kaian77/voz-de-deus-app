@@ -39,6 +39,9 @@ App instalável (PWA) para organizar tudo do bebê. Entrada do Vite `bebe` (`beb
   mala de viagem, vários bebês, privacidade.
 - Alerta de tamanho: idade E último peso (`SIZE_HINT`), sempre como "conferir", nunca "não serve".
 
+Teste de ponta a ponta da nuvem: workflow `bebe-test.yml` (`scripts/bebe-test.mjs`: 2 contas de teste, família, convite,
+conflito de versão, "só ver", apagar conta; limpa tudo no fim). Passou em 23/11/2026.
+
 ## Ainda não existe (próximas fases)
 - Fotos na nuvem; BabyBot (IA); leitura de nota por IA no servidor (mais precisa que o OCR do celular);
   percentis da OMS; memórias/álbum; modelo do móvel feito no Blender (hoje é por código); Play Store.
