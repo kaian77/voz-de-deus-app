@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { slotOf, type CompId, type Item, type Wardrobe } from "./store";
+import { buildDecor, wallTexture } from "./decor";
 
 const FINISH: Record<Wardrobe["finish"], { base: string; grain: string; rough: number }> = {
   branco: { base: "#f4f0ea", grain: "rgba(150,130,110,0.10)", rough: 0.55 },
@@ -103,6 +104,9 @@ export class Wardrobe3D {
   private dx = 0;
   private hasW = true;
   private hasC = true;
+  private spin: THREE.Object3D[] = [];
+  private cx = 0;
+  private zoom = 1;
   private oak = new THREE.MeshStandardMaterial({ map: woodTex(FINISH.carvalho), roughness: 0.55 });
   private contents = new Map<CompId, THREE.Group>();
   /** peças tocáveis (cada uma sabe o id do item) e o chão de cada divisão das gavetas */
@@ -153,6 +157,15 @@ export class Wardrobe3D {
     this.ctl.maxAzimuthAngle = 1.2;
     this.room(w);
     this.build(w.finish);
+    // decoração do quarto (das fotos): a câmera enquadra o quarto inteiro
+    const minX = this.hasW ? this.bx - W / 2 : this.dx - CW / 2, maxX = this.hasC ? this.dx + CW / 2 : this.bx + W / 2;
+    const dec = buildDecor(this.scene, w, { minX, maxX, dresserX: this.hasC ? this.dx : null, dresserTop: CH, hasW: this.hasW });
+    this.spin = dec.spin;
+    this.cx = (dec.lo + dec.hi) / 2;
+    this.zoom = Math.max(1, ((dec.hi - dec.lo) / (maxX - minX + 0.2)) ** 0.7);
+    this.ctl.maxDistance = 8 * this.zoom;
+    this.ctl.minAzimuthAngle = -1.4;
+    this.ctl.maxAzimuthAngle = 1.4;
     this.setName(name);
     this.setLight(w.light);
     this.bindTap();
@@ -162,7 +175,9 @@ export class Wardrobe3D {
   }
 
   // ---------- quarto em volta (chão de madeira, parede com rodapé, tapete, luz)
+  private trocador = false;
   private room(w: Wardrobe) {
+    this.trocador = !!w.decor?.some((d) => d.kind === "trocador");
     const fl = document.createElement("canvas");
     fl.width = fl.height = 512;
     const x = fl.getContext("2d")!;
@@ -176,16 +191,16 @@ export class Wardrobe3D {
     const ft = new THREE.CanvasTexture(fl);
     ft.colorSpace = THREE.SRGBColorSpace;
     ft.wrapS = ft.wrapT = THREE.RepeatWrapping;
-    ft.repeat.set(3, 3);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(8, 8), new THREE.MeshStandardMaterial({ map: ft, roughness: 0.7 }));
+    ft.repeat.set(6, 6);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), new THREE.MeshStandardMaterial({ map: ft, roughness: 0.7 }));
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     this.scene.add(floor);
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(8, 3.2), new THREE.MeshStandardMaterial({ color: w.wall || 0xf4e3e4, roughness: 0.95 }));
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(16, 3.2), new THREE.MeshStandardMaterial({ color: wallTexture(w) ? 0xffffff : w.wall || 0xf4e3e4, map: wallTexture(w), roughness: 0.95 }));
     wall.position.set(0, 1.6, -D / 2 - 0.06);
     wall.receiveShadow = true;
     this.scene.add(wall);
-    const skirt = new THREE.Mesh(new THREE.BoxGeometry(8, 0.1, 0.02), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }));
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(16, 0.1, 0.02), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }));
     skirt.position.set(0, 0.05, -D / 2 - 0.05);
     this.scene.add(skirt);
     // estrelinhas na parede
@@ -196,7 +211,8 @@ export class Wardrobe3D {
       else star.moveTo(Math.cos(a) * rr, -Math.sin(a) * rr);
     }
     const sg = new THREE.ShapeGeometry(star);
-    for (const [sx, sy, s] of [[-1.35, 2.15, 1], [-1.1, 2.45, 0.6], [1.25, 2.3, 0.8], [1.5, 2.0, 0.5]]) {
+    const stars = !w.decor || w.decor.some((d) => d.kind === "estrelas") ? [[-1.35, 2.15, 1], [-1.1, 2.45, 0.6], [1.25, 2.3, 0.8], [1.5, 2.0, 0.5]] : [];
+    for (const [sx, sy, s] of stars) {
       const m = new THREE.Mesh(sg, this.metal);
       m.position.set(sx, sy, -D / 2 - 0.05);
       m.scale.setScalar(s);
@@ -215,8 +231,8 @@ export class Wardrobe3D {
     this.key = new THREE.DirectionalLight(0xfff0dc, 1.9);
     this.key.position.set(2.2, 3.2, 2.6);
     this.key.castShadow = true;
-    this.key.shadow.mapSize.set(1024, 1024);
-    Object.assign(this.key.shadow.camera, { left: -2.8, right: 2.8, top: 2.5, bottom: -0.5, near: 0.5, far: 8 });
+    this.key.shadow.mapSize.set(2048, 2048);
+    Object.assign(this.key.shadow.camera, { left: -4, right: 4, top: 2.5, bottom: -0.5, near: 0.5, far: 8 });
     this.key.shadow.radius = 4;
     this.key.shadow.bias = -0.0006;
     this.scene.add(this.key);
@@ -244,7 +260,7 @@ export class Wardrobe3D {
     if (!this.hasW) {
       // só a cômoda: a plaquinha com o nome vai em cima dela
       this.buildDresser();
-      this.namePlate(this.dresser, CH + 0.12);
+      this.namePlate(this.dresser, CH + (this.trocador ? 0.26 : 0.12));
       return;
     }
     this.scene.add(b);
@@ -717,12 +733,11 @@ export class Wardrobe3D {
     this.flyTo = { target, pos: target.clone().addScaledVector(off, k) };
   }
   private homeTarget() {
-    return new THREE.Vector3(0, this.hasW ? 0.95 : 0.5, 0);
+    return new THREE.Vector3(this.cx, this.hasW ? 0.95 : this.zoom > 1.2 ? 0.8 : 0.5, 0);
   }
   private home() {
-    if (!this.hasC) return new THREE.Vector3(1.4, 0.55, 3.4);
-    if (!this.hasW) return new THREE.Vector3(0.8, 0.75, 2.3);
-    return new THREE.Vector3(1.2, 0.7, 4.4);
+    const v = !this.hasC ? new THREE.Vector3(1.4, 0.55, 3.4) : !this.hasW ? new THREE.Vector3(0.8, 0.75, 2.3) : new THREE.Vector3(1.2, 0.7, 4.4);
+    return v.multiplyScalar(this.zoom);
   }
 
   private bindTap() {
@@ -805,6 +820,7 @@ export class Wardrobe3D {
     this.raf = requestAnimationFrame(this.loop);
     if (document.hidden) return;
     const dt = Math.min(this.clock.getDelta(), 0.05);
+    for (const o of this.spin) o.rotation.y += dt * 0.4; // móbile girando devagar
     const k = 1 - Math.exp(-dt * 6);
     let lit = 0;
     for (const d of this.doors) {

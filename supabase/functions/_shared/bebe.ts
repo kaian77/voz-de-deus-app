@@ -522,30 +522,46 @@ export async function receiptAI(db: Db, u: BUser, b: Obj) {
   return { receipt: r };
 }
 
+export const DECOR = ["berco", "poltrona", "janela", "quadros", "prateleira", "nuvens", "estrelas", "baloes", "luminaria", "mobile", "cesto", "pelucia", "planta", "trocador"] as const;
 const RoomSchema = z.object({
   pieces: z.enum(["guarda", "comoda", "ambos", "nenhum"]),
   finish: z.enum(["branco", "carvalho", "nogueira", "rosa", "salvia"]),
   wall: z.string(),
+  wall2: z.string(),
+  pattern: z.enum(["lisa", "listras", "poa", "xadrez", "meia"]),
+  wall_text: z.string(),
+  text_color: z.string(),
   floor: z.enum(["madeira", "clara", "escura"]),
   rug: z.string(),
   light: z.enum(["quente", "fria"]),
+  decor: z.array(z.object({ kind: z.enum(DECOR), color: z.string() })),
   note: z.string(),
 });
-const ROOM_RULES = `Você olha a foto de um quarto de bebê e descreve só o que dá para ver, para o app montar um quarto 3D parecido.
-- pieces: "guarda" se aparece só guarda-roupa (armário alto com portas), "comoda" se aparece só cômoda (móvel baixo com gavetas, com ou sem porta), "ambos" se aparecem os dois, "nenhum" se não aparece nenhum dos dois ou a foto não é de um quarto.
+const ROOM_RULES = `Você recebe de 1 a 6 fotos do MESMO quarto de bebê, de ângulos diferentes. Junte tudo numa descrição só, para o app montar o quarto 3D igual.
+Descreva só o que aparece; não invente.
+- pieces: "guarda" se aparece só guarda-roupa (armário alto com portas), "comoda" se aparece só cômoda (móvel baixo com gavetas, com ou sem porta), "ambos" se aparecem os dois, "nenhum" se não aparece nenhum dos dois ou as fotos não são de um quarto.
 - finish: cor do móvel mais parecida entre branco, carvalho (madeira clara), nogueira (madeira escura), rosa e salvia (verde claro).
-- wall: cor da parede em hexadecimal (#rrggbb), aproximada; rug: cor do tapete em hexadecimal, "" se não houver tapete.
-- floor: madeira (piso de madeira média), clara (piso claro/porcelanato) ou escura.
+- wall: cor principal da parede em hexadecimal (#rrggbb). pattern: lisa, listras, poa (bolinhas), xadrez ou meia (meia parede: a parte de baixo de outra cor/boiserie). wall2: a 2ª cor do papel de parede/listras/bolinhas/meia parede em hex, "" se lisa.
+- wall_text: nome ou letras escritos na parede (letreiro, letras de madeira, neon, adesivo), copiados exatamente como estão (ex.: "Helena"); "" se não houver. text_color: cor das letras em hex.
+- floor: madeira (piso de madeira média), clara (piso claro/porcelanato) ou escura. rug: cor do tapete em hex, "" se não houver.
 - light: quente se a luz é amarelada, fria se é branca.
-- note: uma frase curta em português dizendo o que você viu (ex.: "Vi uma cômoda branca com tampo de madeira e parede rosa clara"). Não invente objetos que não aparecem.`;
+- decor: cada coisa que aparece, com a cor principal em hex: berco, poltrona (de amamentação), janela (com cortina; cor = da cortina), quadros, prateleira (de parede), nuvens (nuvens na parede), estrelas (estrelas na parede), baloes, luminaria (pendente/lustre), mobile (móbile do berço), cesto (cesto de roupa/organizador), pelucia (bichinho de pelúcia grande), planta, trocador. Cada tipo no máximo uma vez.
+- note: uma ou duas frases curtas em português dizendo o que você viu (ex.: "Vi uma cômoda branca, berço branco, parede rosa com o nome Helena e nuvens").`;
 
+const hexColor = (c: string) => (/^#[0-9a-f]{6}$/i.test(c) ? c : "");
 export async function roomAI(db: Db, u: BUser, b: Obj) {
-  const img = String(b.image ?? "");
-  if (!/^data:image\/(jpeg|png|webp);base64,/.test(img) || img.length > 3_000_000) throw new HttpError(400, "Foto inválida ou grande demais.");
+  const list = (Array.isArray(b.images) ? b.images : [b.image]).map((x) => String(x ?? "")).filter(Boolean);
+  if (!list.length || list.length > 6) throw new HttpError(400, "Mande de 1 a 6 fotos do quarto.");
+  for (const img of list) if (!/^data:image\/(jpeg|png|webp);base64,/.test(img) || img.length > 3_000_000) throw new HttpError(400, "Foto inválida ou grande demais.");
   await aiQuota(db, u);
-  const r = await generateJSON(RoomSchema, ROOM_RULES, "Descreva este quarto e devolva o JSON.", "low", [img]);
-  if (!/^#[0-9a-f]{6}$/i.test(r.wall)) r.wall = "";
-  if (!/^#[0-9a-f]{6}$/i.test(r.rug)) r.rug = "";
+  const r = await generateJSON(RoomSchema, ROOM_RULES, `São ${list.length} foto(s) do mesmo quarto. Descreva o quarto e devolva o JSON.`, "low", list);
+  r.wall = hexColor(r.wall);
+  r.wall2 = hexColor(r.wall2);
+  r.rug = hexColor(r.rug);
+  r.text_color = hexColor(r.text_color);
+  r.wall_text = r.wall_text.trim().slice(0, 24);
+  const seen = new Set<string>();
+  r.decor = r.decor.filter((d) => !seen.has(d.kind) && seen.add(d.kind)).map((d) => ({ kind: d.kind, color: hexColor(d.color) }));
   return { room: r };
 }
 

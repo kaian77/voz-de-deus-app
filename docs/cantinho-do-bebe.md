@@ -70,6 +70,12 @@ conflito de versão, "só ver", apagar conta; limpa tudo no fim). Passou em 23/1
   guardada num móvel que saiu vira "sem lugar"). "Tirar foto do quarto": ação `room_ai` (IA vê os móveis, cor da
   madeira entre os 5 acabamentos, parede/tapete em hex, chão claro/madeira/escuro, luz) → "Montar meu quarto assim"
   grava `pieces/finish/wall/floor/rug/light`. Gavetas e portas continuam as do app (não é cópia exata do móvel).
+  Até 6 fotos de cantos diferentes (`images`, reduzidas para 1024 px; uma chamada da IA só, ~US$ 0,06). A IA também
+  devolve papel de parede (`pattern` lisa/listras/poa/xadrez/meia + `wall2`), nome escrito na parede (`wall_text`,
+  copiado exato, com a cor) e a decoração (`decor`: berço, poltrona, janela com cortina, quadros, prateleira, nuvens,
+  estrelas, balões, luminária, móbile, cesto, pelúcia, planta, trocador, cada um com a cor). `src/baby/decor.ts` monta
+  tudo por código nas cores da foto (berço à esquerda com móbile girando, poltrona/janela/planta à direita, nome em cima
+  do móvel, quadros em cima da cômoda, trocador em cima da cômoda) e a câmera abre para caber o quarto inteiro.
 - **Assinatura** (sem Play Store): 7 dias grátis e depois R$ 29,90/mês no Mercado Pago. `bebe_users.trial_until`/`plan`
   /`sub_id`/`plan_at`; `accessOf` (`_shared/bebe.ts`) = active (dele ou de alguém da família) / trial / expired; vencido
   = tela `#assinar` (o resto bloqueia, menos conta/backup/privacidade; dados continuam guardados). Com

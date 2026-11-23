@@ -60,7 +60,10 @@ export type Wardrobe = {
   finish: "branco" | "carvalho" | "nogueira" | "rosa" | "salvia"; light: "quente" | "fria"; slots?: string[];
   /** móveis que existem no quarto (vazio = ainda não escolheu) e cores do quarto (da foto, pela IA) */
   pieces?: "guarda" | "comoda" | "ambos"; wall?: string; floor?: "madeira" | "clara" | "escura"; rug?: string;
+  wall2?: string; pattern?: "lisa" | "listras" | "poa" | "xadrez" | "meia"; wallText?: string; textColor?: string;
+  decor?: { kind: DecorKind; color: string }[];
 };
+export type DecorKind = "berco" | "poltrona" | "janela" | "quadros" | "prateleira" | "nuvens" | "estrelas" | "baloes" | "luminaria" | "mobile" | "cesto" | "pelucia" | "planta" | "trocador";
 /** cada gaveta tem 3 divisórias = 4 espaços; por padrão um para cada 3 meses */
 export const DEFAULT_SLOTS = ["0-3 meses", "3-6 meses", "6-9 meses", "9-12 meses"];
 export const slotNames = () => data.wardrobe.slots?.length === 4 ? data.wardrobe.slots : DEFAULT_SLOTS;
