@@ -42,6 +42,7 @@ Deno.serve(async (req) => {
       case "babybot": return json(await B.babybot(db, u, b));
       case "access": return json(await B.accessOf(db, u));
       case "subscribe": return json(await B.subscribe(db, u));
+      case "grants": return json(await B.grants(db, u, b));
     }
     throw new HttpError(400, "Ação desconhecida");
   } catch (e) {

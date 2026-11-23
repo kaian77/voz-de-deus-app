@@ -324,3 +324,17 @@ label.btn.file input { position: absolute; inset: 0; opacity: 0; }
 .th.add { display: grid; place-content: center; text-align: center; font-size: 28px; font-weight: 800; color: var(--accent); border: 2px dashed var(--ouro); background: var(--card); }
 .th.add small { font-size: 12px; color: var(--muted); }
 .th.add input { position: absolute; inset: 0; opacity: 0; }
+
+/* pop-up: pôr o app na tela inicial */
+.inst-pop { position: fixed; inset: 0; z-index: 50; background: rgba(30,20,20,0.45); display: grid; align-items: end; justify-items: center; padding: 16px; animation: fadeIn 0.2s; }
+.inst-card { width: 100%; max-width: 420px; background: var(--card); color: var(--ink); border-radius: 24px; padding: 20px 18px 14px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.25); margin-bottom: env(safe-area-inset-bottom); }
+.inst-ico img { width: 72px; height: 72px; border-radius: 18px; box-shadow: 0 4px 14px rgba(0,0,0,0.15); }
+.inst-card h2 { margin: 10px 0 6px; font-size: 19px; }
+.inst-card > p { color: var(--muted); line-height: 1.45; margin: 0 0 12px; font-size: 14.5px; }
+.inst-steps { list-style: none; padding: 0; margin: 0 0 6px; display: grid; gap: 8px; text-align: left; }
+.inst-steps li { display: flex; gap: 10px; align-items: center; background: var(--bege); border-radius: 14px; padding: 10px 12px; font-size: 15px; line-height: 1.35; }
+.inst-steps span { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 14px; }
+.ios-share { font-style: normal; display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1.5px solid #2f7cf6; color: #2f7cf6; border-radius: 5px; font-size: 13px; vertical-align: middle; }
+.admin { margin-top: 18px; text-align: left; }
+.admin h2 { margin-top: 0; }
+@keyframes fadeIn { from { opacity: 0; } }

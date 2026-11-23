@@ -65,6 +65,7 @@ ok(acc.access?.status === "trial" && acc.access.days >= 6, `conta nova começa n
 const sub = await call("subscribe", { session: a.session });
 console.log("   Assinar:", JSON.stringify(sub).slice(0, 200));
 ok(typeof sub.url === "string" && sub.url.startsWith("https://"), "assinar devolve o link do Mercado Pago");
+ok((await call("grants", { session: a.session, email: "x@exemplo.invalid", add: true })).status === 403, "quem não é administrador não libera acesso grátis");
 ok((await call("delete_account", { session: b.session })).ok, "B apaga a conta");
 ok((await call("delete_account", { session: a.session })).ok, "A apaga a conta (família some junto)");
 ok((await call("me", { session: a.session })).status === 401, "sessão de A não vale mais");

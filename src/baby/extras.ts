@@ -21,7 +21,7 @@ export function paywall(v: HTMLElement, ctx: Ctx) {
     <section class="pay">
       <div class="logo">🧸</div>
       <h1>${ended ? "Seu teste grátis terminou" : acc.status === "active" ? "Assinatura ativa 💗" : `Teste grátis: ${acc.days} ${acc.days === 1 ? "dia" : "dias"}`}</h1>
-      ${acc.status === "active" ? `<p class="lead center">${acc.family ? "Sua família tem a assinatura: tudo liberado." : "Obrigado! Tudo liberado."}</p>` : `
+      ${acc.status === "active" ? `<p class="lead center">${acc.admin ? "Você é o administrador: tudo liberado, e a sua família também." : acc.gift ? "Acesso liberado de presente 🎁" : acc.family ? "Sua família tem a assinatura: tudo liberado." : "Obrigado! Tudo liberado."}</p>` : `
       <p class="lead center">Continue com tudo: guarda-roupa 3D, notas pela IA, BabyBot, família na nuvem e avisos no celular.</p>
       <div class="price"><b>${C.PRICE}</b><small>por mês · cancele quando quiser</small></div>
       <ul class="perks"><li>👨‍👩‍👧 A família inteira usa com uma assinatura</li><li>🤖 Notas lidas pela IA e BabyBot</li><li>☁️ Tudo guardado na nuvem, com fotos</li></ul>
@@ -29,6 +29,7 @@ export function paywall(v: HTMLElement, ctx: Ctx) {
         : `<a class="btn big" href="#conta">Criar conta para assinar</a><p class="fine center">A assinatura fica ligada à sua conta (e-mail).</p>`}`}
       ${ended ? `<p class="fine center">Seus dados continuam guardados. Você pode baixar tudo em <a href="#backup">Backup</a>.</p>` : ""}
     </section>`;
+  if (acc.admin) adminGrants(v, ctx);
   const sub = $("#sub", v);
   if (sub) sub.onclick = async () => {
     sub.textContent = "Abrindo…";
@@ -287,4 +288,35 @@ export function report(v: HTMLElement, ctx: Ctx) {
     };
   };
   draw();
+}
+
+// ---------- administrador: libera o app de graça para qualquer e-mail (a família de quem tem acesso entra junto)
+type Grant = { email: string; note: string; created_at: string; has_account: boolean };
+function adminGrants(v: HTMLElement, ctx: Ctx) {
+  const box = document.createElement("section");
+  box.className = "card-form admin";
+  v.appendChild(box);
+  const draw = (list: Grant[]) => {
+    box.innerHTML = `<h2>👑 Administrador · acesso grátis</h2>
+      <p class="fine">Quem entra na sua família (Conta e família → Convidar) já usa de graça. Para liberar outra pessoa que vai ter a família dela, coloque o e-mail dela aqui (pode ser antes de ela criar a conta).</p>
+      <form class="ask inline" id="gf"><input id="ge" type="email" placeholder="e-mail da pessoa" autocomplete="off" required><button aria-label="Liberar">＋</button></form>
+      <div class="list">${list.map((g) => `<div class="row"><span>🎁</span><div><b>${esc(g.email)}</b><small>${g.has_account ? "já tem conta · liberado" : "ainda não criou a conta · libera quando criar"}</small></div><button class="x" data-rm="${esc(g.email)}">✕</button></div>`).join("") || `<p class="note">Ninguém liberado ainda.</p>`}</div>`;
+    ($("#gf", box) as HTMLFormElement).onsubmit = (e) => {
+      e.preventDefault();
+      void run({ email: $<HTMLInputElement>("#ge", box).value, add: true }, "Liberado 🎁");
+    };
+    $$<HTMLButtonElement>("[data-rm]", box).forEach((b) => (b.onclick = () => {
+      if (confirm(`Tirar o acesso grátis de ${b.dataset.rm}?`)) void run({ email: b.dataset.rm, remove: true }, "Acesso tirado");
+    }));
+  };
+  const run = async (body: Record<string, unknown>, msg?: string) => {
+    try {
+      const r = await C.api<{ grants: Grant[] }>("grants", body);
+      draw(r.grants);
+      if (msg) ctx.toast(msg);
+    } catch (err) {
+      ctx.toast((err as Error).message);
+    }
+  };
+  void run({});
 }

@@ -84,3 +84,11 @@ alter table public.bebe_users add column if not exists sub_id text;
 alter table public.bebe_users add column if not exists plan_at timestamptz;
 alter table public.bebe_users alter column trial_until set default now() + interval '7 days';
 update public.bebe_users set trial_until = created_at + interval '7 days' where trial_until is null;
+
+-- acesso grátis dado pelo administrador (por e-mail; vale também para quem ainda vai criar a conta)
+create table if not exists public.bebe_grants (
+  email text primary key,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+alter table public.bebe_grants enable row level security;
