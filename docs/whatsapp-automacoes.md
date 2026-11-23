@@ -1,6 +1,19 @@
-# WhatsApp, atendente de IA e automações
+# Automação de WhatsApp + Instagram (atendente de IA)
 
-Leia só este arquivo para mexer em WhatsApp, respostas automáticas (WhatsApp/Instagram), aviso para a chefe e automações de post. Atualize aqui (não no CLAUDE.md) quando algo mudar.
+Leia só este arquivo para mexer no atendimento automático do WhatsApp e do Instagram (DMs, comentários, aviso para a chefe, automações de post). Atualize aqui (não no CLAUDE.md) quando algo mudar.
+
+## Quando o dono disser "tá alucinando"
+1. Ache a conversa: MCP `list_conversations` / `get_conversation` (ou o print que ele mandar). Veja a mensagem do cliente e o que a IA respondeu.
+2. Se ele pedir, desligue a IA só nessa conversa (`update_conversation`, IA off + needs_human) e não responda o cliente.
+3. Descubra a causa e corrija no lugar certo, nesta ordem:
+   - Faltou informação ou a IA chutou → `agent_knowledge` (resposta certa) via `update_brand_settings`.
+   - Jeito de falar / quando não responder → `agent_instructions` via `update_brand_settings` (regra curta, com o exemplo do caso).
+   - Erro que o prompt não segura (link errado, resposta que não devia sair) → trava no código em `inbox.ts` (como as travas de link de produto e de conversa continuada).
+4. Anote o caso na lista "Casos corrigidos" abaixo (data, o que houve, o que mudou).
+5. Responda ao dono em 2-3 linhas: o que estava errado e o que mudou.
+
+## Casos corrigidos
+- 16/11/2026 — Lory (revendedora) perguntou "guardou os meus?" e a IA mandou link de produto. Correção: trava de conversa continuada (2 h) + regra "ENTENDA ANTES DE RESPONDER"; IA desligada na conversa dela.
 
 ## Estado atual (23/11/2026)
 - WhatsApp da loja conectado: 556195175906 ("Brax pins mania"), pelo WAHA no **Render** grátis: serviço `waha:gows`, https://waha-gows-0d5r.onrender.com, sessão `default`, motor GOWS. Roda 24 h na nuvem (não precisa do PC do dono). `wahaKeepAlive` no cron pinga e religa a sessão. Se a sessão cair (FAILED), o dono escaneia o QR de novo no painel do WAHA (chave = `WAHA_API_KEY` nas variáveis do serviço no Render).
@@ -31,6 +44,11 @@ Leia só este arquivo para mexer em WhatsApp, respostas automáticas (WhatsApp/I
 - **Mensagem para a chefe pelo GitHub**: `scripts/wa-boss.ts` + workflow `wa-boss.yml` (input TEXT → `handoff_phone`).
 - **Mercado Livre na caixa de entrada**: ver `_shared/ml-inbox.ts` (descrito no CLAUDE.md, seção Mercado Livre). A IA não responde sozinha no ML.
 - **Atendente da PáginasPro** (outra marca, `_shared/paginaspro-agent.ts`) e WhatsApp oficial em coexistência (`PaginasProWhatsApp.tsx`, "Conectar com Facebook"): descritos no CLAUDE.md, seção Landing pages.
+
+## Instagram
+- Comentários e DMs chegam pelo cron (`instagram-poller.ts`, a cada minuto). App da Meta aprovado (vale para qualquer conta).
+- DM: mesmo atendente do WhatsApp (`autoReply`), com as regras de Instagram acima (só dúvida de produto/compra/pedido; o resto = `ignore` ou handoff calado).
+- Comentário: responde pelas automações (palavra-chave → resposta no comentário e/ou link no direct). Contas da PáginasPro e de canal ficam fora.
 
 ## Automações
 - **Automação por post** (`auto-link.ts`, cron a cada 5 min): post novo no IG → acha o produto (`options.product` ou IA pela legenda/foto) e cria automação só daquele post com a palavra da legenda e o link no direct. Liga/desliga: `brand_settings.auto_post_link`.
