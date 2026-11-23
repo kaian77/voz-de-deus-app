@@ -52,7 +52,7 @@ App instalável (PWA) para organizar tudo do bebê. Entrada do Vite `bebe` (`beb
 Teste de ponta a ponta da nuvem: workflow `bebe-test.yml` (`scripts/bebe-test.mjs`: 2 contas de teste, família, convite,
 conflito de versão, "só ver", apagar conta; limpa tudo no fim). Passou em 23/11/2026.
 
-- **IA** (chave `ANTHROPIC_API_KEY` do projeto, só no servidor; limite 40 usos por pessoa por dia em `bebe_ai_usage`;
+- **IA** (chave `ANTHROPIC_API_KEY` do projeto, só no servidor; limite 10 usos por pessoa por dia em `bebe_ai_usage` (`AI_PER_DAY`); teste vencido = 402;
   gasto aparece em Studio → Uso): **nota fiscal por foto** (`receipt_ai`: o celular reduz a foto para 1600 px e manda em
   base64; a IA devolve loja, CNPJ, data, itens com nome/categoria/tamanho/quantidade/pacote/valores e os campos em dúvida,
   sem inventar; vai para a mesma tela de revisão; sem conta ou se a IA falhar, cai no leitor do celular) e **BabyBot**
@@ -60,5 +60,22 @@ conflito de versão, "só ver", apagar conta; limpa tudo no fim). Passou em 23/1
   diagnóstico/remédio/dose; "adiciona 3 bodies M" volta como proposta e só entra no inventário no botão Confirmar).
   `generateJSON` (`_shared/claude.ts`) aceita imagem `data:image/...;base64`.
 
+- **Cômoda** ao lado do guarda-roupa (`wardrobe3d.ts` `buildDresser`, pela foto do dono): corpo na cor do acabamento,
+  tampo, base recortada em ondinhas, pés bolinha e puxadores de madeira; 4 gavetas `c1`-`c4` (mesmas 4 divisões por idade
+  das gavetas do guarda-roupa, `isDrawer`) e porta `cporta` com 2 janelinhas arredondadas (varão com roupinhas menores e
+  prateleira de sapatinhos: `cat` sapato vai para a prateleira). Também no modo simples (2D).
+- **Assinatura** (sem Play Store): 7 dias grátis e depois R$ 29,90/mês no Mercado Pago. `bebe_users.trial_until`/`plan`
+  /`sub_id`/`plan_at`; `accessOf` (`_shared/bebe.ts`) = active (dele ou de alguém da família) / trial / expired; vencido
+  = tela `#assinar` (o resto bloqueia, menos conta/backup/privacidade; dados continuam guardados). Com
+  `MERCADOPAGO_ACCESS_TOKEN` o botão cria a assinatura própria (preapproval `bb:<user_id>` com `free_trial`) e o
+  `mercadopago-webhook` (`onBebeSubscription`) liga/pausa; sem token, link fixo https://mpago.la/2onvEzq e a assinatura
+  que chega com valor ~29,90 é ligada pelo e-mail do pagador (pagar com o mesmo e-mail da conta). Sem conta, o teste
+  conta do 1º uso no aparelho (`cb_first`).
+- **Extras** (`extras.ts`): lista de compras `#lista` (sugestões por estoque de fraldas/tamanhos que estão ficando
+  pequenos/higiene; marcar comprado vira item + compra; tabela `buys`), memórias `#memorias` (linha do tempo com foto,
+  marcos e cartão de mêsversário em PNG para compartilhar; `memories`, fotos vão para a nuvem junto), etiquetas QR
+  `#etiquetas` (QR de cada parte do móvel → `/bebe/#quarto/<parte>` abre o 3D já nela; imprimir) e relatório do mês
+  `#relatorio` (gastos, sono, crescimento, fraldas, roupas por tamanho, memórias; "PDF" = imprimir do navegador).
+
 ## Ainda não existe (próximas fases)
-- Percentis da OMS; memórias/álbum; modelo do móvel feito no Blender (hoje é por código); Play Store.
+- Percentis da OMS (só com as tabelas oficiais); modelo do móvel feito no Blender (hoje é por código); Play Store.

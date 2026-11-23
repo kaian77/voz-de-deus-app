@@ -10,6 +10,7 @@ import { keyInfo, ocr, parseQr, parseText, parseXml, type Line, type Parsed } fr
 import { Wardrobe3D, colorOf, webglOk } from "./wardrobe3d";
 import * as C from "./cloud";
 import { babybotPage, readReceiptAi } from "./bot";
+import { labels, memories, paywall, report, shopping } from "./extras";
 
 const $ = <E extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as E;
 const $$ = <E extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => [...root.querySelectorAll(sel)] as E[];
@@ -76,10 +77,18 @@ function route() {
   // quem só pode ver: aviso fixo no alto
   const ro = C.account()?.family?.role === "ve";
   document.body.classList.toggle("readonly", ro);
+  // teste grátis acabou e sem assinatura: só a tela de assinar, conta, backup e privacidade
+  const ctx = { head, toast, route };
+  if (C.access().status === "expired" && !["assinar", "conta", "backup", "privacidade", "nova-senha"].includes(page)) {
+    $$("#tabs a").forEach((a) => a.classList.remove("on"));
+    return paywall(v, ctx);
+  }
   const pages: Record<string, (v: HTMLElement, arg?: string) => void> = {
     inicio: home, quarto: room, itens: items, item: itemForm, nota: receipt, compras: purchases, compra: purchase, gastos: money_,
     sono: sleep, crescimento: growth, fraldas: diapers, agenda: agenda, enxoval: layette, bebe: babyForm, bebes: babies, mais: more,
     backup: backup, privacidade: privacy, remedios: meds, mala: trip, conta: accountPage, babybot: (el) => babybotPage(el, head, toast), avisos: alertsPage, "nova-senha": newPass,
+    assinar: (el) => paywall(el, ctx), lista: (el) => shopping(el, ctx), memorias: (el) => memories(el, ctx),
+    etiquetas: (el) => void labels(el, ctx), relatorio: (el) => report(el, ctx),
   };
   (pages[page] ?? home)(v, arg);
 }
@@ -87,7 +96,7 @@ addEventListener("hashchange", route);
 onChange(() => {
   // telas que mostram números ao vivo se atualizam sozinhas; formulários não (para não perder o que está sendo digitado)
   const p = location.hash.slice(1).split("/")[0] || "inicio";
-  if (["inicio", "itens", "compras", "gastos", "fraldas", "sono", "crescimento", "agenda", "enxoval", "bebes", "remedios"].includes(p)) route();
+  if (["inicio", "itens", "compras", "gastos", "fraldas", "sono", "crescimento", "agenda", "enxoval", "bebes", "remedios", "lista", "memorias"].includes(p)) route();
 });
 
 // ---------- boas-vindas
@@ -163,6 +172,7 @@ function home(v: HTMLElement) {
     ${a.totalDays >= 0 ? `<div class="mv"><span>🎂</span><div><b>${a.months + 1}º mêsversário</b> em ${a.toNext === 0 ? "hoje!" : `${a.toNext} ${a.toNext === 1 ? "dia" : "dias"}`}<small>${a.nextMonthversary.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}</small></div></div>` : ""}
   </section>
   <a class="cta" href="#nota"><span>🧾</span><div><b>Cadastrar compras pela nota fiscal</b><small>foto, XML, QR Code ou texto</small></div><i>›</i></a>
+  ${trialBanner()}
   <a class="cta bot" href="#babybot"><span>🤖</span><div><b>Pergunte ao BabyBot</b><small>"onde estão os bodies M?" · "quanto gastei?"</small></div><i>›</i></a>
   <div class="grid">
     <a class="card" href="#itens?cat=roupa"><span>👕</span><b>${clothes}</b><small>roupinhas cadastradas</small></a>
@@ -185,7 +195,7 @@ function home(v: HTMLElement) {
 }
 
 // ---------- guarda-roupa 3D
-function room(v: HTMLElement) {
+function room(v: HTMLElement, arg?: string) {
   const b = baby()!;
   const w = db().wardrobe;
   const has3d = webglOk() && localStorage.getItem("cb_2d") !== "1";
@@ -345,10 +355,13 @@ function room(v: HTMLElement) {
     const f = $("#flat");
     f.innerHTML = `<div class="w2d"><div class="plate">${esc(b.nick || b.name)}</div>
       <div class="top"><button data-c="cabide" class="tall">Cabideiro</button><div class="col"><button data-c="prat1">Prateleira de cima</button><button data-c="prat2">Prateleira de baixo</button></div></div>
-      <div class="bot"><div class="col"><button data-c="g1">Gaveta 1</button><button data-c="g2">Gaveta 2</button><button data-c="g3">Gaveta 3</button></div><button data-c="sapateira" class="tall">Sapateira</button></div></div>`;
+      <div class="bot"><div class="col"><button data-c="g1">Gaveta 1</button><button data-c="g2">Gaveta 2</button><button data-c="g3">Gaveta 3</button></div><button data-c="sapateira" class="tall">Sapateira</button></div></div>
+      <div class="w2d dresser"><div class="plate">Cômoda</div><div class="bot"><div class="col"><button data-c="c1">Gaveta 1</button><button data-c="c2">Gaveta 2</button><button data-c="c3">Gaveta 3</button><button data-c="c4">Gaveta 4</button></div><button data-c="cporta" class="tall">Porta</button></div></div>`;
     $$("[data-c]", f).forEach((x) => (x.onclick = () => pick(x.dataset.c as CompId)));
   }
   sheet();
+  // QR Code da etiqueta: /bebe/#quarto/g1 abre direto naquele lugar
+  if (arg && COMPARTMENTS.some((c) => c.id === arg)) setTimeout(() => pick(arg as CompId), 400);
 }
 function itemRow(i: Item, local = false) {
   return `<a class="row" href="#item/${i.id}" ${local ? `data-item="${i.id}"` : ""}><span class="dot big" style="background:${i.cat === "roupa" || i.cat === "sapato" ? colorOf(i) : "#f3ede6"}">${i.cat === "roupa" || i.cat === "sapato" ? "" : catIcon(i.cat)}</span>
@@ -1058,7 +1071,8 @@ function more(v: HTMLElement) {
   const links = [
     ["#sono", "🌙", "Soninho"], ["#crescimento", "📏", "Crescimento"], ["#fraldas", "🧷", "Fraldas e higiene"], ["#gastos", "💰", "Gastos"],
     ["#compras", "🧾", "Histórico de compras"], ["#agenda", "📅", "Agenda e mêsversários"], ["#remedios", "💊", "Remédios receitados"], ["#enxoval", "🎀", "Enxoval"],
-    ["#babybot", "🤖", "BabyBot"], ["#mala", "🧳", "Montar mala"], ["#bebes", "👶", "Bebês (irmãos, gêmeos)"], ["#conta", "👨‍👩‍👧", "Conta e família"], ["#avisos", "🔔", "Avisos no celular"],
+    ["#babybot", "🤖", "BabyBot"], ["#lista", "🛒", "Lista de compras"], ["#memorias", "📸", "Memórias"],
+    ["#relatorio", "📄", "Relatório do mês (PDF)"], ["#etiquetas", "🏷️", "Etiquetas com QR Code"], ["#assinar", "💳", "Assinatura"], ["#mala", "🧳", "Montar mala"], ["#bebes", "👶", "Bebês (irmãos, gêmeos)"], ["#conta", "👨‍👩‍👧", "Conta e família"], ["#avisos", "🔔", "Avisos no celular"],
     ["#backup", "💾", "Backup"], ["#privacidade", "🔒", "Privacidade"],
   ];
   v.innerHTML = `${head("Mais", "#inicio")}<div class="menu">${links.map(([h, i, n]) => `<a href="${h}"><span>${i}</span>${n}</a>`).join("")}</div>
@@ -1352,4 +1366,10 @@ function newPass(v: HTMLElement, token?: string) {
       toast((err as Error).message);
     }
   };
+}
+
+function trialBanner() {
+  const a = C.access();
+  if (a.status !== "trial") return "";
+  return `<a class="trial" href="#assinar">🎁 Teste grátis: ${a.days === 1 ? "último dia" : `faltam ${a.days} dias`} · <b>Assinar ${C.PRICE}/mês</b></a>`;
 }

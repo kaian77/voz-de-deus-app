@@ -19,6 +19,12 @@ export const COMPARTMENTS = [
   { id: "g2", name: "Gaveta 2", hint: "macacões e calças" },
   { id: "g3", name: "Gaveta 3", hint: "meias e acessórios" },
   { id: "sapateira", name: "Sapateira", hint: "sapatinhos" },
+  // cômoda (4 gavetas à esquerda + porta com janelinhas e cabideiro à direita)
+  { id: "c1", name: "Cômoda · gaveta 1", hint: "bodies" },
+  { id: "c2", name: "Cômoda · gaveta 2", hint: "mijões e calças" },
+  { id: "c3", name: "Cômoda · gaveta 3", hint: "pijamas" },
+  { id: "c4", name: "Cômoda · gaveta 4", hint: "fraldas de pano e toalhinhas" },
+  { id: "cporta", name: "Cômoda · porta", hint: "roupinhas penduradas e sapatinhos" },
 ] as const;
 export type CompId = (typeof COMPARTMENTS)[number]["id"];
 export type Item = {
@@ -40,11 +46,15 @@ export type Measure = { id: string; babyId: string; date: string; weight?: numbe
 export type DiaperLog = { id: string; babyId: string; date: string; qty: number };
 export type Event = { id: string; babyId: string; date: string; time: string; title: string; kind: "consulta" | "vacina" | "remedio" | "compra" | "outro"; notes: string };
 export type Med = { id: string; babyId: string; name: string; dose: string; times: string[]; until: string; notes: string; given: string[] };
+/** lista de compras (sugestões do estoque e do enxoval + o que a família anotar) */
+export type Buy = { id: string; babyId: string; name: string; cat: Cat; size: string; qty: number; price: number; done: boolean; doneAt?: string; from?: string };
+/** memórias: linha do tempo com foto, marco e texto */
+export type Memory = { id: string; babyId: string; date: string; title: string; text: string; photo?: string; kind: "marco" | "foto" | "mesversario" };
 export type Wardrobe = { finish: "branco" | "carvalho" | "nogueira" | "rosa" | "salvia"; light: "quente" | "fria"; slots?: string[] };
 /** cada gaveta tem 3 divisórias = 4 espaços; por padrão um para cada 3 meses */
 export const DEFAULT_SLOTS = ["0-3 meses", "3-6 meses", "6-9 meses", "9-12 meses"];
 export const slotNames = () => data.wardrobe.slots?.length === 4 ? data.wardrobe.slots : DEFAULT_SLOTS;
-export const isDrawer = (loc: string) => loc === "g1" || loc === "g2" || loc === "g3";
+export const isDrawer = (loc: string) => /^(g[123]|c[1234])$/.test(loc);
 /** divisão pelo tamanho: RN/P = 0-3, M = 3-6, G = 6-9, GG/XG = 9-12; "6 meses" / "3-6 meses" pelo número */
 export function slotFor(size: string) {
   const s = size.toUpperCase().trim();
@@ -56,6 +66,7 @@ export const slotOf = (i: Item) => (typeof i.slot === "number" ? i.slot : slotFo
 export type Data = {
   v: 1; babies: Baby[]; current: string; items: Item[]; purchases: Purchase[]; sleeps: Sleep[];
   measures: Measure[]; diapers: DiaperLog[]; events: Event[]; meds: Med[]; wardrobe: Wardrobe; budget: number;
+  buys: Buy[]; memories: Memory[];
   barcodes: Record<string, { name: string; cat: Cat; brand: string; size: string }>;
   /** quando cada registro mudou e quando foi apagado (para juntar as edições de vários celulares da família) */
   mt: Record<string, number>; del: Record<string, number>;
@@ -63,7 +74,7 @@ export type Data = {
 
 const KEY = "cb_data";
 const empty = (): Data => ({
-  v: 1, babies: [], current: "", items: [], purchases: [], sleeps: [], measures: [], diapers: [], events: [], meds: [],
+  v: 1, babies: [], current: "", items: [], purchases: [], sleeps: [], measures: [], diapers: [], events: [], meds: [], buys: [], memories: [],
   wardrobe: { finish: "branco", light: "quente" }, budget: 0, barcodes: {}, mt: {}, del: {},
 });
 let data: Data = load();
@@ -79,7 +90,7 @@ function load(): Data {
   return empty();
 }
 export const db = () => data;
-const LISTS = ["babies", "items", "purchases", "sleeps", "measures", "diapers", "events", "meds"] as const;
+const LISTS = ["babies", "items", "purchases", "sleeps", "measures", "diapers", "events", "meds", "buys", "memories"] as const;
 type ListKey = (typeof LISTS)[number];
 type Rec = { id: string };
 const snap = (d: Data) => {

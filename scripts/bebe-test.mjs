@@ -59,6 +59,11 @@ ok((await call("family_save", { session: b.session, family: fam, base: 2, data: 
 ok((await call("set_role", { session: b.session, family: fam, user: a.user.id, role: "sair" })).status === 403, "B não consegue remover A");
 ok((await call("push_key")).key?.length > 20, "chave dos avisos");
 ok((await call("me", { session: b.session })).families?.length === 1, "B vê a família na lista");
+const acc = await call("me", { session: a.session });
+ok(acc.access?.status === "trial" && acc.access.days >= 6, `conta nova começa no teste grátis (${JSON.stringify(acc.access)})`);
+const sub = await call("subscribe", { session: a.session });
+console.log("   Assinar:", JSON.stringify(sub).slice(0, 200));
+ok(typeof sub.url === "string" && sub.url.startsWith("https://"), "assinar devolve o link do Mercado Pago");
 ok((await call("delete_account", { session: b.session })).ok, "B apaga a conta");
 ok((await call("delete_account", { session: a.session })).ok, "A apaga a conta (família some junto)");
 ok((await call("me", { session: a.session })).status === 401, "sessão de A não vale mais");

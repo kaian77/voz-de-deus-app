@@ -87,7 +87,77 @@ export async function me(db: Db, u: BUser) {
   return {
     user: u,
     families: (fams ?? []).map((f) => ({ ...f, role: mem!.find((m) => m.family_id === f.id)!.role })),
+    access: await accessOf(db, u),
   };
+}
+
+// ---------------------------------------------------------------- assinatura (7 dias grátis, depois R$ 29,90/mês)
+export const BEBE_PRICE = 29.9;
+export const BEBE_LINK = "https://mpago.la/2onvEzq"; // link fixo do plano no Mercado Pago (o dono criou)
+/** Acesso de quem está logado: assinou, alguém da família assinou, está no teste ou venceu. */
+export async function accessOf(db: Db, u: BUser) {
+  const { data: me } = await db.from("bebe_users").select("plan, trial_until").eq("id", u.id).single();
+  if (me?.plan === "active") return { status: "active" as const };
+  // família de quem assinou também entra (pai, avó, babá)
+  const { data: mem } = await db.from("bebe_members").select("family_id").eq("user_id", u.id);
+  const fams = (mem ?? []).map((m) => m.family_id);
+  if (fams.length) {
+    const { data: others } = await db.from("bebe_members").select("user_id").in("family_id", fams);
+    const ids = [...new Set((others ?? []).map((o) => o.user_id))].filter((id) => id !== u.id);
+    if (ids.length) {
+      const { count } = await db.from("bebe_users").select("id", { count: "exact", head: true }).in("id", ids).eq("plan", "active");
+      if (count) return { status: "active" as const, family: true };
+    }
+  }
+  const until = me?.trial_until ? Date.parse(me.trial_until) : 0;
+  if (until > Date.now()) return { status: "trial" as const, until: me!.trial_until, days: Math.ceil((until - Date.now()) / 864e5) };
+  return { status: "expired" as const };
+}
+/** Link para assinar: assinatura própria no e-mail da pessoa (o teste que sobrar vira dias grátis); sem a chave do MP, o link fixo. */
+export async function subscribe(db: Db, u: BUser) {
+  if (!Deno.env.get("MERCADOPAGO_ACCESS_TOKEN")) return { url: BEBE_LINK, fixed: true };
+  const acc = await accessOf(db, u);
+  const days = acc.status === "trial" ? Math.max(1, acc.days ?? 0) : 0;
+  const res = await fetch("https://api.mercadopago.com/preapproval", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${Deno.env.get("MERCADOPAGO_ACCESS_TOKEN")}`, "Content-Type": "application/json", "X-Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify({
+      reason: "Cantinho do bebê · assinatura mensal",
+      external_reference: `bb:${u.id}`,
+      payer_email: u.email,
+      back_url: "https://paginaspro.app.br/bebe/#assinar",
+      auto_recurring: { frequency: 1, frequency_type: "months", transaction_amount: BEBE_PRICE, currency_id: "BRL", ...(days ? { free_trial: { frequency: days, frequency_type: "days" } } : {}) },
+      status: "pending",
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.init_point) return { url: BEBE_LINK, fixed: true }; // cai no link fixo
+  return { url: data.init_point as string };
+}
+/** Aviso de assinatura do Mercado Pago (chamado pelo webhook com a assinatura lida da API). */
+// deno-lint-ignore no-explicit-any
+export async function onBebeSubscription(db: Db, sub: any) {
+  const ref = String(sub.external_reference ?? "").match(/^bb:([0-9a-f-]{36})$/);
+  const amount = Number(sub.auto_recurring?.transaction_amount ?? 0);
+  let userId = ref?.[1] ?? "";
+  // link fixo (sem referência): pelo e-mail de quem pagou, se for o valor do app
+  if (!userId && Math.abs(amount - BEBE_PRICE) < 0.05 && sub.payer_email) {
+    const { data } = await db.from("bebe_users").select("id").eq("email", String(sub.payer_email).toLowerCase()).maybeSingle();
+    userId = data?.id ?? "";
+  }
+  if (!userId) return null;
+  const { data: u } = await db.from("bebe_users").select("id, plan, sub_id").eq("id", userId).maybeSingle();
+  if (!u) return { ignored: "conta do app não existe" };
+  if (sub.status === "authorized") {
+    await db.from("bebe_users").update({ plan: "active", sub_id: String(sub.id), plan_at: new Date().toISOString() }).eq("id", u.id);
+    return { bebe: "active" };
+  }
+  if (["paused", "cancelled"].includes(sub.status) && u.sub_id === String(sub.id)) {
+    await db.from("bebe_users").update({ plan: "paused", plan_at: new Date().toISOString() }).eq("id", u.id);
+    return { bebe: sub.status };
+  }
+  return { status: sub.status };
 }
 const MAX = 1_500_000;
 function checkData(d: unknown) {
@@ -402,7 +472,8 @@ export async function photoClean(db: Db, u: BUser, b: Obj) {
   const role = await roleIn(db, u, b.family);
   if (role === "ve") return { removed: 0 };
   const { data: f } = await db.from("bebe_families").select("data").eq("id", String(b.family)).single();
-  const used = new Set(((f?.data as Obj)?.items as { photo?: string }[] ?? []).map((i) => i.photo).filter(Boolean));
+  const d = (f?.data ?? {}) as Obj;
+  const used = new Set([...((d.items as { photo?: string }[]) ?? []), ...((d.memories as { photo?: string }[]) ?? [])].map((i) => i.photo).filter(Boolean));
   const { data: files } = await db.storage.from("bebe").list(String(b.family), { limit: 1000 });
   const old = (files ?? []).filter((x) => !used.has(x.name.replace(".jpg", "")) && Date.now() - new Date(x.created_at ?? 0).getTime() > 86400_000);
   if (old.length) await db.storage.from("bebe").remove(old.map((x) => `${b.family}/${x.name}`));
@@ -411,9 +482,10 @@ export async function photoClean(db: Db, u: BUser, b: Obj) {
 
 // ---------------------------------------------------------------- IA (chave ANTHROPIC_API_KEY do projeto): nota fiscal e BabyBot
 
-const AI_PER_DAY = 40;
+const AI_PER_DAY = 10;
 async function aiQuota(db: Db, u: BUser) {
   if (!aiEnabled()) throw new HttpError(503, "A IA não está ligada agora.");
+  if ((await accessOf(db, u)).status === "expired") throw new HttpError(402, "O teste grátis terminou. Assine para usar a IA.");
   const day = brNow().toISOString().slice(0, 10);
   const { data } = await db.from("bebe_ai_usage").select("n").eq("user_id", u.id).eq("day", day).maybeSingle();
   if ((data?.n ?? 0) >= AI_PER_DAY) throw new HttpError(429, "Você chegou no limite de hoje da IA. Amanhã libera de novo.");
@@ -463,7 +535,7 @@ type Fam = {
   diapers?: { babyId: string; date: string; qty: number }[];
   wardrobe?: { slots?: string[] };
 };
-const PLACES: Record<string, string> = { cabide: "Cabideiro", prat1: "Prateleira de cima", prat2: "Prateleira de baixo", g1: "Gaveta 1", g2: "Gaveta 2", g3: "Gaveta 3", sapateira: "Sapateira" };
+const PLACES: Record<string, string> = { cabide: "Cabideiro", prat1: "Prateleira de cima", prat2: "Prateleira de baixo", g1: "Gaveta 1", g2: "Gaveta 2", g3: "Gaveta 3", sapateira: "Sapateira", c1: "Cômoda gaveta 1", c2: "Cômoda gaveta 2", c3: "Cômoda gaveta 3", c4: "Cômoda gaveta 4", cporta: "Cômoda porta" };
 const SLOTS = ["0-3 meses", "3-6 meses", "6-9 meses", "9-12 meses"];
 function slotOfSize(size: string) {
   const s = size.toUpperCase();
@@ -478,7 +550,7 @@ function familyBrief(d: Fam, babyId: string) {
   if (!b) return "Nenhum bebê cadastrado.";
   const slots = d.wardrobe?.slots?.length === 4 ? d.wardrobe.slots : SLOTS;
   const items = (d.items ?? []).filter((i) => i.babyId === b.id);
-  const lines = items.map((i) => `- ${i.name}${i.size ? ` tam. ${i.size}` : ""}${i.color ? `, ${i.color}` : ""}: ${i.qty} (${i.cat}; ${i.loc ? PLACES[i.loc] ?? i.loc : "sem lugar"}${i.loc?.startsWith("g") ? `, divisão ${slots[typeof i.slot === "number" ? i.slot : slotOfSize(i.size)]}` : ""}; ${i.state})`).slice(0, 400);
+  const lines = items.map((i) => `- ${i.name}${i.size ? ` tam. ${i.size}` : ""}${i.color ? `, ${i.color}` : ""}: ${i.qty} (${i.cat}; ${i.loc ? PLACES[i.loc] ?? i.loc : "sem lugar"}${/^(g|c\d)/.test(i.loc ?? "") ? `, divisão ${slots[typeof i.slot === "number" ? i.slot : slotOfSize(i.size)]}` : ""}; ${i.state})`).slice(0, 400);
   const month = today.slice(0, 7), year = today.slice(0, 4);
   const ps = d.purchases ?? [];
   const sum = (f: (p: (typeof ps)[number]) => boolean) => ps.filter(f).reduce((s, p) => s + (p.total || 0), 0);
