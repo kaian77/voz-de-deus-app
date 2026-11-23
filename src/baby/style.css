@@ -239,3 +239,16 @@ body.readonly #view::before { content: "👀 Você está só vendo: as mudanças
 .slotnames input { padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); font-size: 14px; }
 .row3 .btn { font-size: 14px; padding: 11px 6px; display: flex; align-items: center; justify-content: center; }
 .hint { white-space: normal; text-align: center; width: max-content; max-width: 92%; }
+.cta.bot { background: var(--theme); color: #343434; margin-top: -4px; }
+.bot-hero { font-size: 64px; text-align: center; margin: 10px 0; }
+.chat { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.msg { max-width: 86%; padding: 10px 13px; border-radius: 18px; font-size: 15px; line-height: 1.45; }
+.msg.me { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 6px; }
+.msg.bot { align-self: flex-start; background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+.msg .add { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.msg .add span { background: var(--bege); border-radius: 10px; padding: 5px 9px; font-size: 13.5px; font-weight: 700; }
+.tips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.tips button { background: var(--bege); border-radius: 999px; padding: 8px 12px; font-size: 13.5px; font-weight: 700; text-align: left; }
+.ask { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); display: flex; gap: 6px; background: var(--bg); padding: 6px 0; }
+.ask input { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--card); font-size: 16px; color: var(--ink); }
+.ask button { width: 46px; height: 46px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 18px; }

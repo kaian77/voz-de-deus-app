@@ -41,6 +41,16 @@ const dl = gp.urls?.fototeste1 ? await fetch(gp.urls.fototeste1) : null;
 ok(dl?.ok && (await dl.arrayBuffer()).byteLength === jpg.length, "outro celular baixa a mesma foto");
 ok((await call("photo_get", { session: a.session, family: "00000000-0000-0000-0000-000000000000", ids: ["fototeste1"] })).status === 403, "foto de outra família é recusada");
 ok((await call("photo_upload", { session: a.session, family: fam, ids: ["../x"] })).status === 400, "nome de foto inválido é recusado");
+// IA: BabyBot responde com os dados da família; leitura de nota aceita a foto
+const bot = await call("babybot", { session: a.session, family: fam, baby: "b1", question: "Quantos bodies eu tenho?" });
+console.log("   BabyBot:", JSON.stringify(bot).slice(0, 300));
+ok(typeof bot.answer === "string" && bot.answer.length > 3, "BabyBot responde");
+const add = await call("babybot", { session: a.session, family: fam, baby: "b1", question: "Adiciona 3 bodies tamanho M rosa" });
+console.log("   BabyBot (adicionar):", JSON.stringify(add).slice(0, 300));
+ok(Array.isArray(add.add) && add.add.length > 0, "BabyBot propõe adicionar (sem salvar sozinho)");
+const rc = await call("receipt_ai", { session: a.session, image: `data:image/jpeg;base64,${jpg.toString("base64")}` });
+console.log("   Nota (foto vazia):", JSON.stringify(rc).slice(0, 300));
+ok(rc.receipt && Array.isArray(rc.receipt.items), "leitura de nota pela IA responde");
 // esqueci a senha
 ok((await call("reset_request", { email: `ninguem-${tag}@exemplo.invalid` })).ok, "pedido de senha para e-mail sem conta responde igual");
 ok((await call("reset_confirm", { token: "x".repeat(48), pass: "nova1234" })).status === 400, "link de senha inválido é recusado");

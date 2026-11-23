@@ -37,6 +37,8 @@ Deno.serve(async (req) => {
       case "photo_upload": return json(await B.photoUpload(db, u, b));
       case "photo_get": return json(await B.photoGet(db, u, b));
       case "photo_clean": return json(await B.photoClean(db, u, b));
+      case "receipt_ai": return json(await B.receiptAI(db, u, b));
+      case "babybot": return json(await B.babybot(db, u, b));
     }
     throw new HttpError(400, "Ação desconhecida");
   } catch (e) {

@@ -9,6 +9,7 @@ import {
 import { keyInfo, ocr, parseQr, parseText, parseXml, type Line, type Parsed } from "./receipt";
 import { Wardrobe3D, colorOf, webglOk } from "./wardrobe3d";
 import * as C from "./cloud";
+import { babybotPage, readReceiptAi } from "./bot";
 
 const $ = <E extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as E;
 const $$ = <E extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => [...root.querySelectorAll(sel)] as E[];
@@ -78,7 +79,7 @@ function route() {
   const pages: Record<string, (v: HTMLElement, arg?: string) => void> = {
     inicio: home, quarto: room, itens: items, item: itemForm, nota: receipt, compras: purchases, compra: purchase, gastos: money_,
     sono: sleep, crescimento: growth, fraldas: diapers, agenda: agenda, enxoval: layette, bebe: babyForm, bebes: babies, mais: more,
-    backup: backup, privacidade: privacy, remedios: meds, mala: trip, conta: accountPage, avisos: alertsPage, "nova-senha": newPass,
+    backup: backup, privacidade: privacy, remedios: meds, mala: trip, conta: accountPage, babybot: (el) => babybotPage(el, head, toast), avisos: alertsPage, "nova-senha": newPass,
   };
   (pages[page] ?? home)(v, arg);
 }
@@ -162,6 +163,7 @@ function home(v: HTMLElement) {
     ${a.totalDays >= 0 ? `<div class="mv"><span>🎂</span><div><b>${a.months + 1}º mêsversário</b> em ${a.toNext === 0 ? "hoje!" : `${a.toNext} ${a.toNext === 1 ? "dia" : "dias"}`}<small>${a.nextMonthversary.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}</small></div></div>` : ""}
   </section>
   <a class="cta" href="#nota"><span>🧾</span><div><b>Cadastrar compras pela nota fiscal</b><small>foto, XML, QR Code ou texto</small></div><i>›</i></a>
+  <a class="cta bot" href="#babybot"><span>🤖</span><div><b>Pergunte ao BabyBot</b><small>"onde estão os bodies M?" · "quanto gastei?"</small></div><i>›</i></a>
   <div class="grid">
     <a class="card" href="#itens?cat=roupa"><span>👕</span><b>${clothes}</b><small>roupinhas cadastradas</small></a>
     <a class="card ${ds.daysLeft !== null && ds.daysLeft < 5 ? "warn" : ""}" href="#fraldas"><span>🧷</span><b>${ds.stock}</b><small>fraldas · ${ds.daysLeft === null ? "registre o uso" : `dá para ~${ds.daysLeft} dias`}</small></a>
@@ -537,7 +539,7 @@ function receipt(v: HTMLElement) {
   v.innerHTML = `${head("Cadastrar compras", "#inicio")}
   <p class="lead">Escolha como quer cadastrar. Antes de salvar você confere tudo numa tela de revisão.</p>
   <div class="opts">
-    <label class="opt"><span>📸</span><div><b>Tirar foto da nota</b><small>o celular lê o texto (sem internet depois da 1ª vez)</small></div><input type="file" accept="image/*" capture="environment" id="foto"></label>
+    <label class="opt"><span>📸</span><div><b>Tirar foto da nota</b><small>${C.account() ? "🤖 a IA lê a nota inteira" : "o celular lê o texto · com conta, a IA lê melhor"}</small></div><input type="file" accept="image/*" capture="environment" id="foto"></label>
     <label class="opt"><span>🖼️</span><div><b>Foto ou PDF da galeria</b><small>imagem da nota impressa</small></div><input type="file" accept="image/*" id="gal"></label>
     <label class="opt"><span>📄</span><div><b>Importar XML da nota</b><small>o arquivo .xml que a loja manda por e-mail (mais preciso)</small></div><input type="file" accept=".xml,text/xml,application/xml" id="xml"></label>
     <button class="opt" id="qr"><span>🔳</span><div><b>Ler o QR Code da NFC-e</b><small>pega a chave e abre a nota no site da Fazenda</small></div></button>
@@ -554,6 +556,17 @@ function receipt(v: HTMLElement) {
     if (!file) return;
     if (file.type === "application/pdf") return toast("Para PDF, abra o PDF e tire um print da nota, ou importe o XML.");
     $("#ocr").hidden = false;
+    // com conta: a IA lê a nota (bem mais preciso); se falhar, cai no leitor do próprio celular
+    if (C.account()) {
+      $("#ocr p").innerHTML = "🤖 A IA está lendo a nota… <b>uns segundos</b>";
+      $("#bar").style.width = "35%";
+      try {
+        return go(await readReceiptAi(file, shrink), "foto");
+      } catch (err) {
+        toast(`${(err as Error).message} Lendo pelo celular…`);
+        $("#ocr p").innerHTML = 'Lendo a nota… <b id="pct">0%</b>';
+      }
+    }
     try {
       const text = await ocr(file, (p) => {
         $("#pct").textContent = `${Math.round(p * 100)}%`;
@@ -1045,7 +1058,7 @@ function more(v: HTMLElement) {
   const links = [
     ["#sono", "🌙", "Soninho"], ["#crescimento", "📏", "Crescimento"], ["#fraldas", "🧷", "Fraldas e higiene"], ["#gastos", "💰", "Gastos"],
     ["#compras", "🧾", "Histórico de compras"], ["#agenda", "📅", "Agenda e mêsversários"], ["#remedios", "💊", "Remédios receitados"], ["#enxoval", "🎀", "Enxoval"],
-    ["#mala", "🧳", "Montar mala"], ["#bebes", "👶", "Bebês (irmãos, gêmeos)"], ["#conta", "👨‍👩‍👧", "Conta e família"], ["#avisos", "🔔", "Avisos no celular"],
+    ["#babybot", "🤖", "BabyBot"], ["#mala", "🧳", "Montar mala"], ["#bebes", "👶", "Bebês (irmãos, gêmeos)"], ["#conta", "👨‍👩‍👧", "Conta e família"], ["#avisos", "🔔", "Avisos no celular"],
     ["#backup", "💾", "Backup"], ["#privacidade", "🔒", "Privacidade"],
   ];
   v.innerHTML = `${head("Mais", "#inicio")}<div class="menu">${links.map(([h, i, n]) => `<a href="${h}"><span>${i}</span>${n}</a>`).join("")}</div>

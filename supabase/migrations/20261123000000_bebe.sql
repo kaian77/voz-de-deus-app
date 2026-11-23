@@ -67,3 +67,12 @@ alter table public.bebe_resets enable row level security;
 
 -- Fotos das peças na nuvem: bucket privado; só a função `bebe` entrega links assinados para quem é da família
 insert into storage.buckets (id, name, public) values ('bebe', 'bebe', false) on conflict (id) do nothing;
+
+-- IA do app (leitura de nota e BabyBot): limite por pessoa por dia
+create table if not exists public.bebe_ai_usage (
+  user_id uuid not null references public.bebe_users(id) on delete cascade,
+  day date not null,
+  n int not null default 0,
+  primary key (user_id, day)
+);
+alter table public.bebe_ai_usage enable row level security;

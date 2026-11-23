@@ -5,6 +5,8 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { HttpError, sha256Hex } from "./util.ts";
 import { pushPublicKey, sendWebPush } from "./push.ts";
+import { z } from "npm:zod@4";
+import { aiEnabled, generateJSON } from "./claude.ts";
 
 type Db = SupabaseClient;
 type Obj = Record<string, unknown>;
@@ -405,4 +407,114 @@ export async function photoClean(db: Db, u: BUser, b: Obj) {
   const old = (files ?? []).filter((x) => !used.has(x.name.replace(".jpg", "")) && Date.now() - new Date(x.created_at ?? 0).getTime() > 86400_000);
   if (old.length) await db.storage.from("bebe").remove(old.map((x) => `${b.family}/${x.name}`));
   return { removed: old.length };
+}
+
+// ---------------------------------------------------------------- IA (chave ANTHROPIC_API_KEY do projeto): nota fiscal e BabyBot
+
+const AI_PER_DAY = 40;
+async function aiQuota(db: Db, u: BUser) {
+  if (!aiEnabled()) throw new HttpError(503, "A IA não está ligada agora.");
+  const day = brNow().toISOString().slice(0, 10);
+  const { data } = await db.from("bebe_ai_usage").select("n").eq("user_id", u.id).eq("day", day).maybeSingle();
+  if ((data?.n ?? 0) >= AI_PER_DAY) throw new HttpError(429, "Você chegou no limite de hoje da IA. Amanhã libera de novo.");
+  await db.from("bebe_ai_usage").upsert({ user_id: u.id, day, n: (data?.n ?? 0) + 1 }, { onConflict: "user_id,day" });
+}
+
+const CATS = ["roupa", "sapato", "fralda", "higiene", "brinquedo", "utensilio", "remedio", "movel", "outro"] as const;
+const ReceiptSchema = z.object({
+  store: z.string(), cnpj: z.string(), date: z.string(), number: z.string(), key: z.string(),
+  total: z.number(), discount: z.number(),
+  items: z.array(z.object({
+    desc: z.string(), name: z.string(), cat: z.enum(CATS), size: z.string(), qty: z.number(),
+    units: z.number().nullable(), unit: z.number(), total: z.number(), brand: z.string(),
+    unsure: z.array(z.enum(["name", "cat", "size", "qty", "units", "total"])),
+  })),
+  warnings: z.array(z.string()),
+});
+const RECEIPT_RULES = `Você lê fotos de notas fiscais brasileiras (NFC-e/DANFE/cupom) de compras de bebê.
+Transcreva SÓ o que está escrito. NUNCA invente loja, CNPJ, data, item, tamanho, marca ou valor: o que não dá para ler fica vazio ("" ou 0) e o campo entra em "unsure".
+- date no formato AAAA-MM-DD; cnpj só números; key = chave de acesso de 44 dígitos se aparecer, senão "".
+- Para cada produto: desc = texto exato da nota; name = nome claro em português ("BODY INF M 2UN" → "Body infantil"; "MACACAO" → "Macacão"); cat entre: ${CATS.join(", ")};
+  size = tamanho escrito (RN, P, M, G, GG, XG, número do calçado ou "3-6 meses"), vazio se não houver; qty = quantidade comprada;
+  units = unidades por pacote quando for fralda/lenço/algodão ("FRALDA G 80UN" → 80), senão null; unit = preço unitário; total = valor do item já com desconto do item; brand = marca se escrita.
+  Se a peça de roupa vem em kit ("BODY 2UN" com qtd 1), qty = número de peças.
+- total = valor total pago; discount = desconto total.
+- warnings: avisos curtos em português (foto cortada, ilegível, soma não bate). Se a imagem não for nota fiscal, items vazio e um aviso.`;
+
+export async function receiptAI(db: Db, u: BUser, b: Obj) {
+  const img = String(b.image ?? "");
+  if (!/^data:image\/(jpeg|png|webp);base64,/.test(img) || img.length > 3_000_000) throw new HttpError(400, "Foto inválida ou grande demais.");
+  await aiQuota(db, u);
+  const r = await generateJSON(ReceiptSchema, RECEIPT_RULES, "Leia esta nota fiscal e devolva o JSON.", "low", [img]);
+  return { receipt: r };
+}
+
+const BotSchema = z.object({
+  answer: z.string(),
+  add: z.array(z.object({ name: z.string(), cat: z.enum(CATS), size: z.string(), color: z.string(), qty: z.number() })),
+});
+type Fam = {
+  babies?: { id: string; name: string; nick?: string; birth: string }[];
+  items?: { babyId: string; name: string; cat: string; size: string; color: string; qty: number; loc: string; slot?: number; state: string; price: number }[];
+  purchases?: { date: string; store: string; total: number; lines: { name: string; cat: string; total: number }[] }[];
+  sleeps?: { babyId: string; start: string; end?: string }[];
+  measures?: { babyId: string; date: string; weight?: number; length?: number; head?: number }[];
+  events?: { babyId: string; date: string; time: string; title: string }[];
+  diapers?: { babyId: string; date: string; qty: number }[];
+  wardrobe?: { slots?: string[] };
+};
+const PLACES: Record<string, string> = { cabide: "Cabideiro", prat1: "Prateleira de cima", prat2: "Prateleira de baixo", g1: "Gaveta 1", g2: "Gaveta 2", g3: "Gaveta 3", sapateira: "Sapateira" };
+const SLOTS = ["0-3 meses", "3-6 meses", "6-9 meses", "9-12 meses"];
+function slotOfSize(size: string) {
+  const s = size.toUpperCase();
+  const m = s.match(/(\d{1,2})\s*(?:-|A)\s*(\d{1,2})/) ?? s.match(/^(\d{1,2})\s*M/);
+  if (m) return Math.min(3, Math.floor((Number(m[2] ?? Number(m[1]) + 1) - 1) / 3));
+  return ({ RN: 0, PP: 0, P: 0, M: 1, G: 2, GG: 3, XG: 3 } as Record<string, number>)[s] ?? 0;
+}
+/** Resumo dos dados da família (só o que o BabyBot precisa para responder). */
+function familyBrief(d: Fam, babyId: string) {
+  const today = brNow().toISOString().slice(0, 10);
+  const b = (d.babies ?? []).find((x) => x.id === babyId) ?? d.babies?.[0];
+  if (!b) return "Nenhum bebê cadastrado.";
+  const slots = d.wardrobe?.slots?.length === 4 ? d.wardrobe.slots : SLOTS;
+  const items = (d.items ?? []).filter((i) => i.babyId === b.id);
+  const lines = items.map((i) => `- ${i.name}${i.size ? ` tam. ${i.size}` : ""}${i.color ? `, ${i.color}` : ""}: ${i.qty} (${i.cat}; ${i.loc ? PLACES[i.loc] ?? i.loc : "sem lugar"}${i.loc?.startsWith("g") ? `, divisão ${slots[typeof i.slot === "number" ? i.slot : slotOfSize(i.size)]}` : ""}; ${i.state})`).slice(0, 400);
+  const month = today.slice(0, 7), year = today.slice(0, 4);
+  const ps = d.purchases ?? [];
+  const sum = (f: (p: (typeof ps)[number]) => boolean) => ps.filter(f).reduce((s, p) => s + (p.total || 0), 0);
+  const cat = new Map<string, number>();
+  for (const p of ps.filter((x) => x.date.startsWith(month))) for (const l of p.lines ?? []) cat.set(l.cat, (cat.get(l.cat) ?? 0) + l.total);
+  const now = Date.now();
+  const used = (d.diapers ?? []).filter((x) => x.babyId === b.id && now - Date.parse(x.date) < 7 * 864e5).reduce((s, x) => s + x.qty, 0);
+  const sleeps = (d.sleeps ?? []).filter((s) => s.babyId === b.id && s.end && now - Date.parse(s.start) < 7 * 864e5);
+  const lastSleep = sleeps.sort((x, y) => y.start.localeCompare(x.start))[0];
+  const meas = (d.measures ?? []).filter((m) => m.babyId === b.id).sort((x, y) => y.date.localeCompare(x.date))[0];
+  const evs = (d.events ?? []).filter((e) => e.babyId === b.id && e.date >= today).sort((x, y) => x.date.localeCompare(y.date)).slice(0, 8);
+  return [
+    `Hoje: ${today}. Bebê: ${b.name}${b.nick ? ` (${b.nick})` : ""}, nasceu em ${b.birth}.`,
+    `Itens cadastrados (${items.length}):`, ...lines,
+    `Gastos: mês ${month} R$ ${sum((p) => p.date.startsWith(month)).toFixed(2)}; ano ${year} R$ ${sum((p) => p.date.startsWith(year)).toFixed(2)}; por categoria no mês: ${[...cat].map(([k, v]) => `${k} R$ ${v.toFixed(2)}`).join(", ") || "—"}.`,
+    `Últimas compras: ${ps.slice().sort((x, y) => y.date.localeCompare(x.date)).slice(0, 5).map((p) => `${p.date} ${p.store || "loja"} R$ ${p.total.toFixed(2)}`).join("; ") || "nenhuma"}.`,
+    `Fraldas usadas nos últimos 7 dias: ${used}.`,
+    `Sono nos últimos 7 dias: ${sleeps.length} registros${lastSleep ? `; último de ${lastSleep.start} a ${lastSleep.end}` : ""}.`,
+    meas ? `Última medida (${meas.date}): ${[meas.weight && `${meas.weight} kg`, meas.length && `${meas.length} cm`, meas.head && `PC ${meas.head} cm`].filter(Boolean).join(", ")}.` : "Sem medidas.",
+    `Próximos compromissos: ${evs.map((e) => `${e.date} ${e.time} ${e.title}`).join("; ") || "nenhum"}.`,
+  ].join("\n").slice(0, 40_000);
+}
+const BOT_RULES = `Você é o BabyBot do app "Cantinho do bebê": ajuda a família a achar e organizar as coisas do bebê.
+Responda em português do Brasil, curto, carinhoso e direto (no máximo 6 linhas ou uma lista curta).
+Use SOMENTE os dados da família abaixo. Se a informação não estiver lá, diga que não tem esse registro no app. Nunca invente itens, valores ou datas.
+Nunca dê diagnóstico, nunca indique remédio nem dose e nunca mude orientação médica: para saúde, febre, alimentação ou desenvolvimento, diga para falar com o pediatra.
+Se a pessoa pedir para ADICIONAR peças ("adiciona 3 bodies M"), não diga que adicionou: preencha "add" com os itens e na resposta peça para ela confirmar no botão. Para qualquer outro pedido, "add" fica vazio.
+Para montar mala, use as peças cadastradas (diga onde estão) e quantidades razoáveis para os dias pedidos.`;
+
+export async function babybot(db: Db, u: BUser, b: Obj) {
+  await roleIn(db, u, b.family);
+  const q = String(b.question ?? "").trim().slice(0, 500);
+  if (!q) throw new HttpError(400, "Escreva a pergunta.");
+  await aiQuota(db, u);
+  const { data: f } = await db.from("bebe_families").select("data").eq("id", String(b.family)).single();
+  const hist = ((b.history as { q: string; a: string }[]) ?? []).slice(-4).map((h) => `Pessoa: ${String(h.q).slice(0, 300)}\nBabyBot: ${String(h.a).slice(0, 500)}`).join("\n");
+  const prompt = `DADOS DA FAMÍLIA:\n${familyBrief(f?.data as Fam, String(b.baby ?? ""))}\n\n${hist ? `CONVERSA ATÉ AGORA:\n${hist}\n\n` : ""}PERGUNTA: ${q}`;
+  return await generateJSON(BotSchema, BOT_RULES, prompt, "low");
 }
