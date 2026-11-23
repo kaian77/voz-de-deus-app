@@ -3,9 +3,8 @@
   --muted: #8a7f75; --line: #eee4da; --card: #ffffff; --theme: #f4d8dc; --accent: #c98f9b; --red: #c2554f;
   --font: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #1f1c1b; --bege: #2b2725; --card: #2a2624; --ink: #f3ece6; --muted: #b5aaa0; --line: #3a3532; }
-}
+/* sempre claro (o dono pediu): celular no modo escuro não escurece o app */
+:root { color-scheme: only light; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; }
