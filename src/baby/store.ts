@@ -27,6 +27,7 @@ export type Item = {
   photo?: string; // id da foto no IndexedDB
   purchaseId?: string; barcode?: string;
   /** sapato: comprimento interno (cm) */ innerCm?: number;
+  /** gaveta: em qual das 4 divisões (0..3) a peça está; vazio = pelo tamanho */ slot?: number;
 };
 export type PurchaseLine = { desc: string; name: string; cat: Cat; size: string; qty: number; unit: number; total: number; units?: number; itemId?: string; barcode?: string; brand?: string };
 export type Purchase = {
@@ -39,7 +40,19 @@ export type Measure = { id: string; babyId: string; date: string; weight?: numbe
 export type DiaperLog = { id: string; babyId: string; date: string; qty: number };
 export type Event = { id: string; babyId: string; date: string; time: string; title: string; kind: "consulta" | "vacina" | "remedio" | "compra" | "outro"; notes: string };
 export type Med = { id: string; babyId: string; name: string; dose: string; times: string[]; until: string; notes: string; given: string[] };
-export type Wardrobe = { finish: "branco" | "carvalho" | "nogueira" | "rosa" | "salvia"; light: "quente" | "fria" };
+export type Wardrobe = { finish: "branco" | "carvalho" | "nogueira" | "rosa" | "salvia"; light: "quente" | "fria"; slots?: string[] };
+/** cada gaveta tem 3 divisórias = 4 espaços; por padrão um para cada 3 meses */
+export const DEFAULT_SLOTS = ["0-3 meses", "3-6 meses", "6-9 meses", "9-12 meses"];
+export const slotNames = () => data.wardrobe.slots?.length === 4 ? data.wardrobe.slots : DEFAULT_SLOTS;
+export const isDrawer = (loc: string) => loc === "g1" || loc === "g2" || loc === "g3";
+/** divisão pelo tamanho: RN/P = 0-3, M = 3-6, G = 6-9, GG/XG = 9-12; "6 meses" / "3-6 meses" pelo número */
+export function slotFor(size: string) {
+  const s = size.toUpperCase().trim();
+  const m = s.match(/(\d{1,2})\s*(?:-|A)\s*(\d{1,2})/) ?? s.match(/^(\d{1,2})\s*M/);
+  if (m) return Math.min(3, Math.floor((Number(m[2] ?? Number(m[1]) + 1) - 1) / 3));
+  return ({ RN: 0, PP: 0, P: 0, M: 1, G: 2, GG: 3, XG: 3, XGG: 3 } as Record<string, number>)[s] ?? 0;
+}
+export const slotOf = (i: Item) => (typeof i.slot === "number" ? i.slot : slotFor(i.size));
 export type Data = {
   v: 1; babies: Baby[]; current: string; items: Item[]; purchases: Purchase[]; sleeps: Sleep[];
   measures: Measure[]; diapers: DiaperLog[]; events: Event[]; meds: Med[]; wardrobe: Wardrobe; budget: number;

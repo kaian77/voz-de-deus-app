@@ -2,7 +2,7 @@
 // guarda-roupa 3D ligado ao inventário (wardrobe3d.ts) e cadastro de compras pela nota fiscal (receipt.ts).
 import "./style.css";
 import {
-  COMPARTMENTS, age, ageText, baby, db, diaperStock, dur, esc, exportJson, importJson, money, onChange, photoUrl, putPhoto,
+  COMPARTMENTS, age, ageText, isDrawer, slotFor, slotNames, slotOf, baby, db, diaperStock, dur, esc, exportJson, importJson, money, onChange, photoUrl, putPhoto,
   resetAll, save, shoeAlerts, shrink, sizeAlerts, sleepToday, spent, today, uid, spendDiapers,
   type Baby, type Cat, type CompId, type Item, type ItemState, type Purchase, type Theme,
 } from "./store";
@@ -109,11 +109,19 @@ function demo() {
     d.current = id;
     const it = (name: string, cat: Cat, size: string, color: string, qty: number, price: number, loc: CompId | "") =>
       d.items.push({ id: uid(), babyId: id, name, cat, size, color, brand: "", qty, price, date: today(), state: "uso", loc, notes: "" });
-    it("Body manga curta", "roupa", "M", "rosa", 4, 29.9, "g1");
-    it("Body manga longa", "roupa", "P", "branco", 3, 34.9, "g1");
-    it("Macacão plush", "roupa", "M", "azul", 2, 59.9, "g2");
-    it("Calça mijão", "roupa", "M", "bege", 3, 24.9, "g2");
-    it("Meia antiderrapante", "roupa", "M", "amarelo", 5, 9.9, "g3");
+    it("Body manga curta", "roupa", "M", "rosa", 6, 29.9, "g1");
+    it("Body manga longa", "roupa", "P", "branco", 5, 34.9, "g1");
+    it("Body RN", "roupa", "RN", "amarelo", 4, 24.9, "g1");
+    it("Body manga curta", "roupa", "G", "azul", 5, 32.9, "g1");
+    it("Body regata", "roupa", "GG", "verde", 3, 29.9, "g1");
+    it("Macacão plush", "roupa", "M", "azul", 4, 59.9, "g2");
+    it("Calça mijão", "roupa", "P", "bege", 5, 24.9, "g2");
+    it("Calça mijão", "roupa", "G", "cinza", 4, 26.9, "g2");
+    it("Macacão", "roupa", "GG", "lilás", 2, 64.9, "g2");
+    it("Meia antiderrapante", "roupa", "M", "amarelo", 6, 9.9, "g3");
+    it("Meia", "roupa", "P", "branco", 6, 7.9, "g3");
+    it("Touca", "roupa", "RN", "rosa", 3, 19.9, "g3");
+    it("Babador", "roupa", "G", "azul", 5, 12.9, "g3");
     it("Vestido de festa", "roupa", "M", "lilás", 1, 89.9, "cabide");
     it("Casaco de tricô", "roupa", "M", "verde", 1, 79.9, "cabide");
     it("Macacão longo", "roupa", "M", "rosa", 2, 64.9, "cabide");
@@ -181,23 +189,65 @@ function room(v: HTMLElement) {
   const has3d = webglOk() && localStorage.getItem("cb_2d") !== "1";
   v.innerHTML = `<section class="room">
     <div class="room-top">${head("Guarda-roupa", "#inicio", `<button class="chip" id="mode">${has3d ? "Modo simples" : "Ver em 3D"}</button>`)}</div>
-    ${has3d ? `<div class="stage" id="stage"><p class="hint" id="hint">Toque numa porta ou gaveta para abrir · arraste para girar</p></div>` : `<div class="flat" id="flat"></div>`}
+    ${has3d ? `<div class="stage" id="stage"><p class="hint" id="hint">Toque numa porta ou gaveta para abrir · toque numa roupinha para ver</p></div>` : `<div class="flat" id="flat"></div>`}
     <div class="sheet" id="sheet"></div></section>`;
   $("#mode").onclick = () => {
     localStorage.setItem("cb_2d", has3d ? "1" : "0");
     route();
   };
   const mine = () => db().items.filter((i) => i.babyId === b.id);
-  let sel: CompId | null = null;
+  let sel: CompId | null = null, slot: number | null = null, focus: string | null = null;
+  const pcs = (list: Item[]) => list.reduce((s, i) => s + i.qty, 0);
   const sheet = () => {
     const el = $("#sheet");
+    const names = slotNames();
+    // roupinha tocada: cartão da peça
+    const it = focus ? mine().find((i) => i.id === focus) : null;
+    if (it) {
+      el.innerHTML = `<div class="sel-hd"><button class="back" id="close">‹</button><div><b>${esc(it.name)}</b><small>${compName(it.loc)}${isDrawer(it.loc) ? ` · ${esc(names[slotOf(it)])}` : ""}</small></div></div>
+        <div class="piece"><div class="ph" id="pph" style="background:${colorOf(it)}"></div><div>
+          <p><b>${it.qty}</b> ${it.qty === 1 ? "peça" : "peças"}${it.size ? ` · tamanho <b>${esc(it.size)}</b>` : ""}${it.color ? ` · ${esc(it.color)}` : ""}</p>
+          <p class="fine">${[it.brand, it.price ? money(it.price) + " cada" : "", it.date ? `comprado em ${fmtDate(it.date)}` : "", STATES.find((x) => x.id === it.state)?.name].filter(Boolean).map(esc).join(" · ")}</p></div></div>
+        ${isDrawer(it.loc) ? `<label class="mini">Divisão da gaveta<select id="slotSel">${names.map((n, k) => `<option value="${k}" ${slotOf(it) === k ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>` : ""}
+        <div class="row3"><button class="btn ghost" data-st="pequeno">Ficou pequena</button><button class="btn ghost" data-st="doacao">Doação</button><a class="btn" href="#item/${it.id}">Editar</a></div>`;
+      if (it.photo) photoUrl(it.photo).then((u) => u && ($("#pph").style.background = `center/cover url(${u})`));
+      $("#close", el).onclick = () => {
+        focus = null;
+        wardrobe?.highlight(null);
+        sheet();
+      };
+      const ss = $<HTMLSelectElement>("#slotSel", el);
+      if (ss) ss.onchange = () => {
+        save((d) => (d.items.find((x) => x.id === it.id)!.slot = Number(ss.value)));
+        wardrobe?.setItems(mine());
+        wardrobe?.highlight(it.id);
+        toast(`Movida para ${names[Number(ss.value)]}`);
+        sheet();
+      };
+      $$("[data-st]", el).forEach((x) => (x.onclick = () => {
+        const st = x.dataset.st as ItemState;
+        if (!confirm(st === "pequeno" ? "Marcar como pequena e tirar do guarda-roupa?" : "Separar para doação e tirar do guarda-roupa?")) return;
+        save((d) => {
+          const y = d.items.find((z) => z.id === it.id)!;
+          y.state = st;
+          y.loc = "";
+        });
+        wardrobe?.setItems(mine());
+        focus = null;
+        toast(st === "pequeno" ? "Separada como pequena 💗" : "Separada para doação 💗");
+        sheet();
+      }));
+      return;
+    }
     if (!sel) {
       const loose = mine().filter((i) => !i.loc && (i.cat === "roupa" || i.cat === "sapato") && i.state === "uso");
-      el.innerHTML = `<div class="pills">${COMPARTMENTS.map((c) => `<button data-c="${c.id}"><b>${c.name}</b><small>${mine().filter((i) => i.loc === c.id).reduce((s, i) => s + i.qty, 0)} peças</small></button>`).join("")}</div>
+      el.innerHTML = `<div class="pills">${COMPARTMENTS.map((c) => `<button data-c="${c.id}"><b>${c.name}</b><small>${pcs(mine().filter((i) => i.loc === c.id))} peças</small></button>`).join("")}</div>
         ${loose.length ? `<p class="note">🧺 ${loose.length} ${loose.length === 1 ? "peça sem lugar" : "peças sem lugar"}. Toque num compartimento e em "Guardar aqui".</p>` : ""}
         <details class="custom"><summary>🎨 Personalizar o móvel</summary>
           <div class="row2"><label>Acabamento<select id="fin">${(["branco", "carvalho", "nogueira", "rosa", "salvia"] as const).map((f) => `<option ${w.finish === f ? "selected" : ""} value="${f}">${{ branco: "Branco", carvalho: "Carvalho", nogueira: "Nogueira", rosa: "Rosa antigo", salvia: "Verde sálvia" }[f]}</option>`).join("")}</select></label>
-          <label>Luz<select id="lgt"><option value="quente" ${w.light === "quente" ? "selected" : ""}>Aconchegante</option><option value="fria" ${w.light === "fria" ? "selected" : ""}>Clara</option></select></label></div></details>`;
+          <label>Luz<select id="lgt"><option value="quente" ${w.light === "quente" ? "selected" : ""}>Aconchegante</option><option value="fria" ${w.light === "fria" ? "selected" : ""}>Clara</option></select></label></div>
+          <p class="fine">Nomes das 4 divisões de cada gaveta:</p>
+          <div class="row2 slotnames">${slotNames().map((n, k) => `<input data-sn="${k}" value="${esc(n)}" maxlength="18">`).join("")}</div></details>`;
       $$("[data-c]", el).forEach((x) => (x.onclick = () => pick(x.dataset.c as CompId)));
       $<HTMLSelectElement>("#fin", el).onchange = (e) => {
         save((d) => (d.wardrobe.finish = (e.target as HTMLSelectElement).value as typeof w.finish));
@@ -207,24 +257,50 @@ function room(v: HTMLElement) {
         save((d) => (d.wardrobe.light = (e.target as HTMLSelectElement).value as typeof w.light));
         wardrobe?.setLight(db().wardrobe.light);
       };
+      $$<HTMLInputElement>("[data-sn]", el).forEach((x) => (x.onchange = () => {
+        const list = $$<HTMLInputElement>("[data-sn]", el).map((y) => y.value.trim() || "—");
+        save((d) => (d.wardrobe.slots = list));
+        wardrobe?.setSlots(list);
+      }));
       return;
     }
     const c = COMPARTMENTS.find((x) => x.id === sel)!;
-    const here = mine().filter((i) => i.loc === sel);
-    const loose = mine().filter((i) => i.loc !== sel && (i.cat === "roupa" || i.cat === "sapato" || i.cat === "utensilio") && i.state !== "doacao");
-    el.innerHTML = `<div class="sel-hd"><button class="back" id="close">‹</button><div><b>${c.name}</b><small>${c.hint}</small></div></div>
-      ${here.length ? `<div class="list">${here.map((i) => itemRow(i)).join("")}</div>` : `<p class="note">Vazio por enquanto.</p>`}
-      ${loose.length ? `<details class="move"><summary>➕ Guardar aqui</summary><div class="checks">${loose.map((i) => `<label><input type="checkbox" value="${i.id}"><span class="dot" style="background:${colorOf(i)}"></span>${esc(i.name)} ${i.size ? `<small>${esc(i.size)}</small>` : ""}<em>${i.loc ? compName(i.loc) : "sem lugar"}</em></label>`).join("")}</div><button class="btn" id="put">Guardar selecionados</button></details>` : ""}`;
+    const drawer = isDrawer(sel);
+    const inComp = mine().filter((i) => i.loc === sel);
+    const here = drawer && slot !== null ? inComp.filter((i) => slotOf(i) === slot) : inComp;
+    const loose = mine().filter((i) => i.loc !== sel && (i.cat === "roupa" || i.cat === "sapato" || i.cat === "utensilio") && i.state !== "doacao" && i.state !== "pequeno");
+    el.innerHTML = `<div class="sel-hd"><button class="back" id="close">‹</button><div><b>${c.name}</b><small>${drawer ? "3 divisórias · toque numa divisão ou numa roupinha" : c.hint}</small></div></div>
+      ${drawer ? `<div class="slots"><button data-slot="" class="${slot === null ? "on" : ""}">Tudo<small>${pcs(inComp)}</small></button>${slotNames().map((n, k) => `<button data-slot="${k}" class="${slot === k ? "on" : ""}">${esc(n)}<small>${pcs(inComp.filter((i) => slotOf(i) === k))}</small></button>`).join("")}</div>` : ""}
+      ${here.length ? `<div class="list">${here.map((i) => itemRow(i, true)).join("")}</div>` : `<p class="note">Vazio por enquanto.</p>`}
+      ${loose.length ? `<details class="move"><summary>➕ Guardar aqui${drawer && slot !== null ? ` (${esc(slotNames()[slot])})` : ""}</summary>
+        ${drawer && slot === null ? `<p class="fine">Cada peça vai para a divisão do tamanho dela (RN/P = 0-3, M = 3-6, G = 6-9, GG = 9-12). Toque numa divisão antes para escolher.</p>` : ""}
+        <div class="checks">${loose.map((i) => `<label><input type="checkbox" value="${i.id}"><span class="dot" style="background:${colorOf(i)}"></span>${esc(i.name)} ${i.size ? `<small>${esc(i.size)}</small>` : ""}<em>${i.loc ? compName(i.loc) : "sem lugar"}</em></label>`).join("")}</div><button class="btn" id="put">Guardar selecionados</button></details>` : ""}`;
     $("#close", el).onclick = () => {
       sel = null;
+      slot = null;
       wardrobe?.closeAll();
       sheet();
     };
+    $$("[data-slot]", el).forEach((x) => (x.onclick = () => {
+      slot = x.dataset.slot === "" ? null : Number(x.dataset.slot);
+      sheet();
+    }));
+    $$("[data-item]", el).forEach((x) => (x.onclick = (e) => {
+      e.preventDefault();
+      focus = x.dataset.item!;
+      wardrobe?.highlight(focus);
+      sheet();
+    }));
     const put = $("#put", el);
     if (put) put.onclick = () => {
       const ids = $$<HTMLInputElement>("input:checked", el).map((x) => x.value);
       if (!ids.length) return toast("Marque as peças");
-      save((d) => d.items.forEach((i) => ids.includes(i.id) && (i.loc = sel!)));
+      save((d) => d.items.forEach((i) => {
+        if (!ids.includes(i.id)) return;
+        i.loc = sel!;
+        if (drawer) i.slot = slot ?? slotFor(i.size);
+        else delete i.slot;
+      }));
       wardrobe?.setItems(mine());
       toast("Prontinho! Suas comprinhas estão organizadas. 💗");
       sheet();
@@ -232,15 +308,34 @@ function room(v: HTMLElement) {
   };
   const pick = (id: CompId) => {
     sel = id;
+    slot = null;
+    focus = null;
     wardrobe?.open(id);
     sheet();
   };
   if (has3d) {
     wardrobe = new Wardrobe3D($("#stage"), w, b.nick || b.name);
+    wardrobe.setSlots(slotNames());
     wardrobe.setItems(mine());
     wardrobe.onSelect = (id) => {
       $("#hint").hidden = true;
       sel = id;
+      slot = null;
+      focus = null;
+      sheet();
+    };
+    wardrobe.onSlot = (id, k) => {
+      sel = id;
+      slot = k;
+      focus = null;
+      wardrobe?.highlight(null);
+      sheet();
+    };
+    wardrobe.onItem = (itemId) => {
+      $("#hint").hidden = true;
+      focus = itemId;
+      const it = mine().find((i) => i.id === itemId);
+      if (it?.loc) sel = it.loc;
       sheet();
     };
   } else {
@@ -253,9 +348,9 @@ function room(v: HTMLElement) {
   }
   sheet();
 }
-function itemRow(i: Item) {
-  return `<a class="row" href="#item/${i.id}"><span class="dot big" style="background:${i.cat === "roupa" || i.cat === "sapato" ? colorOf(i) : "#f3ede6"}">${i.cat === "roupa" || i.cat === "sapato" ? "" : catIcon(i.cat)}</span>
-    <div><b>${esc(i.name)}</b><small>${[i.size && `tam. ${esc(i.size)}`, i.color && esc(i.color), i.loc && compName(i.loc), i.state !== "uso" && STATES.find((s) => s.id === i.state)?.name].filter(Boolean).join(" · ")}</small></div><em>${i.qty}×</em></a>`;
+function itemRow(i: Item, local = false) {
+  return `<a class="row" href="#item/${i.id}" ${local ? `data-item="${i.id}"` : ""}><span class="dot big" style="background:${i.cat === "roupa" || i.cat === "sapato" ? colorOf(i) : "#f3ede6"}">${i.cat === "roupa" || i.cat === "sapato" ? "" : catIcon(i.cat)}</span>
+    <div><b>${esc(i.name)}</b><small>${[i.size && `tam. ${esc(i.size)}`, i.color && esc(i.color), i.loc && compName(i.loc) + (isDrawer(i.loc) ? ` · ${slotNames()[slotOf(i)]}` : ""), i.state !== "uso" && STATES.find((s) => s.id === i.state)?.name].filter(Boolean).join(" · ")}</small></div><em>${i.qty}×</em></a>`;
 }
 
 // ---------- inventário
@@ -277,7 +372,7 @@ function items(v: HTMLElement) {
       list = list.filter((i) => `${i.name} ${i.brand} ${i.size} ${i.color} ${i.notes}`.toLowerCase().includes(t));
     }
     list.sort((x, y) => x.name.localeCompare(y.name));
-    $("#list").innerHTML = list.length ? list.map(itemRow).join("") : `<p class="note">Nada por aqui. ${alert ? "Nenhuma peça para conferir 🎉" : 'Toque em "Novo item" ou cadastre pela nota fiscal.'}</p>`;
+    $("#list").innerHTML = list.length ? list.map((i) => itemRow(i)).join("") : `<p class="note">Nada por aqui. ${alert ? "Nenhuma peça para conferir 🎉" : 'Toque em "Novo item" ou cadastre pela nota fiscal.'}</p>`;
     $("#count").textContent = `${list.reduce((s, i) => s + i.qty, 0)} peças`;
   };
   v.innerHTML = `${head(alert ? "Conferir tamanhos" : "Itens", "#inicio", `<a class="chip" href="#item/novo">+ Novo item</a>`)}
@@ -333,6 +428,7 @@ function itemForm(v: HTMLElement, arg?: string) {
     <div class="row2"><label>Marca<input name="brand" value="${esc(it.brand)}"></label><label>Data da compra<input name="date" type="date" value="${it.date}"></label></div>
     <div class="row2"><label>Estado<select name="state">${STATES.map((s) => `<option value="${s.id}" ${it.state === s.id ? "selected" : ""}>${s.name}</option>`).join("")}</select></label>
     <label>Onde está<select name="loc"><option value="">Sem lugar</option>${COMPARTMENTS.map((c) => `<option value="${c.id}" ${it.loc === c.id ? "selected" : ""}>${c.name}</option>`).join("")}</select></label></div>
+    <label class="slotf" ${isDrawer(it.loc) ? "" : "hidden"}>Divisão da gaveta<select name="slot"><option value="">Pelo tamanho</option>${slotNames().map((n, k) => `<option value="${k}" ${it.slot === k ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
     <label class="shoe" ${it.cat === "sapato" ? "" : "hidden"}>Comprimento interno do sapato (cm)<input name="innerCm" type="number" step="0.1" value="${it.innerCm ?? ""}"></label>
     <label>Observações<textarea name="notes" rows="2">${esc(it.notes)}</textarea></label>
     <button class="btn big">Salvar</button>
@@ -341,6 +437,7 @@ function itemForm(v: HTMLElement, arg?: string) {
   const f = $<HTMLFormElement>("#f");
   let photo = it.photo;
   if (photo) photoUrl(photo).then((u) => u && ($("#ph").style.backgroundImage = `url(${u})`));
+  $<HTMLSelectElement>("[name=loc]", f).onchange = (e) => ($("label.slotf", f).hidden = !isDrawer((e.target as HTMLSelectElement).value));
   $<HTMLSelectElement>("[name=cat]", f).onchange = (e) => ($("label.shoe", f).hidden = (e.target as HTMLSelectElement).value !== "sapato");
   $<HTMLInputElement>("#pf").onchange = async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -359,6 +456,7 @@ function itemForm(v: HTMLElement, arg?: string) {
       ...it, name: g("name"), cat: g("cat") as Cat, size: g("size").toUpperCase().replace(/MESES?/, "meses"), color: g("color").toLowerCase(), brand: g("brand"),
       qty: Math.max(0, parseInt(g("qty")) || 0), price: parseFloat(g("price")) || 0, date: g("date") || today(), state: g("state") as ItemState,
       loc: g("loc") as CompId | "", notes: g("notes"), photo, innerCm: parseFloat(g("innerCm")) || undefined,
+      slot: isDrawer(g("loc")) && g("slot") !== "" ? Number(g("slot")) : undefined,
     };
     if (!next.name) return toast("Dê um nome ao item");
     save((d) => {
@@ -790,7 +888,7 @@ function diapers(v: HTMLElement) {
     <div class="sum"><div><small>Fraldas em casa</small><b>${ds.stock}</b></div><div><small>Por dia</small><b>${ds.perDay ? ds.perDay.toFixed(1).replace(".", ",") : "—"}</b></div><div><small>Dura</small><b class="${ds.daysLeft !== null && ds.daysLeft < 5 ? "red" : ""}">${ds.daysLeft === null ? "—" : `~${ds.daysLeft} dias`}</b></div></div>
     <h2>Trocou agora? <small>hoje: ${todayUse}</small></h2>
     <div class="row3"><button class="btn" data-use="1">+1 fralda</button><button class="btn ghost" data-use="2">+2</button><button class="btn ghost" data-undo>Desfazer</button></div>
-    <h2>Estoque</h2><div class="list">${packs.map(itemRow).join("") || `<p class="note">Cadastre fraldas pela nota fiscal ou em Itens.</p>`}</div>
+    <h2>Estoque</h2><div class="list">${packs.map((i) => itemRow(i)).join("") || `<p class="note">Cadastre fraldas pela nota fiscal ou em Itens.</p>`}</div>
     <a class="btn ghost" href="#item/novo">+ Cadastrar pacote</a>
     <p class="fine">A previsão usa a média de trocas registradas nos últimos 7 dias.</p>`;
   $$("[data-use]").forEach((x) => (x.onclick = () => {

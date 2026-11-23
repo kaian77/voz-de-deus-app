@@ -226,3 +226,16 @@ details select { padding: 9px; border-radius: 12px; border: 1.5px solid var(--li
 .row select { padding: 6px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); font-size: 13px; }
 .btn:disabled { opacity: 0.5; }
 body.readonly #view::before { content: "👀 Você está só vendo: as mudanças feitas aqui não vão para a família."; display: block; background: #fff3d6; color: #6b5420; font-size: 12.5px; font-weight: 700; padding: 8px 12px; border-radius: 12px; margin-bottom: 8px; }
+.slots { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 10px; padding: 0 16px 4px; scrollbar-width: none; }
+.slots button { flex: none; padding: 7px 11px; border-radius: 12px; background: var(--bege); font-weight: 800; font-size: 13px; display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.slots button small { font-size: 11px; color: var(--muted); font-weight: 700; }
+.slots button.on { background: var(--ink); color: var(--bg); }
+.slots button.on small { color: var(--bg); opacity: 0.75; }
+.piece { display: flex; gap: 12px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 10px; }
+.piece .ph { width: 64px; height: 64px; border-radius: 14px; flex: none; }
+.piece p { margin: 2px 0; }
+.mini { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); margin-top: 10px; }
+.mini select { padding: 10px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); font-size: 15px; }
+.slotnames input { padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); font-size: 14px; }
+.row3 .btn { font-size: 14px; padding: 11px 6px; display: flex; align-items: center; justify-content: center; }
+.hint { white-space: normal; text-align: center; width: max-content; max-width: 92%; }

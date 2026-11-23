@@ -24,6 +24,11 @@ App instalável (PWA) para organizar tudo do bebê. Entrada do Vite `bebe` (`beb
   3 gavetas deslizam 36 cm, cabideiro, 2 prateleiras, sapateira, plaquinha com o nome, quarto com chão, tapete e estrelas,
   luz aconchegante/clara e 5 acabamentos. Cada compartimento (`COMPARTMENTS`) é ligado aos itens pelo campo `loc`; o que
   aparece dentro (roupa dobrada, cabides, sapatinhos) vem do inventário com a cor de cada peça. "Guardar aqui" move itens.
+  Cada gaveta tem 3 divisórias = 4 espaços (padrão 0-3, 3-6, 6-9 e 9-12 meses; nomes editáveis em "Personalizar",
+  `wardrobe.slots`, etiquetas no fundo da gaveta); a peça fica na divisão do campo `slot` ou, sem ele, pelo tamanho
+  (`slotFor`: RN/P = 0-3, M = 3-6, G = 6-9, GG = 9-12). Na gaveta as roupas ficam dobradas em pé (até 15 por divisão).
+  Toque numa roupinha (gaveta, cabide, prateleira ou sapato) = ela levanta e abre o cartão da peça (trocar de divisão,
+  "Ficou pequena", "Doação", Editar); toque no chão de uma divisão = lista só dela.
   Modo simples 2D para celular sem WebGL (lembrado em `cb_2d`).
 - **Nota fiscal** (`receipt.ts`): XML da NF-e/NFC-e (exato), foto (OCR no próprio celular com tesseract.js, português;
   o leitor é baixado na 1ª vez e o service worker guarda), texto colado e QR Code da NFC-e (pega a chave e abre o site da

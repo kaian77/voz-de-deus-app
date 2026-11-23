@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import type { CompId, Item, Wardrobe } from "./store";
+import { slotOf, type CompId, type Item, type Wardrobe } from "./store";
 
 const FINISH: Record<Wardrobe["finish"], { base: string; grain: string; rough: number }> = {
   branco: { base: "#f4f0ea", grain: "rgba(150,130,110,0.10)", rough: 0.55 },
@@ -90,6 +90,13 @@ export class Wardrobe3D {
   private drawers: { g: THREE.Group; out: number; want: number; id: CompId; box: THREE.Group }[] = [];
   private hits: { mesh: THREE.Object3D; id: CompId | "door0" | "door1" }[] = [];
   private contents = new Map<CompId, THREE.Group>();
+  /** peças tocáveis (cada uma sabe o id do item) e o chão de cada divisão das gavetas */
+  private pieces: THREE.Object3D[] = [];
+  private slotHits: { mesh: THREE.Mesh; id: CompId; slot: number }[] = [];
+  private slotTags: { id: CompId; slot: number; mesh: THREE.Mesh }[] = [];
+  private picked: { g: THREE.Object3D; y: number } | null = null;
+  onItem: (itemId: string) => void = () => {};
+  onSlot: (id: CompId, slot: number) => void = () => {};
   private plate!: THREE.Mesh;
   private key!: THREE.DirectionalLight;
   private lamp!: THREE.PointLight;
@@ -282,7 +289,21 @@ export class Wardrobe3D {
       this.panel(0.012, bh, bd, -bw / 2, by + bh / 2, zf - bd / 2, this.inner, box);
       this.panel(0.012, bh, bd, bw / 2, by + bh / 2, zf - bd / 2, this.inner, box);
       this.panel(bw, bh, 0.012, 0, by + bh / 2, zf - bd, this.inner, box);
-      box.userData = { y: by + 0.005, bw, bd };
+      // 3 divisórias = 4 espaços (por padrão um para cada 3 meses), etiqueta no fundo e chão tocável
+      const sw = bw / 4;
+      for (let k = 1; k < 4; k++) this.panel(0.008, bh * 0.82, bd - 0.02, -bw / 2 + k * sw, by + bh * 0.41, zf - bd / 2, this.metal, box).castShadow = false;
+      for (let k = 0; k < 4; k++) {
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(sw - 0.02, bd - 0.03), new THREE.MeshBasicMaterial({ visible: false }));
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.set(-bw / 2 + (k + 0.5) * sw, by + 0.012, zf - bd / 2);
+        box.add(floor);
+        this.slotHits.push({ mesh: floor, id, slot: k });
+        const tag = new THREE.Mesh(new THREE.PlaneGeometry(sw - 0.03, 0.04), new THREE.MeshBasicMaterial({ transparent: true }));
+        tag.position.set(-bw / 2 + (k + 0.5) * sw, by + bh - 0.03, zf - bd + 0.008);
+        box.add(tag);
+        this.slotTags.push({ id, slot: k, mesh: tag });
+      }
+      box.userData = { y: by + 0.005, bw, bd, zb: zf - bd };
       g.add(box);
       b.add(g);
       this.drawers.push({ g, out: 0, want: 0, id, box });
@@ -315,10 +336,39 @@ export class Wardrobe3D {
     this.lamp.color.set(l === "quente" ? 0xffe2b8 : 0xf0f6ff);
   }
 
+  /** nomes das 4 divisões das gavetas (etiquetas no fundo de cada gaveta) */
+  setSlots(names: string[]) {
+    for (const t of this.slotTags) {
+      const c = document.createElement("canvas");
+      c.width = 256;
+      c.height = 48;
+      const x = c.getContext("2d")!;
+      x.fillStyle = "#fffcf8";
+      x.beginPath();
+      x.roundRect(2, 2, 252, 44, 20);
+      x.fill();
+      x.strokeStyle = "#d6b98c";
+      x.lineWidth = 3;
+      x.stroke();
+      x.fillStyle = "#8a6d4a";
+      x.font = "700 28px Nunito, sans-serif";
+      x.textAlign = "center";
+      x.textBaseline = "middle";
+      x.fillText(names[t.slot] ?? "", 128, 26, 236);
+      const m = t.mesh.material as THREE.MeshBasicMaterial;
+      m.map?.dispose();
+      m.map = new THREE.CanvasTexture(c);
+      m.map.colorSpace = THREE.SRGBColorSpace;
+      m.needsUpdate = true;
+    }
+  }
+
   // ---------- o que tem dentro (itens do inventário guardados em cada parte)
   setItems(items: Item[]) {
     for (const g of this.contents.values()) g.removeFromParent();
     this.contents.clear();
+    this.pieces = [];
+    this.picked = null;
     const by = (id: CompId) => items.filter((i) => i.loc === id && i.qty > 0);
     const expand = (list: Item[], max: number) => list.flatMap((i) => Array(Math.min(i.qty, 6)).fill(i) as Item[]).slice(0, max);
     // cabideiro: cabides com a roupa
@@ -340,15 +390,16 @@ export class Wardrobe3D {
       });
       this.add(id, g);
     });
-    // gavetas: peças dobradas deitadas lado a lado
+    // gavetas: em cada divisão as peças ficam dobradas em pé, uma atrás da outra (como dobra de gaveta organizada)
     for (const d of this.drawers) {
       const g = new THREE.Group();
-      const { y, bw } = d.box.userData as { y: number; bw: number };
-      const list = expand(by(d.id), 12);
-      list.forEach((it, i) => {
-        const col = i % 4, row = Math.floor(i / 4) % 2, layer = Math.floor(i / 8);
-        g.add(this.folded(it, -bw / 2 + 0.13 + col * ((bw - 0.2) / 3), y + 0.016 + layer * 0.03, D / 2 - 0.13 - row * 0.21, 0.2, 0.18));
-      });
+      const { y, bw, bd, zb } = d.box.userData as { y: number; bw: number; bd: number; zb: number };
+      const sw = bw / 4;
+      for (let k = 0; k < 4; k++) {
+        const list = by(d.id).filter((i) => slotOf(i) === k).flatMap((i) => Array(Math.min(i.qty, 20)).fill(i) as Item[]).slice(0, 15);
+        const step = Math.min(0.03, (bd - 0.05) / Math.max(1, list.length));
+        list.forEach((it, j) => g.add(this.standing(it, -bw / 2 + (k + 0.5) * sw, y + 0.006, zb + 0.03 + j * step, sw - 0.035)));
+      }
       d.box.add(g);
       this.contents.set(d.id, g);
     }
@@ -380,7 +431,27 @@ export class Wardrobe3D {
     g.add(fold);
     g.position.set(x, y + h / 2, z);
     g.rotation.y = (Math.random() - 0.5) * 0.06;
+    return this.piece(g, it);
+  }
+  /** marca a peça como tocável (o toque abre o item) */
+  private piece(g: THREE.Object3D, it: Item) {
+    g.userData.itemId = it.id;
+    this.pieces.push(g);
     return g;
+  }
+  /** peça dobrada em pé dentro da gaveta */
+  private standing(it: Item, x: number, y: number, z: number, w: number) {
+    const g = new THREE.Group();
+    const h = 0.085, t = 0.024;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, t), this.cloth(it));
+    body.position.y = h / 2;
+    body.castShadow = true;
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(t / 2, t / 2, w, 10).rotateZ(Math.PI / 2), this.cloth(it));
+    top.position.y = h;
+    g.add(body, top);
+    g.position.set(x + (Math.random() - 0.5) * 0.006, y, z);
+    g.rotation.x = -0.12; // um pouco inclinada, encostada na de trás
+    return this.piece(g, it);
   }
   private hanger(it: Item, x: number) {
     const g = new THREE.Group();
@@ -415,7 +486,7 @@ export class Wardrobe3D {
     m.rotation.y = Math.PI / 2;
     g.add(m);
     g.position.x = x;
-    return g;
+    return this.piece(g, it);
   }
   private shoePair(it: Item, x: number, y: number, z: number) {
     const g = new THREE.Group();
@@ -428,7 +499,7 @@ export class Wardrobe3D {
     }
     g.rotation.x = y > 0.3 ? 0.18 : 0;
     g.position.x = x;
-    return g;
+    return this.piece(g, it);
   }
 
   // ---------- abrir e fechar
@@ -474,8 +545,26 @@ export class Wardrobe3D {
       const r = c.getBoundingClientRect();
       v.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(v, this.cam);
-      const hits = ray.intersectObjects(this.hits.map((h) => h.mesh), false);
-      const h = hits[0] && this.hits.find((x) => x.mesh === hits[0].object);
+      // o mais perto ganha: roupinha, chão de uma divisão, porta ou gaveta
+      const all = ray.intersectObjects([...this.hits.map((h) => h.mesh), ...this.pieces, ...this.slotHits.map((x) => x.mesh)], true);
+      for (const hit of all) {
+        let o: THREE.Object3D | null = hit.object;
+        while (o && !o.userData.itemId && !this.pieces.includes(o)) o = o.parent;
+        if (o?.userData.itemId) {
+          this.pick(o);
+          this.onItem(o.userData.itemId as string);
+          return;
+        }
+        const sh = this.slotHits.find((x) => x.mesh === hit.object);
+        if (sh) {
+          if (!this.drawers.find((d) => d.id === sh.id)?.want) continue; // gaveta fechada: vale a frente
+          this.onSlot(sh.id, sh.slot);
+          return;
+        }
+        if (this.hits.some((x) => x.mesh === hit.object)) break;
+      }
+      const first = all.find((a) => this.hits.some((y) => y.mesh === a.object));
+      const h = first && this.hits.find((x) => x.mesh === first.object);
       if (!h) return;
       if (h.id === "door0" || h.id === "door1") {
         const i = h.id === "door0" ? 0 : 1;
@@ -491,6 +580,19 @@ export class Wardrobe3D {
       this.open(h.id);
       this.onSelect(h.id);
     });
+  }
+
+  /** a roupinha tocada levanta um pouco (e a anterior volta) */
+  private pick(o: THREE.Object3D) {
+    if (this.picked) this.picked.g.position.y = this.picked.y;
+    this.picked = { g: o, y: o.position.y };
+    o.position.y += 0.05;
+  }
+  highlight(itemId: string | null) {
+    if (this.picked) this.picked.g.position.y = this.picked.y;
+    this.picked = null;
+    const o = itemId ? this.pieces.find((p) => p.userData.itemId === itemId) : null;
+    if (o) this.pick(o);
   }
 
   private resize() {
