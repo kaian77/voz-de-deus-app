@@ -2,7 +2,7 @@
 // - nota fiscal lida pela IA → mesma tela de revisão da leitura do celular;
 // - BabyBot: responde só com os dados da família; para adicionar peças pede confirmação.
 import * as C from "./cloud";
-import { baby, db, esc, save, today, uid, type Cat, type Wardrobe } from "./store";
+import { baby, db, esc, save, today, uid, type Cat, type DecorKind, type Wardrobe } from "./store";
 import type { Parsed } from "./receipt";
 
 export type AiReceipt = {
@@ -96,7 +96,14 @@ export function babybotPage(v: HTMLElement, head: (t: string, back?: string) => 
 }
 
 // ---------- móveis do quarto: a família escolhe (só guarda-roupa, só cômoda ou os dois) ou tira foto e a IA copia o quarto
-type Room = { pieces: "guarda" | "comoda" | "ambos" | "nenhum"; finish: Wardrobe["finish"]; wall: string; floor: "madeira" | "clara" | "escura"; rug: string; light: "quente" | "fria"; note: string };
+type Room = {
+  pieces: "guarda" | "comoda" | "ambos" | "nenhum"; finish: Wardrobe["finish"]; wall: string; wall2: string; pattern: NonNullable<Wardrobe["pattern"]>;
+  wall_text: string; text_color: string; floor: "madeira" | "clara" | "escura"; rug: string; light: "quente" | "fria"; decor: { kind: DecorKind; color: string }[]; note: string;
+};
+const DECOR_NAME: Record<DecorKind, string> = {
+  berco: "berço", poltrona: "poltrona", janela: "janela com cortina", quadros: "quadros", prateleira: "prateleira", nuvens: "nuvens", estrelas: "estrelas",
+  baloes: "balões", luminaria: "luminária", mobile: "móbile", cesto: "cesto", pelucia: "pelúcia", planta: "planta", trocador: "trocador",
+};
 const PIECES = [
   { id: "guarda", icon: "🚪", name: "Só guarda-roupa", sub: "cabideiro, prateleiras, 3 gavetas e sapateira" },
   { id: "comoda", icon: "🗄️", name: "Só cômoda", sub: "4 gavetas e porta com cabideiro" },
@@ -113,44 +120,71 @@ export function roomSetup(v: HTMLElement, head: (t: string, back?: string) => st
   v.innerHTML = `${head("Móveis do quarto", cur ? "#quarto" : "#inicio")}
     <p class="lead">O que tem no quarto do bebê? O app monta só o que você tem.</p>
     <div class="pieces">${PIECES.map((p) => `<button class="pc ${cur === p.id ? "on" : ""}" data-p="${p.id}"><span>${p.icon}</span><b>${p.name}</b><small>${p.sub}</small></button>`).join("")}</div>
-    <h2>📷 Ou copie o seu quarto pela foto</h2>
-    <p class="fine">Tire uma foto do quarto inteiro: a IA vê quais móveis tem, a cor da madeira, da parede, do chão e do tapete, e o quartinho 3D fica parecido. As gavetas e portas continuam as do app.</p>
-    <label class="btn big file">📷 Tirar foto do quarto<input type="file" accept="image/*" capture="environment" id="rf"></label>
+    <h2>📷 Ou copie o seu quarto pelas fotos</h2>
+    <p class="fine">Tire até 6 fotos de cantos diferentes do quarto. A IA vê os móveis, as cores (madeira, parede, chão, tapete), o nome na parede, berço, poltrona, cortina, quadros, nuvens, balões e o resto, e o quartinho 3D fica igual. As gavetas e portas continuam as do app.</p>
+    <div class="thumbs" id="thumbs"></div>
+    <button class="btn big" id="go" hidden></button>
     <div id="res"></div>`;
   const choose = (p: Wardrobe["pieces"]) => {
     save((d) => (d.wardrobe.pieces = p));
     done();
   };
   v.querySelectorAll<HTMLButtonElement>("[data-p]").forEach((b) => (b.onclick = () => choose(b.dataset.p as Wardrobe["pieces"])));
-  (v.querySelector("#rf") as HTMLInputElement).onchange = async (e) => {
-    const f = (e.target as HTMLInputElement).files?.[0];
-    if (!f) return;
-    const res = v.querySelector("#res") as HTMLElement;
+  // até 6 fotos (de cantos diferentes): a IA junta tudo numa descrição só
+  const shots: { blob: Blob; url: string }[] = [];
+  const res = v.querySelector("#res") as HTMLElement;
+  const thumbs = v.querySelector("#thumbs") as HTMLElement;
+  const drawThumbs = () => {
+    thumbs.innerHTML = shots.map((x, k) => `<div class="th" style="background-image:url(${x.url})"><button class="x" data-rm="${k}">✕</button></div>`).join("")
+      + (shots.length < 6 ? `<label class="th add">＋<br><small>${shots.length ? "mais um canto" : "1ª foto"}</small><input type="file" accept="image/*" multiple id="rf"></label>` : "");
+    (v.querySelector("#go") as HTMLButtonElement).hidden = !shots.length;
+    (v.querySelector("#go") as HTMLButtonElement).textContent = `🔎 Montar meu quarto (${shots.length} ${shots.length === 1 ? "foto" : "fotos"})`;
+    thumbs.querySelectorAll<HTMLButtonElement>("[data-rm]").forEach((b) => (b.onclick = () => {
+      URL.revokeObjectURL(shots[Number(b.dataset.rm)].url);
+      shots.splice(Number(b.dataset.rm), 1);
+      drawThumbs();
+    }));
+    const inp = thumbs.querySelector("#rf") as HTMLInputElement | null;
+    if (inp) inp.onchange = async () => {
+      for (const f of [...(inp.files ?? [])].slice(0, 6 - shots.length)) {
+        const blob = await shrink(f, 1024);
+        shots.push({ blob, url: URL.createObjectURL(blob) });
+      }
+      drawThumbs();
+    };
+  };
+  drawThumbs();
+  (v.querySelector("#go") as HTMLButtonElement).onclick = async () => {
     if (!C.account()) {
-      res.innerHTML = `<div class="alert">A leitura da foto usa a IA e precisa da conta. <a href="#conta">Criar conta</a> ou escolha os móveis acima.</div>`;
+      res.innerHTML = `<div class="alert">A leitura das fotos usa a IA e precisa da conta. <a href="#conta">Criar conta</a> ou escolha os móveis acima.</div>`;
       return;
     }
-    res.innerHTML = `<p class="note">🔎 Olhando o seu quarto…</p>`;
+    res.innerHTML = `<p class="note">🔎 Olhando o seu quarto (${shots.length} ${shots.length === 1 ? "foto" : "fotos"})…</p>`;
     try {
-      const small = await shrink(f, 1280);
-      const image = await new Promise<string>((ok, bad) => {
+      const images = await Promise.all(shots.map((x) => new Promise<string>((ok, bad) => {
         const fr = new FileReader();
         fr.onload = () => ok(String(fr.result));
         fr.onerror = () => bad(fr.error);
-        fr.readAsDataURL(small);
-      });
-      const { room: r } = await C.api<{ room: Room }>("room_ai", { image });
+        fr.readAsDataURL(x.blob);
+      })));
+      const { room: r } = await C.api<{ room: Room }>("room_ai", { images });
       if (r.pieces === "nenhum") {
-        res.innerHTML = `<div class="alert">${esc(r.note || "Não achei guarda-roupa nem cômoda na foto.")} Tente outra foto mostrando os móveis, ou escolha acima.</div>`;
+        res.innerHTML = `<div class="alert">${esc(r.note || "Não achei guarda-roupa nem cômoda nas fotos.")} Tente fotos mostrando os móveis, ou escolha acima.</div>`;
         return;
       }
       const sw = (c: string) => (c ? `<i class="sw" style="background:${c}"></i>` : "");
       res.innerHTML = `<div class="card-form roomres"><p>🤖 ${esc(r.note)}</p>
         <ul><li>Móveis: <b>${PIECES.find((p) => p.id === r.pieces)?.name}</b></li><li>Cor dos móveis: <b>${FIN[r.finish]}</b></li>
-        <li>Parede: ${sw(r.wall)}</li><li>Chão: <b>${{ madeira: "madeira", clara: "claro", escura: "escuro" }[r.floor]}</b></li>${r.rug ? `<li>Tapete: ${sw(r.rug)}</li>` : ""}</ul>
+        <li>Parede: ${sw(r.wall)}${r.pattern !== "lisa" && r.wall2 ? ` ${{ listras: "listrada", poa: "de bolinhas", xadrez: "xadrez", meia: "meia parede", lisa: "" }[r.pattern]} ${sw(r.wall2)}` : ""}</li>
+        ${r.wall_text ? `<li>Nome na parede: <b style="color:${r.text_color || "inherit"}">${esc(r.wall_text)}</b></li>` : ""}
+        <li>Chão: <b>${{ madeira: "madeira", clara: "claro", escura: "escuro" }[r.floor]}</b>${r.rug ? ` · tapete ${sw(r.rug)}` : ""}</li>
+        ${r.decor.length ? `<li>Também: ${r.decor.map((d) => `${sw(d.color)} ${DECOR_NAME[d.kind]}`).join(", ")}</li>` : ""}</ul>
         <button class="btn big" id="use">Montar meu quarto assim</button></div>`;
       (v.querySelector("#use") as HTMLButtonElement).onclick = () => {
-        save((d) => Object.assign(d.wardrobe, { pieces: r.pieces, finish: r.finish, wall: r.wall, floor: r.floor, rug: r.rug, light: r.light }));
+        save((d) => Object.assign(d.wardrobe, {
+          pieces: r.pieces, finish: r.finish, wall: r.wall, floor: r.floor, rug: r.rug, light: r.light,
+          wall2: r.wall2, pattern: r.pattern, wallText: r.wall_text, textColor: r.text_color, decor: r.decor,
+        }));
         toast("Quartinho montado 💗");
         done();
       };
