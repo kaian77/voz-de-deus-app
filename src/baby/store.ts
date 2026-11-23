@@ -44,12 +44,14 @@ export type Data = {
   v: 1; babies: Baby[]; current: string; items: Item[]; purchases: Purchase[]; sleeps: Sleep[];
   measures: Measure[]; diapers: DiaperLog[]; events: Event[]; meds: Med[]; wardrobe: Wardrobe; budget: number;
   barcodes: Record<string, { name: string; cat: Cat; brand: string; size: string }>;
+  /** quando cada registro mudou e quando foi apagado (para juntar as edições de vários celulares da família) */
+  mt: Record<string, number>; del: Record<string, number>;
 };
 
 const KEY = "cb_data";
 const empty = (): Data => ({
   v: 1, babies: [], current: "", items: [], purchases: [], sleeps: [], measures: [], diapers: [], events: [], meds: [],
-  wardrobe: { finish: "branco", light: "quente" }, budget: 0, barcodes: {},
+  wardrobe: { finish: "branco", light: "quente" }, budget: 0, barcodes: {}, mt: {}, del: {},
 });
 let data: Data = load();
 const subs = new Set<() => void>();
@@ -64,8 +66,25 @@ function load(): Data {
   return empty();
 }
 export const db = () => data;
+const LISTS = ["babies", "items", "purchases", "sleeps", "measures", "diapers", "events", "meds"] as const;
+type ListKey = (typeof LISTS)[number];
+type Rec = { id: string };
+const snap = (d: Data) => {
+  const m = new Map<string, string>();
+  for (const k of LISTS) for (const r of d[k] as Rec[]) m.set(r.id, JSON.stringify(r));
+  m.set("~wardrobe", JSON.stringify(d.wardrobe));
+  m.set("~budget", String(d.budget));
+  return m;
+};
 export function save(mut?: (d: Data) => void) {
-  if (mut) mut(data);
+  if (mut) {
+    // marca a hora do que mudou, entrou ou saiu (a nuvem usa isso para juntar sem perder nada)
+    const before = snap(data);
+    mut(data);
+    const after = snap(data), now = Date.now();
+    for (const [id, j] of after) if (before.get(id) !== j) data.mt[id] = now;
+    for (const id of before.keys()) if (!after.has(id)) data.del[id] = now;
+  }
   try {
     localStorage.setItem(KEY, JSON.stringify(data));
   } catch {
@@ -224,6 +243,38 @@ export function shrink(file: Blob, max = 900): Promise<Blob> {
 export function exportJson() {
   return new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
 }
+/** Junta os dados da nuvem com os deste celular: em cada registro fica a versão mais nova; apagado continua apagado. */
+export function merge(a: Data, b: Data): Data {
+  const A = { ...empty(), ...a }, B = { ...empty(), ...b };
+  const out: Data = { ...A, mt: { ...A.mt }, del: { ...A.del }, barcodes: { ...B.barcodes, ...A.barcodes } };
+  for (const [k, v] of Object.entries(B.mt)) out.mt[k] = Math.max(out.mt[k] ?? 0, v);
+  for (const [k, v] of Object.entries(B.del)) out.del[k] = Math.max(out.del[k] ?? 0, v);
+  for (const k of LISTS) {
+    const ma = new Map((A[k] as Rec[]).map((r) => [r.id, r])), mb = new Map((B[k] as Rec[]).map((r) => [r.id, r]));
+    const list: Rec[] = [];
+    for (const id of new Set([...ma.keys(), ...mb.keys()])) {
+      const ra = ma.get(id), rb = mb.get(id);
+      const pick = !ra ? rb! : !rb ? ra : (B.mt[id] ?? 0) > (A.mt[id] ?? 0) ? rb : ra;
+      if (out.del[id] && out.del[id] >= (out.mt[id] ?? 0)) continue; // apagado depois da última edição
+      list.push(pick);
+    }
+    (out as Record<ListKey, Rec[]>)[k] = list;
+  }
+  if ((B.mt["~wardrobe"] ?? 0) > (A.mt["~wardrobe"] ?? 0)) out.wardrobe = B.wardrobe;
+  if ((B.mt["~budget"] ?? 0) > (A.mt["~budget"] ?? 0)) out.budget = B.budget;
+  // registros apagados há mais de 90 dias já podem ser esquecidos
+  const old = Date.now() - 90 * 864e5;
+  for (const [k, v] of Object.entries(out.del)) if (v < old) delete out.del[k];
+  out.current = A.current && out.babies.some((x) => x.id === A.current) ? A.current : out.babies[0]?.id ?? "";
+  return out;
+}
+/** Troca os dados deste celular (depois de juntar com a nuvem), sem marcar nada como editado agora. */
+export function replaceAll(d: Data) {
+  data = { ...empty(), ...d };
+  save();
+}
+export const sameData = (a: Data, b: Data) => JSON.stringify({ ...a, current: "" }) === JSON.stringify({ ...b, current: "" });
+
 export function importJson(text: string) {
   const d = JSON.parse(text) as Data;
   if (d.v !== 1 || !Array.isArray(d.babies)) throw new Error("Arquivo não é um backup do Cantinho do bebê.");

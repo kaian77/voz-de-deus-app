@@ -54,3 +54,7 @@ verify_jwt = false
 # App de treino FORMA (/treino): conta própria (e-mail + senha), separada do login do Studio
 [functions.forma]
 verify_jwt = false
+
+# App Cantinho do bebê (/bebe/): conta própria (e-mail + senha) e família na nuvem
+[functions.bebe]
+verify_jwt = false
