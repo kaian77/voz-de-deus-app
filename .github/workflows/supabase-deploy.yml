@@ -59,6 +59,7 @@ jobs:
       REVIEW_EMAIL_FROM: ${{ vars.REVIEW_EMAIL_FROM }}
       # Agenda online: remetente dos e-mails (domínio verificado no Resend), padrão "agenda@paginaspro.app.br"
       AGENDA_EMAIL_FROM: ${{ vars.AGENDA_EMAIL_FROM }}
+      BEBE_EMAIL_FROM: ${{ vars.BEBE_EMAIL_FROM }}
       # Domínio próprio das landing pages: token da Vercel (Account Settings → Tokens); projeto e time são opcionais
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}

@@ -2,7 +2,7 @@
 // (abre e salva sem internet); com conta + família, cada mudança sobe para a nuvem e as dos outros celulares descem.
 // Fotos ficam só no aparelho por enquanto.
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "../studio/lib/config";
-import { db, merge, onChange, replaceAll, sameData, type Data } from "./store";
+import { db, getPhoto, merge, onChange, putPhoto, replaceAll, sameData, type Data } from "./store";
 
 export type Role = "dono" | "edita" | "ve";
 export type Family = { id: string; name: string; role: Role; version?: number };
@@ -67,6 +67,14 @@ export async function login(email: string, pass: string) {
   return r;
 }
 export const me = () => api<MeRes>("me");
+/** Esqueci a senha: manda o link por e-mail (a resposta é a mesma com ou sem conta). */
+export const resetRequest = (email: string) => api("reset_request", { email, origin: location.origin });
+export async function resetConfirm(token: string, pass: string) {
+  const r = await api<MeRes>("reset_confirm", { token, pass });
+  auth = { session: r.session!, user: r.user };
+  keep();
+  return r;
+}
 export async function logout() {
   await api("logout").catch(() => {});
   auth = null;
@@ -138,6 +146,7 @@ export function sync(): Promise<void> {
       auth!.syncedAt = Date.now();
       keep();
       setState("ok");
+      void syncPhotos();
     } catch (e) {
       setState(navigator.onLine ? "erro" : "offline");
       if (String((e as Error).message).includes("não faz parte")) forgetFamily();
@@ -201,3 +210,52 @@ export const pushPrefs = (): Prefs | null => {
     return null;
   }
 };
+
+// ---------- fotos das peças: sobem para o bucket privado da família e descem nos outros celulares
+let photosBusy = false;
+async function syncPhotos() {
+  const fam = auth?.family;
+  if (!fam || photosBusy) return;
+  photosBusy = true;
+  const key = `cb_up_${fam.id}`;
+  try {
+    const up = new Set<string>(JSON.parse(localStorage.getItem(key) ?? "[]") as string[]);
+    const ids = [...new Set(db().items.map((i) => i.photo).filter((x): x is string => !!x))];
+    const have: string[] = [], missing: string[] = [];
+    for (const id of ids) ((await getPhoto(id)) ? have : missing).push(id);
+    // subir as deste celular que ainda não foram
+    const toUp = fam.role === "ve" ? [] : have.filter((id) => !up.has(id)).slice(0, 20);
+    if (toUp.length) {
+      const { urls } = await api<{ urls: Record<string, string> }>("photo_upload", { family: fam.id, ids: toUp });
+      for (const id of toUp) {
+        const blob = await getPhoto(id);
+        if (!blob || !urls[id]) continue;
+        const r = await fetch(urls[id], { method: "PUT", headers: { "Content-Type": "image/jpeg", "x-upsert": "true" }, body: blob });
+        if (r.ok) up.add(id);
+      }
+      localStorage.setItem(key, JSON.stringify([...up]));
+    }
+    // baixar as que outro celular tirou
+    if (missing.length) {
+      const { urls } = await api<{ urls: Record<string, string> }>("photo_get", { family: fam.id, ids: missing.slice(0, 60) });
+      for (const [id, url] of Object.entries(urls)) {
+        const r = await fetch(url);
+        if (r.ok) {
+          await putPhoto(await r.blob(), id);
+          up.add(id);
+        }
+      }
+      localStorage.setItem(key, JSON.stringify([...up]));
+    }
+    // uma vez por dia: tira da nuvem as fotos que nenhum item usa mais
+    const day = new Date().toISOString().slice(0, 10);
+    if (fam.role !== "ve" && localStorage.getItem("cb_clean") !== day) {
+      localStorage.setItem("cb_clean", day);
+      await api("photo_clean", { family: fam.id });
+    }
+  } catch {
+    /* tenta de novo na próxima sincronização */
+  } finally {
+    photosBusy = false;
+  }
+}

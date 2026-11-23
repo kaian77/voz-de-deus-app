@@ -13,7 +13,12 @@ App instalável (PWA) para organizar tudo do bebê. Entrada do Vite `bebe` (`beb
   `save()` marca a hora de cada registro mudado (`mt`) e apagado (`del`); `sync()` baixa, junta (`merge`: em cada registro
   fica o mais novo, apagado depois da última edição continua apagado) e sobe com a versão que tinha (`family_save` só grava
   se ninguém salvou no meio; senão repete). Sobe 2,5 s depois de mudar, ao abrir, ao voltar a internet e a cada 1 min.
-  Quem é "só ver" nunca sobe. Fotos não vão para a nuvem. Convite: link `/bebe/?convite=CODIGO` (WhatsApp) ou código;
+  Quem é "só ver" nunca sobe. Fotos das peças: bucket privado `bebe` (pasta = id da família); o celular pede links
+  assinados (`photo_upload`, `photo_get`, 1 dia), sobe as suas e baixa as dos outros depois de cada sincronização
+  (`syncPhotos`, lista do que já subiu em `cb_up_<família>`); 1x por dia `photo_clean` apaga as sem item.
+  Esqueci a senha: `reset_request` manda link por e-mail (Resend; remetente var `BEBE_EMAIL_FROM`, se o domínio for
+  recusado tenta `AGENDA_EMAIL_FROM` e `REVIEW_EMAIL_FROM`; até 3 por hora; mesma resposta com ou sem conta) para
+  `/bebe/#nova-senha/<token>` (vale 1 h, uma vez; `reset_confirm` troca a senha e derruba as outras sessões). Convite: link `/bebe/?convite=CODIGO` (WhatsApp) ou código;
   o dono troca o acesso, remove, troca o código. Sair da família / apagar conta (LGPD; família sem ninguém é apagada).
 - **Avisos no celular** (Web Push, mesmas chaves VAPID do Studio; `bebe_push` com `prefs` e `sent` do dia): cron
   `runBebeReminders` no `publish-scheduled` (Brasília): mêsversário 9h, fraldas para ≤3 dias 10h, roupinhas para conferir
@@ -48,5 +53,5 @@ Teste de ponta a ponta da nuvem: workflow `bebe-test.yml` (`scripts/bebe-test.mj
 conflito de versão, "só ver", apagar conta; limpa tudo no fim). Passou em 23/11/2026.
 
 ## Ainda não existe (próximas fases)
-- Fotos na nuvem; BabyBot (IA); leitura de nota por IA no servidor (mais precisa que o OCR do celular);
+- BabyBot (IA); leitura de nota por IA no servidor (mais precisa que o OCR do celular);
   percentis da OMS; memórias/álbum; modelo do móvel feito no Blender (hoje é por código); Play Store.

@@ -15,6 +15,8 @@ Deno.serve(async (req) => {
       case "login": return json(await B.login(db, b));
       case "logout": return json(await B.logout(db, b.session));
       case "push_key": return json(await B.pushKey(db));
+      case "reset_request": return json(await B.resetRequest(db, b));
+      case "reset_confirm": return json(await B.resetConfirm(db, b));
     }
     const u = await B.userBySession(db, b.session);
     switch (b.action) {
@@ -32,6 +34,9 @@ Deno.serve(async (req) => {
       case "push_subscribe": return json(await B.pushSubscribe(db, u, b));
       case "push_off": return json(await B.pushOff(db, u, b.endpoint));
       case "push_test": return json(await B.pushTest(db, u));
+      case "photo_upload": return json(await B.photoUpload(db, u, b));
+      case "photo_get": return json(await B.photoGet(db, u, b));
+      case "photo_clean": return json(await B.photoClean(db, u, b));
     }
     throw new HttpError(400, "Ação desconhecida");
   } catch (e) {

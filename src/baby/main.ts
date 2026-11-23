@@ -71,14 +71,14 @@ function route() {
   const v = $("#view");
   v.scrollTop = 0;
   window.scrollTo(0, 0);
-  if (!b && page !== "bebe" && page !== "conta") return welcome(v);
+  if (!b && page !== "bebe" && page !== "conta" && page !== "nova-senha") return welcome(v);
   // quem só pode ver: aviso fixo no alto
   const ro = C.account()?.family?.role === "ve";
   document.body.classList.toggle("readonly", ro);
   const pages: Record<string, (v: HTMLElement, arg?: string) => void> = {
     inicio: home, quarto: room, itens: items, item: itemForm, nota: receipt, compras: purchases, compra: purchase, gastos: money_,
     sono: sleep, crescimento: growth, fraldas: diapers, agenda: agenda, enxoval: layette, bebe: babyForm, bebes: babies, mais: more,
-    backup: backup, privacidade: privacy, remedios: meds, mala: trip, conta: accountPage, avisos: alertsPage,
+    backup: backup, privacidade: privacy, remedios: meds, mala: trip, conta: accountPage, avisos: alertsPage, "nova-senha": newPass,
   };
   (pages[page] ?? home)(v, arg);
 }
@@ -1081,7 +1081,7 @@ function backup(v: HTMLElement) {
 }
 function privacy(v: HTMLElement) {
   v.innerHTML = `${head("Privacidade", "#mais")}<div class="text">
-    <p><b>Onde ficam os dados:</b> neste aparelho. Se você criar uma conta e uma família, os registros (não as fotos) vão também para a nuvem, protegidos pela sua senha, e só as pessoas que você convidar veem. Sem conta, nada sai do celular.</p>
+    <p><b>Onde ficam os dados:</b> neste aparelho. Se você criar uma conta e uma família, os registros e as fotos das peças vão também para a nuvem (pasta privada da família, acessada só por links que vencem), e só as pessoas que você convidar veem. Sem conta, nada sai do celular.</p>
     <p><b>Avisos:</b> na tela bloqueada nunca aparece nome de remédio nem o que é o compromisso, só "lembrete que você marcou".</p>
     <p><b>Leitura da nota por foto:</b> feita no próprio celular. Na primeira vez o app baixa o leitor de texto em português; a foto não sai do aparelho.</p>
     <p><b>QR Code da NFC-e:</b> abre a nota no site da Secretaria da Fazenda do seu estado, se você tocar no link.</p>
@@ -1142,14 +1142,26 @@ function accountPage(v: HTMLElement) {
         <label>E-mail<input name="email" type="email" required autocomplete="email"></label>
         <label>Senha<input name="pass" type="password" required minlength="6" autocomplete="current-password"></label>
         <button class="btn big" id="go">Criar conta</button></form>
-      <p class="fine">As fotos continuam só no seu celular. Você pode apagar a conta quando quiser.</p>`;
+      <button class="btn ghost" id="forgot" hidden>Esqueci a senha</button>
+      <p class="fine">As fotos das peças vão para a nuvem da família (só quem você convidar vê). Você pode apagar a conta quando quiser.</p>`;
     let mode = "new";
     $$("[data-m]").forEach((x) => (x.onclick = () => {
       mode = x.dataset.m!;
       $$("[data-m]").forEach((y) => y.classList.toggle("on", y === x));
       $("[data-only=new]").hidden = mode !== "new";
       $("#go").textContent = mode === "new" ? "Criar conta" : "Entrar";
+      $("#forgot").hidden = mode === "new";
     }));
+    $("#forgot").onclick = async () => {
+      const email = String(new FormData($<HTMLFormElement>("#af")).get("email") ?? "").trim() || prompt("Seu e-mail:")?.trim();
+      if (!email) return;
+      try {
+        await C.resetRequest(email);
+        toast("Se tiver conta com esse e-mail, o link chega em instantes 📩 (veja o spam)");
+      } catch (err) {
+        toast((err as Error).message);
+      }
+    };
     $<HTMLFormElement>("#af").onsubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target as HTMLFormElement);
@@ -1308,4 +1320,23 @@ function alertsPage(v: HTMLElement) {
       route();
     };
   }
+}
+
+// ---------- senha nova (link do e-mail: /bebe/#nova-senha/<token>)
+function newPass(v: HTMLElement, token?: string) {
+  v.innerHTML = `${head("Senha nova", "#conta")}<form class="form" id="np"><label>Senha nova<input name="p1" type="password" minlength="6" required autocomplete="new-password"></label>
+    <label>Repita a senha<input name="p2" type="password" minlength="6" required autocomplete="new-password"></label><button class="btn big">Salvar e entrar</button></form>`;
+  $<HTMLFormElement>("#np").onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target as HTMLFormElement);
+    if (fd.get("p1") !== fd.get("p2")) return toast("As senhas não são iguais");
+    try {
+      const r = await C.resetConfirm(token ?? "", String(fd.get("p1")));
+      toast("Senha trocada 💗");
+      if (r.families.length === 1) return askMode(r.families[0]);
+      location.hash = "#conta";
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  };
 }

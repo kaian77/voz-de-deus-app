@@ -30,6 +30,20 @@ const s1 = await call("family_save", { session: b.session, family: fam, base: g1
 ok(s1.ok && s1.version === 2, "B salva (versão 2)");
 const s2 = await call("family_save", { session: a.session, family: fam, base: 1, data: data([{ id: "i1", name: "Body", qty: 9 }]) });
 ok(s2.ok === false && s2.conflict && s2.version === 2 && s2.data.items[0].qty === 5, "A com versão velha recebe conflito e os dados novos");
+// fotos: sobe uma foto pelo link assinado, outro celular baixa
+const jpg = Buffer.from("/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==", "base64");
+const up = await call("photo_upload", { session: b.session, family: fam, ids: ["fototeste1"] });
+ok(up.urls?.fototeste1, "link para subir foto");
+const put = up.urls?.fototeste1 ? await fetch(up.urls.fototeste1, { method: "PUT", headers: { "Content-Type": "image/jpeg", "x-upsert": "true" }, body: jpg }) : { ok: false, status: 0 };
+ok(put.ok, `foto sobe para a nuvem (${put.status})`);
+const gp = await call("photo_get", { session: a.session, family: fam, ids: ["fototeste1"] });
+const dl = gp.urls?.fototeste1 ? await fetch(gp.urls.fototeste1) : null;
+ok(dl?.ok && (await dl.arrayBuffer()).byteLength === jpg.length, "outro celular baixa a mesma foto");
+ok((await call("photo_get", { session: a.session, family: "00000000-0000-0000-0000-000000000000", ids: ["fototeste1"] })).status === 403, "foto de outra família é recusada");
+ok((await call("photo_upload", { session: a.session, family: fam, ids: ["../x"] })).status === 400, "nome de foto inválido é recusado");
+// esqueci a senha
+ok((await call("reset_request", { email: `ninguem-${tag}@exemplo.invalid` })).ok, "pedido de senha para e-mail sem conta responde igual");
+ok((await call("reset_confirm", { token: "x".repeat(48), pass: "nova1234" })).status === 400, "link de senha inválido é recusado");
 ok((await call("set_role", { session: a.session, family: fam, user: b.user.id, role: "ve" })).ok, "A muda B para só ver");
 ok((await call("family_save", { session: b.session, family: fam, base: 2, data: data([]) })).status === 403, "B (só ver) não consegue salvar");
 ok((await call("set_role", { session: b.session, family: fam, user: a.user.id, role: "sair" })).status === 403, "B não consegue remover A");
