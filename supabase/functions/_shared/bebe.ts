@@ -166,7 +166,12 @@ export async function leave(db: Db, u: BUser, b: Obj) {
   await db.from("bebe_members").delete().eq("family_id", String(b.family)).eq("user_id", u.id);
   await db.from("bebe_push").delete().eq("family_id", String(b.family)).eq("user_id", u.id);
   const { count } = await db.from("bebe_members").select("user_id", { count: "exact", head: true }).eq("family_id", String(b.family));
-  if (!count) await db.from("bebe_families").delete().eq("id", String(b.family)); // ninguém mais: apaga os dados
+  if (!count) {
+    // ninguém mais: apaga os dados e as fotos
+    const { data: files } = await db.storage.from("bebe").list(String(b.family), { limit: 1000 });
+    if (files?.length) await db.storage.from("bebe").remove(files.map((x) => `${b.family}/${x.name}`));
+    await db.from("bebe_families").delete().eq("id", String(b.family));
+  }
   else if (role === "dono") {
     // passa o comando para quem entrou primeiro
     const { data: next } = await db.from("bebe_members").select("user_id").eq("family_id", String(b.family)).order("joined_at").limit(1);
@@ -304,4 +309,100 @@ export async function runBebeReminders(db: Db) {
     else await db.from("bebe_push").update({ sent: fresh }).eq("id", s.id);
   }
   return { subs: subs.length, sent };
+}
+
+// ---------------------------------------------------------------- esqueci a senha (link por e-mail)
+const escH = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+/** Remetente: BEBE_EMAIL_FROM; se o domínio não estiver verificado no Resend, tenta os outros já usados pelo projeto. */
+async function sendMail(to: string, subject: string, html: string) {
+  const key = Deno.env.get("RESEND_API_KEY");
+  if (!key) throw new HttpError(503, "O envio de e-mail não está configurado. Fale com o suporte.");
+  const addr = (s?: string) => (s ? (s.match(/<([^>]+)>/)?.[1] ?? s).trim() : "");
+  const froms = [...new Set([addr(Deno.env.get("BEBE_EMAIL_FROM")), addr(Deno.env.get("AGENDA_EMAIL_FROM")) || "agenda@paginaspro.app.br", addr(Deno.env.get("REVIEW_EMAIL_FROM"))].filter(Boolean))];
+  let last = "";
+  for (const f of froms) {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: `Cantinho do bebê <${f}>`, to: [to], subject, html }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (res.ok) return void (await res.body?.cancel());
+    last = `${res.status} ${(await res.text()).slice(0, 160)}`;
+    if (res.status !== 403 && res.status !== 422) break; // só troca de remetente quando o domínio é recusado
+  }
+  console.error("bebe: e-mail não saiu", last);
+  throw new HttpError(502, "Não consegui mandar o e-mail agora. Tente de novo em alguns minutos.");
+}
+export async function resetRequest(db: Db, b: Obj) {
+  const email = cleanEmail(b.email);
+  const { data: u } = await db.from("bebe_users").select("id, name").eq("email", email).maybeSingle();
+  // mesma resposta com ou sem conta (não revela quem é cliente); no máximo 3 pedidos por hora
+  if (!u) return { ok: true };
+  const { count } = await db.from("bebe_resets").select("token_hash", { count: "exact", head: true }).eq("user_id", u.id).gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+  if ((count ?? 0) >= 3) return { ok: true };
+  const token = hex(24);
+  await db.from("bebe_resets").insert({ token_hash: await sha256Hex(token), user_id: u.id, expires_at: new Date(Date.now() + 3600_000).toISOString() });
+  const base = /^https:\/\/[a-z0-9.-]+$/i.test(String(b.origin)) ? String(b.origin) : "https://paginaspro.app.br";
+  const link = `${base}/bebe/#nova-senha/${token}`;
+  const html = `<!doctype html><html><body style="margin:0;background:#fffcf8;font-family:Arial,Helvetica,sans-serif;color:#343434">
+<table role="presentation" width="100%"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="100%" style="max-width:480px;background:#ffffff;border-radius:18px;border:1px solid #eee4da">
+<tr><td style="background:#f4d8dc;padding:18px 24px;font-size:20px;font-weight:700;border-radius:18px 18px 0 0">🧸 Cantinho do bebê</td></tr>
+<tr><td style="padding:24px;font-size:16px;line-height:1.55"><p>Oi, ${escH(String(u.name).split(" ")[0])}!</p><p>Recebemos um pedido para criar uma senha nova. Toque no botão (vale por 1 hora):</p>
+<p><a href="${escH(link)}" style="display:inline-block;background:#c98f9b;color:#ffffff;padding:13px 24px;border-radius:999px;font-weight:700;text-decoration:none">Criar senha nova</a></p>
+<p style="font-size:13px;color:#8a7f75">Se não foi você, é só ignorar este e-mail: sua senha continua a mesma.</p></td></tr></table></td></tr></table></body></html>`;
+  await sendMail(email, "Criar senha nova · Cantinho do bebê", html);
+  return { ok: true };
+}
+export async function resetConfirm(db: Db, b: Obj) {
+  const pass = String(b.pass ?? "");
+  if (pass.length < 6) throw new HttpError(400, "A senha precisa de pelo menos 6 letras ou números.");
+  const h = await sha256Hex(String(b.token ?? ""));
+  const { data: r } = await db.from("bebe_resets").select("user_id, expires_at").eq("token_hash", h).maybeSingle();
+  if (!r || new Date(r.expires_at) < new Date()) throw new HttpError(400, "Esse link venceu ou já foi usado. Peça outro.");
+  await db.from("bebe_resets").delete().eq("user_id", r.user_id);
+  await db.from("bebe_users").update({ pass: await hashPassword(pass) }).eq("id", r.user_id);
+  await db.from("bebe_auth").delete().eq("user_id", r.user_id); // sai dos outros aparelhos
+  const { data: u } = await db.from("bebe_users").select("id, email, name").eq("id", r.user_id).single();
+  return { session: await newSession(db, r.user_id), ...(await me(db, u as BUser)) };
+}
+
+// ---------------------------------------------------------------- fotos das peças (bucket privado `bebe`, pasta = família)
+const photoPath = (family: string, id: unknown) => {
+  const s = String(id ?? "");
+  if (!/^[a-z0-9]{6,24}$/.test(s)) throw new HttpError(400, "Foto inválida.");
+  return `${family}/${s}.jpg`;
+};
+/** Links para subir fotos novas (o celular manda direto para o storage). */
+export async function photoUpload(db: Db, u: BUser, b: Obj) {
+  const role = await roleIn(db, u, b.family);
+  if (role === "ve") throw new HttpError(403, "Seu acesso é só para ver.");
+  const ids = ((b.ids as unknown[]) ?? []).slice(0, 20);
+  const out: Record<string, string> = {};
+  for (const id of ids) {
+    const { data } = await db.storage.from("bebe").createSignedUploadUrl(photoPath(String(b.family), id), { upsert: true });
+    if (data?.signedUrl) out[String(id)] = data.signedUrl;
+  }
+  return { urls: out };
+}
+/** Links (1 dia) para baixar as fotos que este celular ainda não tem. */
+export async function photoGet(db: Db, u: BUser, b: Obj) {
+  await roleIn(db, u, b.family);
+  const ids = ((b.ids as unknown[]) ?? []).slice(0, 60).map(String);
+  if (!ids.length) return { urls: {} };
+  const { data } = await db.storage.from("bebe").createSignedUrls(ids.map((id) => photoPath(String(b.family), id)), 86400);
+  const out: Record<string, string> = {};
+  for (const r of data ?? []) if (r.signedUrl && r.path) out[r.path.split("/").pop()!.replace(".jpg", "")] = r.signedUrl;
+  return { urls: out };
+}
+/** Fotos que nenhum item usa mais saem do storage (chamado pelo celular depois de sincronizar). */
+export async function photoClean(db: Db, u: BUser, b: Obj) {
+  const role = await roleIn(db, u, b.family);
+  if (role === "ve") return { removed: 0 };
+  const { data: f } = await db.from("bebe_families").select("data").eq("id", String(b.family)).single();
+  const used = new Set(((f?.data as Obj)?.items as { photo?: string }[] ?? []).map((i) => i.photo).filter(Boolean));
+  const { data: files } = await db.storage.from("bebe").list(String(b.family), { limit: 1000 });
+  const old = (files ?? []).filter((x) => !used.has(x.name.replace(".jpg", "")) && Date.now() - new Date(x.created_at ?? 0).getTime() > 86400_000);
+  if (old.length) await db.storage.from("bebe").remove(old.map((x) => `${b.family}/${x.name}`));
+  return { removed: old.length };
 }

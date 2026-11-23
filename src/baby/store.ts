@@ -209,8 +209,7 @@ function idb(): Promise<IDBDatabase> {
     r.onerror = () => bad(r.error);
   });
 }
-export async function putPhoto(blob: Blob) {
-  const id = uid();
+export async function putPhoto(blob: Blob, id = uid()) {
   const d = await idb();
   await new Promise((ok, bad) => {
     const t = d.transaction("fotos", "readwrite");
@@ -219,6 +218,14 @@ export async function putPhoto(blob: Blob) {
     t.onerror = () => bad(t.error);
   });
   return id;
+}
+export async function getPhoto(id: string): Promise<Blob | undefined> {
+  const d = await idb();
+  return new Promise((ok) => {
+    const r = d.transaction("fotos").objectStore("fotos").get(id);
+    r.onsuccess = () => ok(r.result as Blob | undefined);
+    r.onerror = () => ok(undefined);
+  });
 }
 const urls = new Map<string, string>();
 export async function photoUrl(id: string) {

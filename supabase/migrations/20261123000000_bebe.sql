@@ -55,3 +55,15 @@ alter table public.bebe_auth enable row level security;
 alter table public.bebe_families enable row level security;
 alter table public.bebe_members enable row level security;
 alter table public.bebe_push enable row level security;
+
+-- Recuperar senha (link por e-mail, vale 1 h, só uma vez)
+create table if not exists public.bebe_resets (
+  token_hash text primary key,
+  user_id uuid not null references public.bebe_users(id) on delete cascade,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+alter table public.bebe_resets enable row level security;
+
+-- Fotos das peças na nuvem: bucket privado; só a função `bebe` entrega links assinados para quem é da família
+insert into storage.buckets (id, name, public) values ('bebe', 'bebe', false) on conflict (id) do nothing;
