@@ -6,7 +6,8 @@ import { db, getPhoto, merge, onChange, putPhoto, replaceAll, sameData, type Dat
 
 export type Role = "dono" | "edita" | "ve";
 export type Family = { id: string; name: string; role: Role; version?: number };
-type Auth = { session: string; user: { id: string; email: string; name: string }; family?: Family; version?: number; syncedAt?: number };
+export type Access = { status: "trial" | "active" | "expired"; until?: string; days?: number; family?: boolean };
+type Auth = { session: string; user: { id: string; email: string; name: string }; family?: Family; version?: number; syncedAt?: number; access?: Access };
 
 const KEY = "cb_auth";
 let auth: Auth | null = (() => {
@@ -53,25 +54,67 @@ export async function api<T = Record<string, unknown>>(action: string, body: Rec
   return j as T;
 }
 
-type MeRes = { session?: string; user: Auth["user"]; families: Family[] };
+type MeRes = { session?: string; user: Auth["user"]; families: Family[]; access?: Access };
 export async function signup(name: string, email: string, pass: string) {
   const r = await api<MeRes>("signup", { name, email, pass });
-  auth = { session: r.session!, user: r.user };
+  auth = { session: r.session!, user: r.user, access: r.access };
   keep();
   return r;
 }
 export async function login(email: string, pass: string) {
   const r = await api<MeRes>("login", { email, pass });
-  auth = { session: r.session!, user: r.user };
+  auth = { session: r.session!, user: r.user, access: r.access };
   keep();
   return r;
 }
-export const me = () => api<MeRes>("me");
+export async function me() {
+  const r = await api<MeRes>("me");
+  if (auth && r.access) {
+    auth.access = r.access;
+    keep();
+  }
+  return r;
+}
+
+// ---------- assinatura: 7 dias grátis, depois R$ 29,90/mês (Mercado Pago)
+export const PRICE = "R$ 29,90";
+const TRIAL_DAYS = 7;
+/** Sem conta: o teste conta do primeiro uso neste celular. Com conta: vale o que o servidor disser. */
+export function access(): Access {
+  if (auth?.access) {
+    const a = auth.access;
+    // o teste também vence sozinho no aparelho, sem esperar a próxima conferência
+    if (a.status === "trial" && a.until && Date.parse(a.until) < Date.now()) return { status: "expired" };
+    return a.status === "trial" && a.until ? { ...a, days: Math.max(1, Math.ceil((Date.parse(a.until) - Date.now()) / 864e5)) } : a;
+  }
+  let first = Number(localStorage.getItem("cb_first") ?? 0);
+  if (!first) {
+    first = Date.now();
+    try {
+      localStorage.setItem("cb_first", String(first));
+    } catch {
+      /* sem armazenamento */
+    }
+  }
+  const until = first + TRIAL_DAYS * 864e5;
+  return until > Date.now() ? { status: "trial", until: new Date(until).toISOString(), days: Math.ceil((until - Date.now()) / 864e5) } : { status: "expired" };
+}
+export async function refreshAccess() {
+  if (!auth) return access();
+  try {
+    auth.access = await api<Access>("access");
+    keep();
+  } catch {
+    /* sem internet: fica o último conhecido */
+  }
+  return access();
+}
+export const subscribeUrl = () => api<{ url: string; fixed?: boolean }>("subscribe");
 /** Esqueci a senha: manda o link por e-mail (a resposta é a mesma com ou sem conta). */
 export const resetRequest = (email: string) => api("reset_request", { email, origin: location.origin });
 export async function resetConfirm(token: string, pass: string) {
   const r = await api<MeRes>("reset_confirm", { token, pass });
-  auth = { session: r.session!, user: r.user };
+  auth = { session: r.session!, user: r.user, access: r.access };
   keep();
   return r;
 }
@@ -220,7 +263,7 @@ async function syncPhotos() {
   const key = `cb_up_${fam.id}`;
   try {
     const up = new Set<string>(JSON.parse(localStorage.getItem(key) ?? "[]") as string[]);
-    const ids = [...new Set(db().items.map((i) => i.photo).filter((x): x is string => !!x))];
+    const ids = [...new Set([...db().items.map((i) => i.photo), ...db().memories.map((m) => m.photo)].filter((x): x is string => !!x))];
     const have: string[] = [], missing: string[] = [];
     for (const id of ids) ((await getPhoto(id)) ? have : missing).push(id);
     // subir as deste celular que ainda não foram

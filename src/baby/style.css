@@ -252,3 +252,55 @@ body.readonly #view::before { content: "👀 Você está só vendo: as mudanças
 .ask { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); display: flex; gap: 6px; background: var(--bg); padding: 6px 0; }
 .ask input { flex: 1; min-width: 0; padding: 12px 14px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--card); font-size: 16px; color: var(--ink); }
 .ask button { width: 46px; height: 46px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 18px; }
+
+/* cômoda no modo 2D */
+.w2d.dresser { margin-top: 12px; max-width: 300px; border-color: #d9c09a; border-bottom-width: 14px; }
+.w2d.dresser .bot { grid-template-columns: 1fr 1fr; }
+
+/* assinatura e teste grátis */
+.pay { text-align: center; padding-top: 6px; }
+.pay .logo { font-size: 56px; width: 96px; height: 96px; margin: 0 auto 10px; border-radius: 32px; background: var(--rosa); display: grid; place-items: center; }
+.pay h1 { margin-bottom: 4px; }
+.price { margin: 14px auto 16px; padding: 14px; border-radius: 20px; background: var(--theme); max-width: 280px; }
+.price b { display: block; font-size: 34px; line-height: 1.1; }
+.price small { color: var(--muted); font-weight: 700; font-size: 13px; }
+.pay .btn { width: 100%; margin-top: 8px; }
+.trial { display: block; margin: 0 0 12px; padding: 10px 14px; border-radius: 16px; background: var(--lavanda); color: #4a3d63; font-size: 14px; text-align: center; }
+
+/* lista de compras */
+.ask.inline { position: static; margin: 4px 0 10px; }
+.tick { width: 24px; height: 24px; flex: none; accent-color: var(--accent); }
+
+/* memórias */
+.card-form { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 12px; margin-bottom: 14px; }
+.timeline { position: relative; display: grid; gap: 12px; padding-left: 22px; }
+.timeline::before { content: ""; position: absolute; left: 13px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+.mem { position: relative; display: flex; gap: 10px; }
+.mem .dot { position: absolute; left: -22px; top: 6px; width: 28px; height: 28px; border-radius: 50%; background: var(--theme); display: grid; place-items: center; font-size: 15px; }
+.mem .body { position: relative; flex: 1; margin-left: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 10px 40px 10px 12px; }
+.mem img { width: 100%; max-height: 260px; object-fit: cover; border-radius: 12px; margin-bottom: 8px; display: block; }
+.mem b { display: block; }
+.mem small { color: var(--muted); font-size: 12.5px; }
+.mem p { margin: 6px 0 0; line-height: 1.4; }
+.mem .x { position: absolute; top: 8px; right: 8px; }
+
+/* etiquetas QR */
+.labels { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.lab { background: #fff; color: #343434; border: 1.5px dashed var(--ouro); border-radius: 14px; padding: 10px; text-align: center; break-inside: avoid; }
+.lab canvas { width: 100%; max-width: 140px; height: auto; display: block; margin: 0 auto 6px; }
+.lab b { display: block; font-size: 14px; }
+.lab small { display: block; font-size: 11px; color: #8a7f75; }
+
+/* relatório do mês */
+.report { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-top: 10px; }
+.report h1 { text-transform: capitalize; }
+.report ul { margin: 4px 0; padding-left: 20px; line-height: 1.5; }
+.report p { margin: 4px 0; line-height: 1.45; }
+
+@media print {
+  .tabs, .hd, .no-print, .trial, #toast { display: none !important; }
+  html, body { background: #fff !important; color: #111 !important; }
+  #view { padding: 0; max-width: none; }
+  .report, .lab { border-color: #ccc; background: #fff; color: #111; }
+  .labels { grid-template-columns: repeat(3, 1fr); }
+}

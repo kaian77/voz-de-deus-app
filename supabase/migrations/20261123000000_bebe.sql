@@ -76,3 +76,10 @@ create table if not exists public.bebe_ai_usage (
   primary key (user_id, day)
 );
 alter table public.bebe_ai_usage enable row level security;
+
+-- Assinatura: 7 dias grátis a partir da conta e depois R$ 29,90/mês no Mercado Pago (bebe_users.plan)
+alter table public.bebe_users add column if not exists trial_until timestamptz;
+alter table public.bebe_users add column if not exists plan text not null default 'trial';
+alter table public.bebe_users add column if not exists sub_id text;
+alter table public.bebe_users add column if not exists plan_at timestamptz;
+update public.bebe_users set trial_until = created_at + interval '7 days' where trial_until is null;
