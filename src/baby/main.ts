@@ -8,6 +8,7 @@ import {
 } from "./store";
 import { keyInfo, ocr, parseQr, parseText, parseXml, type Line, type Parsed } from "./receipt";
 import { Wardrobe3D, colorOf, webglOk } from "./wardrobe3d";
+import * as C from "./cloud";
 
 const $ = <E extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as E;
 const $$ = <E extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => [...root.querySelectorAll(sel)] as E[];
@@ -70,11 +71,14 @@ function route() {
   const v = $("#view");
   v.scrollTop = 0;
   window.scrollTo(0, 0);
-  if (!b && page !== "bebe") return welcome(v);
+  if (!b && page !== "bebe" && page !== "conta") return welcome(v);
+  // quem só pode ver: aviso fixo no alto
+  const ro = C.account()?.family?.role === "ve";
+  document.body.classList.toggle("readonly", ro);
   const pages: Record<string, (v: HTMLElement, arg?: string) => void> = {
     inicio: home, quarto: room, itens: items, item: itemForm, nota: receipt, compras: purchases, compra: purchase, gastos: money_,
     sono: sleep, crescimento: growth, fraldas: diapers, agenda: agenda, enxoval: layette, bebe: babyForm, bebes: babies, mais: more,
-    backup: backup, privacidade: privacy, remedios: meds, mala: trip,
+    backup: backup, privacidade: privacy, remedios: meds, mala: trip, conta: accountPage, avisos: alertsPage,
   };
   (pages[page] ?? home)(v, arg);
 }
@@ -93,6 +97,7 @@ function welcome(v: HTMLElement) {
     <li>🧷 Estoque de fraldas que avisa antes de acabar</li><li>🌙 Sono, 📏 crescimento e 💰 gastos num lugar só</li></ul>
     <a class="btn big" href="#bebe">Cadastrar meu bebê</a>
     <button class="btn ghost" id="demo">Explorar com um bebê de exemplo</button>
+    <a class="btn ghost" href="#conta">Já tenho conta · Recebi um convite</a>
     <p class="fine">Tudo fica salvo só neste celular. Nada é enviado para a internet.</p></section>`;
   $("#demo").onclick = demo;
 }
@@ -145,7 +150,7 @@ function home(v: HTMLElement) {
   v.innerHTML = `
   <section class="hero">
     <div class="hero-top"><button class="avatar" id="who" aria-label="Trocar bebê">${b.name[0]}</button>
-      <div><small>${greet()}!</small><h1>${a.totalDays < 0 ? `${esc(b.name)} chega em breve 💗` : `${esc(b.nick || b.name)} está com ${ageText(b.birth)} 💗`}</h1></div></div>
+      <div class="grow"><small>${greet()}!${syncBadge()}</small><h1>${a.totalDays < 0 ? `${esc(b.name)} chega em breve 💗` : `${esc(b.nick || b.name)} está com ${ageText(b.birth)} 💗`}</h1></div></div>
     ${a.totalDays >= 0 ? `<div class="mv"><span>🎂</span><div><b>${a.months + 1}º mêsversário</b> em ${a.toNext === 0 ? "hoje!" : `${a.toNext} ${a.toNext === 1 ? "dia" : "dias"}`}<small>${a.nextMonthversary.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })}</small></div></div>` : ""}
   </section>
   <a class="cta" href="#nota"><span>🧾</span><div><b>Cadastrar compras pela nota fiscal</b><small>foto, XML, QR Code ou texto</small></div><i>›</i></a>
@@ -942,7 +947,8 @@ function more(v: HTMLElement) {
   const links = [
     ["#sono", "🌙", "Soninho"], ["#crescimento", "📏", "Crescimento"], ["#fraldas", "🧷", "Fraldas e higiene"], ["#gastos", "💰", "Gastos"],
     ["#compras", "🧾", "Histórico de compras"], ["#agenda", "📅", "Agenda e mêsversários"], ["#remedios", "💊", "Remédios receitados"], ["#enxoval", "🎀", "Enxoval"],
-    ["#mala", "🧳", "Montar mala"], ["#bebes", "👶", "Bebês (irmãos, gêmeos)"], ["#backup", "💾", "Backup"], ["#privacidade", "🔒", "Privacidade"],
+    ["#mala", "🧳", "Montar mala"], ["#bebes", "👶", "Bebês (irmãos, gêmeos)"], ["#conta", "👨‍👩‍👧", "Conta e família"], ["#avisos", "🔔", "Avisos no celular"],
+    ["#backup", "💾", "Backup"], ["#privacidade", "🔒", "Privacidade"],
   ];
   v.innerHTML = `${head("Mais", "#inicio")}<div class="menu">${links.map(([h, i, n]) => `<a href="${h}"><span>${i}</span>${n}</a>`).join("")}</div>
     <button class="btn ghost" id="inst" hidden>📲 Instalar no celular</button><p class="fine center">Cantinho do bebê · versão 1</p>`;
@@ -977,10 +983,11 @@ function backup(v: HTMLElement) {
 }
 function privacy(v: HTMLElement) {
   v.innerHTML = `${head("Privacidade", "#mais")}<div class="text">
-    <p><b>Onde ficam os dados:</b> só neste aparelho (armazenamento do navegador). Nada é enviado para servidor, nem fotos, nem notas fiscais.</p>
+    <p><b>Onde ficam os dados:</b> neste aparelho. Se você criar uma conta e uma família, os registros (não as fotos) vão também para a nuvem, protegidos pela sua senha, e só as pessoas que você convidar veem. Sem conta, nada sai do celular.</p>
+    <p><b>Avisos:</b> na tela bloqueada nunca aparece nome de remédio nem o que é o compromisso, só "lembrete que você marcou".</p>
     <p><b>Leitura da nota por foto:</b> feita no próprio celular. Na primeira vez o app baixa o leitor de texto em português; a foto não sai do aparelho.</p>
     <p><b>QR Code da NFC-e:</b> abre a nota no site da Secretaria da Fazenda do seu estado, se você tocar no link.</p>
-    <p><b>Seus direitos (LGPD):</b> você pode baixar todos os dados (Backup) e apagar tudo a qualquer momento (Backup → Apagar tudo).</p>
+    <p><b>Seus direitos (LGPD):</b> você pode baixar todos os dados (Backup), apagar tudo deste celular (Backup → Apagar tudo) e apagar sua conta na nuvem (Conta e família → Apagar minha conta).</p>
     <p><b>Saúde:</b> sono, medidas e remédios são só registros. O app não faz diagnóstico, não calcula dose e não substitui o pediatra.</p></div>`;
 }
 
@@ -991,4 +998,216 @@ addEventListener("beforeinstallprompt", (e) => {
   installEvt = e as Event & { prompt: () => void };
 });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/bebe/sw.js", { scope: "/bebe/" }).catch(() => {});
+// link de convite: /bebe/?convite=CODIGO
+{
+  const inv = new URLSearchParams(location.search).get("convite");
+  if (inv) {
+    sessionStorage.setItem("cb_invite", inv.toUpperCase());
+    history.replaceState(null, "", "/bebe/#conta");
+  }
+}
+C.onSync(() => {
+  const el = document.querySelector(".sync");
+  if (el) el.outerHTML = syncBadge();
+});
+C.startSync();
 route();
+
+// ---------- conta, família e nuvem
+function syncBadge() {
+  const a = C.account();
+  if (!a?.family) return "";
+  const st = C.syncState();
+  const t = { off: "", ok: "☁️ salvo na nuvem", busy: "☁️ sincronizando…", offline: "📴 sem internet (salvo no celular)", erro: "⚠️ não sincronizou" }[st];
+  return `<span class="sync ${st}">${t}</span>`;
+}
+async function askMode(f: C.Family) {
+  const local = db().babies.length > 0;
+  const mode = local && !confirm(`Entrar na família "${f.name}".\n\nOK = juntar o que já está neste celular com os dados da família.\nCancelar = usar só os dados da família.`) ? "trocar" : "juntar";
+  await C.enterFamily(f, mode);
+  toast(`Pronto! Você está na família ${f.name} 💗`);
+  location.hash = "#inicio";
+}
+function accountPage(v: HTMLElement) {
+  const a = C.account();
+  const invite = sessionStorage.getItem("cb_invite");
+  if (!C.cloudOn()) {
+    v.innerHTML = `${head("Conta e família", "#mais")}<p class="note">A nuvem não está disponível nesta versão.</p>`;
+    return;
+  }
+  if (!a) {
+    v.innerHTML = `${head("Conta e família", db().babies.length ? "#mais" : "")}
+      ${invite ? `<div class="alert">💌 Você recebeu um convite para uma família. Crie sua conta ou entre para aceitar.</div>` : ""}
+      <p class="lead">Com uma conta, os dados do bebê ficam guardados na nuvem e você pode compartilhar com o pai, a mãe, avós ou babá. Cada um vê e anota no próprio celular.</p>
+      <div class="seg2"><button class="on" data-m="new">Criar conta</button><button data-m="in">Já tenho conta</button></div>
+      <form class="form" id="af"><label data-only="new">Seu nome<input name="name" autocomplete="name"></label>
+        <label>E-mail<input name="email" type="email" required autocomplete="email"></label>
+        <label>Senha<input name="pass" type="password" required minlength="6" autocomplete="current-password"></label>
+        <button class="btn big" id="go">Criar conta</button></form>
+      <p class="fine">As fotos continuam só no seu celular. Você pode apagar a conta quando quiser.</p>`;
+    let mode = "new";
+    $$("[data-m]").forEach((x) => (x.onclick = () => {
+      mode = x.dataset.m!;
+      $$("[data-m]").forEach((y) => y.classList.toggle("on", y === x));
+      $("[data-only=new]").hidden = mode !== "new";
+      $("#go").textContent = mode === "new" ? "Criar conta" : "Entrar";
+    }));
+    $<HTMLFormElement>("#af").onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target as HTMLFormElement);
+      const g = (k: string) => String(fd.get(k) ?? "").trim();
+      $("#go").textContent = "Aguarde…";
+      try {
+        const r = mode === "new" ? await C.signup(g("name"), g("email"), g("pass")) : await C.login(g("email"), g("pass"));
+        if (invite) {
+          sessionStorage.removeItem("cb_invite");
+          return askMode(await C.joinByCode(invite));
+        }
+        if (r.families.length === 1) return askMode(r.families[0]);
+        route();
+      } catch (err) {
+        toast((err as Error).message);
+        $("#go").textContent = mode === "new" ? "Criar conta" : "Entrar";
+      }
+    };
+    return;
+  }
+  v.innerHTML = `${head("Conta e família", "#mais")}<p class="lead">Olá, <b>${esc(a.user.name)}</b> (${esc(a.user.email)})</p><div id="fam"><p class="note">Carregando…</p></div>
+    <button class="btn ghost" id="out">Sair da conta neste celular</button><button class="btn danger" id="delacc">Apagar minha conta</button>`;
+  $("#out").onclick = async () => {
+    if (!confirm("Sair da conta? Os dados continuam neste celular.")) return;
+    await C.logout();
+    route();
+  };
+  $("#delacc").onclick = async () => {
+    if (prompt('Isso apaga sua conta e as famílias em que você está sozinho(a). Digite "APAGAR" para confirmar.') !== "APAGAR") return;
+    try {
+      await C.api("delete_account");
+      await C.logout();
+      toast("Conta apagada. Os dados continuam neste celular.");
+      route();
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  };
+  const fam = $("#fam");
+  (async () => {
+    try {
+      if (invite) {
+        sessionStorage.removeItem("cb_invite");
+        return askMode(await C.joinByCode(invite));
+      }
+      const r = await C.me();
+      const cur = a.family;
+      if (!cur) {
+        fam.innerHTML = `${r.families.length ? `<h2>Suas famílias</h2><div class="list">${r.families.map((f) => `<div class="row"><span>👨‍👩‍👧</span><div><b>${esc(f.name)}</b><small>${roleName(f.role)}</small></div><button class="chip" data-use="${f.id}">Usar</button></div>`).join("")}</div>` : ""}
+          <h2>Criar a família do bebê</h2><form class="form" id="cf"><label>Nome da família<input name="name" value="Família ${esc(baby()?.name ?? "")}"></label><button class="btn">Criar e guardar na nuvem</button></form>
+          <h2>Recebi um convite</h2><form class="form" id="jf"><label>Código do convite<input name="code" placeholder="ABCD2345" autocapitalize="characters"></label><button class="btn ghost">Entrar na família</button></form>`;
+        $$("[data-use]", fam).forEach((x) => (x.onclick = () => askMode(r.families.find((f) => f.id === x.dataset.use)!)));
+        $<HTMLFormElement>("#cf", fam).onsubmit = async (e) => {
+          e.preventDefault();
+          if (!db().babies.length) return toast("Cadastre o bebê primeiro");
+          await C.createFamily(String(new FormData(e.target as HTMLFormElement).get("name")));
+          toast("Família criada e dados na nuvem ☁️");
+          route();
+        };
+        $<HTMLFormElement>("#jf", fam).onsubmit = async (e) => {
+          e.preventDefault();
+          try {
+            await askMode(await C.joinByCode(String(new FormData(e.target as HTMLFormElement).get("code"))));
+          } catch (err) {
+            toast((err as Error).message);
+          }
+        };
+        return;
+      }
+      const m = await C.api<{ role: C.Role; invite?: string; members: { id: string; name: string; email?: string; role: C.Role; me: boolean }[] }>("members", { family: cur.id });
+      const link = m.invite ? `${location.origin}/bebe/?convite=${m.invite}` : "";
+      fam.innerHTML = `<div class="sum"><div><small>Família</small><b>${esc(cur.name)}</b></div><div><small>Seu acesso</small><b>${roleName(m.role)}</b></div></div>
+        <p class="fine">${syncBadge()} ${a.syncedAt ? `· última vez ${new Date(a.syncedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : ""}</p>
+        <button class="btn ghost" id="now">🔄 Sincronizar agora</button>
+        <h2>Quem participa</h2><div class="list">${m.members.map((x) => `<div class="row"><span>${x.role === "dono" ? "👑" : x.role === "ve" ? "👀" : "✏️"}</span><div><b>${esc(x.name)}${x.me ? " (você)" : ""}</b><small>${roleName(x.role)}${x.email ? ` · ${esc(x.email)}` : ""}</small></div>
+          ${m.role === "dono" && !x.me ? `<select data-role="${x.id}"><option value="edita" ${x.role === "edita" ? "selected" : ""}>Pode editar</option><option value="ve" ${x.role === "ve" ? "selected" : ""}>Só ver</option><option value="sair">Remover</option></select>` : ""}</div>`).join("")}</div>
+        ${link ? `<h2>Convidar alguém</h2><p class="fine">Quem abrir o link cria a conta e entra podendo editar (você muda para "só ver" aqui).</p>
+          <div class="row2"><button class="btn" id="wa">📲 Mandar no WhatsApp</button><button class="btn ghost" id="cp">🔗 Copiar link</button></div>
+          <p class="fine">Código: <b>${m.invite}</b> · <a href="#" id="newinv">trocar código</a> (o antigo para de funcionar)</p>` : ""}
+        <button class="btn ghost" id="leave">Sair desta família</button>`;
+      $("#now", fam).onclick = async () => {
+        await C.sync();
+        toast(C.syncState() === "ok" ? "Tudo sincronizado ☁️" : "Não deu agora; tento de novo sozinho.");
+        route();
+      };
+      $$<HTMLSelectElement>("[data-role]", fam).forEach((x) => (x.onchange = async () => {
+        if (x.value === "sair" && !confirm("Remover essa pessoa da família?")) return route();
+        await C.api("set_role", { family: cur.id, user: x.dataset.role, role: x.value });
+        route();
+      }));
+      if (link) {
+        const msg = `Oi! Entra no Cantinho do bebê para a gente acompanhar juntos o(a) ${baby()?.name ?? "bebê"} 💗 ${link}`;
+        $("#wa", fam).onclick = () => window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+        $("#cp", fam).onclick = async () => {
+          try {
+            await navigator.clipboard.writeText(link);
+            toast("Link copiado");
+          } catch {
+            prompt("Copie o link:", link);
+          }
+        };
+        $("#newinv", fam).onclick = async (e) => {
+          e.preventDefault();
+          await C.api("new_invite", { family: cur.id });
+          route();
+        };
+      }
+      $("#leave", fam).onclick = async () => {
+        if (!confirm(`Sair da família ${cur.name}? Os dados continuam neste celular, mas param de sincronizar.`)) return;
+        await C.api("leave", { family: cur.id });
+        await C.pushOffHere().catch(() => {});
+        C.forgetFamily();
+        route();
+      };
+    } catch (err) {
+      fam.innerHTML = `<p class="note">${esc((err as Error).message)}</p>`;
+    }
+  })();
+}
+const roleName = (r: C.Role) => ({ dono: "Criou a família", edita: "Pode editar", ve: "Só ver" })[r];
+
+function alertsPage(v: HTMLElement) {
+  const on = C.pushPrefs();
+  const p = on ?? C.defaultPrefs;
+  const fam = C.account()?.family;
+  const opts: [keyof C.Prefs, string][] = [["mv", "👶 Mêsversário (9h)"], ["fraldas", "🧷 Fraldas acabando (10h)"], ["roupas", "👕 Conferir roupinhas (domingo)"], ["agenda", "📅 Compromissos (véspera e 1 h antes)"], ["remedios", "💊 Horários de remédio que você marcou"], ["sono", "🌙 Lembrar de registrar a soneca (21h)"]];
+  v.innerHTML = `${head("Avisos no celular", "#mais")}
+    ${fam ? "" : `<div class="alert">Os avisos precisam de conta e família (é o servidor que manda o aviso com o app fechado). <a href="#conta">Criar agora</a></div>`}
+    <form class="form" id="pf">${opts.map(([k, n]) => `<label class="check"><input type="checkbox" name="${k}" ${p[k] ? "checked" : ""}> ${n}</label>`).join("")}
+      <div class="row2"><label>Silêncio de<input name="q1" type="time" value="${p.quiet.slice(0, 5)}"></label><label>até<input name="q2" type="time" value="${p.quiet.slice(6)}"></label></div>
+      <p class="fine">No silêncio só tocam os lembretes de remédio. Na tela bloqueada não aparece o nome do remédio nem o que é o compromisso.</p>
+      <button class="btn big" ${fam ? "" : "disabled"}>${on ? "Salvar" : "🔔 Ligar avisos"}</button>
+      ${on ? `<div class="row2"><button type="button" class="btn ghost" id="test">Mandar um teste</button><button type="button" class="btn danger" id="off">Desligar</button></div>` : ""}
+    </form><p class="fine">No iPhone, os avisos só funcionam com o app adicionado à tela inicial (Compartilhar → Adicionar à Tela de Início).</p>`;
+  $<HTMLFormElement>("#pf").onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target as HTMLFormElement);
+    const prefs = { ...C.defaultPrefs, quiet: `${fd.get("q1") || "22:00"}-${fd.get("q2") || "07:00"}` } as C.Prefs;
+    for (const [k] of opts) (prefs as unknown as Record<string, boolean>)[k] = !!fd.get(k);
+    try {
+      await C.pushOn(prefs);
+      toast("🔔 Avisos ligados");
+      route();
+    } catch (err) {
+      toast((err as Error).message);
+    }
+  };
+  if (on) {
+    $("#test").onclick = async () => {
+      const r = await C.api<{ devices: number }>("push_test").catch((err) => (toast((err as Error).message), null));
+      if (r) toast(r.devices ? "Teste enviado 🔔" : "Nenhum aparelho inscrito");
+    };
+    $("#off").onclick = async () => {
+      await C.pushOffHere();
+      toast("Avisos desligados neste celular");
+      route();
+    };
+  }
+}

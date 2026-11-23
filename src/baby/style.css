@@ -217,3 +217,12 @@ details select { padding: 9px; border-radius: 12px; border: 1.5px solid var(--li
 .vbars.dark i { background: #f6dd8a; }
 .text p { line-height: 1.55; }
 .toast { position: fixed; z-index: 60; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 700; font-size: 14px; max-width: 92vw; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+.hero-top .grow { flex: 1; min-width: 0; }
+.sync { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: rgba(255,255,255,0.7); }
+.sync.erro, .sync.offline { background: #fff3d6; }
+.seg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--bege); padding: 4px; border-radius: 14px; margin-bottom: 12px; }
+.seg2 button { padding: 9px; border-radius: 11px; font-weight: 800; color: var(--muted); }
+.seg2 button.on { background: var(--card); color: var(--ink); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+.row select { padding: 6px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); font-size: 13px; }
+.btn:disabled { opacity: 0.5; }
+body.readonly #view::before { content: "👀 Você está só vendo: as mudanças feitas aqui não vão para a família."; display: block; background: #fff3d6; color: #6b5420; font-size: 12.5px; font-weight: 700; padding: 8px 12px; border-radius: 12px; margin-bottom: 8px; }

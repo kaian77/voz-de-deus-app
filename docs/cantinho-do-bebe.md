@@ -4,9 +4,22 @@ App instalável (PWA) para organizar tudo do bebê. Entrada do Vite `bebe` (`beb
 `voz-de-deus-app.vercel.app/bebe/` e `paginaspro.app.br/bebe/` (`/bebe` redireciona para `/bebe/`; noindex).
 
 ## Como está feito (versão 1)
-- **Dados só no aparelho** (`store.ts`): `localStorage` `cb_data` (bebês, itens, compras, sono, medidas, fraldas, agenda,
+- **Dados no aparelho** (`store.ts`): `localStorage` `cb_data` (bebês, itens, compras, sono, medidas, fraldas, agenda,
   remédios, guarda-roupa, orçamento, códigos de barras conhecidos) e fotos no IndexedDB `cantinho` (reduzidas para 900 px).
-  Backup = baixar/restaurar JSON; "Apagar tudo". Sem login e sem servidor ainda.
+  Backup = baixar/restaurar JSON; "Apagar tudo". O app funciona sem conta e sem internet.
+- **Conta, família e nuvem** (`cloud.ts` + função `bebe`, `_shared/bebe.ts`, migration `20261123000000_bebe.sql`): conta
+  própria (e-mail + senha PBKDF2, sessão em `bebe_auth`, 180 dias; separada do Studio e do FORMA). Família = `bebe_families`
+  (`data` = o mesmo JSON do aparelho, `version`), papéis em `bebe_members` (dono / edita / só ver). Sincronização: cada
+  `save()` marca a hora de cada registro mudado (`mt`) e apagado (`del`); `sync()` baixa, junta (`merge`: em cada registro
+  fica o mais novo, apagado depois da última edição continua apagado) e sobe com a versão que tinha (`family_save` só grava
+  se ninguém salvou no meio; senão repete). Sobe 2,5 s depois de mudar, ao abrir, ao voltar a internet e a cada 1 min.
+  Quem é "só ver" nunca sobe. Fotos não vão para a nuvem. Convite: link `/bebe/?convite=CODIGO` (WhatsApp) ou código;
+  o dono troca o acesso, remove, troca o código. Sair da família / apagar conta (LGPD; família sem ninguém é apagada).
+- **Avisos no celular** (Web Push, mesmas chaves VAPID do Studio; `bebe_push` com `prefs` e `sent` do dia): cron
+  `runBebeReminders` no `publish-scheduled` (Brasília): mêsversário 9h, fraldas para ≤3 dias 10h, roupinhas para conferir
+  domingo 10h30, soneca não registrada 21h (desligado por padrão), compromisso na véspera 19h e 1 h antes, remédio nos
+  horários marcados. Silêncio (padrão 22h-7h) não bloqueia remédio. Na tela bloqueada nunca sai nome de remédio nem o que é
+  o compromisso.
 - **Guarda-roupa 3D** (`wardrobe3d.ts`, three.js feito por código, sem modelo para baixar): portas giram 105° na dobradiça,
   3 gavetas deslizam 36 cm, cabideiro, 2 prateleiras, sapateira, plaquinha com o nome, quarto com chão, tapete e estrelas,
   luz aconchegante/clara e 5 acabamentos. Cada compartimento (`COMPARTMENTS`) é ligado aos itens pelo campo `loc`; o que
@@ -27,6 +40,5 @@ App instalável (PWA) para organizar tudo do bebê. Entrada do Vite `bebe` (`beb
 - Alerta de tamanho: idade E último peso (`SIZE_HINT`), sempre como "conferir", nunca "não serve".
 
 ## Ainda não existe (próximas fases)
-- Conta e nuvem (Supabase) para sincronizar entre celulares e o **modo família**; notificações push (hoje não há aviso
-  com o app fechado); BabyBot (IA); leitura de nota por IA no servidor (mais precisa que o OCR do celular);
+- Fotos na nuvem; BabyBot (IA); leitura de nota por IA no servidor (mais precisa que o OCR do celular);
   percentis da OMS; memórias/álbum; modelo do móvel feito no Blender (hoje é por código); Play Store.
