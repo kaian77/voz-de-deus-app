@@ -52,6 +52,13 @@ App instalável (PWA) para organizar tudo do bebê. Entrada do Vite `bebe` (`beb
 Teste de ponta a ponta da nuvem: workflow `bebe-test.yml` (`scripts/bebe-test.mjs`: 2 contas de teste, família, convite,
 conflito de versão, "só ver", apagar conta; limpa tudo no fim). Passou em 23/11/2026.
 
+- **IA** (chave `ANTHROPIC_API_KEY` do projeto, só no servidor; limite 40 usos por pessoa por dia em `bebe_ai_usage`;
+  gasto aparece em Studio → Uso): **nota fiscal por foto** (`receipt_ai`: o celular reduz a foto para 1600 px e manda em
+  base64; a IA devolve loja, CNPJ, data, itens com nome/categoria/tamanho/quantidade/pacote/valores e os campos em dúvida,
+  sem inventar; vai para a mesma tela de revisão; sem conta ou se a IA falhar, cai no leitor do celular) e **BabyBot**
+  (`bot.ts`, `#babybot`, botão no início: resposta curta só com o resumo dos dados da família `familyBrief`, sem
+  diagnóstico/remédio/dose; "adiciona 3 bodies M" volta como proposta e só entra no inventário no botão Confirmar).
+  `generateJSON` (`_shared/claude.ts`) aceita imagem `data:image/...;base64`.
+
 ## Ainda não existe (próximas fases)
-- BabyBot (IA); leitura de nota por IA no servidor (mais precisa que o OCR do celular);
-  percentis da OMS; memórias/álbum; modelo do móvel feito no Blender (hoje é por código); Play Store.
+- Percentis da OMS; memórias/álbum; modelo do móvel feito no Blender (hoje é por código); Play Store.
