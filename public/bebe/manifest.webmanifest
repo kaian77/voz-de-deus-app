@@ -1,0 +1,16 @@
+{
+  "name": "Cantinho do bebê",
+  "short_name": "Cantinho",
+  "description": "O mundinho do seu bebê, organizado com amor.",
+  "start_url": "/bebe/",
+  "scope": "/bebe/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFCF8",
+  "theme_color": "#FFFCF8",
+  "icons": [
+    { "src": "/bebe/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/bebe/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/bebe/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
