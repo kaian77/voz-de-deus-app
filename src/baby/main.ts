@@ -150,9 +150,34 @@ function demo() {
   route();
 }
 
+/** bebê de exemplo (o "Explorar com um bebê de exemplo") */
+const isDemo = (b: { notes?: string } | undefined) => !!b && /Bebê de exemplo/.test(b.notes ?? "");
+/** apaga o exemplo (e tudo dele) e abre o cadastro do bebê de verdade; vale também na nuvem */
+function leaveDemo() {
+  const ids = db().babies.filter(isDemo).map((b) => b.id);
+  save((d) => {
+    d.babies = d.babies.filter((b) => !ids.includes(b.id));
+    const keep = <T extends { babyId: string }>(list: T[]) => list.filter((r) => !ids.includes(r.babyId));
+    d.items = keep(d.items);
+    d.sleeps = keep(d.sleeps);
+    d.measures = keep(d.measures);
+    d.diapers = keep(d.diapers);
+    d.events = keep(d.events);
+    d.meds = keep(d.meds);
+    d.buys = keep(d.buys);
+    d.memories = keep(d.memories);
+    d.purchases = d.purchases.filter((x) => x.store !== "Loja de exemplo");
+    d.current = d.babies[0]?.id ?? "";
+    if (!d.babies.length) d.wardrobe = { finish: "branco", light: "quente" };
+  });
+  location.hash = db().babies.length ? "#inicio" : "#bebe";
+  route();
+}
+
 // ---------- início (painel)
 function home(v: HTMLElement) {
   const b = baby()!;
+  const demoBar = isDemo(b) ? `<div class="demo-bar"><span>👀 Você está vendo um <b>bebê de exemplo</b>.</span><button class="btn" id="leave-demo">Começar com o meu bebê</button></div>` : "";
   const a = age(b.birth);
   const its = db().items.filter((i) => i.babyId === b.id);
   const clothes = its.filter((i) => i.cat === "roupa").reduce((s, i) => s + i.qty, 0);
@@ -165,7 +190,7 @@ function home(v: HTMLElement) {
   const evs = db().events.filter((e) => e.babyId === b.id && e.date >= today()).sort((x, y) => (x.date + x.time).localeCompare(y.date + y.time)).slice(0, 3);
   const last = db().purchases.slice().sort((x, y) => y.date.localeCompare(x.date)).slice(0, 3);
   const meas = db().measures.filter((m) => m.babyId === b.id).sort((x, y) => y.date.localeCompare(x.date))[0];
-  v.innerHTML = `
+  v.innerHTML = `${demoBar}
   <section class="hero">
     <div class="hero-top"><button class="avatar" id="who" aria-label="Trocar bebê">${b.name[0]}</button>
       <div class="grow"><small>${greet()}!${syncBadge()}</small><h1>${a.totalDays < 0 ? `${esc(b.name)} chega em breve 💗` : `${esc(b.nick || b.name)} está com ${ageText(b.birth)} 💗`}</h1></div></div>
@@ -192,6 +217,10 @@ function home(v: HTMLElement) {
   ${last.length ? `<h2>Últimas compras</h2><div class="list">${last.map((p) => `<a class="row" href="#compra/${p.id}"><span>🛍️</span><div><b>${esc(p.store || "Compra")}</b><small>${fmtDate(p.date)} · ${p.lines.length} itens</small></div><em>${money(p.total)}</em></a>`).join("")}</div>` : ""}
   <p class="fine center">O acompanhamento não substitui a avaliação do pediatra.</p>`;
   $("#who").onclick = () => (location.hash = "#bebes");
+  const ld = v.querySelector<HTMLButtonElement>("#leave-demo");
+  if (ld) ld.onclick = () => {
+    if (confirm("Apagar o bebê de exemplo e cadastrar o seu?")) leaveDemo();
+  };
 }
 
 // ---------- guarda-roupa 3D
@@ -1053,6 +1082,11 @@ function babyForm(v: HTMLElement, arg?: string) {
       }
       d.current = next.id;
     });
+    // cadastrou um bebê de verdade: o de exemplo sai (com tudo dele)
+    if (!ex && db().babies.some(isDemo)) {
+      leaveDemo();
+      save((d) => (d.current = next.id));
+    }
     location.hash = "#inicio";
   };
   if (ex) $("#del").onclick = () => {
