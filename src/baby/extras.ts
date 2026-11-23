@@ -3,7 +3,7 @@
 import QRCode from "qrcode";
 import * as C from "./cloud";
 import {
-  COMPARTMENTS, age, ageText, baby, db, isDrawer, diaperStock, dur, esc, money, photoUrl, putPhoto, save, shrink, sizeAlerts, slotNames, slotOf, today, uid,
+  comps, age, ageText, baby, db, isDrawer, diaperStock, dur, esc, money, photoUrl, putPhoto, save, shrink, sizeAlerts, slotNames, slotOf, today, uid,
   type Buy, type Cat, type Memory,
 } from "./store";
 
@@ -232,7 +232,7 @@ export async function labels(v: HTMLElement, ctx: Ctx) {
   const base = `${location.origin}/bebe/#quarto/`;
   v.innerHTML = `${ctx.head("Etiquetas com QR Code", "#mais", `<button class="chip" id="print">🖨️ Imprimir</button>`)}
     <p class="lead no-print">Imprima, recorte e cole em cada gaveta ou caixa. Apontando a câmera do celular, o app abre direto naquele lugar com o que tem dentro.</p>
-    <div class="labels">${COMPARTMENTS.map((c) => `<div class="lab"><canvas data-qr="${c.id}"></canvas><b>${c.name}</b><small>${esc(b.nick || b.name)}${isDrawer(c.id) ? ` · ${slotNames().map(esc).join(" · ")}` : ""}</small></div>`).join("")}</div>`;
+    <div class="labels">${comps().map((c) => `<div class="lab"><canvas data-qr="${c.id}"></canvas><b>${c.name}</b><small>${esc(b.nick || b.name)}${isDrawer(c.id) ? ` · ${slotNames().map(esc).join(" · ")}` : ""}</small></div>`).join("")}</div>`;
   for (const cv of $$<HTMLCanvasElement>("[data-qr]", v)) await QRCode.toCanvas(cv, base + cv.dataset.qr, { width: 220, margin: 1, color: { dark: "#343434", light: "#ffffff" } });
   $("#print", v).onclick = () => window.print();
 }
@@ -260,7 +260,7 @@ export function report(v: HTMLElement, ctx: Ctx) {
     const ds = diaperStock(b.id);
     const used = db().diapers.filter((d) => d.babyId === b.id && d.date.slice(0, 7) === month).reduce((s, d) => s + d.qty, 0);
     const mems = db().memories.filter((x) => x.babyId === b.id && x.date.slice(0, 7) === month);
-    const drawers = COMPARTMENTS.filter((c) => isDrawer(c.id)).map((c) => `${c.name}: ${slotNames().map((n, k) => `${n} ${db().items.filter((i) => i.loc === c.id && slotOf(i) === k).reduce((s, i) => s + i.qty, 0)}`).join(", ")}`);
+    const drawers = comps().filter((c) => isDrawer(c.id)).map((c) => `${c.name}: ${slotNames().map((n, k) => `${n} ${db().items.filter((i) => i.loc === c.id && slotOf(i) === k).reduce((s, i) => s + i.qty, 0)}`).join(", ")}`);
     v.innerHTML = `${ctx.head("Relatório do mês", "#mais", `<button class="chip" id="pdf">⬇️ PDF</button>`)}
       <div class="row2 no-print"><button class="btn ghost" id="prev">‹ Mês anterior</button><button class="btn ghost" id="next" ${month >= ym(now) ? "disabled" : ""}>Próximo ›</button></div>
       <article class="report">

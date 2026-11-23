@@ -304,3 +304,17 @@ body.readonly #view::before { content: "👀 Você está só vendo: as mudanças
   .report, .lab { border-color: #ccc; background: #fff; color: #111; }
   .labels { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* móveis do quarto */
+.pieces { display: grid; gap: 8px; }
+.pc { display: grid; grid-template-columns: 48px 1fr; grid-template-rows: auto auto; column-gap: 10px; text-align: left; background: var(--card); border: 2px solid var(--line); border-radius: 18px; padding: 12px 14px; }
+.pc span { grid-row: span 2; font-size: 30px; display: grid; place-items: center; }
+.pc b { font-size: 16px; }
+.pc small { color: var(--muted); font-size: 13px; }
+.pc.on { border-color: var(--accent); background: var(--theme); }
+label.btn.file { position: relative; display: block; text-align: center; overflow: hidden; }
+label.btn.file input { position: absolute; inset: 0; opacity: 0; }
+.roomres { margin-top: 12px; }
+.roomres p { margin: 0 0 8px; line-height: 1.4; }
+.roomres ul { margin: 0 0 12px; padding-left: 20px; line-height: 1.7; }
+.sw { display: inline-block; width: 28px; height: 16px; border-radius: 6px; border: 1px solid var(--line); vertical-align: middle; }

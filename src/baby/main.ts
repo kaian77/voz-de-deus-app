@@ -2,14 +2,14 @@
 // guarda-roupa 3D ligado ao inventário (wardrobe3d.ts) e cadastro de compras pela nota fiscal (receipt.ts).
 import "./style.css";
 import {
-  COMPARTMENTS, age, ageText, isDrawer, slotFor, slotNames, slotOf, baby, db, diaperStock, dur, esc, exportJson, importJson, money, onChange, photoUrl, putPhoto,
+  COMPARTMENTS, comps, age, ageText, isDrawer, slotFor, slotNames, slotOf, baby, db, diaperStock, dur, esc, exportJson, importJson, money, onChange, photoUrl, putPhoto,
   resetAll, save, shoeAlerts, shrink, sizeAlerts, sleepToday, spent, today, uid, spendDiapers,
   type Baby, type Cat, type CompId, type Item, type ItemState, type Purchase, type Theme,
 } from "./store";
 import { keyInfo, ocr, parseQr, parseText, parseXml, type Line, type Parsed } from "./receipt";
 import { Wardrobe3D, colorOf, webglOk } from "./wardrobe3d";
 import * as C from "./cloud";
-import { babybotPage, readReceiptAi } from "./bot";
+import { babybotPage, readReceiptAi, roomSetup } from "./bot";
 import { labels, memories, paywall, report, shopping } from "./extras";
 
 const $ = <E extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as E;
@@ -35,7 +35,7 @@ const greet = () => {
 };
 
 document.body.innerHTML = `<div id="app"><main id="view"></main><nav class="tabs" id="tabs">
-  <a href="#inicio" data-t="inicio"><span>🏠</span>Início</a><a href="#quarto" data-t="quarto"><span>🚪</span>Guarda-roupa</a>
+  <a href="#inicio" data-t="inicio"><span>🏠</span>Início</a><a href="#quarto" data-t="quarto"><span>🚪</span>Quarto</a>
   <a href="#nota" data-t="nota" class="mid"><span>🧾</span>Nota fiscal</a><a href="#itens" data-t="itens"><span>👕</span>Itens</a>
   <a href="#mais" data-t="mais"><span>☰</span>Mais</a></nav><div class="toast" id="toast" hidden></div></div>`;
 
@@ -180,13 +180,13 @@ function home(v: HTMLElement) {
     <a class="card" href="#sono"><span>🌙</span><b>${running ? "dormindo" : lastSleep ? dur(new Date(lastSleep.end!).getTime() - new Date(lastSleep.start).getTime()) : "—"}</b><small>${running ? `desde ${new Date(running.start).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : `última soneca · hoje ${dur(sleepToday(b.id))}`}</small></a>
     <a class="card" href="#gastos"><span>💰</span><b>${money(spent(m0, today()))}</b><small>gastos do mês</small></a>
     <a class="card" href="#crescimento"><span>📏</span><b>${meas?.weight ? `${String(meas.weight).replace(".", ",")} kg` : "—"}</b><small>${meas?.length ? `${String(meas.length).replace(".", ",")} cm · ` : ""}crescimento</small></a>
-    <a class="card" href="#quarto"><span>🚪</span><b>3D</b><small>abrir o guarda-roupa</small></a>
+    <a class="card" href="#quarto"><span>🚪</span><b>3D</b><small>abrir ${roomTitle() === "Cômoda" ? "a cômoda" : roomTitle() === "Guarda-roupa" ? "o guarda-roupa" : "o quartinho"}</small></a>
   </div>
   ${sa.length || sh.length || unplaced || (ds.daysLeft !== null && ds.daysLeft < 5) ? `<h2>Avisos</h2><div class="alerts">
     ${sa.length ? `<a href="#itens?alerta=1" class="alert">💗 Seu bebê está crescendo! <b>${sa.length}</b> ${sa.length === 1 ? "roupinha precisa" : "roupinhas precisam"} de uma conferida no tamanho.</a>` : ""}
     ${sh.length ? `<a href="#itens?cat=sapato" class="alert">👟 ${sh.length} sapatinho(s) com menos de 1 cm de folga para o pé.</a>` : ""}
     ${ds.daysLeft !== null && ds.daysLeft < 5 ? `<a href="#fraldas" class="alert">🧷 O estoque de fraldas pode acabar em ~${ds.daysLeft} dias.</a>` : ""}
-    ${unplaced ? `<a href="#quarto" class="alert">🧺 ${unplaced} ${unplaced === 1 ? "peça está" : "peças estão"} sem lugar no guarda-roupa. Vamos guardar?</a>` : ""}
+    ${unplaced ? `<a href="#quarto" class="alert">🧺 ${unplaced} ${unplaced === 1 ? "peça está" : "peças estão"} sem lugar nos móveis. Vamos guardar?</a>` : ""}
   </div>` : ""}
   ${evs.length ? `<h2>Próximos compromissos</h2><div class="list">${evs.map((e) => `<a class="row" href="#agenda"><span>${{ consulta: "🩺", vacina: "💉", remedio: "💊", compra: "🛍️", outro: "📌" }[e.kind]}</span><div><b>${esc(e.title)}</b><small>${fmtDate(e.date)} ${e.time}</small></div></a>`).join("")}</div>` : ""}
   ${last.length ? `<h2>Últimas compras</h2><div class="list">${last.map((p) => `<a class="row" href="#compra/${p.id}"><span>🛍️</span><div><b>${esc(p.store || "Compra")}</b><small>${fmtDate(p.date)} · ${p.lines.length} itens</small></div><em>${money(p.total)}</em></a>`).join("")}</div>` : ""}
@@ -198,9 +198,10 @@ function home(v: HTMLElement) {
 function room(v: HTMLElement, arg?: string) {
   const b = baby()!;
   const w = db().wardrobe;
+  if (!w.pieces || arg === "moveis") return roomSetup(v, head, toast, shrink);
   const has3d = webglOk() && localStorage.getItem("cb_2d") !== "1";
   v.innerHTML = `<section class="room">
-    <div class="room-top">${head("Guarda-roupa", "#inicio", `<button class="chip" id="mode">${has3d ? "Modo simples" : "Ver em 3D"}</button>`)}</div>
+    <div class="room-top">${head(roomTitle(), "#inicio", `<button class="chip" id="mode">${has3d ? "Modo simples" : "Ver em 3D"}</button>`)}</div>
     ${has3d ? `<div class="stage" id="stage"><p class="hint" id="hint">Toque numa porta ou gaveta para abrir · toque numa roupinha para ver</p></div>` : `<div class="flat" id="flat"></div>`}
     <div class="sheet" id="sheet"></div></section>`;
   $("#mode").onclick = () => {
@@ -252,10 +253,12 @@ function room(v: HTMLElement, arg?: string) {
       return;
     }
     if (!sel) {
-      const loose = mine().filter((i) => !i.loc && (i.cat === "roupa" || i.cat === "sapato") && i.state === "uso");
-      el.innerHTML = `<div class="pills">${COMPARTMENTS.map((c) => `<button data-c="${c.id}"><b>${c.name}</b><small>${pcs(mine().filter((i) => i.loc === c.id))} peças</small></button>`).join("")}</div>
+      const here = comps().map((c) => c.id as string);
+      const loose = mine().filter((i) => (!i.loc || !here.includes(i.loc)) && (i.cat === "roupa" || i.cat === "sapato") && i.state === "uso");
+      el.innerHTML = `<div class="pills">${comps().map((c) => `<button data-c="${c.id}"><b>${c.name}</b><small>${pcs(mine().filter((i) => i.loc === c.id))} peças</small></button>`).join("")}</div>
         ${loose.length ? `<p class="note">🧺 ${loose.length} ${loose.length === 1 ? "peça sem lugar" : "peças sem lugar"}. Toque num compartimento e em "Guardar aqui".</p>` : ""}
         <details class="custom"><summary>🎨 Personalizar o móvel</summary>
+          <a class="btn ghost" href="#quarto/moveis">🏠 Trocar os móveis · 📷 copiar pela foto</a>
           <div class="row2"><label>Acabamento<select id="fin">${(["branco", "carvalho", "nogueira", "rosa", "salvia"] as const).map((f) => `<option ${w.finish === f ? "selected" : ""} value="${f}">${{ branco: "Branco", carvalho: "Carvalho", nogueira: "Nogueira", rosa: "Rosa antigo", salvia: "Verde sálvia" }[f]}</option>`).join("")}</select></label>
           <label>Luz<select id="lgt"><option value="quente" ${w.light === "quente" ? "selected" : ""}>Aconchegante</option><option value="fria" ${w.light === "fria" ? "selected" : ""}>Clara</option></select></label></div>
           <p class="fine">Nomes das 4 divisões de cada gaveta:</p>
@@ -353,10 +356,11 @@ function room(v: HTMLElement, arg?: string) {
   } else {
     // modo simples (2D): o móvel desenhado em blocos, cada bloco abre a lista
     const f = $("#flat");
-    f.innerHTML = `<div class="w2d"><div class="plate">${esc(b.nick || b.name)}</div>
+    const pc = w.pieces ?? "ambos";
+    f.innerHTML = `${pc === "comoda" ? "" : `<div class="w2d"><div class="plate">${esc(b.nick || b.name)}</div>
       <div class="top"><button data-c="cabide" class="tall">Cabideiro</button><div class="col"><button data-c="prat1">Prateleira de cima</button><button data-c="prat2">Prateleira de baixo</button></div></div>
-      <div class="bot"><div class="col"><button data-c="g1">Gaveta 1</button><button data-c="g2">Gaveta 2</button><button data-c="g3">Gaveta 3</button></div><button data-c="sapateira" class="tall">Sapateira</button></div></div>
-      <div class="w2d dresser"><div class="plate">Cômoda</div><div class="bot"><div class="col"><button data-c="c1">Gaveta 1</button><button data-c="c2">Gaveta 2</button><button data-c="c3">Gaveta 3</button><button data-c="c4">Gaveta 4</button></div><button data-c="cporta" class="tall">Porta</button></div></div>`;
+      <div class="bot"><div class="col"><button data-c="g1">Gaveta 1</button><button data-c="g2">Gaveta 2</button><button data-c="g3">Gaveta 3</button></div><button data-c="sapateira" class="tall">Sapateira</button></div></div>`}
+      ${pc === "guarda" ? "" : `<div class="w2d dresser"><div class="plate">${pc === "comoda" ? esc(b.nick || b.name) : "Cômoda"}</div><div class="bot"><div class="col"><button data-c="c1">Gaveta 1</button><button data-c="c2">Gaveta 2</button><button data-c="c3">Gaveta 3</button><button data-c="c4">Gaveta 4</button></div><button data-c="cporta" class="tall">Porta</button></div></div>`}`;
     $$("[data-c]", f).forEach((x) => (x.onclick = () => pick(x.dataset.c as CompId)));
   }
   sheet();
@@ -442,7 +446,7 @@ function itemForm(v: HTMLElement, arg?: string) {
     <div class="row2"><label>Quantidade<input name="qty" type="number" min="0" value="${it.qty}"></label><label>Preço (un.)<input name="price" type="number" step="0.01" min="0" value="${it.price || ""}"></label></div>
     <div class="row2"><label>Marca<input name="brand" value="${esc(it.brand)}"></label><label>Data da compra<input name="date" type="date" value="${it.date}"></label></div>
     <div class="row2"><label>Estado<select name="state">${STATES.map((s) => `<option value="${s.id}" ${it.state === s.id ? "selected" : ""}>${s.name}</option>`).join("")}</select></label>
-    <label>Onde está<select name="loc"><option value="">Sem lugar</option>${COMPARTMENTS.map((c) => `<option value="${c.id}" ${it.loc === c.id ? "selected" : ""}>${c.name}</option>`).join("")}</select></label></div>
+    <label>Onde está<select name="loc"><option value="">Sem lugar</option>${COMPARTMENTS.filter((c) => it.loc === c.id || comps().includes(c)).map((c) => `<option value="${c.id}" ${it.loc === c.id ? "selected" : ""}>${c.name}</option>`).join("")}</select></label></div>
     <label class="slotf" ${isDrawer(it.loc) ? "" : "hidden"}>Divisão da gaveta<select name="slot"><option value="">Pelo tamanho</option>${slotNames().map((n, k) => `<option value="${k}" ${it.slot === k ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
     <label class="shoe" ${it.cat === "sapato" ? "" : "hidden"}>Comprimento interno do sapato (cm)<input name="innerCm" type="number" step="0.1" value="${it.innerCm ?? ""}"></label>
     <label>Observações<textarea name="notes" rows="2">${esc(it.notes)}</textarea></label>
@@ -1372,4 +1376,10 @@ function trialBanner() {
   const a = C.access();
   if (a.status !== "trial") return "";
   return `<a class="trial" href="#assinar">🎁 Teste grátis: ${a.days === 1 ? "último dia" : `faltam ${a.days} dias`} · <b>Assinar ${C.PRICE}/mês</b></a>`;
+}
+
+/** nome da tela do móvel pelo que a família tem */
+function roomTitle() {
+  const p = db().wardrobe.pieces;
+  return p === "comoda" ? "Cômoda" : p === "ambos" ? "Quartinho" : "Guarda-roupa";
 }

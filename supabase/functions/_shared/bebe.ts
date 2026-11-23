@@ -96,7 +96,7 @@ export const BEBE_PRICE = 29.9;
 export const BEBE_LINK = "https://mpago.la/2onvEzq"; // link fixo do plano no Mercado Pago (o dono criou)
 /** Acesso de quem está logado: assinou, alguém da família assinou, está no teste ou venceu. */
 export async function accessOf(db: Db, u: BUser) {
-  const { data: me } = await db.from("bebe_users").select("plan, trial_until").eq("id", u.id).single();
+  const { data: me } = await db.from("bebe_users").select("plan, trial_until, created_at").eq("id", u.id).single();
   if (me?.plan === "active") return { status: "active" as const };
   // família de quem assinou também entra (pai, avó, babá)
   const { data: mem } = await db.from("bebe_members").select("family_id").eq("user_id", u.id);
@@ -109,8 +109,9 @@ export async function accessOf(db: Db, u: BUser) {
       if (count) return { status: "active" as const, family: true };
     }
   }
-  const until = me?.trial_until ? Date.parse(me.trial_until) : 0;
-  if (until > Date.now()) return { status: "trial" as const, until: me!.trial_until, days: Math.ceil((until - Date.now()) / 864e5) };
+  // conta nova: 7 dias a partir da criação (trial_until fica vazio até alguém gravar)
+  const until = me?.trial_until ? Date.parse(me.trial_until) : me?.created_at ? Date.parse(me.created_at) + 7 * 864e5 : 0;
+  if (until > Date.now()) return { status: "trial" as const, until: new Date(until).toISOString(), days: Math.ceil((until - Date.now()) / 864e5) };
   return { status: "expired" as const };
 }
 /** Link para assinar: assinatura própria no e-mail da pessoa (o teste que sobrar vira dias grátis); sem a chave do MP, o link fixo. */
@@ -519,6 +520,33 @@ export async function receiptAI(db: Db, u: BUser, b: Obj) {
   await aiQuota(db, u);
   const r = await generateJSON(ReceiptSchema, RECEIPT_RULES, "Leia esta nota fiscal e devolva o JSON.", "low", [img]);
   return { receipt: r };
+}
+
+const RoomSchema = z.object({
+  pieces: z.enum(["guarda", "comoda", "ambos", "nenhum"]),
+  finish: z.enum(["branco", "carvalho", "nogueira", "rosa", "salvia"]),
+  wall: z.string(),
+  floor: z.enum(["madeira", "clara", "escura"]),
+  rug: z.string(),
+  light: z.enum(["quente", "fria"]),
+  note: z.string(),
+});
+const ROOM_RULES = `Você olha a foto de um quarto de bebê e descreve só o que dá para ver, para o app montar um quarto 3D parecido.
+- pieces: "guarda" se aparece só guarda-roupa (armário alto com portas), "comoda" se aparece só cômoda (móvel baixo com gavetas, com ou sem porta), "ambos" se aparecem os dois, "nenhum" se não aparece nenhum dos dois ou a foto não é de um quarto.
+- finish: cor do móvel mais parecida entre branco, carvalho (madeira clara), nogueira (madeira escura), rosa e salvia (verde claro).
+- wall: cor da parede em hexadecimal (#rrggbb), aproximada; rug: cor do tapete em hexadecimal, "" se não houver tapete.
+- floor: madeira (piso de madeira média), clara (piso claro/porcelanato) ou escura.
+- light: quente se a luz é amarelada, fria se é branca.
+- note: uma frase curta em português dizendo o que você viu (ex.: "Vi uma cômoda branca com tampo de madeira e parede rosa clara"). Não invente objetos que não aparecem.`;
+
+export async function roomAI(db: Db, u: BUser, b: Obj) {
+  const img = String(b.image ?? "");
+  if (!/^data:image\/(jpeg|png|webp);base64,/.test(img) || img.length > 3_000_000) throw new HttpError(400, "Foto inválida ou grande demais.");
+  await aiQuota(db, u);
+  const r = await generateJSON(RoomSchema, ROOM_RULES, "Descreva este quarto e devolva o JSON.", "low", [img]);
+  if (!/^#[0-9a-f]{6}$/i.test(r.wall)) r.wall = "";
+  if (!/^#[0-9a-f]{6}$/i.test(r.rug)) r.rug = "";
+  return { room: r };
 }
 
 const BotSchema = z.object({

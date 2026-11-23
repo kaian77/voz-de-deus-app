@@ -51,6 +51,7 @@ ok(Array.isArray(add.add) && add.add.length > 0, "BabyBot propõe adicionar (sem
 const rc = await call("receipt_ai", { session: a.session, image: `data:image/jpeg;base64,${jpg.toString("base64")}` });
 console.log("   Nota (foto vazia):", JSON.stringify(rc).slice(0, 300));
 ok(rc.receipt && Array.isArray(rc.receipt.items), "leitura de nota pela IA responde");
+ok((await call("room_ai", { session: a.session, image: "nada" })).status === 400, "foto do quarto inválida é recusada");
 // esqueci a senha
 ok((await call("reset_request", { email: `ninguem-${tag}@exemplo.invalid` })).ok, "pedido de senha para e-mail sem conta responde igual");
 ok((await call("reset_confirm", { token: "x".repeat(48), pass: "nova1234" })).status === 400, "link de senha inválido é recusado");

@@ -27,6 +27,12 @@ export const COMPARTMENTS = [
   { id: "cporta", name: "Cômoda · porta", hint: "roupinhas penduradas e sapatinhos" },
 ] as const;
 export type CompId = (typeof COMPARTMENTS)[number]["id"];
+/** partes dos móveis que a família tem (só guarda-roupa, só cômoda ou os dois) */
+export const isDresser = (id: string) => /^c(\d|porta)$/.test(id);
+export function comps() {
+  const p = data.wardrobe.pieces ?? "ambos";
+  return COMPARTMENTS.filter((c) => p === "ambos" || (p === "comoda") === isDresser(c.id));
+}
 export type Item = {
   id: string; babyId: string; name: string; cat: Cat; size: string; color: string; brand: string;
   qty: number; price: number; date: string; state: ItemState; loc: CompId | ""; notes: string;
@@ -50,7 +56,11 @@ export type Med = { id: string; babyId: string; name: string; dose: string; time
 export type Buy = { id: string; babyId: string; name: string; cat: Cat; size: string; qty: number; price: number; done: boolean; doneAt?: string; from?: string };
 /** memórias: linha do tempo com foto, marco e texto */
 export type Memory = { id: string; babyId: string; date: string; title: string; text: string; photo?: string; kind: "marco" | "foto" | "mesversario" };
-export type Wardrobe = { finish: "branco" | "carvalho" | "nogueira" | "rosa" | "salvia"; light: "quente" | "fria"; slots?: string[] };
+export type Wardrobe = {
+  finish: "branco" | "carvalho" | "nogueira" | "rosa" | "salvia"; light: "quente" | "fria"; slots?: string[];
+  /** móveis que existem no quarto (vazio = ainda não escolheu) e cores do quarto (da foto, pela IA) */
+  pieces?: "guarda" | "comoda" | "ambos"; wall?: string; floor?: "madeira" | "clara" | "escura"; rug?: string;
+};
 /** cada gaveta tem 3 divisórias = 4 espaços; por padrão um para cada 3 meses */
 export const DEFAULT_SLOTS = ["0-3 meses", "3-6 meses", "6-9 meses", "9-12 meses"];
 export const slotNames = () => data.wardrobe.slots?.length === 4 ? data.wardrobe.slots : DEFAULT_SLOTS;
