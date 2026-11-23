@@ -82,4 +82,5 @@ alter table public.bebe_users add column if not exists trial_until timestamptz;
 alter table public.bebe_users add column if not exists plan text not null default 'trial';
 alter table public.bebe_users add column if not exists sub_id text;
 alter table public.bebe_users add column if not exists plan_at timestamptz;
+alter table public.bebe_users alter column trial_until set default now() + interval '7 days';
 update public.bebe_users set trial_until = created_at + interval '7 days' where trial_until is null;

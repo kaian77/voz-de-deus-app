@@ -96,7 +96,7 @@ export const BEBE_PRICE = 29.9;
 export const BEBE_LINK = "https://mpago.la/2onvEzq"; // link fixo do plano no Mercado Pago (o dono criou)
 /** Acesso de quem está logado: assinou, alguém da família assinou, está no teste ou venceu. */
 export async function accessOf(db: Db, u: BUser) {
-  const { data: me } = await db.from("bebe_users").select("plan, trial_until").eq("id", u.id).single();
+  const { data: me } = await db.from("bebe_users").select("plan, trial_until, created_at").eq("id", u.id).single();
   if (me?.plan === "active") return { status: "active" as const };
   // família de quem assinou também entra (pai, avó, babá)
   const { data: mem } = await db.from("bebe_members").select("family_id").eq("user_id", u.id);
@@ -109,8 +109,9 @@ export async function accessOf(db: Db, u: BUser) {
       if (count) return { status: "active" as const, family: true };
     }
   }
-  const until = me?.trial_until ? Date.parse(me.trial_until) : 0;
-  if (until > Date.now()) return { status: "trial" as const, until: me!.trial_until, days: Math.ceil((until - Date.now()) / 864e5) };
+  // conta nova: 7 dias a partir da criação (trial_until fica vazio até alguém gravar)
+  const until = me?.trial_until ? Date.parse(me.trial_until) : me?.created_at ? Date.parse(me.created_at) + 7 * 864e5 : 0;
+  if (until > Date.now()) return { status: "trial" as const, until: new Date(until).toISOString(), days: Math.ceil((until - Date.now()) / 864e5) };
   return { status: "expired" as const };
 }
 /** Link para assinar: assinatura própria no e-mail da pessoa (o teste que sobrar vira dias grátis); sem a chave do MP, o link fixo. */
