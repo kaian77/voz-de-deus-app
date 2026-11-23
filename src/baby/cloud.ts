@@ -6,7 +6,7 @@ import { db, getPhoto, merge, onChange, putPhoto, replaceAll, sameData, type Dat
 
 export type Role = "dono" | "edita" | "ve";
 export type Family = { id: string; name: string; role: Role; version?: number };
-export type Access = { status: "trial" | "active" | "expired"; until?: string; days?: number; family?: boolean };
+export type Access = { status: "trial" | "active" | "expired"; until?: string; days?: number; family?: boolean; admin?: boolean; gift?: boolean };
 type Auth = { session: string; user: { id: string; email: string; name: string }; family?: Family; version?: number; syncedAt?: number; access?: Access };
 
 const KEY = "cb_auth";

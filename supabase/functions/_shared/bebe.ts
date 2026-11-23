@@ -95,9 +95,27 @@ export async function me(db: Db, u: BUser) {
 export const BEBE_PRICE = 29.9;
 export const BEBE_LINK = "https://mpago.la/2onvEzq"; // link fixo do plano no Mercado Pago (o dono criou)
 /** Acesso de quem está logado: assinou, alguém da família assinou, está no teste ou venceu. */
+// administrador do app (o dono): e-mail guardado só como hash; BEBE_ADMINS (e-mails separados por vírgula) soma mais
+const ADMIN_HASHES = ["46b37e27c197b0fb62d1150744571b4ad607221e3b6b5971f1dfdd7d0554a337"];
+async function isAdmin(u: BUser) {
+  const email = String(u.email ?? "").toLowerCase();
+  const extra = (Deno.env.get("BEBE_ADMINS") ?? "").toLowerCase().split(",").map((x) => x.trim()).filter(Boolean);
+  return extra.includes(email) || ADMIN_HASHES.includes(await sha256Hex(email));
+}
 export async function accessOf(db: Db, u: BUser) {
-  const { data: me } = await db.from("bebe_users").select("plan, trial_until, created_at").eq("id", u.id).single();
-  if (me?.plan === "active") return { status: "active" as const };
+  const { data: me } = await db.from("bebe_users").select("plan, sub_id, trial_until, created_at").eq("id", u.id).single();
+  // dono do app e quem ele liberou de graça: plano ativo (vale também para a família deles)
+  if (await isAdmin(u)) {
+    if (me?.plan !== "active") await db.from("bebe_users").update({ plan: "active", sub_id: "admin", plan_at: new Date().toISOString() }).eq("id", u.id);
+    return { status: "active" as const, admin: true };
+  }
+  const { data: gift } = await db.from("bebe_grants").select("email").eq("email", String(u.email ?? "").toLowerCase()).maybeSingle();
+  if (gift) {
+    if (me?.plan !== "active") await db.from("bebe_users").update({ plan: "active", sub_id: "cortesia", plan_at: new Date().toISOString() }).eq("id", u.id);
+    return { status: "active" as const, gift: true };
+  }
+  if (me?.plan === "active" && me.sub_id === "cortesia") await db.from("bebe_users").update({ plan: "trial" }).eq("id", u.id); // cortesia tirada
+  else if (me?.plan === "active") return { status: "active" as const };
   // família de quem assinou também entra (pai, avó, babá)
   const { data: mem } = await db.from("bebe_members").select("family_id").eq("user_id", u.id);
   const fams = (mem ?? []).map((m) => m.family_id);
@@ -113,6 +131,23 @@ export async function accessOf(db: Db, u: BUser) {
   const until = me?.trial_until ? Date.parse(me.trial_until) : me?.created_at ? Date.parse(me.created_at) + 7 * 864e5 : 0;
   if (until > Date.now()) return { status: "trial" as const, until: new Date(until).toISOString(), days: Math.ceil((until - Date.now()) / 864e5) };
   return { status: "expired" as const };
+}
+/** Admin: lista, libera e tira o acesso grátis de qualquer e-mail (vale até antes de a pessoa criar a conta). */
+export async function grants(db: Db, u: BUser, b: Obj) {
+  if (!(await isAdmin(u))) throw new HttpError(403, "Só o administrador.");
+  const email = cleanEmail(b.email);
+  if (b.add || b.remove) {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(400, "E-mail inválido.");
+    if (b.add) await db.from("bebe_grants").upsert({ email, note: cleanName(b.note, 60) });
+    else {
+      await db.from("bebe_grants").delete().eq("email", email);
+      await db.from("bebe_users").update({ plan: "trial" }).eq("email", email).eq("sub_id", "cortesia");
+    }
+  }
+  const { data } = await db.from("bebe_grants").select("email, note, created_at").order("created_at", { ascending: false });
+  const emails = (data ?? []).map((g) => g.email);
+  const { data: users } = emails.length ? await db.from("bebe_users").select("email").in("email", emails) : { data: [] };
+  return { grants: (data ?? []).map((g) => ({ ...g, has_account: (users ?? []).some((x) => x.email === g.email) })) };
 }
 /** Link para assinar: assinatura própria no e-mail da pessoa (o teste que sobrar vira dias grátis); sem a chave do MP, o link fixo. */
 export async function subscribe(db: Db, u: BUser) {

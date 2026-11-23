@@ -1126,6 +1126,42 @@ addEventListener("beforeinstallprompt", (e) => {
   e.preventDefault();
   installEvt = e as Event & { prompt: () => void };
 });
+/** Pop-up "ponha o app na tela inicial" (Android: botão que instala; iPhone: o passo a passo do Safari). */
+function installPopup() {
+  const nav = navigator as Navigator & { standalone?: boolean };
+  if (matchMedia("(display-mode: standalone)").matches || nav.standalone) return; // já está instalado
+  if (document.querySelector(".inst-pop")) return;
+  try {
+    localStorage.setItem("cb_inst", "1");
+  } catch {
+    /* sem armazenamento */
+  }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const safari = ios && !/crios|fxios|edgios/i.test(navigator.userAgent);
+  const pop = document.createElement("div");
+  pop.className = "inst-pop";
+  pop.innerHTML = `<div class="inst-card" role="dialog" aria-modal="true" aria-labelledby="inst-t">
+    <div class="inst-ico"><img src="/bebe/icon-192.png" alt=""></div>
+    <h2 id="inst-t">Coloque o Cantinho na tela inicial 📲</h2>
+    <p>Fica igual a um aplicativo: abre com um toque, em tela cheia, e os avisos (fralda, remédio, consulta) chegam no celular.</p>
+    ${ios ? (safari ? `<ol class="inst-steps">
+        <li><span>1</span><div>Toque em <b>Compartilhar</b> <i class="ios-share">⬆︎</i> na barra de baixo do Safari</div></li>
+        <li><span>2</span><div>Role e toque em <b>Adicionar à Tela de Início</b> ➕</div></li>
+        <li><span>3</span><div>Toque em <b>Adicionar</b>, no canto de cima</div></li></ol>`
+      : `<p class="note">No iPhone, abra este link no <b>Safari</b> (a bússola azul) e depois: Compartilhar ⬆︎ → <b>Adicionar à Tela de Início</b>.</p>`)
+    : installEvt ? `<button class="btn big" id="inst-go">📲 Instalar agora</button>`
+    : `<ol class="inst-steps"><li><span>1</span><div>Toque nos <b>3 pontinhos ⋮</b> do navegador, em cima</div></li><li><span>2</span><div>Toque em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b></div></li></ol>`}
+    <button class="btn ghost" id="inst-later">Agora não</button></div>`;
+  document.body.appendChild(pop);
+  const close = () => pop.remove();
+  pop.onclick = (e) => e.target === pop && close();
+  (pop.querySelector("#inst-later") as HTMLButtonElement).onclick = close;
+  const go = pop.querySelector("#inst-go") as HTMLButtonElement | null;
+  if (go) go.onclick = () => {
+    installEvt?.prompt();
+    close();
+  };
+}
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/bebe/sw.js", { scope: "/bebe/" }).catch(() => {});
 // link de convite: /bebe/?convite=CODIGO
 {
@@ -1141,6 +1177,12 @@ C.onSync(() => {
 });
 C.startSync();
 route();
+// quem já tem conta e ainda não viu o convite neste celular também vê uma vez
+try {
+  if (C.account() && !localStorage.getItem("cb_inst")) setTimeout(() => installPopup(), 2500);
+} catch {
+  /* sem armazenamento */
+}
 
 // ---------- conta, família e nuvem
 function syncBadge() {
@@ -1200,6 +1242,7 @@ function accountPage(v: HTMLElement) {
       $("#go").textContent = "Aguarde…";
       try {
         const r = mode === "new" ? await C.signup(g("name"), g("email"), g("pass")) : await C.login(g("email"), g("pass"));
+        setTimeout(() => installPopup(), 900); // logo depois de entrar: convite para pôr o app na tela inicial
         if (invite) {
           sessionStorage.removeItem("cb_invite");
           return askMode(await C.joinByCode(invite));

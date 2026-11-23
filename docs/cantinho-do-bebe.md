@@ -83,6 +83,13 @@ conflito de versão, "só ver", apagar conta; limpa tudo no fim). Passou em 23/1
   `mercadopago-webhook` (`onBebeSubscription`) liga/pausa; sem token, link fixo https://mpago.la/2onvEzq e a assinatura
   que chega com valor ~29,90 é ligada pelo e-mail do pagador (pagar com o mesmo e-mail da conta). Sem conta, o teste
   conta do 1º uso no aparelho (`cb_first`).
+- **Administrador** (o dono; e-mail guardado só como hash SHA-256 em `ADMIN_HASHES` no `_shared/bebe.ts`, mais o env
+  opcional `BEBE_ADMINS`): `accessOf` deixa o plano dele `active` (`sub_id` admin), então quem entra na família dele
+  (convite) usa de graça. Em Assinatura aparece "👑 Administrador · acesso grátis": libera qualquer e-mail (tabela
+  `bebe_grants`, vale até antes de a pessoa criar a conta; `sub_id` cortesia) e tira de novo (ação `grants`).
+- **Pop-up "Coloque o Cantinho na tela inicial"** (`installPopup` em `main.ts`): logo depois de criar a conta/entrar e
+  uma vez por celular para quem já tem conta (`cb_inst`); não aparece se já está instalado. Android = botão que
+  instala (`beforeinstallprompt`); iPhone = passo a passo do Safari (ou "abra no Safari"); outros = menu ⋮.
 - **Extras** (`extras.ts`): lista de compras `#lista` (sugestões por estoque de fraldas/tamanhos que estão ficando
   pequenos/higiene; marcar comprado vira item + compra; tabela `buys`), memórias `#memorias` (linha do tempo com foto,
   marcos e cartão de mêsversário em PNG para compartilhar; `memories`, fotos vão para a nuvem junto), etiquetas QR
