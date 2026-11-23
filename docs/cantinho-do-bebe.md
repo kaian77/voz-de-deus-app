@@ -96,5 +96,13 @@ conflito de versão, "só ver", apagar conta; limpa tudo no fim). Passou em 23/1
   `#etiquetas` (QR de cada parte do móvel → `/bebe/#quarto/<parte>` abre o 3D já nela; imprimir) e relatório do mês
   `#relatorio` (gastos, sono, crescimento, fraldas, roupas por tamanho, memórias; "PDF" = imprimir do navegador).
 
+- **Página de venda** `public/cantinho/index.html` em paginaspro.app.br/cantinho/ (redirect `/cantinho` no
+  `vercel.json`): vídeo do app (`demo.mp4`), imagens (`quarto/gaveta/comoda/inicio.jpg`), recursos, 3 passos, preço,
+  dúvidas, botão fixo no celular; todos os botões vão para `/bebe/`. Vídeo de divulgação 9:16 e legendas em
+  `site/cantinho/` (gravado do app quadro a quadro com o relógio falso do Playwright, legendas em HTML, música de
+  caixinha feita por código).
+- **Bebê de exemplo**: faixa "Começar com o meu bebê" (`leaveDemo`) apaga o exemplo e tudo dele e abre o cadastro;
+  cadastrar um bebê novo também tira o exemplo. App sempre no tema claro (`color-scheme: only light`).
+
 ## Ainda não existe (próximas fases)
 - Percentis da OMS (só com as tabelas oficiais); modelo do móvel feito no Blender (hoje é por código); Play Store.
