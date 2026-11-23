@@ -1,0 +1,24 @@
+# Teste de ponta a ponta da função `bebe` (Cantinho do bebê). Cria 2 contas de teste e apaga tudo no fim.
+name: Cantinho do bebê (teste)
+on:
+  workflow_dispatch:
+  push:
+    branches: [bebe-teste]
+jobs:
+  teste:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_NAME: ${{ vars.SUPABASE_PROJECT_NAME || 'supabase-citron-window' }}
+    steps:
+      - name: Endereço do Supabase
+        run: |
+          set -euo pipefail
+          REF=$(curl -sSf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" https://api.supabase.com/v1/projects | jq -r --arg n "$SUPABASE_PROJECT_NAME" '.[] | select(.name == $n) | .id' | head -1)
+          echo "SUPABASE_URL=https://$REF.supabase.co" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/bebe-test.mjs
