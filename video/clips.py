@@ -158,6 +158,61 @@ def duration(video):
         return 0.0
 
 
+VOD_HOSTS = re.compile(r"(twitch\.tv|kick\.com|youtube\.com|youtu\.be)", re.I)
+VOD_CHUNK = 1500  # live gravada: corta um pedaço de 25 min por rodada (maratona de horas não cabe de uma vez)
+
+
+def vod_duration(url):
+    out = subprocess.run(["yt-dlp", "--no-warnings", "--skip-download", "--print", "duration", url],
+                         capture_output=True, text=True, timeout=180).stdout.strip().splitlines()
+    try:
+        return float(out[0])
+    except (IndexError, ValueError):
+        return 0.0
+
+
+def latest_vods(url, n=3):
+    """Link de canal da Twitch (twitch.tv/<nome>) = as últimas lives gravadas dele; link de vídeo = ele mesmo."""
+    m = re.match(r"https?://(?:www\.|m\.)?twitch\.tv/([A-Za-z0-9_]+)/?$", url.strip())
+    if not m:
+        return [url]
+    out = subprocess.run(["yt-dlp", "--no-warnings", "--flat-playlist", "--playlist-items", f"1:{n}", "--print", "url",
+                          f"https://www.twitch.tv/{m.group(1)}/videos?filter=archives&sort=time"],
+                         capture_output=True, text=True, timeout=180).stdout.split()
+    return [u for u in out if "/videos/" in u] or [url]
+
+
+def vod_chunks(url, done_ids):
+    """Pedaços de 25 min das lives gravadas que ainda não viraram cortes (a live mais nova e o fim dela primeiro)."""
+    chunks = []
+    for vod in latest_vods(url):
+        total = vod_duration(vod)
+        if total <= 0:
+            continue
+        tag = re.sub(r"\W", "", vod.rstrip("/").split("/")[-1])[-20:]
+        for s0 in reversed(range(0, int(total), VOD_CHUNK)):
+            fid = f"vod:{tag}@{s0}"
+            if fid not in done_ids:
+                chunks.append((fid, f"live {tag} {s0 // 60}-{min(total, s0 + VOD_CHUNK) // 60:.0f} min", vod))
+    if not chunks and not done_ids:
+        raise RuntimeError("não consegui ler a live (link privado, apagado ou fora do ar?)")
+    VOD_URLS.update({c[0]: c[2] for c in chunks})
+    return [c[:2] for c in chunks]
+
+
+VOD_URLS = {}
+
+
+def download_vod(url, fid, folder):
+    url = VOD_URLS.get(fid, url)
+    s0 = int(fid.split("@")[1])
+    out = os.path.join(folder, f"vod-{s0}.mp4")
+    subprocess.run(["yt-dlp", "--no-warnings", "-q", "-f", "best[height<=1080][ext=mp4]/best[height<=1080]/best",
+                    "--download-sections", f"*{s0}-{s0 + VOD_CHUNK}", "--force-keyframes-at-cuts",
+                    "--merge-output-format", "mp4", "-o", out, url], check=True, timeout=3000)
+    return out
+
+
 def download_direct(url, folder):
     out = os.path.join(folder, "video.mp4")
     req = urllib.request.Request(url, headers={"User-Agent": "BraxStudio/1.0"})
@@ -474,9 +529,45 @@ def make_clip(source, channel, clip, video, words, logo, work, when, name, row_i
     key = f"{source['user_id']}/clips/{name}"
     thumb = yt.storage_upload(thumb_path, key + ".jpg", "image/jpeg")
     preview = yt.storage_upload(small, key + ".mp4", "video/mp4")
+    if source.get("post_to"):  # campanha só de TikTok/Instagram: post do Studio, nada no YouTube
+        social_clip(source, clip, final, thumb, preview, when, work, key, row_id)
+        log(f"    ✓ {', '.join(source['post_to'])} ({mode}) → publica {when.isoformat()}")
+        return None
     vid = upload_clip(source, channel, clip, final, thumb, preview, when, work, row_id)
     log(f"    ✓ https://youtu.be/{vid} ({mode}) → publica {when.isoformat()}")
     return vid
+
+
+def social_clip(source, clip, final, thumb, preview, when, work, key, row_id=None):
+    """Corte para Reels/TikTok: cópia leve no storage + post agendado no Studio (o publisher publica no Instagram e manda
+    para a caixa de entrada do TikTok) + linha em yt_videos (sem youtube_id) para aparecer na lista de Cortes."""
+    light = os.path.join(work, "social.mp4")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", final, "-c:v", "libx264", "-preset", "medium", "-crf", "24",
+                    "-maxrate", "4000k", "-bufsize", "8M", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", light], check=True)
+    url = yt.storage_upload(light, key + "-social.mp4", "video/mp4")
+    tags = [h if h.startswith("#") else "#" + h for h in (source.get("hashtags") or "").split() if h.strip("#")]
+    credit = (source.get("credit") or "").strip()
+    caption = "\n\n".join(x for x in [clip["youtube_title"], credit, " ".join(tags)] if x)[:2100]
+    targets = source["post_to"]
+    for platform, account in targets.items():
+        rest("POST", "posts", {
+            "user_id": source["user_id"], "title": clip["screen_title"][:120], "caption": caption,
+            "kind": "reel" if platform == "instagram" else "video", "platforms": [platform],
+            "media": [{"url": url, "type": "video"}], "scheduled_at": when.isoformat(), "status": "scheduled", "created_by": "agent",
+            "options": {"account_ids": {platform: account}, "source": "clips", "clip_source": source["id"],
+                        **({"tiktok": {"mode": "inbox"}} if platform == "tiktok" else {})},
+        })
+    row = {
+        "user_id": source["user_id"], "channel_ref": source["channel_ref"], "kind": "clip", "status": "uploaded", "error": None,
+        "topic": source["campaign"], "angle": clip.get("why"), "title": clip["youtube_title"][:100], "youtube_id": None,
+        "publish_at": when.isoformat(), "thumbnail_url": thumb, "preview_url": preview, "duration_s": round(clip["end"] - clip["start"], 1),
+        "script": {"source_id": source["id"], "file": clip.get("file"), "start": clip["start"], "end": clip["end"],
+                   "screen_title": clip["screen_title"], "social": list(targets)},
+    }
+    if row_id:
+        rest("PATCH", f"yt_videos?id=eq.{row_id}", {**row, "updated_at": now().isoformat()})
+    else:
+        rest("POST", "yt_videos", row)
 
 
 def process(source):
@@ -490,8 +581,11 @@ def process(source):
     patch_source(sid, status="processing", error=None)
     made = 0
     with tempfile.TemporaryDirectory() as work:
+        vod = bool(VOD_HOSTS.search(source["url"])) and "drive.google.com" not in source["url"]
         if "drive.google.com" in source["url"]:
             files = [f for f in drive_files(source["url"], work) if f[0] not in done_ids]
+        elif vod:  # live gravada (Twitch/Kick/YouTube) de campanha que libera os cortes
+            files = vod_chunks(source["url"], done_ids)[:1]
         else:
             files = [("direct", "video.mp4")] if "direct" not in done_ids else []
         if not files:
@@ -501,9 +595,10 @@ def process(source):
         edited = bool(source.get("edited"))  # campanha manda cortes prontos (curtos): cada um vira um corte nosso
         for fid, name in files[:6 if edited else 2]:  # vídeos novos por rodada (tempo do workflow)
             log(f"  baixando {name}…")
-            video = download(fid, name, work, source.get("mirror_url")) if fid != "direct" else download_direct(source["url"], work)
+            video = download_vod(source["url"], fid, work) if vod else \
+                download(fid, name, work, source.get("mirror_url")) if fid != "direct" else download_direct(source["url"], work)
             total = duration(video)
-            if total < 180 and len(files) > 1 and not edited:  # vinheta/teaser curto: não vale cortar se tem episódio
+            if total < 180 and len(files) > 1 and not edited and not vod:  # vinheta/teaser curto: não vale cortar se tem episódio
                 log(f"  {name} tem só {total:.0f}s, pulando")
                 drop(video)
                 continue

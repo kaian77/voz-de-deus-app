@@ -17,6 +17,10 @@
       "destination": "/jogo.html"
     },
     {
+      "source": "/treino",
+      "destination": "/treino.html"
+    },
+    {
       "source": "/montagem/:slug",
       "destination": "/montagem.html"
     },
@@ -31,6 +35,22 @@
     {
       "source": "/media/:path*",
       "destination": "https://rrlxhnmfsmknzhqpfrhr.supabase.co/storage/v1/object/public/media/:path*"
+    },
+    {
+      "source": "/bio/nutrimarinagusmao",
+      "destination": "/bio/nutrimarinagusmao/index.html"
+    },
+    {
+      "source": "/arenafight",
+      "destination": "/arenafight.html"
+    },
+    {
+      "source": "/drtino",
+      "destination": "/drtino/index.html"
+    },
+    {
+      "source": "/implante/:slug",
+      "destination": "/implante.html"
     },
     {
       "source": "/ofs",
@@ -142,6 +162,15 @@
       ]
     },
     {
+      "source": "/implante/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
       "source": "/coracao/(.*)",
       "headers": [
         {
@@ -160,7 +189,7 @@
       ]
     },
     {
-      "source": "/((?!crazygames/).*)",
+      "source": "/((?!crazygames/|treino).*)",
       "headers": [
         {
           "key": "X-Frame-Options",
@@ -199,6 +228,35 @@
         {
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/treino(.html)?",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(), geolocation=(), payment=()"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
         }
       ]
     },
@@ -251,6 +309,17 @@
         }
       ],
       "destination": "/jogo",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "(www\\.)?ofsobradinho\\.com\\.br"
+        }
+      ],
+      "destination": "/ofs",
       "permanent": false
     }
   ]

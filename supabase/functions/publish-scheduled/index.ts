@@ -23,6 +23,7 @@ import { runPaginasproJobs } from "../_shared/paginaspro-agent.ts";
 import { runProspectSends, runProspecting } from "../_shared/prospect.ts";
 import { sendPendingPush } from "../_shared/push.ts";
 import { runAgendaEmails } from "../_shared/agenda.ts";
+import { runFormaReminders } from "../_shared/forma.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
@@ -99,6 +100,8 @@ Deno.serve(async (req) => {
     const agenda = new Date().getUTCMinutes() % 10 === 1
       ? await runAgendaEmails(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }))
       : null;
+    // App de treino FORMA: lembrete na hora marcada
+    const forma = await runFormaReminders(db).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     // Avisos no celular (Studio instalado como app)
     const push = await sendPendingPush(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     // Resumo do dia no WhatsApp (só às 8h de Brasília, uma vez por dia)
@@ -115,7 +118,7 @@ Deno.serve(async (req) => {
     // PáginasPro: prévias pedidas pelo atendente (a IA leva ~1 min; roda em segundo plano)
     const paginaspro = runPaginasproJobs(db).catch((e) => [{ error: e instanceof Error ? e.message : String(e) }]);
     if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(paginaspro);
-    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, shopeesync, mlnew, sales, reviews, push, mlinbox, agenda, prospect, outbox });
+    return json({ processed, polled, autolink, videos, aivideos, briefs, digest, daily, autopilot, ppautopilot, cleanup, waha, mlsync, shopeesync, mlnew, sales, reviews, push, mlinbox, agenda, forma, prospect, outbox });
   } catch (err) {
     return handleError(err);
   }

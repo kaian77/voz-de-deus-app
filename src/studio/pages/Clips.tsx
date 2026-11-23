@@ -22,7 +22,7 @@ const SOURCE_STATUS: Record<ClipSource["status"], { label: string; tone: string 
   failed: { label: "Falhou", tone: "text-danger" },
 };
 
-const EMPTY = { campaign: "", url: "", mirror_url: "", credit: "", hashtags: "", rules: "", clips_wanted: "6", per_day: "3", edited: "" };
+const EMPTY = { campaign: "", url: "", mirror_url: "", credit: "", hashtags: "", rules: "", clips_wanted: "6", per_day: "3", edited: "", ig: "", tt: "" };
 
 const shortUrl = (v: YtVideo) => `https://youtube.com/shorts/${v.youtube_id}`;
 
@@ -30,6 +30,9 @@ export default function Clips() {
   const invalidate = useInvalidate();
   const { data: channels = [] } = useTable("yt_channels", { order: "created_at", ascending: true });
   const { data: sources = [] } = useTable("clip_sources", { order: "created_at" }, { refetchInterval: 20000 });
+  const { data: accounts = [] } = useTable("social_accounts", { order: "connected_at" });
+  const igAccounts = accounts.filter((a) => a.platform === "instagram");
+  const ttAccounts = accounts.filter((a) => a.platform === "tiktok");
   const { data: allClips = [] } = useTable("yt_videos", { order: "publish_at", limit: 100, eq: { kind: "clip" } }, { refetchInterval: 20000 });
   const videos = allClips.filter((v) => v.status !== "deleted");
   const [channelId, setChannelId] = useState("");
@@ -54,7 +57,7 @@ export default function Clips() {
         rules: r.rules || f.rules, url: r.url || f.url,
       }));
       if (r.only_link) toast.message("Peguei o link da pasta. Para o resto, cole também o texto das regras ou o link do briefing (Google Docs).");
-      else toast.success(r.url ? "Preenchido! Confira e clique em Começar." : "Preenchido! Falta o link da pasta do Drive.");
+      else toast.success(r.url ? "Preenchido! Confira e clique em Começar." : "Preenchido! Falta o link da pasta do Drive ou da live.");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -68,6 +71,7 @@ export default function Clips() {
     setForm({
       campaign: s.campaign, url: s.url, mirror_url: s.mirror_url ?? "", credit: s.credit ?? "", hashtags: s.hashtags ?? "", rules: s.rules ?? "",
       clips_wanted: String(s.clips_wanted), per_day: String(s.per_day), edited: s.edited ? "1" : "",
+      ig: s.post_to?.instagram ?? "", tt: s.post_to?.tiktok ?? "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -76,7 +80,7 @@ export default function Clips() {
     try {
       await api.invoke("ai", {
         action: "clips_add_source", id: s.id, channel_id: s.channel_ref, campaign: s.campaign, url: s.url, mirror_url: s.mirror_url ?? "", credit: s.credit ?? "",
-        hashtags: s.hashtags ?? "", rules: s.rules ?? "", clips_wanted: s.clips_wanted, per_day: s.per_day, edited: s.edited,
+        hashtags: s.hashtags ?? "", rules: s.rules ?? "", clips_wanted: s.clips_wanted, per_day: s.per_day, edited: s.edited, post_to: s.post_to,
       });
       toast.success("Recomeçou! Baixar e transcrever o episódio leva de 30 min a 2 h.");
       invalidate("clip_sources");
@@ -87,11 +91,12 @@ export default function Clips() {
 
   const add = async () => {
     if (!chosen) return toast.error("Escolha o canal de cortes");
-    if (!form.url.trim()) return toast.error("Cole o link da pasta do Drive da campanha");
+    if (!form.url.trim()) return toast.error("Cole o link da pasta do Drive ou da live gravada da campanha");
     setSending(true);
     try {
       const r = await api.invoke<{ started: boolean }>("ai", {
         action: "clips_add_source", id: editing ?? undefined, channel_id: chosen, ...form, clips_wanted: Number(form.clips_wanted), per_day: Number(form.per_day), edited: form.edited === "1",
+        post_to: { instagram: form.ig, tiktok: form.tt },
       });
       toast.success(editing ? (r.started ? "Salvo e recomeçou!" : "Campanha salva: os próximos cortes já seguem os dados novos.") : r.started ? "Começou! Baixar e transcrever o episódio leva de 30 min a 2 h." : "Na fila: roda em até 6 h.");
       setForm(EMPTY);
@@ -144,8 +149,8 @@ export default function Clips() {
               <Input value={form.campaign} onChange={(e) => set("campaign", e.target.value)} placeholder="Stream House LA" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Link da pasta (ou do vídeo) no Google Drive</Label>
-              <Input value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="https://drive.google.com/drive/folders/…" />
+              <Label className="text-xs text-muted-foreground">Link da pasta/vídeo no Drive ou da live gravada (Twitch, Kick, YouTube)</Label>
+              <Input value={form.url} onChange={(e) => set("url", e.target.value)} placeholder="Pasta do Drive ou live gravada (Twitch, Kick, YouTube)" />
             </div>
             {editing && (
               <div className="space-y-1.5">
@@ -162,6 +167,26 @@ export default function Clips() {
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Hashtags obrigatórias</Label>
                 <Input value={form.hashtags} onChange={(e) => set("hashtags", e.target.value)} placeholder="#streamhousela #cwetv" />
+              </div>
+            </div>
+            <div className="space-y-2 rounded-md border p-3">
+              <p className="text-sm">Campanha só de TikTok / Instagram Reels?</p>
+              <p className="text-xs text-muted-foreground">Escolha as contas: os cortes vão para elas (Reels publica sozinho; TikTok chega na caixa de entrada do app para você tocar em Publicar) e não vão para o YouTube. Envie o link na campanha logo depois de publicar.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Select value={form.ig || "none"} onValueChange={(v) => set("ig", v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Instagram" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Instagram: não</SelectItem>
+                    {igAccounts.map((a) => <SelectItem key={a.id} value={a.id}>@{a.username ?? a.display_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={form.tt || "none"} onValueChange={(v) => set("tt", v === "none" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="TikTok" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">TikTok: não</SelectItem>
+                    {ttAccounts.map((a) => <SelectItem key={a.id} value={a.id}>@{a.username ?? a.display_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <label className="flex items-start gap-2 rounded-md border p-3 text-sm">

@@ -234,6 +234,18 @@ Deno.serve(async (req) => {
     }
 
     if (action === "clips_add_source") {
+      // post_to: { instagram?: id, tiktok?: id } — contas do próprio dono; com alguma, o corte vai para lá e não para o YouTube
+      async function clipPostTo(db: any, userId: string, raw: unknown) {
+        const want = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+        const out: Record<string, string> = {};
+        for (const p of ["instagram", "tiktok"]) {
+          const id = String(want[p] ?? "").trim();
+          if (!id) continue;
+          const { data } = await db.from("social_accounts").select("id").eq("user_id", userId).eq("platform", p).eq("id", id).maybeSingle();
+          if (data) out[p] = data.id;
+        }
+        return Object.keys(out).length ? out : null;
+      }
       // Cortes: nova fonte (pasta/arquivo do Drive de uma campanha) entra na fila do workflow "Cortes"; com id, só atualiza os dados salvos
       const { data: channel } = await db.from("yt_channels").select("id").eq("user_id", userId).eq("id", String(input.channel_id ?? "")).maybeSingle();
       if (!channel) throw new HttpError(400, "Escolha o canal de cortes");
@@ -249,6 +261,7 @@ Deno.serve(async (req) => {
         clips_wanted: Math.min(12, Math.max(1, Number(input.clips_wanted) || 6)),
         per_day: Math.min(6, Math.max(1, Number(input.per_day) || 3)),
         edited: input.edited === true,
+        post_to: await clipPostTo(db, userId, input.post_to),
       };
       if (input.id) {
         const { data: old } = await db.from("clip_sources").select("status, mirror_url, edited").eq("id", String(input.id)).eq("user_id", userId).maybeSingle();
