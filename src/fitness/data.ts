@@ -101,9 +101,18 @@ export interface Session {
   ended: number;
   name: string;
   exercises: ExLog[];
+  /** Calorias estimadas (MET × peso × tempo). */
+  kcal?: number;
 }
 
-export interface Goals { perWeek: number; targetKg?: number; monthlyReps: number }
+export interface Goals {
+  perWeek: number; targetKg?: number; monthlyReps: number;
+  /** Cintura alvo (cm). */
+  targetWaist?: number;
+  /** Programa ativo (perder barriga em casa): começo e semana já aplicada ao plano. */
+  program?: { id: "barriga"; start: string; week: number };
+}
+export interface WaistLog { date: string; cm: number }
 export interface WeightLog { date: string; kg: number }
 
 export const DAY_NAMES = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
@@ -138,7 +147,7 @@ const DEFAULT_PLAN: WeekPlan = [
   null,
 ];
 
-const K = { plan: "forma_plan", hist: "forma_hist", goals: "forma_goals", weight: "forma_weight", prefs: "forma_prefs" };
+const K = { plan: "forma_plan", hist: "forma_hist", goals: "forma_goals", weight: "forma_weight", prefs: "forma_prefs", waist: "forma_waist" };
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -166,10 +175,13 @@ export const store = {
   setGoals: (g: Goals) => save(K.goals, g),
   weights: (): WeightLog[] => load(K.weight, [] as WeightLog[]),
   addWeight: (w: WeightLog) => save(K.weight, [...store.weights().filter((x) => x.date !== w.date), w].sort((a, b) => a.date.localeCompare(b.date))),
+  waists: (): WaistLog[] => load(K.waist, [] as WaistLog[]),
+  addWaist: (w: WaistLog) => save(K.waist, [...store.waists().filter((x) => x.date !== w.date), w].sort((a, b) => a.date.localeCompare(b.date))),
   prefs: (): Prefs => ({ ...DEFAULT_PREFS, ...load(K.prefs, {}) }),
   setPrefs: (p: Prefs) => save(K.prefs, p),
   /** Grava o que veio da nuvem sem disparar outro envio. */
-  replace: (d: { plan?: WeekPlan; goals?: Goals; weights?: WeightLog[]; prefs?: Partial<Prefs>; history?: Session[] }) => {
+  replace: (d: { plan?: WeekPlan; goals?: Goals; weights?: WeightLog[]; waists?: WaistLog[]; prefs?: Partial<Prefs>; history?: Session[] }) => {
+    if (d.waists) save(K.waist, d.waists, true);
     if (d.plan) save(K.plan, d.plan, true);
     if (d.goals) save(K.goals, d.goals, true);
     if (d.weights) save(K.weight, d.weights, true);

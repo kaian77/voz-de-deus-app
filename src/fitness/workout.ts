@@ -213,6 +213,11 @@ export async function startWorkout(o: WorkoutOpts) {
     beep("done");
     const before = records(store.history());
     const session: Session = { id: uid(), date: today(), started, ended: Date.now(), name: o.name, exercises: logs.filter((l) => l.sets.length) };
+    // calorias: MET médio dos exercícios × peso × horas (peso anotado em Metas; sem peso, 75 kg)
+    const kg = store.weights().slice(-1)[0]?.kg ?? 75;
+    const mets = session.exercises.map((e) => metOf(e.ex));
+    const kcal = Math.round(((mets.reduce((a, b) => a + b, 0) / Math.max(1, mets.length)) * kg * (Date.now() - started)) / 3600000);
+    session.kcal = kcal;
     if (session.exercises.length) { store.addSession(session); saveWorkout(session); }
     const after = records(store.history());
     const prs = Object.entries(after).filter(([k, v]) => (v ?? 0) > ((before as Record<string, number>)[k] ?? 0) && (before as Record<string, number>)[k] !== undefined);
@@ -227,10 +232,6 @@ export async function startWorkout(o: WorkoutOpts) {
     let total = 0, ok = 0;
     for (const e of session.exercises) for (const s of e.sets) { total += s.reps; ok += s.good; }
     const mins = Math.max(1, Math.round((Date.now() - started) / 60000));
-    // calorias: MET médio dos exercícios × peso × horas (peso anotado em Metas; sem peso, 75 kg)
-    const kg = store.weights().slice(-1)[0]?.kg ?? 75;
-    const mets = session.exercises.map((e) => metOf(e.ex));
-    const kcal = Math.round(((mets.reduce((a, b) => a + b, 0) / Math.max(1, mets.length)) * kg * (Date.now() - started)) / 3600000);
     modal.hidden = false;
     modal.innerHTML = `
       <div class="sum">
