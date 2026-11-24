@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/bebe/",
+      "destination": "/bebe.html"
+    },
+    {
       "source": "/3d/:slug",
       "destination": "/tour3d.html"
     },
@@ -189,7 +193,7 @@
       ]
     },
     {
-      "source": "/((?!crazygames/|treino).*)",
+      "source": "/((?!crazygames/|treino|bebe).*)",
       "headers": [
         {
           "key": "X-Frame-Options",
@@ -286,9 +290,48 @@
           "value": "no-cache"
         }
       ]
+    },
+    {
+      "source": "/bebe(/|.html)?",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(), geolocation=(), payment=()"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        }
+      ]
     }
   ],
   "redirects": [
+    {
+      "source": "/cantinho",
+      "destination": "/cantinho/",
+      "permanent": false
+    },
+    {
+      "source": "/bebe",
+      "destination": "/bebe/",
+      "permanent": false
+    },
     {
       "source": "/",
       "has": [

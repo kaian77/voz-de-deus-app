@@ -36,14 +36,22 @@ export async function generateJSON<T extends z.ZodTypeAny>(
   prompt: string,
   effort: Effort = "medium",
   images: string[] = [],
+  /** modelo só desta chamada (ex.: o mais barato para tarefa simples); vazio = o padrão */
+  model?: string,
 ): Promise<z.infer<T>> {
   // Imagens por URL pública (ex.: fotos de produto no storage do Studio)
   prompt = wellFormed(prompt);
   const content = images.length
-    ? [...images.slice(0, 8).map((url) => ({ type: "image" as const, source: { type: "url" as const, url } })), { type: "text" as const, text: prompt }]
+    ? [...images.slice(0, 8).map((url) => {
+        // aceita também a foto mandada direto pelo celular ("data:image/jpeg;base64,...")
+        const m = url.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,(.+)$/);
+        return m
+          ? { type: "image" as const, source: { type: "base64" as const, media_type: m[1] as "image/jpeg", data: m[2] } }
+          : { type: "image" as const, source: { type: "url" as const, url } };
+      }), { type: "text" as const, text: prompt }]
     : prompt;
   const response = await anthropic().messages.parse({
-    model: MODEL(),
+    model: model || MODEL(),
     max_tokens: 16000,
     system: wellFormed(system),
     messages: [{ role: "user", content }],
