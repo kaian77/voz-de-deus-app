@@ -35,18 +35,18 @@ export async function api<T = Record<string, unknown>>(action: string, data: Rec
 }
 
 function localData() {
-  return { plan: store.plan(), goals: store.goals(), weights: store.weights(), prefs: { name: store.prefs().name } };
+  return { plan: store.plan(), goals: store.goals(), weights: store.weights(), waists: store.waists(), prefs: { name: store.prefs().name } };
 }
 
 /** Junta o que veio da nuvem com o que está no aparelho. */
 function merge(m: Me, firstLogin: boolean) {
   cloud.me = m;
-  const d = m.data as { plan?: WeekPlan; goals?: never; weights?: never };
+  const d = m.data as { plan?: WeekPlan; goals?: never; weights?: never; waists?: never };
   const cloudEmpty = !d.plan && !d.goals;
   if (cloudEmpty || (firstLogin && !d.plan)) {
     api("save_data", { data: localData() }).catch(() => {});
   } else {
-    store.replace({ plan: d.plan, goals: d.goals, weights: d.weights, prefs: { name: m.user.name } });
+    store.replace({ plan: d.plan, goals: d.goals, weights: d.weights, waists: d.waists, prefs: { name: m.user.name } });
   }
   // treinos: junta os dois lados pelo id
   const local = store.history();

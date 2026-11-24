@@ -8,6 +8,7 @@ import { shareVideo, startWorkout } from "./workout";
 import { recordings } from "./rec";
 import { drawTonhao, TONHAO } from "./tonhao";
 import { CREDIT } from "./exart";
+import { PROGRAM_WEEKS, programWeek, startProgram, stopProgram, syncProgram, tipOfDay } from "./program";
 import { social, perfil, socialClick, boot, resetSocial } from "./social";
 
 export type Tab = "hoje" | "treinos" | "agenda" | "metas" | "videos" | "ranking" | "perfil" | "biblioteca";
@@ -30,7 +31,8 @@ export function goTab(t: Tab) {
   tab = t;
   if (t === "ranking") resetSocial();
   history.replaceState(null, "", `${location.pathname}?aba=${t}`);
-  render();
+  syncProgram();
+render();
 boot();
   scrollTo(0, 0);
 }
@@ -48,6 +50,36 @@ export function render() {
 }
 
 import { deleteWorkout, saveWorkout } from "./cloud";
+
+// ---------------- Programa "Perder barriga em casa" ----------------
+function weekKcal(hist: Session[]) {
+  const ws = weekStart();
+  return hist.filter((s) => parseDay(s.date) >= ws).reduce((a, s) => a + (s.kcal ?? 0), 0);
+}
+
+function programCard() {
+  const g = store.goals();
+  const wa = store.waists();
+  const first = wa[0], last = wa[wa.length - 1];
+  const lost = first && last && wa.length > 1 ? +(first.cm - last.cm).toFixed(1) : 0;
+  if (!g.program) return `
+    <section class="card program">
+      <h2>🔥 Perder barriga em casa</h2>
+      <p>Programa de <b>4 semanas</b>, sem aparelho, 6 dias por semana: treino que queima (polichinelo, burpee, agachamento) + abdômen e prancha. Cada semana fica um pouco mais forte, e o app troca o treino sozinho.</p>
+      <button class="btn big" data-program="start">Começar o programa</button>
+      <p class="hint">Isso troca o seu treino da semana pelo do programa.</p>
+    </section>`;
+  const w = programWeek(g.program.start);
+  const done = w > PROGRAM_WEEKS;
+  return `
+    <section class="card program">
+      <div class="row between"><h2>🔥 Perder barriga em casa</h2><span class="tag ok">${done ? "Fase 2" : `Semana ${w}/${PROGRAM_WEEKS}`}</span></div>
+      <div class="bar"><i style="width:${Math.min(100, Math.round((Math.min(w, PROGRAM_WEEKS) / PROGRAM_WEEKS) * 100))}%"></i></div>
+      ${last ? `<p>Cintura: <b>${last.cm} cm</b>${lost > 0 ? ` · <b class="good">−${lost} cm</b> desde o começo 🎉` : lost < 0 ? ` · +${-lost} cm desde o começo` : ""}${g.targetWaist ? ` · meta ${g.targetWaist} cm` : ""}</p>` : `<p class="muted">Meça a cintura na altura do umbigo e anote em Metas: é o melhor jeito de ver a barriga indo embora.</p>`}
+      ${done ? `<p class="muted">Você terminou as 4 semanas! O programa continua subindo devagar.</p>` : ""}
+      <div class="row"><button class="btn ghost small" data-tab="metas">📏 Anotar cintura</button><button class="link" data-program="stop">Sair do programa</button></div>
+    </section>`;
+}
 
 // ---------------- Hoje ----------------
 function hoje() {
@@ -69,9 +101,10 @@ function hoje() {
       <div class="chips">
         <div class="chip"><b>🔥 ${streak(hist)}</b><span>dias seguidos</span></div>
         <div class="chip"><b>${weekDone}/${goals.perWeek}</b><span>treinos na semana</span></div>
-        <div class="chip"><b>${hist.length}</b><span>treinos no total</span></div>
+        <div class="chip"><b>${weekKcal(hist)}</b><span>kcal na semana</span></div>
       </div>
     </header>
+    ${programCard()}
     <section class="card today">
       <div class="row between"><h2>${DAY_NAMES[d]}${day ? ` · ${esc(day.name)}` : ""}</h2>${doneToday ? `<span class="tag ok">✓ Feito</span>` : ""}</div>
       ${day && day.items.length ? `
@@ -82,6 +115,10 @@ function hoje() {
         <button class="btn big" data-go="today">▶ Começar treino</button>
         <p class="hint">🎧 Coloque o fone, apoie o celular a 2–3 m e deixe o corpo inteiro aparecer na tela.</p>`
       : `<p class="muted">Hoje é dia de descanso. 😴 Quer treinar mesmo assim? Escolha um exercício abaixo ou monte o dia em Treinos.</p>`}
+    </section>
+    <section class="card tip">
+      <h2>💡 Dica do dia</h2>
+      <p>${tipOfDay()}</p>
     </section>
     <section class="card">
       <h2>Treino livre</h2>
@@ -177,6 +214,7 @@ function treinos() {
       <h2>Modelos prontos</h2>
       <p class="muted">Troca a semana inteira (dá para editar depois).</p>
       <div class="presets">
+        <button class="btn" data-program="start">🔥 Perder barriga em casa (4 semanas)</button>
         <button class="btn ghost" data-preset="abc">ABC (3 dias)</button>
         <button class="btn ghost" data-preset="casa">Em casa, sem aparelho</button>
         <button class="btn ghost" data-preset="calis">Calistenia (barra)</button>
@@ -291,6 +329,17 @@ function metas() {
       </div>
     </section>
     <section class="card">
+      <h2>📏 Cintura (barriga)</h2>
+      <p class="muted">Meça 1 vez por semana, de manhã, na altura do umbigo, sem apertar a fita.</p>
+      ${(() => { const wa = store.waists(); const a = wa[0], b = wa[wa.length - 1]; return b ? `<p>Atual: <b>${b.cm} cm</b>${a && wa.length > 1 ? ` · começou com ${a.cm} cm (${a.cm - b.cm >= 0 ? "−" : "+"}${Math.abs(+(a.cm - b.cm).toFixed(1))} cm)` : ""}${g.targetWaist ? ` · meta <b>${g.targetWaist} cm</b>` : ""}</p>` : ""; })()}
+      <canvas id="cchart" height="140"></canvas>
+      <div class="nums">
+        <label>Cintura hoje (cm)<input type="number" step="0.5" min="40" max="200" id="w-cm" inputmode="decimal" placeholder="${store.waists().slice(-1)[0]?.cm ?? "95"}"></label>
+        <label>Meta (cm)<input type="number" step="0.5" min="40" max="200" id="g-cm" value="${g.targetWaist ?? ""}" inputmode="decimal"></label>
+      </div>
+      <button class="btn ghost" data-waist>Salvar cintura</button>
+    </section>
+    <section class="card">
       <h2>Peso</h2>
       ${lastW ? `<p>Atual: <b>${lastW.kg} kg</b>${g.targetKg ? ` · meta <b>${g.targetKg} kg</b> · faltam <b>${Math.abs(+(lastW.kg - g.targetKg).toFixed(1))} kg</b>` : ""}</p>` : `<p class="muted">Anote seu peso para acompanhar.</p>`}
       <canvas id="wchart" height="140"></canvas>
@@ -317,13 +366,17 @@ function metas() {
 }
 
 function drawWeight() {
-  const c = document.getElementById("wchart") as HTMLCanvasElement | null;
-  const w = store.weights().slice(-30);
+  drawLine("wchart", store.weights().slice(-30).map((x) => ({ date: x.date, v: x.kg })), store.goals().targetKg, "kg");
+  drawLine("cchart", store.waists().slice(-30).map((x) => ({ date: x.date, v: x.cm })), store.goals().targetWaist, "cm");
+}
+
+function drawLine(id: string, pts: { date: string; v: number }[], tgt: number | undefined, unit: string) {
+  const c = document.getElementById(id) as HTMLCanvasElement | null;
+  const w = pts.map((p) => ({ kg: p.v }));
   if (!c) return;
   if (w.length < 2) { c.style.display = "none"; return; }
   const W = (c.width = c.clientWidth * 2), H = (c.height = 280);
   const g = c.getContext("2d")!;
-  const tgt = store.goals().targetKg;
   const vals = w.map((x) => x.kg).concat(tgt ? [tgt] : []);
   const lo = Math.min(...vals) - 1, hi = Math.max(...vals) + 1;
   const X = (i: number) => 30 + (i / (w.length - 1)) * (W - 60);
@@ -334,7 +387,7 @@ function drawWeight() {
   g.fillStyle = "#fff"; g.font = "600 22px system-ui";
   w.forEach((x, i) => { g.beginPath(); g.arc(X(i), Y(x.kg), 6, 0, 7); g.fill(); });
   g.fillText(`${w[0].kg}`, X(0) - 10, H - 4);
-  g.textAlign = "right"; g.fillText(`${w[w.length - 1].kg} kg`, W - 20, H - 4);
+  g.textAlign = "right"; g.fillText(`${w[w.length - 1].kg} ${unit}`, W - 20, H - 4);
 }
 
 // ---------------- Vídeos ----------------
@@ -379,6 +432,21 @@ app.addEventListener("click", (e) => {
   const d = el.dataset;
   if (d.tab) { goTab(d.tab as Tab); return; }
   if (socialClick(el)) return;
+  if (d.program === "start") {
+    if (store.history().length && !confirm("Começar o programa? Ele troca o treino da sua semana.")) return;
+    startProgram(today());
+    render();
+    return;
+  }
+  if (d.program === "stop") { if (confirm("Sair do programa? Seu treino atual fica como está.")) { stopProgram(); render(); } return; }
+  if (d.waist !== undefined) {
+    const cm = +(document.getElementById("w-cm") as HTMLInputElement).value;
+    const tgt = +(document.getElementById("g-cm") as HTMLInputElement).value;
+    if (cm) store.addWaist({ date: today(), cm });
+    store.setGoals({ ...store.goals(), targetWaist: tgt || undefined });
+    render();
+    return;
+  }
   if (d.quick) {
     const e = EXERCISES[d.quick];
     go(e.name, [{ ex: e.id, sets: e.timed ? 1 : 3, reps: e.timed ? 600 : 12, rest: 60 }]);
