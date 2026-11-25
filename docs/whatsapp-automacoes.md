@@ -14,6 +14,7 @@ Leia só este arquivo para mexer no atendimento automático do WhatsApp e do Ins
 
 ## Casos corrigidos
 - 16/11/2026 — Lory (revendedora) perguntou "guardou os meus?" e a IA mandou link de produto. Correção: trava de conversa continuada (2 h) + regra "ENTENDA ANTES DE RESPONDER"; IA desligada na conversa dela.
+- 25/11/2026 — Cliente no WhatsApp disse que comprou presencial ("aqui presencial ontem") e a IA respondeu que ia "chamar alguém da equipe pra confirmar esse pedido"; ela já tinha retirado na hora. Correção: seção "COMPRA PRESENCIAL" no `agent_instructions` — compra presencial não é pedido do site (nada de número de pedido/rastreio); só contar que comprou, agradecer ou mandar foto = não responde (ignore); problema com a compra presencial = handoff calado; só responde pergunta clara de produto/compra nova. O handoff também não diz mais "chamar alguém da equipe".
 
 ## Estado atual (23/11/2026)
 - WhatsApp da loja conectado: 556195175906 ("Brax pins mania"), pelo WAHA no **Render** grátis: serviço `waha:gows`, https://waha-gows-0d5r.onrender.com, sessão `default`, motor GOWS. Roda 24 h na nuvem (não precisa do PC do dono). `wahaKeepAlive` no cron pinga e religa a sessão. Se a sessão cair (FAILED), o dono escaneia o QR de novo no painel do WAHA (chave = `WAHA_API_KEY` nas variáveis do serviço no Render).
