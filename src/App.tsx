@@ -28,6 +28,7 @@ import Accounts from "./studio/pages/Accounts";
 import ClaudeApi from "./studio/pages/ClaudeApi";
 import Messages from "./studio/pages/Messages";
 import Orders from "./studio/pages/Orders";
+import Packing from "./studio/pages/Packing";
 import Products from "./studio/pages/Products";
 import Legal from "./studio/pages/Legal";
 import StrategyPage from "./studio/pages/Strategy";
@@ -48,6 +49,8 @@ const App = () => (
       <Router>
         <Routes>
           <Route path="/" element={<Navigate to="/studio" replace />} />
+          {/* Separação abre em tela cheia, sem o menu do Studio, para usar no celular na bancada */}
+          <Route path="/studio/separacao" element={<AuthGate><Packing /></AuthGate>} />
           <Route path="/studio" element={<AuthGate><StudioLayout /></AuthGate>}>
             <Route index element={<Dashboard />} />
             <Route path="criar" element={<Composer />} />

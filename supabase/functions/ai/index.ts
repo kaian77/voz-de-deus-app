@@ -29,6 +29,7 @@ import { ttCreatorInfo, ttTokenFor } from "../_shared/tiktok.ts";
 import { notify, pushPublicKey, sendPendingPush } from "../_shared/push.ts";
 import { ML_SITES, runMlManualSearch } from "../_shared/manual-leads.ts";
 import { isBrax } from "../_shared/brand.ts";
+import { packingQueue } from "../_shared/packing.ts";
 import { crmReply, crmSent, leadOffer, previewCheckout } from "../_shared/prospect.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
@@ -88,6 +89,7 @@ Deno.serve(async (req) => {
       if (!account) throw new HttpError(404, "Conecte o TikTok em Contas");
       return json(await ttCreatorInfo(await ttTokenFor(db, account.id)));
     }
+    if (action === "packing_queue") return json(await packingQueue(db, userId));
     if (action === "store_orders") {
       const store = await storeFor(db, userId);
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
