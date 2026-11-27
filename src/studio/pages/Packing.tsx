@@ -2,9 +2,11 @@
 // Junta os pedidos a embalar do Mercado Livre, da Shopee e do site. Lendo o código de barras da etiqueta
 // (câmera do celular ou leitor USB), a tela abre aquele pedido e fala tudo.
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, functionsBaseUrl, isDemo } from "../lib/api";
+import { SUPABASE_ANON_KEY } from "../lib/config";
+import { demoInvoke } from "../lib/demo";
 
 type Channel = "mercadolivre" | "shopee" | "nuvemshop";
 type Item = { title: string; short: string; qty: number; variation?: string; image?: string };
@@ -177,10 +179,72 @@ function LiveCamera({ onRead, onRetry }: { onRead: (texts: string[]) => void; on
   );
 }
 
+// Fila pelo link da equipe (sem login): a chave do link é a única permissão, e só lê os pacotes
+async function sharedQueue(key: string): Promise<Queue> {
+  if (isDemo) return demoInvoke("ai", { action: "packing_queue" }) as Queue;
+  const res = await fetch(`${functionsBaseUrl}/packing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_ANON_KEY}`, apikey: SUPABASE_ANON_KEY },
+    body: JSON.stringify({ key }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ?? "Não consegui buscar os pedidos agora.");
+  return body as Queue;
+}
+
+// Link da equipe, na tela de início do dono: copiar e trocar (trocar desliga o link antigo)
+function TeamLink() {
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const url = key ? `${location.origin}/studio/separacao/${key}` : "";
+  const load = async (fresh: boolean) => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await api.invoke<{ key: string }>("ai", { action: fresh ? "packing_link_new" : "packing_link" });
+      setKey(r.key);
+      if (fresh) setMsg("Link trocado. O link antigo não abre mais.");
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setMsg("Link copiado. Mande para quem embala os pedidos.");
+    } catch {
+      setMsg("Segure o link acima para copiar.");
+    }
+  };
+  return (
+    <div className="team">
+      <b>Link da equipe</b>
+      <span>Abre esta tela sem login, só com a lista de pacotes. Não abre o resto do Studio.</span>
+      {!key ? (
+        <button type="button" className="tbtn" disabled={busy} onClick={() => load(false)}>{busy ? "Gerando…" : "Gerar link da equipe"}</button>
+      ) : (
+        <>
+          <code>{url}</code>
+          <div className="trow">
+            <button type="button" className="tbtn" onClick={copy}>Copiar link</button>
+            <button type="button" className="tbtn alt" disabled={busy} onClick={() => { if (confirm("Trocar o link? Quem tem o link antigo não vai conseguir abrir mais.")) load(true); }}>Trocar link</button>
+          </div>
+        </>
+      )}
+      {msg && <span className="tmsg" role="status">{msg}</span>}
+    </div>
+  );
+}
+
 export default function Packing() {
+  const { key: shareKey } = useParams();
+  const shared = !!shareKey;
   const q = useQuery({
-    queryKey: ["packing-queue"],
-    queryFn: () => api.invoke<Queue>("ai", { action: "packing_queue" }),
+    queryKey: ["packing-queue", shareKey ?? ""],
+    queryFn: () => (shareKey ? sharedQueue(shareKey) : api.invoke<Queue>("ai", { action: "packing_queue" })),
     retry: false,
     refetchInterval: 3 * 60 * 1000,
     staleTime: 60 * 1000,
@@ -206,6 +270,19 @@ export default function Packing() {
     document.head.appendChild(l);
     window.speechSynthesis?.getVoices();
   }, []);
+
+  useEffect(() => {
+    // Link da equipe: não aparece em buscador e não manda o endereço com a chave para outros sites
+    if (!shared) return;
+    const m = document.createElement("meta");
+    m.name = "robots";
+    m.content = "noindex, nofollow";
+    const r = document.createElement("meta");
+    r.name = "referrer";
+    r.content = "no-referrer";
+    document.head.append(m, r);
+    return () => { m.remove(); r.remove(); };
+  }, [shared]);
 
   const show = useCallback((o: Order) => {
     setOrder(o);
@@ -259,7 +336,12 @@ export default function Packing() {
           <h2>Separação de pedidos</h2>
           <p>Mostre a etiqueta para a câmera e a página fala o que vai no pacote. Deixe esta página aberta e o som do celular ligado.</p>
           <button type="button" onClick={() => { speak("Pronto. Pode mostrar a etiqueta."); setStarted(true); }}>Começar</button>
-          <Link to="/studio" className="back">Voltar ao Studio</Link>
+          {shared ? (q.isError && <p className="alert" role="alert">{(q.error as Error).message}</p>) : (
+            <>
+              <TeamLink />
+              <Link to="/studio" className="back">Voltar ao Studio</Link>
+            </>
+          )}
         </div>
       </div>
     );
@@ -270,7 +352,7 @@ export default function Packing() {
       <style>{CSS}</style>
       <header>
         <div className="top">
-          <Link to="/studio" className="back" aria-label="Voltar ao Studio">←</Link>
+          {!shared && <Link to="/studio" className="back" aria-label="Voltar ao Studio">←</Link>}
           <h1>Separação</h1>
           <form className="go" onSubmit={goTyped}>
             <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Nº ou etiqueta" aria-label="Número do pedido ou código da etiqueta" enterKeyHint="go" />
@@ -278,7 +360,7 @@ export default function Packing() {
           <button type="button" className="vbtn" aria-pressed={camera} onClick={() => setCamera(!camera)}>{camera ? "Câmera ligada" : "Câmera desligada"}</button>
         </div>
         <p className="counts">
-          {q.isLoading ? "Buscando os pedidos…" : q.isError ? "Não consegui buscar os pedidos agora." : (
+          {q.isLoading ? "Buscando os pedidos…" : q.isError ? (q.error as Error).message || "Não consegui buscar os pedidos agora." : (
             <>{all.length} pacotes a enviar: {counts.map((c) => `${CH[c.channel].label} ${c.error ? "com erro" : c.connected ? c.count : "não conectado"}`).join(" · ")}</>
           )}
         </p>
@@ -385,6 +467,14 @@ const CSS = `
 .pk .start{min-height:100dvh;display:grid;place-content:center;gap:16px;padding:24px;max-width:460px;margin:0 auto;text-align:center}
 .pk .start h2{font:800 42px/1.05 "Barlow Condensed",sans-serif;margin:0}
 .pk .start p{margin:0;font-size:18px}
-.pk .start button{min-height:68px;border:3px solid var(--ink);background:var(--ink);color:var(--card);border-radius:8px;font:800 28px "Barlow Condensed",sans-serif}
+.pk .start>button{min-height:68px;border:3px solid var(--ink);background:var(--ink);color:var(--card);border-radius:8px;font:800 28px "Barlow Condensed",sans-serif}
+.pk .team{display:grid;gap:8px;text-align:left;background:var(--card);border:2px solid var(--ink);border-radius:8px;padding:14px;margin-top:8px}
+.pk .team b{font:800 22px "Barlow Condensed",sans-serif}
+.pk .team span{font-size:15px;color:var(--muted)}
+.pk .team code{display:block;font:500 13px/1.35 ui-monospace,monospace;word-break:break-all;background:var(--chip);padding:8px;border-radius:6px;-webkit-user-select:all;user-select:all}
+.pk .team .trow{display:flex;gap:8px}
+.pk .team .tbtn{flex:1;min-height:48px;border:2px solid var(--ink);background:var(--ink);color:var(--card);border-radius:8px;font:600 18px Barlow,sans-serif}
+.pk .team .tbtn.alt{background:transparent;color:var(--ink)}
+.pk .team .tmsg{color:var(--ink);font-weight:600}
 .pk .bar .rep{flex:1;background:var(--card);color:var(--ink);border:0}
 `;

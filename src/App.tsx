@@ -51,6 +51,7 @@ const App = () => (
           <Route path="/" element={<Navigate to="/studio" replace />} />
           {/* Separação abre em tela cheia, sem o menu do Studio, para usar no celular na bancada */}
           <Route path="/studio/separacao" element={<AuthGate><Packing /></AuthGate>} />
+          <Route path="/studio/separacao/:key" element={<Packing />} />
           <Route path="/studio" element={<AuthGate><StudioLayout /></AuthGate>}>
             <Route index element={<Dashboard />} />
             <Route path="criar" element={<Composer />} />
