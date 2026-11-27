@@ -58,3 +58,7 @@ verify_jwt = false
 # App Cantinho do bebê (/bebe/): conta própria (e-mail + senha) e família na nuvem
 [functions.bebe]
 verify_jwt = false
+
+# Separação de pedidos pela equipe, sem login (link com chave secreta, só lê a fila de pacotes)
+[functions.packing]
+verify_jwt = false

@@ -90,6 +90,18 @@ Deno.serve(async (req) => {
       return json(await ttCreatorInfo(await ttTokenFor(db, account.id)));
     }
     if (action === "packing_queue") return json(await packingQueue(db, userId));
+    if (action === "packing_link" || action === "packing_link_new") {
+      // Link da equipe para a Separação sem login; "novo" troca a chave e o link antigo para de funcionar
+      const { data: s } = await db.from("brand_settings").select("packing_key").eq("user_id", userId).maybeSingle();
+      let key = s?.packing_key as string | null | undefined;
+      if (!key || action === "packing_link_new") {
+        const bytes = crypto.getRandomValues(new Uint8Array(24));
+        key = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        const { error } = await db.from("brand_settings").upsert({ user_id: userId, packing_key: key }, { onConflict: "user_id" });
+        if (error) throw new HttpError(500, error.message);
+      }
+      return json({ key });
+    }
     if (action === "store_orders") {
       const store = await storeFor(db, userId);
       if (!store) throw new HttpError(404, "Conecte a Nuvemshop em Contas");
