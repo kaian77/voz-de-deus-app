@@ -75,7 +75,7 @@ function findOrder(orders: Order[], raw: string): Order | undefined {
 }
 
 /** Câmera sempre ligada: cada etiqueta lida chama onRead. A mesma etiqueta só conta de novo depois de 6 segundos. */
-function LiveCamera({ onRead }: { onRead: (text: string) => void }) {
+function LiveCamera({ onRead, onRetry }: { onRead: (text: string) => void; onRetry: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const read = useRef(onRead);
   read.current = onRead;
@@ -106,7 +106,7 @@ function LiveCamera({ onRead }: { onRead: (text: string) => void }) {
         if (!alive) stop();
       } catch (e) {
         setError(e instanceof Error && /Permission|NotAllowed/i.test(e.name + e.message)
-          ? "O navegador não deixou usar a câmera. Libere a câmera para este site e recarregue a página."
+          ? "A câmera está bloqueada. Abra no Chrome e permita a câmera (cadeado ao lado do endereço → Permissões)."
           : "Não consegui abrir a câmera. Abra esta página no Chrome do celular.");
       }
     })();
@@ -120,6 +120,7 @@ function LiveCamera({ onRead }: { onRead: (text: string) => void }) {
       <video ref={video} playsInline muted />
       <div className="aim" aria-hidden />
       <p>{error || "Mostre o código de barras da etiqueta"}</p>
+      {error && <button type="button" className="retry" onClick={onRetry}>Tentar de novo</button>}
     </div>
   );
 }
@@ -134,6 +135,7 @@ export default function Packing() {
   });
   const [started, setStarted] = useState(false);
   const [camera, setCamera] = useState(true);
+  const [camTry, setCamTry] = useState(0);
   const [order, setOrder] = useState<Order | null>(null);
   const [miss, setMiss] = useState("");
   const [typed, setTyped] = useState("");
@@ -219,7 +221,7 @@ export default function Packing() {
       </header>
 
       <main>
-        {camera && <LiveCamera onRead={lookup} />}
+        {camera && <LiveCamera key={camTry} onRead={lookup} onRetry={() => setCamTry((n) => n + 1)} />}
         {miss && <p className="alert" role="alert">Não achei o pedido dessa etiqueta ({miss.slice(0, 40)}). Tente o outro código da etiqueta ou digite o número do pedido.</p>}
         {order && (
           <section aria-live="polite">
@@ -307,6 +309,7 @@ const CSS = `
 .pk .cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .pk .cam .aim{position:absolute;left:10%;right:10%;top:28%;bottom:28%;border:3px solid #fff;border-radius:8px;box-shadow:0 0 0 100vmax rgba(0,0,0,.3)}
 .pk .cam p{position:absolute;left:8px;right:8px;bottom:8px;margin:0;color:#fff;font:600 16px/1.3 Barlow,sans-serif;text-align:center}
+.pk .cam .retry{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);min-height:52px;padding:0 20px;border:0;border-radius:8px;background:#fff;color:#000;font:800 22px "Barlow Condensed",sans-serif}
 .pk .recent{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:18px;font-size:15px;color:var(--muted)}
 .pk .recent button{height:40px;padding:0 12px;border:2px solid var(--ink);background:var(--chip);border-radius:6px;font-weight:600;color:var(--ink)}
 .pk .start{min-height:100dvh;display:grid;place-content:center;gap:16px;padding:24px;max-width:460px;margin:0 auto;text-align:center}
