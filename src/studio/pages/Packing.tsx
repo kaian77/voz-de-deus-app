@@ -74,53 +74,105 @@ function findOrder(orders: Order[], raw: string): Order | undefined {
   return undefined;
 }
 
-/** Câmera sempre ligada: cada etiqueta lida chama onRead. A mesma etiqueta só conta de novo depois de 6 segundos. */
-function LiveCamera({ onRead, onRetry }: { onRead: (text: string) => void; onRetry: () => void }) {
+const FORMATS = ["code_128", "qr_code", "code_39", "data_matrix", "itf"] as const;
+type Detector = { detect: (src: CanvasImageSource) => Promise<{ rawValue: string }[]> };
+
+/** Leitor rápido: o do próprio navegador quando existe (Chrome no Android), senão o zxing em WebAssembly (iPhone e o resto). */
+async function makeDetector(): Promise<Detector> {
+  const Native = (window as unknown as { BarcodeDetector?: { new (o: { formats: string[] }): Detector; getSupportedFormats(): Promise<string[]> } }).BarcodeDetector;
+  if (Native) {
+    const ok = await Native.getSupportedFormats().catch(() => [] as string[]);
+    if (ok.includes("code_128") && ok.includes("qr_code")) return new Native({ formats: FORMATS.filter((f) => ok.includes(f)) });
+  }
+  const [{ BarcodeDetector, setZXingModuleOverrides }, { default: wasmUrl }] = await Promise.all([
+    import("barcode-detector/ponyfill"),
+    import("zxing-wasm/reader/zxing_reader.wasm?url"),
+  ]);
+  setZXingModuleOverrides({ locateFile: (path: string, prefix: string) => (path.endsWith(".wasm") ? wasmUrl : prefix + path) });
+  return new BarcodeDetector({ formats: [...FORMATS] }) as unknown as Detector;
+}
+
+/** Câmera sempre ligada: cada leitura chama onRead com os códigos achados no quadro. O mesmo código só conta de novo depois de 6 segundos. */
+function LiveCamera({ onRead, onRetry }: { onRead: (texts: string[]) => void; onRetry: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const read = useRef(onRead);
   read.current = onRead;
   const [error, setError] = useState("");
+  const [torch, setTorch] = useState<null | boolean>(null);
+  const track = useRef<MediaStreamTrack | null>(null);
   useEffect(() => {
-    let stop: (() => void) | undefined;
     let alive = true;
-    let lastText = "";
-    let lastAt = 0;
+    let stream: MediaStream | null = null;
+    const seen = new Map<string, number>();
     (async () => {
       try {
-        const { BrowserMultiFormatReader } = await import("@zxing/browser");
-        const reader = new BrowserMultiFormatReader();
-        const controls = await reader.decodeFromConstraints(
-          { video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } } },
-          video.current!,
-          (result) => {
-            if (!result || !alive) return;
-            const text = result.getText();
-            if (text === lastText && Date.now() - lastAt < 6000) return;
-            lastText = text;
-            lastAt = Date.now();
-            navigator.vibrate?.(100);
-            read.current(text);
-          },
-        );
-        stop = () => controls.stop();
-        if (!alive) stop();
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        });
+        if (!alive) return stream.getTracks().forEach((t) => t.stop());
+        const v = video.current!;
+        v.srcObject = stream;
+        await v.play().catch(() => undefined);
+        const t = stream.getVideoTracks()[0];
+        track.current = t;
+        const caps = (t.getCapabilities?.() ?? {}) as Record<string, unknown>;
+        const adv: Record<string, unknown>[] = [];
+        if (Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous")) adv.push({ focusMode: "continuous" });
+        if (adv.length) await t.applyConstraints({ advanced: adv } as MediaTrackConstraints).catch(() => undefined);
+        if (caps.torch) setTorch(false);
+        const detector = await makeDetector();
+        // Quadro inteiro e o miolo ampliado, alternando: o miolo pega código pequeno ou longe
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+        let crop = false;
+        while (alive) {
+          if (v.readyState >= 2 && v.videoWidth) {
+            let src: CanvasImageSource = v;
+            if (crop) {
+              const w = v.videoWidth, h = v.videoHeight;
+              const cw = Math.round(w * 0.8), ch = Math.round(h * 0.5);
+              canvas.width = cw;
+              canvas.height = ch;
+              ctx.drawImage(v, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, cw, ch);
+              src = canvas;
+            }
+            crop = !crop;
+            const found = await detector.detect(src).catch(() => []);
+            const now = Date.now();
+            const fresh = [...new Set(found.map((b) => b.rawValue).filter(Boolean))].filter((x) => now - (seen.get(x) ?? 0) > 6000);
+            if (fresh.length) {
+              fresh.forEach((x) => seen.set(x, now));
+              navigator.vibrate?.(80);
+              read.current(fresh);
+            }
+          }
+          await new Promise((r) => setTimeout(r, 60));
+        }
       } catch (e) {
-        setError(e instanceof Error && /Permission|NotAllowed/i.test(e.name + e.message)
-          ? "A câmera está bloqueada. Abra no Chrome e permita a câmera (cadeado ao lado do endereço → Permissões)."
-          : "Não consegui abrir a câmera. Abra esta página no Chrome do celular.");
+        const name = e instanceof Error ? e.name + e.message : String(e);
+        setError(/Permission|NotAllowed|Security/i.test(name)
+          ? "A câmera está bloqueada. Permita a câmera para este site (cadeado ao lado do endereço → Permissões) e toque em Tentar de novo."
+          : "Não consegui abrir a câmera. Feche outros apps que usam a câmera e toque em Tentar de novo.");
       }
     })();
     return () => {
       alive = false;
-      stop?.();
+      stream?.getTracks().forEach((t) => t.stop());
     };
   }, []);
+  const toggleTorch = () => {
+    const t = track.current;
+    if (!t || torch === null) return;
+    t.applyConstraints({ advanced: [{ torch: !torch }] } as unknown as MediaTrackConstraints).then(() => setTorch(!torch)).catch(() => undefined);
+  };
   return (
     <div className="cam">
-      <video ref={video} playsInline muted />
+      <video ref={video} playsInline muted autoPlay />
       <div className="aim" aria-hidden />
-      <p>{error || "Mostre o código de barras da etiqueta"}</p>
+      <p>{error || "Mostre o código de barras ou o QR da etiqueta"}</p>
       {error && <button type="button" className="retry" onClick={onRetry}>Tentar de novo</button>}
+      {torch !== null && !error && <button type="button" className="torch" aria-pressed={torch} onClick={toggleTorch}>{torch ? "Luz ligada" : "Luz"}</button>}
     </div>
   );
 }
@@ -162,17 +214,32 @@ export default function Packing() {
     setRecent((r) => [o, ...r.filter((x) => keyOf(x) !== keyOf(o))].slice(0, 6));
   }, []);
 
-  const lookup = useCallback(async (raw: string) => {
-    let o = findOrder(allRef.current, raw) ?? allRef.current.find((x) => norm(x.number) === norm(raw));
-    if (!o) {
+  const lastShown = useRef({ key: "", at: 0 });
+  const lastRefetch = useRef(0);
+  const lookup = useCallback(async (input: string | string[]) => {
+    const texts = Array.isArray(input) ? input : [input];
+    const find = (list: Order[]) => {
+      for (const t of texts) {
+        const o = findOrder(list, t) ?? list.find((x) => norm(x.number) === norm(t));
+        if (o) return o;
+      }
+    };
+    let o = find(allRef.current);
+    if (!o && Date.now() - lastRefetch.current > 15000) {
       // Venda que entrou depois da última busca: atualiza a lista e tenta de novo
+      lastRefetch.current = Date.now();
       const fresh = await q.refetch();
-      o = findOrder(fresh.data?.orders ?? [], raw);
+      o = find(fresh.data?.orders ?? []);
     }
-    if (o) return show(o);
+    if (o) {
+      // O código de barras e o QR da mesma etiqueta não repetem a fala
+      if (lastShown.current.key === keyOf(o) && Date.now() - lastShown.current.at < 6000) return;
+      lastShown.current = { key: keyOf(o), at: Date.now() };
+      return show(o);
+    }
     setOrder(null);
-    setMiss(raw);
-    speak("Não achei esse pedido. Tente o outro código da etiqueta.");
+    setMiss(texts[0]);
+    speak("Não achei esse pedido na lista de pacotes a enviar.");
   }, [q, show]);
 
   const goTyped = (e: FormEvent) => {
@@ -268,7 +335,7 @@ export default function Packing() {
 }
 
 const CSS = `
-.pk{--bg:#d9bf94;--card:#fbf8f1;--ink:#151310;--muted:#5c5143;--ok:#1f7a3a;--warn:#b3261e;--chip:#efe3cb;
+.pk{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;--bg:#d9bf94;--card:#fbf8f1;--ink:#151310;--muted:#5c5143;--ok:#1f7a3a;--warn:#b3261e;--chip:#efe3cb;
   color-scheme:light;min-height:100dvh;background:var(--bg);color:var(--ink);font:17px/1.4 Barlow,system-ui,sans-serif;padding-bottom:130px}
 .pk *{box-sizing:border-box;min-width:0}
 .pk button{font:inherit;color:inherit;cursor:pointer}
@@ -309,6 +376,9 @@ const CSS = `
 .pk .cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .pk .cam .aim{position:absolute;left:10%;right:10%;top:28%;bottom:28%;border:3px solid #fff;border-radius:8px;box-shadow:0 0 0 100vmax rgba(0,0,0,.3)}
 .pk .cam p{position:absolute;left:8px;right:8px;bottom:8px;margin:0;color:#fff;font:600 16px/1.3 Barlow,sans-serif;text-align:center}
+.pk .go input{-webkit-user-select:text;user-select:text}
+.pk .cam .torch{position:absolute;right:8px;top:8px;min-height:40px;padding:0 14px;border:0;border-radius:6px;background:rgba(255,255,255,.9);color:#000;font:700 16px Barlow,sans-serif}
+.pk .cam .torch[aria-pressed=true]{background:#ffd84d}
 .pk .cam .retry{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);min-height:52px;padding:0 20px;border:0;border-radius:8px;background:#fff;color:#000;font:800 22px "Barlow Condensed",sans-serif}
 .pk .recent{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:18px;font-size:15px;color:var(--muted)}
 .pk .recent button{height:40px;padding:0 12px;border:2px solid var(--ink);background:var(--chip);border-radius:6px;font-weight:600;color:var(--ink)}
