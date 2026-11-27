@@ -179,6 +179,59 @@ function LiveCamera({ onRead, onRetry }: { onRead: (texts: string[]) => void; on
   );
 }
 
+// Instalar o link da equipe como app (tela inicial). O Chrome avisa cedo que dá para instalar: guarda o aviso aqui.
+type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+let installEvent: InstallPrompt | null = null;
+const installListeners = new Set<() => void>();
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    installEvent = e as InstallPrompt;
+    installListeners.forEach((f) => f());
+  });
+  window.addEventListener("appinstalled", () => {
+    installEvent = null;
+    installListeners.forEach((f) => f());
+  });
+}
+const isStandalone = () =>
+  window.matchMedia?.("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+function InstallApp() {
+  const [, tick] = useState(0);
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    const f = () => tick((n) => n + 1);
+    installListeners.add(f);
+    return () => { installListeners.delete(f); };
+  }, []);
+  if (isStandalone() || done) return null;
+  const install = async () => {
+    if (!installEvent) return;
+    await installEvent.prompt();
+    const r = await installEvent.userChoice.catch(() => ({ outcome: "" }));
+    if (r.outcome === "accepted") setDone(true);
+    installEvent = null;
+    tick((n) => n + 1);
+  };
+  return (
+    <div className="team inst">
+      <b>Instalar no celular</b>
+      {installEvent ? (
+        <>
+          <span>Fica um ícone na tela inicial que abre direto esta tela, sem navegador e sem login.</span>
+          <button type="button" className="tbtn" onClick={install}>Instalar no celular</button>
+        </>
+      ) : isIOS() ? (
+        <span>No iPhone: toque em <b>Compartilhar</b> (o quadrado com a seta, embaixo no Safari) e depois em <b>Adicionar à Tela de Início</b>.</span>
+      ) : (
+        <span>No Chrome: toque nos <b>3 pontinhos</b> lá em cima e depois em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</span>
+      )}
+    </div>
+  );
+}
+
 // Fila pelo link da equipe (sem login): a chave do link é a única permissão, e só lê os pacotes
 async function sharedQueue(key: string): Promise<Queue> {
   if (isDemo) return demoInvoke("ai", { action: "packing_queue" }) as Queue;
@@ -281,8 +334,26 @@ export default function Packing() {
     r.name = "referrer";
     r.content = "no-referrer";
     document.head.append(m, r);
-    return () => { m.remove(); r.remove(); };
-  }, [shared]);
+    // App próprio da Separação (nome, cor e início no link da equipe) no lugar do app do Studio
+    const touched: [Element, string, string][] = [];
+    const swap = (sel: string, attr: string, value: string) => {
+      const el = document.querySelector(sel);
+      if (!el) return;
+      touched.push([el, attr, el.getAttribute(attr) ?? ""]);
+      el.setAttribute(attr, value);
+    };
+    swap('link[rel="manifest"]', "href", `/api/separacao-manifest?k=${encodeURIComponent(shareKey!)}`);
+    swap('meta[name="apple-mobile-web-app-title"]', "content", "Separação");
+    swap('meta[name="theme-color"]', "content", "#151310");
+    const title = document.title;
+    document.title = "Separação Brax";
+    return () => {
+      m.remove();
+      r.remove();
+      touched.forEach(([el, attr, v]) => el.setAttribute(attr, v));
+      document.title = title;
+    };
+  }, [shared, shareKey]);
 
   const show = useCallback((o: Order) => {
     setOrder(o);
@@ -336,7 +407,7 @@ export default function Packing() {
           <h2>Separação de pedidos</h2>
           <p>Mostre a etiqueta para a câmera e a página fala o que vai no pacote. Deixe esta página aberta e o som do celular ligado.</p>
           <button type="button" onClick={() => { speak("Pronto. Pode mostrar a etiqueta."); setStarted(true); }}>Começar</button>
-          {shared ? (q.isError && <p className="alert" role="alert">{(q.error as Error).message}</p>) : (
+          {shared ? (q.isError ? <p className="alert" role="alert">{(q.error as Error).message}</p> : <InstallApp />) : (
             <>
               <TeamLink />
               <Link to="/studio" className="back">Voltar ao Studio</Link>
@@ -476,5 +547,6 @@ const CSS = `
 .pk .team .tbtn{flex:1;min-height:48px;border:2px solid var(--ink);background:var(--ink);color:var(--card);border-radius:8px;font:600 18px Barlow,sans-serif}
 .pk .team .tbtn.alt{background:transparent;color:var(--ink)}
 .pk .team .tmsg{color:var(--ink);font-weight:600}
+.pk .team.inst span b{font:inherit;font-weight:600;color:var(--ink)}
 .pk .bar .rep{flex:1;background:var(--card);color:var(--ink);border:0}
 `;
