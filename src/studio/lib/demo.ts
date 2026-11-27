@@ -198,6 +198,22 @@ export function demoInvoke(fn: string, body: Record<string, unknown>): unknown {
           privacy_level_options: ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "SELF_ONLY"],
           comment_disabled: false, duet_disabled: false, stitch_disabled: true, max_video_post_duration_sec: 600,
         };
+      case "packing_queue": {
+        const at = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+        const orders = [
+          { channel: "shopee", id: "251127ABCD1234", number: "251127ABCD1234", name: "Joana", created_at: at(20), status: "a enviar", codes: ["251127ABCD1234", "BR2511270001"],
+            items: [{ title: "Pin Coração (Metal Esmaltado)", short: "Coração", qty: 1 }, { title: "Pin Estrela (Metal Esmaltado)", short: "Estrela", qty: 2 }] },
+          { channel: "mercadolivre", id: "2000009876543", number: "2000009876543", name: "Carlos", created_at: at(10), status: "a enviar", codes: ["2000009876543", "44112233445"],
+            items: [{ title: "Pin Lua Metal Esmaltado", short: "Lua", qty: 1 }] },
+          { channel: "nuvemshop", id: "9000001041", number: "1041", name: "Bia", created_at: at(5), status: "a embalar", codes: ["1041", "9000001041"],
+            items: [{ title: "Pin Sol (Metal Esmaltado)", short: "Sol", qty: 3, variation: "Dourado" }] },
+        ];
+        return { orders, channels: [
+          { channel: "mercadolivre", connected: true, count: 1 },
+          { channel: "shopee", connected: true, count: 1 },
+          { channel: "nuvemshop", connected: true, count: 1 },
+        ], at: new Date().toISOString() };
+      }
       case "store_orders": {
         const orders = [
           { number: 1042, customer: "Ana Souza", status: "open", payment: "pago", shipping: "enviado", shipping_option: "Correios PAC", tracking_number: "QB123456789BR", tracking_url: "https://rastreamento.correios.com.br", total: "R$ 89,70", items: ["2x Pin Coração", "1x Pin Estrela"], h: 5 },

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   KanbanSquare,
-  BarChart3, Bot, Building2, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Gauge, Inbox, Globe, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PenLine, Plus, ShoppingBag, Star, Store, Workflow, Target, Youtube, Scissors, BookOpen, ImagePlus, Send,
+  BarChart3, Bot, Building2, CalendarDays, Clapperboard, CalendarPlus, CheckSquare, Gauge, Inbox, Globe, LayoutGrid, Link2, LogOut, MapPin, Menu, MessageSquare, MoreHorizontal, Package, PackageCheck, PenLine, Plus, ShoppingBag, Star, Store, Workflow, Target, Youtube, Scissors, BookOpen, ImagePlus, Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -42,6 +42,7 @@ const GROUPS: { label?: string; items: Item[] }[] = [
       { to: "/studio/produtos", label: "Produtos", icon: ShoppingBag },
       { to: "/studio/fotos", label: "Fotos de produto", icon: ImagePlus },
       { to: "/studio/pedidos", label: "Pedidos", icon: Package },
+      { to: "/studio/separacao", label: "Separação", icon: PackageCheck },
       { to: "/studio/avaliacoes", label: "Avaliações", icon: Star },
     ],
   },
