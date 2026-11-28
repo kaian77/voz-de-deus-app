@@ -1,6 +1,9 @@
 // Regras de correspondência entre comentário e automação (palavras-chave, sem diferenciar acentos/maiúsculas).
+// Letras esticadas contam como uma só: "querooo" = "quero", "lindooo" = "lindo".
 export const normalize = (s: string) =>
-  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/([aeiou])\1+/g, "$1").replace(/(\p{L})\1{2,}/gu, "$1")
+    .replace(/\s+/g, " ").trim();
 
 export function matches(automation: { keywords: string[]; match_mode: string; media_ids: string[] }, text: string, mediaId?: string) {
   if (automation.media_ids?.length && (!mediaId || !automation.media_ids.includes(mediaId))) return false;

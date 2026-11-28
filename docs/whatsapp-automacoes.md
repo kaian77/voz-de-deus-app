@@ -52,7 +52,7 @@ Leia só este arquivo para mexer no atendimento automático do WhatsApp e do Ins
 - Comentário: responde pelas automações (palavra-chave → resposta no comentário e/ou link no direct). Contas da PáginasPro e de canal ficam fora.
 
 ## Automações
-- **Automação por post** (`auto-link.ts`, cron a cada 5 min): post novo no IG → acha o produto (`options.product` ou IA pela legenda/foto) e cria automação só daquele post com a palavra da legenda e o link no direct. Liga/desliga: `brand_settings.auto_post_link`.
+- **Automação por post** (`auto-link.ts`, cron a cada 5 min): post novo no IG → acha o produto (`options.product` ou IA pela legenda/foto) e cria automação só daquele post: qualquer comentário (`match_mode` any, uma vez por pessoa) recebe o link do produto no direct (pedido do dono em 28/11/2026; antes eram só as palavras "eu quero/quero/link" e a da legenda). Palavras-chave ignoram letras esticadas ("querooo" = "quero", `matching.ts`) e "@{username}" não vira "@@". Liga/desliga: `brand_settings.auto_post_link`.
 - Automações de comentário: ferramentas MCP `list_automations`/`upsert_automation`/`delete_automation`. Contas da PáginasPro ficam fora.
 - **"Enviar todos" (prospecção)** (`SendAll.tsx`; cron `runProspectSends` em `_shared/prospect.ts`): até 30 leads na fila (`leads.send_after` 4–9 min aleatório, `send_text` com `{saudacao}`), 1 por vez pelo WAHA da PáginasPro, seg–sáb 8h–20h, mínimo 3 min entre envios, máx. 30/24 h. Número sem WhatsApp vira "Não fechou". 3 erros em 30 min ou nenhum WAHA = pausa + aviso. Sem WAHA = 1 a 1 pelo wa.me. Ainda não há número da PáginasPro conectado.
 

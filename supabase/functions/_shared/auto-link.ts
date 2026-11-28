@@ -1,6 +1,6 @@
 // Automação automática por post: quando sai um post novo no Instagram (pelo Studio ou direto no app),
-// cria uma automação só daquele post que responde a chamada da legenda (ex.: "comente EU QUERO")
-// e manda no direct o link do produto do post.
+// cria uma automação só daquele post: quem comentar qualquer coisa (uma vez por pessoa) recebe
+// no direct o link do produto do post.
 import { isBrax } from "./brand.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { z } from "npm:zod@4";
@@ -9,7 +9,6 @@ import { aiEnabled, generateJSON } from "./claude.ts";
 import { nsProducts, storeFor } from "./nuvemshop.ts";
 
 const EVERY_MS = 5 * 60_000; // confere posts novos a cada 5 min (limite de chamadas da API do Instagram)
-const DEFAULT_KEYWORDS = ["eu quero", "quero", "link"];
 const REPLIES = [
   "Te mandei o link no direct, @{username}! 💌",
   "Corre no direct, @{username}! O link já está lá 🚀",
@@ -29,8 +28,6 @@ export function ctaKeyword(caption: string) {
   if (quoted) return quoted.trim();
   return caption.match(/[Cc][Oo][Mm][Ee][Nn][Tt]\p{L}*\s+((?:[A-ZÀ-Ú0-9]{2,}\s?){1,4})/u)?.[1]?.trim() ?? "";
 }
-
-const norm = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
 // deno-lint-ignore no-explicit-any
 async function productFor(db: SupabaseClient, userId: string, media: any): Promise<{ product: Product | null; keyword: string }> {
@@ -80,17 +77,17 @@ export async function autoLinkPosts(db: SupabaseClient) {
         for (const m of media) {
           done.push(m.id);
           if (covered.has(m.id)) continue;
-          const { product, keyword } = await productFor(db, account.user_id, m);
+          const { product } = await productFor(db, account.user_id, m);
           if (!product) continue; // sem produto: vale a automação geral (link do site)
-          const keywords = [...new Set([norm(keyword), ...DEFAULT_KEYWORDS].filter((k) => k.length >= 2))];
           await db.from("automations").insert({
             user_id: account.user_id,
             account_id: account.id,
             name: `Post: ${product.name}`.slice(0, 120),
             active: true,
             auto: true,
-            keywords,
-            match_mode: "contains",
+            // Qualquer comentário no post recebe o link (uma vez por pessoa), não só "eu quero"
+            keywords: [],
+            match_mode: "any",
             media_ids: [m.id],
             reply_variants: REPLIES,
             dm_message: `Oi {username}! Aqui está o link do ${product.name} 👉 ${product.url}\nEntregamos para todo o Brasil 🚚`,
