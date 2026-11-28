@@ -139,7 +139,7 @@ function JobCard({ job }: { job: PhotoJob }) {
       invalidate("photo_jobs");
       invalidate("product_drafts");
     }
-    if (created) toast.success(`${created} produto${created === 1 ? "" : "s"} no site. O que for novo também vai para o Mercado Livre.`);
+    if (created) toast.success(`${created} produto${created === 1 ? "" : "s"} no site. O que for novo também vai para o Mercado Livre e a Shopee.`);
   };
 
   const redo = async () => {

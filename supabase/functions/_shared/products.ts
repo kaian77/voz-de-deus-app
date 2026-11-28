@@ -5,6 +5,7 @@ import { aiEnabled, brandContext, generateJSON } from "./claude.ts";
 import { applyTemplate, nsCreateProduct, type ProductChanges, type ProductTemplate, storeFor } from "./nuvemshop.ts";
 import { queueProductVideo } from "./product-video.ts";
 import { publishToMercadoLivre } from "./marketplaces.ts";
+import { publishShopeeNow } from "./shopee-sync.ts";
 
 /** Próximo horário nobre (13h ou 19h no fuso da marca) com pelo menos 2h de folga. */
 export function nextSlot(timeZone = "America/Sao_Paulo", from = new Date()) {
@@ -215,29 +216,41 @@ export async function buildProduct(
 }
 
 /**
- * Com "Publicar também nos marketplaces" ligado, publica o produto no Mercado Livre seguindo o padrão
- * dos anúncios atuais do lojista. Erros não desfazem o cadastro na loja: ficam registrados no rascunho.
+ * Com "Publicar também nos marketplaces" ligado, publica o produto no Mercado Livre (padrão dos anúncios atuais)
+ * e na Shopee (na hora, sem esperar a fila), ao mesmo tempo. Erros não desfazem o cadastro na loja: ficam
+ * registrados no rascunho, um por canal. `only` refaz só um canal (botão do canal que falhou).
  */
 export async function publishToMarketplaces(
   db: SupabaseClient,
   userId: string,
   draftId: string | null,
-  product: { name: string; description?: string; images: string[]; price: number; sku?: string; stock?: number | null },
+  product: { name: string; description?: string; images: string[]; price: number; sku?: string; stock?: number | null; productId?: number },
   force = false,
+  only?: "mercadolivre" | "shopee",
 ) {
   const { data: settings } = await db.from("brand_settings").select("marketplace_autopublish").eq("user_id", userId).maybeSingle();
   if (!force && !settings?.marketplace_autopublish) return null;
-  const { data: accounts } = await db.from("social_accounts").select("platform").eq("user_id", userId).in("platform", ["mercadolivre"]);
+  const { data: accounts } = await db.from("social_accounts").select("platform").eq("user_id", userId).in("platform", ["mercadolivre", "shopee"]);
+  const platforms = [...new Set((accounts ?? []).map((a) => a.platform as string))].filter((p) => !only || p === only);
   const results: Record<string, unknown> = {};
-  for (const platform of new Set((accounts ?? []).map((a) => a.platform as string))) {
+  const fail = (e: unknown) => ({ error: e instanceof Error ? e.message : String(e) });
+  await Promise.all(platforms.map(async (platform) => {
     try {
       if (!(product.price > 0)) throw new Error("Produto sem preço");
-      results[platform] = await publishToMercadoLivre(db, userId, product);
+      if (platform === "mercadolivre") results[platform] = await publishToMercadoLivre(db, userId, product);
+      else if (platform === "shopee") {
+        if (!product.productId) throw new Error("Cadastre o produto na loja primeiro");
+        results[platform] = await publishShopeeNow(db, userId, product.productId) ?? { error: "Conecte a Shopee em Contas" };
+      }
     } catch (e) {
-      results[platform] = { error: e instanceof Error ? e.message : String(e) };
+      results[platform] = fail(e);
     }
+  }));
+  if (draftId && Object.keys(results).length) {
+    // Junta com o que já estava (refazer um canal não apaga o outro)
+    const { data: cur } = await db.from("product_drafts").select("marketplaces").eq("id", draftId).maybeSingle();
+    await db.from("product_drafts").update({ marketplaces: { ...(cur?.marketplaces ?? {}), ...results } }).eq("id", draftId);
   }
-  if (draftId && Object.keys(results).length) await db.from("product_drafts").update({ marketplaces: results }).eq("id", draftId);
   return results;
 }
 
@@ -292,6 +305,7 @@ export async function createFromDraft(db: SupabaseClient, userId: string, draftI
       price: Number(built.fields.price),
       sku: built.fields.sku,
       stock: built.fields.stock,
+      productId: Number(product.id),
     });
     return { ...data, product, post, marketplaces };
   } catch (e) {

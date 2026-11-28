@@ -131,13 +131,15 @@ export async function startShopeeSync(db: SupabaseClient, userId: string, ids?: 
 }
 
 /** Devolve produtos para a fila da Shopee (foto nova aplicada, produto novo na loja). Sem fila ainda: não faz nada. */
-export async function requeueShopee(db: SupabaseClient, userId: string, ids: number[]) {
+export async function requeueShopee(db: SupabaseClient, userId: string, ids: number[], onlyNew = false) {
   const acc = await shopeeAccount(db, userId);
   const sync = acc?.meta?.shopee_sync as ShopeeSync | undefined;
   if (!acc || !sync || !ids.length) return 0;
   const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
   const cur = (data?.meta?.shopee_sync ?? sync) as ShopeeSync;
-  const add = ids.filter((id) => !cur.queue.includes(id));
+  // onlyNew: produto novo que o cadastro já publicou na hora não entra de novo
+  const add = ids.filter((id) => !cur.queue.includes(id) && !(onlyNew && cur.links?.[id]));
+  if (!add.length) return 0;
   if (!cur.queue.length && !cur.inflight?.ids.length) cur.total = 0; // rodada nova: o contador recomeça
   cur.queue = [...cur.queue, ...add];
   cur.total += add.length;
@@ -209,6 +211,117 @@ async function photosFor(db: SupabaseClient, images: string[]) {
   const { data } = await db.from("ml_photos").select("result_url").eq("source_url", list[0]).eq("kind", "cover").eq("status", "done").limit(1);
   const white = data?.[0]?.result_url as string | undefined;
   return white && list.length < MAX_PHOTOS ? [...list, white] : list;
+}
+
+type SyncAccount = { id: string; external_id: string };
+type SyncOutcome = { done?: Result; error?: Result; skipped?: Result };
+
+/** Publica (ou atualiza, se já tem anúncio) um produto da loja na Shopee. Não mexe na fila. */
+async function shopeeSyncOne(
+  db: SupabaseClient, acc: SyncAccount, store: { token: string; storeId: string }, token: string, rule: PriceRule, id: number, linked?: number,
+): Promise<SyncOutcome> {
+  let name = String(id);
+  try {
+    // deno-lint-ignore no-explicit-any
+    const p = await ns<any>(store.token, store.storeId, `products/${id}`);
+    name = txt(p.name);
+    // deno-lint-ignore no-explicit-any
+    const v: any = p.variants?.[0] ?? {};
+    const kit = isKit(name);
+    // Igual ao ML: kit usa o preço que o cliente paga no site (vive em promoção)
+    const base = Number((kit && Number(v.promotional_price) > 0 ? v.promotional_price : v.price) || 0);
+    // deno-lint-ignore no-explicit-any
+    const images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
+    const stock = v.stock === null || v.stock === undefined ? 200 : Number(v.stock);
+    // Já tem anúncio e o site está sem estoque: zera na Shopee também (sai de venda)
+    if (linked && !(stock > 0) && base && !/\bteste\b/i.test(name)) {
+      await shopeeSetStock(token, acc.external_id, linked, 0);
+      return { done: { id, name, item_id: linked, price: applyRule(base, rule), updated: true } };
+    }
+    const skip = /\bteste\b/i.test(name) ? "produto de teste"
+      : !base ? "sem preço"
+      : !images.length ? "sem foto"
+      : !(stock > 0) ? "sem estoque na loja"
+      : null;
+    if (skip) {
+      return { skipped: { id, name, reason: skip } };
+    }
+    const price = applyRule(base, rule);
+    const imageIds: string[] = [];
+    for (const src of await photosFor(db, images)) {
+      const img = await shopeeUploadImage(token, acc.external_id, src).catch(() => "");
+      if (img) imageIds.push(img);
+    }
+    if (!imageIds.length) throw new Error("a Shopee não aceitou nenhuma foto");
+    const about = txt(p.description).replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
+    const units = kit ? kitUnits(name, about, Number(v.price || 0)) : null;
+    const description = mlListingDescription({ name, about, units }).slice(0, 2900);
+    if (linked) {
+      const warn: string[] = [];
+      const note = (what: string) => (e: unknown) => warn.push(`${what}: ${e instanceof Error ? e.message : e}`);
+      await shopeeUpdateItem(token, acc.external_id, linked, { image: { image_id_list: imageIds }, description }).catch(note("fotos/descrição"));
+      const models = await shopeeModels(token, acc.external_id, linked);
+      await shopeeSetPrice(token, acc.external_id, linked, price, models).catch(note("preço"));
+      await shopeeSetStock(token, acc.external_id, linked, stock, models).catch(note("estoque"));
+      await shopeeRelistItem(token, acc.external_id, linked).catch(() => {}); // estava fora da vitrine: volta
+      return { done: { id, name, item_id: linked, price, updated: true, ...(warn.length ? { error: warn.join("; ") } : {}) } };
+    }
+    const created = await shopeeAddItem(token, acc.external_id, {
+      original_price: price,
+      description,
+      item_name: name.slice(0, 120),
+      item_sku: String(v.sku ?? "").trim() || pinSku(name),
+      category_id: 100160,
+      image: { image_id_list: imageIds },
+      weight: 0.4,
+      dimension: { package_height: 3, package_length: 4, package_width: 4 },
+      logistic_info: [{ logistic_id: 91003, enabled: true }],
+      tax_info: SHOPEE_PIN_TAX,
+      seller_stock: [{ stock }],
+      brand: { brand_id: 0, original_brand_name: "No Brand" },
+      condition: "NEW",
+    });
+    return { done: { id, name, item_id: Number(created.item_id), price } };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // Já existe na Shopee com nome parecido: não é erro, só não duplica
+    if (/duplicat/i.test(msg)) return { skipped: { id, name, reason: "já existe na Shopee (a Shopee recusou como duplicado)" } };
+    return { error: { id, name, error: msg } };
+  }
+}
+
+/** Link do anúncio na Shopee. */
+export const shopeeLink = (shopId: string, itemId: number) => `https://shopee.com.br/product/${shopId}/${itemId}`;
+
+/**
+ * Cadastro de produto (Studio): publica na Shopee na hora, sem esperar a fila do cron.
+ * Guarda o resultado e a ligação produto → anúncio na fila (para a sincronização não criar outro).
+ * Sem Shopee conectada: null.
+ */
+export async function publishShopeeNow(db: SupabaseClient, userId: string, productId: number) {
+  const acc = await shopeeAccount(db, userId);
+  if (!acc) return null;
+  const store = await storeFor(db, userId);
+  if (!store) throw new Error("Conecte a Nuvemshop em Contas");
+  const token = await shopeeTokenFor(db, acc.id, acc.external_id);
+  const rule: PriceRule = acc.meta?.analysis?.rule ?? DEFAULT_RULE;
+  const sync = acc.meta?.shopee_sync as ShopeeSync | undefined;
+  // Se já estava na fila, sai dela (vai agora)
+  if (sync?.queue.includes(productId)) {
+    const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
+    const cur = data?.meta?.shopee_sync as ShopeeSync | undefined;
+    if (cur) {
+      cur.queue = cur.queue.filter((x) => x !== productId);
+      await saveSync(db, acc.id, cur);
+    }
+  }
+  const r = await shopeeSyncOne(db, acc, store, token, rule, productId, sync?.links?.[productId]);
+  await record(db, acc.id, productId, r);
+  if (r.done?.item_id) {
+    return { id: String(r.done.item_id), permalink: shopeeLink(acc.external_id, r.done.item_id), price: r.done.price, ...(r.done.error ? { warning: r.done.error } : {}) };
+  }
+  if (r.skipped) return { error: `não publicado: ${r.skipped.reason}` };
+  return { error: r.error?.error ?? "a Shopee não respondeu" };
 }
 
 /** Rodada do cron: publica alguns produtos da fila de cada loja da Shopee. */
@@ -303,78 +416,8 @@ export async function runShopeeSync(db: SupabaseClient) {
       const token = await shopeeTokenFor(db, acc.id, acc.external_id);
       const rule: PriceRule = acc.meta?.analysis?.rule ?? DEFAULT_RULE;
       for (const id of batch) {
-        let name = String(id);
-        try {
-          // deno-lint-ignore no-explicit-any
-          const p = await ns<any>(store.token, store.storeId, `products/${id}`);
-          name = txt(p.name);
-          // deno-lint-ignore no-explicit-any
-          const v: any = p.variants?.[0] ?? {};
-          const kit = isKit(name);
-          // Igual ao ML: kit usa o preço que o cliente paga no site (vive em promoção)
-          const base = Number((kit && Number(v.promotional_price) > 0 ? v.promotional_price : v.price) || 0);
-          // deno-lint-ignore no-explicit-any
-          const images: string[] = (p.images ?? []).map((i: any) => i.src).filter(Boolean);
-          const stock = v.stock === null || v.stock === undefined ? 200 : Number(v.stock);
-          const linked = sync.links?.[id];
-          // Já tem anúncio e o site está sem estoque: zera na Shopee também (sai de venda)
-          if (linked && !(stock > 0) && base && !/\bteste\b/i.test(name)) {
-            await shopeeSetStock(token, acc.external_id, linked, 0);
-            await record(db, acc.id, id, { done: { id, name, item_id: linked, price: applyRule(base, rule), updated: true } });
-            continue;
-          }
-          const skip = /\bteste\b/i.test(name) ? "produto de teste"
-            : !base ? "sem preço"
-            : !images.length ? "sem foto"
-            : !(stock > 0) ? "sem estoque na loja"
-            : null;
-          if (skip) {
-            await record(db, acc.id, id, { skipped: { id, name, reason: skip } });
-            continue;
-          }
-          const price = applyRule(base, rule);
-          const imageIds: string[] = [];
-          for (const src of await photosFor(db, images)) {
-            const img = await shopeeUploadImage(token, acc.external_id, src).catch(() => "");
-            if (img) imageIds.push(img);
-          }
-          if (!imageIds.length) throw new Error("a Shopee não aceitou nenhuma foto");
-          const about = txt(p.description).replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
-          const units = kit ? kitUnits(name, about, Number(v.price || 0)) : null;
-          const description = mlListingDescription({ name, about, units }).slice(0, 2900);
-          if (linked) {
-            const warn: string[] = [];
-            const note = (what: string) => (e: unknown) => warn.push(`${what}: ${e instanceof Error ? e.message : e}`);
-            await shopeeUpdateItem(token, acc.external_id, linked, { image: { image_id_list: imageIds }, description }).catch(note("fotos/descrição"));
-            const models = await shopeeModels(token, acc.external_id, linked);
-            await shopeeSetPrice(token, acc.external_id, linked, price, models).catch(note("preço"));
-            await shopeeSetStock(token, acc.external_id, linked, stock, models).catch(note("estoque"));
-            await shopeeRelistItem(token, acc.external_id, linked).catch(() => {}); // estava fora da vitrine: volta
-            await record(db, acc.id, id, { done: { id, name, item_id: linked, price, updated: true, ...(warn.length ? { error: warn.join("; ") } : {}) } });
-            continue;
-          }
-          const created = await shopeeAddItem(token, acc.external_id, {
-            original_price: price,
-            description,
-            item_name: name.slice(0, 120),
-            item_sku: String(v.sku ?? "").trim() || pinSku(name),
-            category_id: 100160,
-            image: { image_id_list: imageIds },
-            weight: 0.4,
-            dimension: { package_height: 3, package_length: 4, package_width: 4 },
-            logistic_info: [{ logistic_id: 91003, enabled: true }],
-            tax_info: SHOPEE_PIN_TAX,
-            seller_stock: [{ stock }],
-            brand: { brand_id: 0, original_brand_name: "No Brand" },
-            condition: "NEW",
-          });
-          await record(db, acc.id, id, { done: { id, name, item_id: Number(created.item_id), price } });
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          // Já existe na Shopee com nome parecido: não é erro, só não duplica
-          if (/duplicat/i.test(msg)) await record(db, acc.id, id, { skipped: { id, name, reason: "já existe na Shopee (a Shopee recusou como duplicado)" } });
-          else await record(db, acc.id, id, { error: { id, name, error: msg } });
-        }
+        const r = await shopeeSyncOne(db, acc, store, token, rule, id, sync.links?.[id]);
+        await record(db, acc.id, id, r);
       }
     } catch (e) {
       const { data } = await db.from("social_accounts").select("meta").eq("id", acc.id).single();
