@@ -713,6 +713,9 @@ export default function Products() {
     }
   };
   const hasMl = accounts.some((a) => a.platform === "mercadolivre");
+  const hasShopee = accounts.some((a) => a.platform === "shopee");
+  const channels = [hasMl && "no Mercado Livre", hasShopee && "na Shopee"].filter(Boolean).join(" e ");
+  const channelNames = [hasMl && "Mercado Livre", hasShopee && "Shopee"].filter(Boolean).join(" e ");
   const setMarketplace = async (v: boolean) => {
     try {
       await api.saveSettings({ marketplace_autopublish: v });
@@ -722,13 +725,14 @@ export default function Products() {
     }
   };
   const [mlFor, setMlFor] = useState<string | null>(null);
-  const publishMl = async (draft: ProductDraft) => {
-    setMlFor(draft.id);
+  const publishTo = async (draft: ProductDraft, platform: "mercadolivre" | "shopee") => {
+    const label = platform === "shopee" ? "Shopee" : "Mercado Livre";
+    setMlFor(`${draft.id}:${platform}`);
     try {
-      const r = await api.invoke<Record<string, { permalink?: string; error?: string }>>("ai", { action: "marketplace_publish", draft_id: draft.id });
-      const ml = r.mercadolivre;
-      if (ml?.error) toast.error(`Mercado Livre: ${ml.error}`);
-      else toast.success("Publicado no Mercado Livre");
+      const r = await api.invoke<Record<string, { permalink?: string; error?: string }>>("ai", { action: "marketplace_publish", draft_id: draft.id, platform });
+      const res = r[platform];
+      if (res?.error) toast.error(`${label}: ${res.error}`);
+      else toast.success(platform === "shopee" ? "Publicado na Shopee" : "Publicado no Mercado Livre");
       refresh();
     } catch (e) {
       toast.error((e as Error).message);
@@ -877,12 +881,12 @@ export default function Products() {
             </span>
             <Switch id="autopost" checked={autopost} onCheckedChange={setAutopost} />
           </label>
-          {hasMl && (
+          {(hasMl || hasShopee) && (
             <label htmlFor="marketplaces" className="flex items-center justify-between gap-4 border-b px-4 py-3">
               <span>
-                <span className="block text-[13px] font-medium">Publicar também no Mercado Livre</span>
+                <span className="block text-[13px] font-medium">Publicar também {channels}</span>
                 <span className="block text-xs text-muted-foreground">
-                  Todo produto novo da loja (cadastrado aqui ou direto na Nuvemshop) vira anúncio em até 10 min, no padrão dos seus anúncios e com a regra de preço descoberta em Contas.
+                  Produto cadastrado aqui vai para o site e {hasMl && hasShopee ? "os dois marketplaces" : channelNames} na mesma hora, no padrão dos seus anúncios e com a regra de preço de cada canal. Cadastrado direto na Nuvemshop entra em até 10 min.
                 </span>
               </span>
               <Switch id="marketplaces" checked={settings?.marketplace_autopublish ?? false} onCheckedChange={setMarketplace} />
@@ -921,7 +925,7 @@ export default function Products() {
                   {bulk ?? `Cadastrar ${queue.length === 1 ? "" : `todos os ${queue.length} `}de uma vez`}
                 </Button>
                 <p className="mt-1.5 text-center text-xs text-muted-foreground">
-                  Usa o nome que você escreveu em cada um (vazio = a IA dá o nome).{settings?.marketplace_autopublish ? " Vai para o site e para o Mercado Livre." : ""}
+                  Usa o nome que você escreveu em cada um (vazio = a IA dá o nome).{settings?.marketplace_autopublish && channelNames ? ` Vai para o site, ${channelNames}.` : ""}
                 </p>
               </div>
             </div>
@@ -947,18 +951,29 @@ export default function Products() {
                   <div className="min-w-0 flex-1 basis-40">
                     <p className="truncate text-[13px] font-medium">{d.name}</p>
                     <p className="text-xs text-muted-foreground"><StatusDot tone="success">Na loja</StatusDot> · {relativeTime(d.created_at)}</p>
-                    {d.marketplaces?.mercadolivre?.error && <p className="truncate text-xs text-danger" title={d.marketplaces.mercadolivre.error}>Mercado Livre: {d.marketplaces.mercadolivre.error}</p>}
+                    {([["mercadolivre", "Mercado Livre", hasMl], ["shopee", "Shopee", hasShopee]] as const).map(([key, label, on]) => {
+                      const err = d.marketplaces?.[key]?.error;
+                      return on && err ? <p key={key} className="truncate text-xs text-danger" title={err}>{label}: {err}</p> : null;
+                    })}
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-x-2">
-                    {d.marketplaces?.mercadolivre?.permalink ? (
-                      <a href={d.marketplaces.mercadolivre.permalink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
-                        Mercado Livre <ExternalLink className="h-3 w-3" />
-                      </a>
-                    ) : hasMl && (
-                      <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => publishMl(d)} disabled={mlFor === d.id}>
-                        {mlFor === d.id && <Loader2 className="animate-spin" />}Mercado Livre
-                      </Button>
-                    )}
+                    {([["mercadolivre", "Mercado Livre", hasMl], ["shopee", "Shopee", hasShopee]] as const).map(([key, label, on]) => {
+                      const link = d.marketplaces?.[key]?.permalink;
+                      if (link) {
+                        return (
+                          <a key={key} href={link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs underline underline-offset-2">
+                            {label} <ExternalLink className="h-3 w-3" />
+                          </a>
+                        );
+                      }
+                      if (!on) return null;
+                      const busy = mlFor === `${d.id}:${key}`;
+                      return (
+                        <Button key={key} size="sm" variant="ghost" className="h-8 text-xs" onClick={() => publishTo(d, key)} disabled={busy}>
+                          {busy && <Loader2 className="animate-spin" />}{d.marketplaces?.[key]?.error ? `Tentar ${label}` : label}
+                        </Button>
+                      );
+                    })}
                     <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setVideoDraft(d)} disabled={videoFor === d.id}>
                       {videoFor === d.id ? <Loader2 className="animate-spin" /> : <Clapperboard />}Vídeo
                     </Button>

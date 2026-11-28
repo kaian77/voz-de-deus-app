@@ -565,7 +565,7 @@ export async function watchNewProducts(db: SupabaseClient) {
         await queuePhotos(db, acc.user_id, products.filter((p) => add.includes(p.id))).catch((e) => console.error("fotos ML", e));
         out.push({ account: acc.id, queued: add });
         // produto novo também vai para a Shopee
-        await requeueShopee(db, acc.user_id, add).catch((e) => console.error("Shopee novos", e));
+        await requeueShopee(db, acc.user_id, add, true).catch((e) => console.error("Shopee novos", e));
       }
       await db.from("social_accounts").update({
         meta: { ...meta, ml_known: [...new Set([...(known ?? []), ...ids])], ...(sync ? { ml_sync: sync } : {}) },

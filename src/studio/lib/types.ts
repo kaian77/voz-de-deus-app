@@ -129,7 +129,7 @@ export interface ProductDraft {
   template_id: string | null;
   overrides: Record<string, unknown>;
   status: "pending" | "creating" | "created" | "failed";
-  marketplaces?: Record<string, { id?: string; permalink?: string; price?: number; error?: string }>;
+  marketplaces?: Record<string, { id?: string; permalink?: string; price?: number; error?: string; warning?: string }>;
   product_id: string | null;
   product_url: string | null;
   error: string | null;

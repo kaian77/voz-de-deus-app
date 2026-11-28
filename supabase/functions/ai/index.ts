@@ -615,7 +615,7 @@ Deno.serve(async (req) => {
     }
     if (action === "marketplace_analyze") return json(await analyzeMarketplace(db, userId, input.platform === "shopee" ? "shopee" : "mercadolivre"));
     if (action === "marketplace_publish") {
-      // Publica no Mercado Livre um produto já cadastrado na loja pelo Studio
+      // Publica no Mercado Livre (padrão) ou na Shopee (platform: "shopee") um produto já cadastrado na loja pelo Studio
       const { data: draft } = await db.from("product_drafts").select("*").eq("id", input.draft_id).eq("user_id", userId).single();
       if (!draft?.product_id) throw new HttpError(404, "Cadastre o produto na loja primeiro");
       const store = await storeFor(db, userId);
@@ -630,7 +630,8 @@ Deno.serve(async (req) => {
         price: Number(v.price),
         sku: v.sku || undefined,
         stock: v.stock ?? null,
-      }, true);
+        productId: Number(draft.product_id),
+      }, true, input.platform === "shopee" ? "shopee" : input.platform === "all" ? undefined : "mercadolivre");
       return json(results ?? {});
     }
     if (action === "product_video") {
