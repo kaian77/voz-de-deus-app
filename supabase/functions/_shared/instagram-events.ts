@@ -15,8 +15,12 @@ export type CommentValue = {
   media?: { id: string; media_product_type?: string };
 };
 
-const fill = (template: string, username?: string) =>
-  template.replaceAll("{username}", username ? `@${username}` : "").replaceAll("{nome}", username ?? "").trim();
+// "{username}" já vira "@fulano"; "@{username}" no texto não pode virar "@@fulano"
+const fill = (template: string, username?: string) => {
+  const t = template.replaceAll("@{username}", "{username}").replaceAll("{username}", username ? `@${username}` : "")
+    .replaceAll("{nome}", username ?? "");
+  return (username ? t : t.replace(/[ ,]+([!?.])/g, "$1")).trim(); // sem nome: "direct, !" vira "direct!"
+};
 
 export async function handleComment(igUserId: string, value: CommentValue) {
   const db = adminClient();
